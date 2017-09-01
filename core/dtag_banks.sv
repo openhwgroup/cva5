@@ -1,0 +1,110 @@
+/*
+ * Copyright © 2017 Eric Matthews,  Lesley Shannon
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ * 
+ * This Source Code Form is "Incompatible With Secondary Licenses", as
+ * defined by the Mozilla Public License, v. 2.0.
+ *
+ * Initial code developed under the supervision of Dr. Lesley Shannon,
+ * Reconfigurable Computing Lab, Simon Fraser University.
+ *
+ * Author(s):
+ *             Eric Matthews <ematthew@sfu.ca>
+ */
+ 
+import taiga_config::*;
+import taiga_types::*;
+
+module dtag_banks(
+        input logic clk,
+        input logic rst,
+
+        input logic[31:0] stage1_addr,
+        input logic[31:0] stage2_addr,
+        input logic[31:0] inv_addr,
+
+        input logic[0:DCACHE_WAYS-1] update_way,
+        input logic update,
+
+        input logic stage1_adv,
+        input logic stage1_inv,
+
+        input logic extern_inv,
+        output logic extern_inv_complete,
+
+        output tag_hit,
+        output logic[0:DCACHE_WAYS-1] tag_hit_way
+        );
+
+    typedef logic [DCACHE_TAG_W : 0] dtag_entry_t;
+
+    function logic[DCACHE_TAG_W-1:0] getTag(logic[31:0] addr);
+        return addr[31 : 32 - DCACHE_TAG_W];
+    endfunction
+
+    function logic[DCACHE_LINE_ADDR_W-1:0] getLineAddr(logic[31:0] addr);
+        return addr[DCACHE_LINE_ADDR_W + DCACHE_SUB_LINE_ADDR_W + 1 : DCACHE_SUB_LINE_ADDR_W + 2];
+    endfunction
+
+    dtag_entry_t  tag_line[DCACHE_WAYS - 1:0];
+    dtag_entry_t  inv_tag_line[DCACHE_WAYS - 1:0];
+
+    dtag_entry_t stage2_tag;
+    dtag_entry_t new_tag;
+
+    logic miss_or_extern_invalidate;
+    logic [DCACHE_WAYS - 1:0] update_tag_way;
+
+    logic inv_tags_accessed;
+
+    logic[0:DCACHE_WAYS-1] inv_hit_way;
+    logic[0:DCACHE_WAYS-1] inv_hit_way_r;
+
+
+    logic [DCACHE_LINE_ADDR_W-1:0] update_port_addr;
+
+    assign miss_or_extern_invalidate = update | extern_inv;
+
+    assign update_port_addr = update ? getLineAddr(stage2_addr) : getLineAddr(inv_addr);
+
+    assign stage2_tag = {1'b1, getTag(stage2_addr)};
+    assign new_tag = {update, getTag(stage2_addr)};
+
+    always_ff @ (posedge clk) begin
+        if (rst)
+            inv_tags_accessed <= 0;
+        else
+            inv_tags_accessed <= extern_inv & ~update;
+    end
+
+    assign extern_inv_complete = (extern_inv & ~update) & inv_tags_accessed;
+
+	 genvar i;
+    generate
+        for (i=0; i < DCACHE_WAYS; i=i+1) begin : tag_bank_gen
+
+            assign update_tag_way[i] = update_way[i] | (inv_hit_way[i] & extern_inv_complete);
+
+            tag_bank #(DCACHE_TAG_W+1, DCACHE_LINES) dtag_bank (.*,
+                    .en_a(stage1_adv), .wen_a(stage1_inv),
+                    .addr_a(getLineAddr(stage1_addr)),
+                    .data_in_a('0), .data_out_a(tag_line[i]),
+
+                    .en_b(miss_or_extern_invalidate), .wen_b(update_tag_way[i]),
+                    .addr_b(update_port_addr),
+                    .data_in_b(new_tag), .data_out_b(inv_tag_line[i])
+                );
+
+            assign inv_hit_way[i] = ({1'b1, getTag(inv_addr)} == inv_tag_line[i]);
+            assign tag_hit_way[i] = (stage2_tag == tag_line[i]);
+
+        end
+    endgenerate
+
+    assign tag_hit = |tag_hit_way;
+
+
+endmodule

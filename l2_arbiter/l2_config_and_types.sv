@@ -1,0 +1,78 @@
+/*
+ * Copyright © 2017 Eric Matthews,  Lesley Shannon
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ * 
+ * This Source Code Form is "Incompatible With Secondary Licenses", as
+ * defined by the Mozilla Public License, v. 2.0.
+ *
+ * Initial code developed under the supervision of Dr. Lesley Shannon,
+ * Reconfigurable Computing Lab, Simon Fraser University.
+ *
+ * Author(s):
+ *             Eric Matthews <ematthew@sfu.ca>
+ */
+ 
+
+package l2_config_and_types;
+
+    parameter L2_NUM_PORTS = 2;
+    parameter L2_SUB_ID_W = 2;
+
+
+    parameter integer L2_INPUT_FIFO_DEPTHS [7 : 0]   = {4, 4, 4, 4, 4, 4, 4, 4};
+    parameter integer L2_INVALIDATION_FIFO_DEPTHS [7 : 0]   = {4, 4, 4, 4, 4, 4, 4, 4};
+    parameter integer L2_READ_RETURN_FIFO_DEPTHS [7 : 0]   = {1, 1, 1, 1, 1, 1, 1, 1};//depth 1, rd_ack will be trimmed
+
+    parameter L2_MEM_ADDR_FIFO_DEPTH = 8;
+
+    parameter L2_DATA_ATTRIBUTES_FIFO_DEPTH = 16;//Sized larger to remove need to check full status
+
+
+
+    //Convenience derivative parameters
+    parameter L2_ID_W = $clog2(L2_NUM_PORTS) + L2_SUB_ID_W;
+
+
+    typedef struct packed{
+        logic [29:0] addr;
+        logic [3:0] be;
+        logic rnw;
+        logic is_amo;
+        logic [4:0] amo_type_or_burst_size;
+        logic [L2_SUB_ID_W-1:0] sub_id;
+    } l2_request_t;
+
+    typedef struct packed{
+        logic [29:0] addr;
+        logic [3:0] be;
+        logic rnw;
+        logic is_amo;
+        logic [4:0] amo_type_or_burst_size;
+        logic [L2_ID_W-1:0] id;
+    } l2_mem_request_t;
+
+
+    typedef struct packed{
+        logic [$clog2(L2_NUM_PORTS)-1:0] id;
+        logic [4:0] burst_size;
+        logic abort;
+    } l2_data_attributes_t;
+
+
+    typedef struct packed{
+        logic [$clog2(L2_NUM_PORTS)-1:0] id;
+        logic [L2_SUB_ID_W-1:0] sub_id;
+        logic [31:0] data;
+    } l2_mem_return_data_t;
+
+    typedef struct packed{
+        logic [L2_SUB_ID_W-1:0] sub_id;
+        logic [31:0] data;
+    } l2_return_data_t;
+
+endpackage
+
+
