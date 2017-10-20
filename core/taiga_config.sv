@@ -58,12 +58,15 @@ package taiga_config;
     parameter LS_INPUT_BUFFER_DEPTH=4;
     parameter LS_OUTPUT_BUFFER_DEPTH=2;
 
+    parameter MUL_CYCLES = 1;
+    parameter MUL_OUTPUT_BUFFER_DEPTH=2;
+
     parameter DIV_INPUT_BUFFER_DEPTH=2;
     parameter DIV_OUTPUT_BUFFER_DEPTH=2;
 
-
     //Address space
-    parameter USE_SCRATCH_MEM = 1;
+    parameter USE_I_SCRATCH_MEM = 1;
+    parameter USE_D_SCRATCH_MEM = 1;
     parameter SCRATCH_ADDR_L = 32'h80000000;
     parameter SCRATCH_ADDR_H = 32'h8000FFFF;
     parameter SCRATCH_BIT_CHECK = 16;
@@ -80,7 +83,7 @@ package taiga_config;
     parameter C_M_AXI_ADDR_WIDTH = 32;
     parameter C_M_AXI_DATA_WIDTH = 32;
 
-    parameter USE_MMU = 1;
+    parameter USE_MMU = 0;
 
     //Caches
     //Size in bytes: (DCACHE_LINES * DCACHE_WAYS * DCACHE_LINE_W * 4)

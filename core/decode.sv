@@ -279,13 +279,11 @@ module decode(
     //----------------------------------------------------------------------------------
     assign ls_ex.new_request_dec = issue[LS_UNIT_ID];
 
-    assign ls_offset = 32'(signed'(opcode[5] ? {ib.data_out.instruction[31:25], ib.data_out.instruction[11:7]} : ib.data_out.instruction[31:20]));
-
-    assign ls_inputs.virtual_address = rf_decode.rs1_data + ls_offset;//rf_decode.rs1_data;
+    assign ls_inputs.offset = opcode[5] ? {ib.data_out.instruction[31:25], ib.data_out.instruction[11:7]} : ib.data_out.instruction[31:20];
+    assign ls_inputs.virtual_address = rf_decode.rs1_data;
     assign ls_inputs.rs2 = rf_decode.rs2_data;
     assign ls_inputs.pc = ib.data_out.pc;
     assign ls_inputs.fn3 = ls_inputs.is_amo ? LS_W_fn3 : fn3;
-    //assign ls_inputs.imm = opcode[5] ? {ib.data_out.instruction[31:25], ib.data_out.instruction[11:7]} : ib.data_out.instruction[31:20];
     assign ls_inputs.amo = ib.data_out.instruction[31:27];
     assign ls_inputs.is_amo = (opcode == AMO);
     assign ls_inputs.load = (opcode == LOAD) || ((opcode == AMO) && (ls_inputs.amo != AMO_SC)); //LR and AMO_ops perform a read operation as well

@@ -179,7 +179,7 @@ module fetch(
     assign fetch_sub[ICACHE_ID].stage2_addr = stage2_phys_address;
 
     //Memory interfaces
-    generate if (USE_SCRATCH_MEM)
+    generate if (USE_I_SCRATCH_MEM)
             ibram i_bram (.*, .fetch_sub(fetch_sub[BRAM_ID]));
         else
             assign  fetch_sub[BRAM_ID].ready = 1;

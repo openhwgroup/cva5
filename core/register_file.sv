@@ -4,7 +4,7 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -19,7 +19,7 @@
  * Author(s):
  *             Eric Matthews <ematthew@sfu.ca>
  */
- 
+
 import taiga_config::*;
 import taiga_types::*;
 
@@ -38,9 +38,12 @@ module register_file(
     logic rs1_feedforward;
     logic rs2_feedforward;
 
-    //End of signal declarations
-    assign rs1_feedforward = (rf_decode.rs1_addr == rf_wb.rd_addr) && rf_wb.valid_write && (in_use_by[rf_wb.rd_addr] == rf_wb.id);
-    assign rs2_feedforward = (rf_decode.rs2_addr == rf_wb.rd_addr) && rf_wb.valid_write && (in_use_by[rf_wb.rd_addr] == rf_wb.id);
+    logic in_use_match;
+    //////////////////////////////////////////
+    assign in_use_match = (in_use_by[rf_wb.rd_addr] == rf_wb.id);
+
+    assign rs1_feedforward = (rf_decode.rs1_addr == rf_wb.rd_addr) && rf_wb.valid_write && in_use_match;
+    assign rs2_feedforward = (rf_decode.rs2_addr == rf_wb.rd_addr) && rf_wb.valid_write && in_use_match;
 
     //Assign zero to r0 and initialize all registers to zero
     initial begin
@@ -52,12 +55,12 @@ module register_file(
     end
 
     always_ff @ (posedge clk) begin
-        if (rf_wb.valid_write && rf_wb.rd_addr != 0 && (in_use_by[rf_wb.rd_addr] == rf_wb.id || inorder)) //inorder needed for case when multiple outstanding writes to this register (common pattern: load, store, load) where the first load hasn't completed by the second causes an exception.  Without inorder we wouldn't commit the first load
+        if (rf_wb.valid_write && rf_wb.rd_addr != 0 && (in_use_match || inorder)) //inorder needed for case when multiple outstanding writes to this register (common pattern: load, store, load) where the first load hasn't completed by the second causes an exception.  Without inorder we wouldn't commit the first load
             register[rf_wb.rd_addr] <= rf_wb.rd_data;
     end
 
     always_ff @ (posedge clk) begin
-        if (rf_decode.instruction_issued && rf_decode.future_rd_addr != 0 )
+        if (rf_decode.instruction_issued)
             in_use_by[rf_decode.future_rd_addr] <= rf_decode.id;
     end
 
@@ -69,7 +72,7 @@ module register_file(
                     inuse[i] <= 0;
                 else if (rf_decode.instruction_issued && rf_decode.future_rd_addr == i)
                     inuse[i] <= 1;
-                else if ( rf_wb.valid_write && (rf_wb.rd_addr == i) && (in_use_by[rf_wb.rd_addr] == rf_wb.id))//  || inorder <-- when exception has occurred
+                else if ( rf_wb.valid_write && (rf_wb.rd_addr == i) && in_use_match)//  || inorder <-- when exception has occurred
                     inuse[i] <= 0;
             end
         end

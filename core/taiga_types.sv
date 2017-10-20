@@ -314,6 +314,7 @@ package taiga_types;
 
     typedef struct packed{
         logic [XLEN-1:0] virtual_address;
+        logic [11:0] offset;
         logic [XLEN-1:0] rs2;
         logic [2:0] fn3;
         logic [4:0] amo;

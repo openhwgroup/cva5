@@ -4,7 +4,7 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -19,7 +19,7 @@
  * Author(s):
  *             Eric Matthews <ematthew@sfu.ca>
  */
- 
+
 module quickdiv
         #(
         parameter C_WIDTH = 32
@@ -52,24 +52,27 @@ module quickdiv
     logic [C_WIDTH-1:0] B1;
     logic [C_WIDTH-1:0] B2;
     logic [C_WIDTH-1:0] B_r;
+    logic [C_WIDTH:0] terminate_sub;
 
-    logic [$clog2(C_WIDTH)-1:0] R_MSB;
-    logic [$clog2(C_WIDTH)-1:0] B_MSB, B_MSB_r;
-    logic [$clog2(C_WIDTH)-1:0] MSB_delta;
+    localparam MSB_W = $clog2(C_WIDTH);
+    logic [MSB_W-1:0] R_MSB;
+    logic [MSB_W-1:0] B_MSB;
+    logic [MSB_W-1:0] MSB_delta;
+    logic [MSB_W-1:0] MSB_delta_r;
 
+    msb msb_r (.msb_input(running ? new_R : A), .msb(R_MSB));
+    msb msb_b (.msb_input(running ? B_r : B), .msb(B_MSB));
 
-    msb msb_r (.msb_input(R), .msb(R_MSB));
-    msb msb_b (.msb_input(B), .msb(B_MSB));
+    assign MSB_delta = R_MSB - B_MSB;
 
-    assign MSB_delta = R_MSB - B_MSB_r;
-
-    assign Q_bit1 = (1'b1 << MSB_delta);
+    assign Q_bit1 = 2**MSB_delta_r;
     assign Q_bit2 = {1'b0, Q_bit1[C_WIDTH-1:1]};
 
-    assign new_Q_bit = (A1[C_WIDTH] ? Q_bit2 : Q_bit1);
+    assign new_Q_bit = Q | (A1[C_WIDTH] ?  Q_bit2 : Q_bit1);
     assign new_R = A1[C_WIDTH] ? A2 : A1[C_WIDTH-1:0];
 
-    assign B1 = (B_r << MSB_delta);
+    assign B1 = (B_r << MSB_delta_r);
+
     assign B2 = {1'b0,B1[C_WIDTH-1:1]};
     assign A1 = R - B1;
     assign A2 = R - B2;
@@ -96,10 +99,12 @@ module quickdiv
         end
     end
 
-    assign terminate = (R < B_r);
+    //assign terminate_sub = {1'b0, R} - {1'b0, B_r};
+    //assign terminate =  terminate_sub[C_WIDTH];
+    assign terminate =  (R < B_r);
 
     always_ff @ (posedge clk) begin
-        B_MSB_r <= B_MSB;
+            MSB_delta_r <= MSB_delta;
     end
 
     always_ff @ (posedge clk) begin
@@ -108,10 +113,8 @@ module quickdiv
             R <= A;
             B_r <= B;
         end
-        else if (~terminate) begin
-            for (int i=0; i < 32; i++)
-                if(new_Q_bit[i])
-                    Q[i] <= 1;
+        else  if (~terminate) begin
+            Q <= new_Q_bit;
             R <= new_R;
         end
     end

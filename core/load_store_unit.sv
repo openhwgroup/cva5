@@ -146,7 +146,7 @@ module load_store_unit (
     /*********************************
      * TLB interface
      *********************************/
-    assign virtual_address = stage1.virtual_address;// + 32'(signed'(stage1.imm)); <-- In decode/issue stage
+    assign virtual_address = stage1.virtual_address + 32'(signed'(stage1.offset));
 
     assign tlb.virtual_address = virtual_address;
     assign tlb.new_request = input_fifo.valid;
@@ -226,7 +226,7 @@ module load_store_unit (
      *  Unit Instantiation
      *********************************/
     //BRAM
-    generate if (USE_SCRATCH_MEM)
+    generate if (USE_D_SCRATCH_MEM)
             dbram d_bram (.clk(clk), .rst(rst), .ls_inputs(d_inputs), .ls(ls_sub[BRAM_ID]), .data_out(unit_data_array[BRAM_ID]), .*);
         else
             assign  ls_sub[BRAM_ID].ready = 1;

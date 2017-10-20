@@ -4,7 +4,7 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -19,7 +19,7 @@
  * Author(s):
  *             Eric Matthews <ematthew@sfu.ca>
  */
- 
+
 import taiga_config::*;
 import taiga_types::*;
 
@@ -28,14 +28,10 @@ module mul_unit(
         input logic rst,
         func_unit_ex_interface.unit mul_ex,
         input mul_inputs_t mul_inputs,
-        unit_writeback_interface.unit mul_wb//writeback_unit_interface_dummy.unit mul_wb//
-
+        unit_writeback_interface.unit mul_wb
         );
 
-    parameter MUL_CYCLES = 1;
-    parameter FIFO_DEPTH = 2;
-
-    logic [$clog2(FIFO_DEPTH+1)-1:0] inflight_count;
+    logic [$clog2(MUL_OUTPUT_BUFFER_DEPTH+1)-1:0] inflight_count;
 
     struct packed{
         logic [31:0] upper;
@@ -43,8 +39,9 @@ module mul_unit(
     } mul_result;
 
     logic [31:0] result;
-    logic [1:0] mul_done_op;
-    logic mul_done;
+    logic mul_lower;
+    logic mul_done_lower;
+    logic signa, signb;
 
     fifo_interface #(.DATA_WIDTH(XLEN)) wb_fifo();
 
@@ -62,29 +59,27 @@ module mul_unit(
     always_ff @(posedge clk) begin
         if (rst)
             mul_ex.ready <= 1;
-        else if (mul_ex.new_request_dec && ~mul_wb.accepted && inflight_count == (FIFO_DEPTH-1))
+        else if (mul_ex.new_request_dec && ~mul_wb.accepted && inflight_count == (MUL_OUTPUT_BUFFER_DEPTH-1))
             mul_ex.ready <= 0;
         else if (mul_wb.accepted)
             mul_ex.ready <= 1;
     end
 
-    mul #(MUL_CYCLES) multiplier (.*, .A(mul_inputs.rs1), .B(mul_inputs.rs2),
-            .P(mul_result), .new_request(mul_ex.new_request_dec), .op(mul_inputs.op),
-            .done(mul_done), .completed_op(mul_done_op));
+    assign mul_lower = (mul_inputs.op[1:0] == 0);
 
-    always_comb begin
-        case (mul_done_op)
-            MUL_fn3[1:0] : result <= mul_result.lower;
-            MULH_fn3[1:0] : result <= mul_result.upper;
-            MULHSU_fn3[1:0] : result <= mul_result.upper;
-            MULHU_fn3[1:0] : result <= mul_result.upper;
-        endcase
-    end
+    assign signa = ~(mul_inputs.op[1:0] == 2'b11);
+    assign signb = ~mul_inputs.op[1];
+
+    mul #(MUL_CYCLES) multiplier (.*, .A(mul_inputs.rs1), .B(mul_inputs.rs2),
+            .P(mul_result), .new_request(mul_ex.new_request_dec), .signa(signa), .signb(signb), .lower(mul_lower),
+            .done(mul_done), .completed_lower(mul_done_lower));
+
+    assign result = mul_done_lower ? mul_result.lower : mul_result.upper;
 
     /*********************************
      *  Output FIFO
      *********************************/
-    lutram_fifo #(.DATA_WIDTH(XLEN), .FIFO_DEPTH(FIFO_DEPTH)) output_fifo (.fifo(wb_fifo), .*);
+    lutram_fifo #(.DATA_WIDTH(XLEN), .FIFO_DEPTH(MUL_OUTPUT_BUFFER_DEPTH)) output_fifo (.fifo(wb_fifo), .*);
 
     assign wb_fifo.data_in = result;
     assign wb_fifo.push = mul_done;
