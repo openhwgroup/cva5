@@ -62,7 +62,7 @@ To build stand-alone software you will need to build the risc-v gcc toolchain an
 
 Build the tools for a RV32IMA configuration.  To build new stand-alone applications the benchmarks in the riscv-tests can be used as a starting point.
 
-###Changes Required
+### Changes Required
 In order to build your own applications you will need to make a few small modifications to the setup in the riscv-tests/benchmarks directory.
 
 In the riscv-tests/benchmarks/Makefile, make sure XLEN is set to 32, and add -DHOST_DEBUG=0 to the RISCV_GCC_OPTS.
@@ -71,7 +71,7 @@ In riscv-tests/benchmarks/common/crt.S the default stack size is 128KB which wou
 
 For UART support you will need to modify the riscv-tests/benchmarks/common/syscalls.c file, specifically, the putchar function.  Replace this function with one that sends a character to the UART.
 
-###Creating the simulation and BRAM init files
+### Creating the simulation and BRAM init files
 To create the inputs for simulation, use the taiga_binary_converter.py (from the tools directory) on the resulting binaries to create inputs for simulation and BRAM initialization for hardware.
 
 The taiga_binary_converter.py script requires the following inputs:
