@@ -32,11 +32,13 @@ module write_back(
         register_file_writeback_interface.writeback rf_wb,
         inflight_queue_interface.wb iq,
         id_generator_interface.wb id_gen,
+        id_table_interface.wb idt,
         output logic instruction_complete
         );
 
     logic done [NUM_WB_UNITS-1:0];
     logic early_done [NUM_WB_UNITS-1:0];
+    logic [$clog2(INFLIGHT_QUEUE_DEPTH)-1:0] unit_ids [NUM_WB_UNITS-1:0];
 
     logic accepted [NUM_WB_UNITS-1:0];
     logic [XLEN-1:0] rd [NUM_WB_UNITS-1:0];
@@ -47,13 +49,37 @@ module write_back(
     logic [$clog2(INFLIGHT_QUEUE_DEPTH)-1:0] iq_index, iq_index_corrected, iq_index_r;
     instruction_id_t issue_id, issue_id_r;
 
-    //Re-assigning interface inputs to array types so that they can be dynamically indexed
+    logic [INFLIGHT_QUEUE_DEPTH-1:0] id_early_done, id_done, id_done_r;
+
+    always_comb begin
+        for (int i = 0; i < INFLIGHT_QUEUE_DEPTH; i++) begin
+            id_early_done[i]=0;
+            for (int j = 0; j < NUM_WB_UNITS; j++) begin
+                id_early_done[i] |= early_done[j] && (unit_ids[j] == i);
+            end
+        end
+    end
+
     genvar i;
+    generate
+        for (i=0; i<INFLIGHT_QUEUE_DEPTH; i++) begin : id_r
+            always_ff @(posedge clk) begin
+                if (rst | (issue_id == i))
+                    id_done_r[i]  <= 0;
+                else if (id_early_done[i])
+                    id_done_r[i] <= 1;
+            end
+        end
+    endgenerate
+
+    assign id_done = id_early_done | id_done_r;
+    //Re-assigning interface inputs to array types so that they can be dynamically indexed
     generate
     for (i=0; i< NUM_WB_UNITS; i++) begin : interface_to_array_g
         assign done[i] = unit_wb[i].done;
         assign early_done[i] = unit_wb[i].early_done;
         assign rd[i] = unit_wb[i].rd;
+        assign unit_ids[i] = unit_wb[i].id;
         assign unit_wb[i].accepted = accepted[i];
     end
     endgenerate
@@ -62,29 +88,28 @@ module write_back(
     always_comb begin
         //queue input
         not_in_queue = 1;
-        unit_id = iq.data_in.unit_id;
         issue_id = iq.data_in.id;
-        rd_addr = iq.data_in.rd_addr;
         iq_index = 0;
 
         //queue outputs
-        for (int i=0; i<INFLIGHT_QUEUE_DEPTH; i=i+1) begin
-            if ( (iq.valid[i] && ~iq.pop[i]) //only consider valid entries and not the one completing this cycle
-                    && (inorder || (~inorder && early_done[iq.data_out[i].unit_id]))) begin //if inorder set find oldest valid instruction, otherwise find oldest instruction that is done
+        for (int i=0; i<INFLIGHT_QUEUE_DEPTH; i++) begin
+            if ( (inorder | (~inorder & id_done[iq.data_out[i].id]))) begin //if inorder set find oldest valid instruction, otherwise find oldest instruction that is done
                 not_in_queue = 0;
-                unit_id =  iq.data_out[i].unit_id;
                 issue_id = iq.data_out[i].id;
-                rd_addr = iq.data_out[i].rd_addr;
                 iq_index = i;
             end
         end
     end
 
+    assign idt.wb_instruction_id = issue_id;
+    assign unit_id = not_in_queue ? iq.data_in.unit_id : idt.wb_unit_id;
+    assign rd_addr = not_in_queue ? iq.data_in.rd_addr : idt.wb_rd_addr;
+
     always_ff @(posedge clk) begin
         if (rst)
             instruction_complete <= 0;
         else
-            instruction_complete <= early_done[unit_id];
+            instruction_complete <= id_done[issue_id];
     end
 
     //As we decide our popping logic one cycle in advance we have to perform a correction in some cases
@@ -107,7 +132,7 @@ module write_back(
 
     assign rf_wb.rd_addr_early =  rd_addr;
     assign rf_wb.id_early =  issue_id;
-    assign rf_wb.valid_write_early = early_done[unit_id];
+    assign rf_wb.valid_write_early = id_done[issue_id];
 
     generate
         for (i=0; i<INFLIGHT_QUEUE_DEPTH; i++) begin : iq_pop
@@ -115,7 +140,7 @@ module write_back(
                 if (rst)
                     iq.pop[i]  <= 0;
                 else
-                    iq.pop[i] <= early_done[unit_id] && (iq_index_corrected == i);
+                    iq.pop[i] <= id_done[issue_id] && (iq_index_corrected == i);
             end
         end
     endgenerate
@@ -126,7 +151,7 @@ module write_back(
                 if (rst)
                     accepted[i] <= 0;
                 else
-                    accepted[i] <= early_done[i] && (unit_id == i);
+                    accepted[i] <= id_done[issue_id] && (unit_id == i);
             end
         end
     endgenerate
