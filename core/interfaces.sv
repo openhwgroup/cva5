@@ -4,7 +4,7 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -19,7 +19,7 @@
  * Author(s):
  *             Eric Matthews <ematthew@sfu.ca>
  */
- 
+
 import taiga_config::*;
 import taiga_types::*;
 import l2_config_and_types::*;
@@ -58,7 +58,6 @@ interface branch_table_interface;
     logic use_prediction;
     logic use_ras;
     logic flush;
-
     modport branch_table (input if_pc, dec_pc, ex_pc, next_pc, njump_pc, jump_pc, branch_taken, branch_ex, is_return_ex, prediction_dec, next_pc_valid, new_mem_request, output predicted_pc, prediction, use_prediction, use_ras, flush);
     modport fetch (input predicted_pc, prediction, use_prediction, branch_taken, flush, njump_pc, jump_pc, use_ras, output if_pc, next_pc, next_pc_valid, new_mem_request);
     modport decode (output dec_pc);
@@ -87,26 +86,6 @@ interface ras_interface;
     modport fetch (input addr, valid);
 endinterface
 
-// SystemVerilog does not permit dynamic indexing of arrays of interfaces so to mux between signals
-// of an array of interfaces it is necessary to aggregate them in one interface and mux the aggregate signals instead
-// The units instantiate a generic interface who's signal names must match those below in the unit modport
-// Alternative would be to use structs instead
-//interface writeback_unit_interface;
-//    logic done [NUM_WB_UNITS-1:0];
-//    logic early_done [NUM_WB_UNITS-1:0];
-//
-//    logic accepted [NUM_WB_UNITS-1:0];
-//    logic [XLEN-1:0] rd [NUM_WB_UNITS-1:0];
-//
-//    genvar i;
-//    for (i=0; i< NUM_WB_UNITS; i++) begin : member
-//        modport unit (output .done(done[i]), .early_done(early_done[i]), .rd(rd[i]), input .accepted(accepted[i]));
-//    end
-//
-//    modport writeback (input done, early_done, rd, output accepted);
-//endinterface
-
-//Dummy interface can be used to compile a single unit as top-level for development purposes
 interface unit_writeback_interface;
     logic done ;
     logic early_done;
@@ -131,20 +110,6 @@ interface csr_exception_interface;
     modport econtrol (output valid, code, pc, addr, input illegal_instruction, csr_pc);
 
 endinterface
-
-
-interface csr_inputs_interface;
-    logic [XLEN-1:0] rs1;
-    logic [11:0] csr_addr;
-    logic system_op; //fn3 == 3'b000
-    logic [1:0] csr_op;
-
-    logic zero_operand;//(rs1 == x0 or zimm[4:0] == 4'b0000) and RS/RC or RSI/RCI
-
-    modport decode (output rs1, csr_addr, system_op, csr_op, zero_operand);
-    modport unit (input rs1, csr_addr, system_op, csr_op, zero_operand);
-endinterface
-
 
 interface register_file_decode_interface;
     logic[4:0] future_rd_addr; //if not a storing instruction required to be zero
@@ -414,10 +379,9 @@ interface ls_sub_unit_interface;
     logic data_valid;
     logic ready;
     logic new_request;
-    logic ack;
 
-    modport sub_unit (input ack, new_request, output data_valid, ready);
-    modport ls (output ack, new_request, input data_valid, ready);
+    modport sub_unit (input new_request, output data_valid, ready);
+    modport ls (output new_request, input data_valid, ready);
 
 endinterface
 

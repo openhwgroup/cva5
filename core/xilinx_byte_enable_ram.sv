@@ -4,7 +4,7 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -19,12 +19,12 @@
  * Author(s):
  *             Eric Matthews <ematthew@sfu.ca>
  */
- 
+
 import taiga_config::*;
 import taiga_types::*;
 
 module xilinx_byte_enable_ram #(
-        parameter LINES = 8192,
+        parameter LINES = 4096,
         parameter preload_file = "",
         parameter USE_PRELOAD_FILE = 0
         )
@@ -48,7 +48,7 @@ module xilinx_byte_enable_ram #(
     initial
     begin
         if(USE_PRELOAD_FILE)
-        $readmemh(preload_file,ram, 0, LINES-1);
+            $readmemh(preload_file,ram, 0, LINES-1);
     end
 
     always_ff @(posedge clk) begin
@@ -61,10 +61,10 @@ module xilinx_byte_enable_ram #(
     end
 
     always_ff @(posedge clk) begin
-        if (en_a) begin
-            if(~|be_a)
-                data_out_a <= ram[addr_a];
-        end
+        if (~en_a)
+            data_out_a <= 0;
+        else
+            data_out_a <= ram[addr_a];
     end
 
     always_ff @(posedge clk) begin
@@ -77,10 +77,10 @@ module xilinx_byte_enable_ram #(
     end
 
     always_ff @(posedge clk) begin
-        if (en_b) begin
-            if(~|be_b)
-                data_out_b <= ram[addr_b];
-        end
+        if (~en_b)
+            data_out_b <= 0;
+        else
+            data_out_b <= ram[addr_b];
     end
 
 endmodule

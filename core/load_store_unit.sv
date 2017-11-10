@@ -4,7 +4,7 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -19,7 +19,7 @@
  * Author(s):
  *             Eric Matthews <ematthew@sfu.ca>
  */
- 
+
 import taiga_config::*;
 import taiga_types::*;
 
@@ -55,13 +55,14 @@ module load_store_unit (
     localparam DCACHE_ID = 2;
 
     //Should be equal to pipeline depth of longest load/store subunit
-    localparam ATTRIBUTES_DEPTH = 4;
+    localparam ATTRIBUTES_DEPTH = 2;
 
     typedef enum bit [2:0] {BU = 3'b000, HU = 3'b001, BS = 3'b010, HS = 3'b011, W = 3'b100} sign_type;
 
     data_access_shared_inputs_t d_inputs;
     ls_sub_unit_interface ls_sub[NUM_SUB_UNITS-1:0]();
 
+    logic units_ready;
     logic issue_request;
     logic data_valid;
     logic load_complete;
@@ -79,12 +80,12 @@ module load_store_unit (
     logic [31:0] previous_load;
     logic [31:0] stage1_raw_data;
 
-    logic unaligned_addr;
-    logic bus_access;
-    logic bram_access;
-    logic cache_access;
-
     logic [31:0] unit_data_array [NUM_SUB_UNITS-1:0];
+    logic [NUM_SUB_UNITS-1:0] unit_ready;
+    logic [NUM_SUB_UNITS-1:0] unit_data_valid;
+
+    logic unaligned_addr;
+    logic [NUM_SUB_UNITS-1:0] sub_unit_address_match;
 
     //AMO support
     //LR -- invalidates line if tag hit
@@ -97,9 +98,8 @@ module load_store_unit (
     logic [4:0] amo_op;
 
     typedef struct packed{
-        logic[1:0] unit_id;
         logic [2:0] fn3;
-        logic[1:0] byte_addr;
+        logic [1:0] byte_addr;
     } load_attributes_t;
     load_attributes_t  load_attributes_in, stage2_attr;
     load_store_inputs_t  stage1;
@@ -114,21 +114,27 @@ module load_store_unit (
     /*********************************
      *  Primary control signals
      *********************************/
-    assign issue_request =   ((stage1.load_store_forward & (data_valid | ~load_attributes.valid)) | (~stage1.load_store_forward)) & input_fifo.valid & ls_sub[DCACHE_ID].ready & ls_sub[BRAM_ID].ready & ls_sub[BUS_ID].ready;
-    assign data_valid = ls_sub[DCACHE_ID].data_valid | ls_sub[BRAM_ID].data_valid | ls_sub[BUS_ID].data_valid;
-    assign load_complete = data_valid & ~wb_fifo.full;
+    genvar i;
+    generate
+        for(i=0; i < NUM_SUB_UNITS; i++) begin
+            assign unit_ready[i] = ls_sub[i].ready;
+            assign unit_data_valid[i] = ls_sub[i].data_valid;
+        end
+    endgenerate
 
-    assign bram_access = tlb.physical_address[31:32-SCRATCH_BIT_CHECK] == SCRATCH_ADDR_L[31:32-SCRATCH_BIT_CHECK];
-    assign bus_access = tlb.physical_address[31:32-BUS_BIT_CHECK] == BUS_ADDR_L[31:32-BUS_BIT_CHECK];
-    assign cache_access = tlb.physical_address[31:32-MEMORY_BIT_CHECK] == MEMORY_ADDR_L[31:32-MEMORY_BIT_CHECK];
+    assign units_ready = &unit_ready;
+    assign data_valid = |unit_data_valid;
 
-    assign ls_sub[BRAM_ID].new_request = bram_access & issue_request;
-    assign ls_sub[BUS_ID].new_request = bus_access & issue_request;
-    assign ls_sub[DCACHE_ID].new_request = cache_access & issue_request;
+    assign issue_request = ((stage1.load_store_forward & (data_valid | ~load_attributes.valid)) | (~stage1.load_store_forward)) & input_fifo.valid & units_ready & ~wb_fifo.early_full;
+    assign load_complete = data_valid;
 
-    assign ls_sub[BRAM_ID].ack = ls_sub[BRAM_ID].data_valid & ~wb_fifo.full;
-    assign ls_sub[BUS_ID].ack = ls_sub[BUS_ID].data_valid & ~wb_fifo.full;
-    assign ls_sub[DCACHE_ID].ack = ls_sub[DCACHE_ID].data_valid & ~wb_fifo.full;
+    assign sub_unit_address_match[BRAM_ID] = tlb.physical_address[31:32-SCRATCH_BIT_CHECK] == SCRATCH_ADDR_L[31:32-SCRATCH_BIT_CHECK];
+    assign sub_unit_address_match[BUS_ID] = tlb.physical_address[31:32-BUS_BIT_CHECK] == BUS_ADDR_L[31:32-BUS_BIT_CHECK];
+    assign sub_unit_address_match[DCACHE_ID] = tlb.physical_address[31:32-MEMORY_BIT_CHECK] == MEMORY_ADDR_L[31:32-MEMORY_BIT_CHECK];
+
+    assign ls_sub[BRAM_ID].new_request = sub_unit_address_match[BRAM_ID] & issue_request;
+    assign ls_sub[BUS_ID].new_request = sub_unit_address_match[BUS_ID] & issue_request;
+    assign ls_sub[DCACHE_ID].new_request = sub_unit_address_match[DCACHE_ID] & issue_request;
     /*********************************************/
 
 
@@ -216,11 +222,10 @@ module load_store_unit (
     assign load_attributes.pop = load_complete;
     assign load_attributes.push = issue_request & stage1.load;
     assign load_attributes.data_in = load_attributes_in;
-    assign stage2_attr  = load_attributes.data_out;
-
-    assign load_attributes_in.unit_id = cache_access ? DCACHE_ID : (bus_access ? BUS_ID : BRAM_ID);
     assign load_attributes_in.fn3 = stage1.fn3;
     assign load_attributes_in.byte_addr = virtual_address[1:0];
+
+    assign stage2_attr  = load_attributes.data_out;
 
     /*********************************
      *  Unit Instantiation
@@ -228,47 +233,63 @@ module load_store_unit (
     //BRAM
     generate if (USE_D_SCRATCH_MEM)
             dbram d_bram (.clk(clk), .rst(rst), .ls_inputs(d_inputs), .ls(ls_sub[BRAM_ID]), .data_out(unit_data_array[BRAM_ID]), .*);
-        else
+        else begin
             assign  ls_sub[BRAM_ID].ready = 1;
+            assign unit_data_array[BRAM_ID] = 0;
+            assign ls_sub[BRAM_ID].data_valid = 0;
+        end
     endgenerate
     generate
-        if(FPGA_VENDOR == "xilinx") //AXI BUS
-            axi_master axi_bus (.clk(clk), .rst(rst), .ls_inputs(d_inputs), .size({1'b0,stage1.fn3[1:0]}), .m_axi(m_axi),.ls(ls_sub[BUS_ID]), .data_out(unit_data_array[BUS_ID])); //Lower two bits of fn3 match AXI specification for request size (byte/halfword/word)
-        else begin //Avalon bus
-            avalon_master avalon_bus(.clk(clk), .rst(rst),
-                    .addr(m_avalon.addr),
-                    .avread(m_avalon.read),
-                    .avwrite(m_avalon.write),
-                    .byteenable(m_avalon.byteenable),
-                    .readdata(m_avalon.readdata),
-                    .writedata(m_avalon.writedata),
-                    .waitrequest(m_avalon.waitrequest),
-                    .readdatavalid(m_avalon.readdatavalid),
-                    .writeresponsevalid(m_avalon.writeresponsevalid),
-                    .addr_in(d_inputs.addr),
-                    .data_in(d_inputs.data_in),
-                    .data_out(unit_data_array[BUS_ID]),
-                    .data_valid(ls_sub[BUS_ID].data_valid),
-                    .ready(ls_sub[BUS_ID].ready),
-                    .new_request(ls_sub[BUS_ID].new_request),
-                    .rnw(d_inputs.load),
-                    .be(d_inputs.be),
-                    .data_ack(ls_sub[BUS_ID].ack)
-                );
+        if (USE_BUS) begin
+            if(FPGA_VENDOR == "xilinx") //AXI BUS
+                axi_master axi_bus (.clk(clk), .rst(rst), .ls_inputs(d_inputs), .size({1'b0,stage1.fn3[1:0]}), .m_axi(m_axi),.ls(ls_sub[BUS_ID]), .data_out(unit_data_array[BUS_ID])); //Lower two bits of fn3 match AXI specification for request size (byte/halfword/word)
+            else begin //Avalon bus
+                avalon_master avalon_bus(.clk(clk), .rst(rst),
+                        .addr(m_avalon.addr),
+                        .avread(m_avalon.read),
+                        .avwrite(m_avalon.write),
+                        .byteenable(m_avalon.byteenable),
+                        .readdata(m_avalon.readdata),
+                        .writedata(m_avalon.writedata),
+                        .waitrequest(m_avalon.waitrequest),
+                        .readdatavalid(m_avalon.readdatavalid),
+                        .writeresponsevalid(m_avalon.writeresponsevalid),
+                        .addr_in(d_inputs.addr),
+                        .data_in(d_inputs.data_in),
+                        .data_out(unit_data_array[BUS_ID]),
+                        .data_valid(ls_sub[BUS_ID].data_valid),
+                        .ready(ls_sub[BUS_ID].ready),
+                        .new_request(ls_sub[BUS_ID].new_request),
+                        .rnw(d_inputs.load),
+                        .be(d_inputs.be),
+                        .data_ack(ls_sub[BUS_ID].ack)
+                    );
+            end
+        end else begin
+            assign  ls_sub[BUS_ID].ready = 1;
+            assign unit_data_array[BUS_ID] = 0;
+            assign ls_sub[BUS_ID].data_valid = 0;
         end
     endgenerate
 
     //Cache
     generate if (USE_DCACHE)
             dcache data_cache (.clk(clk), .rst(rst), .ls_inputs(d_inputs), .ls(ls_sub[DCACHE_ID]), .is_amo(is_amo),  .use_forwarded_data( stage1.load_store_forward), .forwarded_data(most_recent_load), .data_out(unit_data_array[DCACHE_ID]), .*);
-        else
+        else begin
             assign  ls_sub[DCACHE_ID].ready = 1;
+            assign unit_data_array[DCACHE_ID] = 0;
+            assign ls_sub[DCACHE_ID].data_valid = 0;
+        end
     endgenerate
     /*************************************
      * Output Muxing
      *************************************/
     //unit mux
-    assign unit_muxed_load_data = unit_data_array[stage2_attr.unit_id];
+    always_comb begin
+        unit_muxed_load_data = 0;
+        for (int i=0; i < NUM_SUB_UNITS; i++)
+            unit_muxed_load_data |= unit_data_array[i];
+    end
 
     //Byte select
     always_comb begin

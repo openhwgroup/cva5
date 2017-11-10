@@ -4,7 +4,7 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -19,7 +19,7 @@
  * Author(s):
  *             Eric Matthews <ematthew@sfu.ca>
  */
- 
+
 import taiga_config::*;
 import taiga_types::*;
 
@@ -30,7 +30,7 @@ module csr_unit (
         unit_writeback_interface.unit csr_wb, //        writeback_unit_interface_dummy.unit csr_wb, //        writeback_unit_interface_dummy.unit csr_wb,
 
         //Decode
-        csr_inputs_interface.unit csr_inputs,
+        input csr_inputs_t csr_inputs,
         input logic instruction_issued_no_rd,
 
         //exception_control
@@ -161,7 +161,7 @@ module csr_unit (
     struct packed {
         logic [9:0] asid;
         logic [21:0] ppn;
-    } sptbr;
+    } satp;
 
     //Non-constant registers
 
@@ -180,7 +180,7 @@ module csr_unit (
     logic[XLEN-1:0] mtimecmp;
 
     logic[XLEN-1:0] mcause;
-    logic[XLEN-1:0] mbadaddr;
+    logic[XLEN-1:0] mtval;
 
     mip_t sip_mask;
     mie_t sie_mask;
@@ -190,7 +190,7 @@ module csr_unit (
     logic[XLEN-1:0] stimecmp;
 
     logic[XLEN-1:0] scause;
-    logic[XLEN-1:0] sbadaddr;
+    logic[XLEN-1:0] stval;
 
     logic[XLEN-1:0] sstatus;
     logic[XLEN-1:0] stvec;
@@ -221,6 +221,7 @@ module csr_unit (
     logic [31:0] updated_csr;
 
     logic invalid_addr;
+    logic mcounter_addr;
 
     logic machine_trap;
     logic supervisor_trap;
@@ -229,7 +230,7 @@ module csr_unit (
 
     //TLB status --- used to mux physical/virtual address
     assign tlb_on = mstatus.vm[3]; //We only support Sv32 or Mbare so only need to check one bit
-    assign asid = sptbr.asid;
+    assign asid = satp.asid;
     //******************
 
     //MMU interface
@@ -239,8 +240,8 @@ module csr_unit (
     assign dmmu.pum = mstatus.pum;
     assign immu.privilege = privilege_level;
     assign dmmu.privilege = mstatus.mprv ? mstatus.mpp : privilege_level;
-    assign immu.ppn = sptbr.ppn;
-    assign dmmu.ppn = sptbr.ppn;
+    assign immu.ppn = satp.ppn;
+    assign dmmu.ppn = satp.ppn;
     //******************
 
     //Machine ISA register
@@ -253,9 +254,9 @@ module csr_unit (
     assign  csr_addr = csr_inputs.csr_addr;
     assign privilege_exception = csr_ex.new_request  && (csr_addr.privilege > privilege_level);
 
-    assign user_write = !csr_inputs.system_op && !privilege_exception && (csr_addr.rw_bits != CSR_READ_ONLY && csr_addr.privilege == USER);
-    assign supervisor_write = !csr_inputs.system_op && !privilege_exception && (csr_addr.rw_bits != CSR_READ_ONLY && csr_addr.privilege == SUPERVISOR);
-    assign machine_write = !csr_inputs.system_op && !privilege_exception && (csr_addr.rw_bits != CSR_READ_ONLY && csr_addr.privilege == MACHINE);
+    assign user_write = !privilege_exception && (csr_addr.rw_bits != CSR_READ_ONLY && csr_addr.privilege == USER);
+    assign supervisor_write = !privilege_exception && (csr_addr.rw_bits != CSR_READ_ONLY && csr_addr.privilege == SUPERVISOR);
+    assign machine_write = !privilege_exception && (csr_addr.rw_bits != CSR_READ_ONLY && csr_addr.privilege == MACHINE);
 
     assign csr_exception.illegal_instruction = invalid_addr | privilege_exception;
 
@@ -515,13 +516,13 @@ module csr_unit (
 //        end
 //    end
 
-//    //mbadaddr
+//    //mtval
 //    always_ff @(posedge clk) begin
 //        if (machine_trap) begin
-//            mbadaddr <= csr_exception.addr;
+//            mtval <= csr_exception.addr;
 //        end
-//        else if (machine_write && csr_addr.sub_addr == MBADADDR[7:0]) begin
-//            mbadaddr <= updated_csr;
+//        else if (machine_write && csr_addr.sub_addr == MTVAL[7:0]) begin
+//            mtval <= updated_csr;
 //        end
 //    end
 
@@ -560,22 +561,22 @@ module csr_unit (
 //        end
 //    end
 
-//    //sbadaddr
+//    //stval
 //    always_ff @(posedge clk) begin
 //        if (supervisor_trap) begin
-//            sbadaddr <= csr_exception.addr;
+//            stval <= csr_exception.addr;
 //        end
-//        else if (supervisor_write && csr_addr.sub_addr == SBADADDR[7:0]) begin
-//            sbadaddr <= updated_csr;
+//        else if (supervisor_write && csr_addr.sub_addr == STVAL[7:0]) begin
+//            stval <= updated_csr;
 //        end
 //    end
 
-//    //sptbr
+//    //satp
 //    always_ff @(posedge clk) begin
 //        if (rst) begin
-//            sptbr <= 0;
-//        end else if (supervisor_write && csr_addr.sub_addr == SPTBR[7:0]) begin
-//            sptbr <= updated_csr;
+//            satp <= 0;
+//        end else if (supervisor_write && csr_addr.sub_addr == SATP[7:0]) begin
+//            satp <= updated_csr;
 //        end
 //    end
 
@@ -607,6 +608,7 @@ module csr_unit (
         end
     end
 
+    //assign mcounter_addr = (csr_addr >= 12'hB00 && csr_addr < 12'hBA0);
 
     always_comb begin
         invalid_addr = 0;
@@ -627,32 +629,15 @@ module csr_unit (
             MSCRATCH : selected_csr = scratch_out;
             MEPC : selected_csr = mepc;
             MCAUSE : selected_csr = mcause;
-            MBADADDR : selected_csr = mbadaddr;
+            MTVAL : selected_csr = mtval;
             MIP : selected_csr = mip;
                 //Machine Timers and Counters
             MCYCLE : selected_csr = mcycle[XLEN-1:0];
-            MTIME : selected_csr = mtime[XLEN-1:0];
             MINSTRET : selected_csr = minst_ret[XLEN-1:0];
             MCYCLEH : selected_csr = mcycle[TIMER_W-1:XLEN];
-            MTIMEH : selected_csr = mtime[TIMER_W-1:XLEN];
             MINSTRETH : selected_csr = minst_ret[TIMER_W-1:XLEN];
-                //Counter enables
-            MUCOUNTEREN : selected_csr = 0;
-            MSCOUNTEREN : selected_csr = 0;
-                //counter deltas
-            MUCYCLE_DELTA : selected_csr = 0;
-            MUTIME_DELTA : selected_csr = 0;
-            MUINSTRET_DELTA : selected_csr = 0;
-            MSCYCLE_DELTA : selected_csr = 0;
-            MSTIME_DELTA : selected_csr = 0;
-            MSINSTRET_DELTA : selected_csr = 0;
-            MUCYCLE_DELTAH : selected_csr = 0;
-            MUTIME_DELTAH : selected_csr = 0;
-            MUINSTRET_DELTAH : selected_csr = 0;
-            MSCYCLE_DELTAH : selected_csr = 0;
-            MSTIME_DELTAH : selected_csr = 0;
-            MSINSTRET_DELTAH : selected_csr = 0;
-                //Supervisor Trap Setup
+
+            //Supervisor Trap Setup
             SSTATUS : selected_csr = (mstatus & mstatus_smask);
             SEDELEG : selected_csr = 0;
             SIDELEG : selected_csr = 0;
@@ -662,18 +647,10 @@ module csr_unit (
             SSCRATCH : selected_csr = scratch_out;
             SEPC : selected_csr = sepc;
             SCAUSE : selected_csr = scause;
-            SBADADDR : selected_csr = sbadaddr;
+            STVAL : selected_csr = stval;
             SIP : selected_csr = (mip & sip_mask);
                 //Supervisor Protection and Translation
-            SPTBR : selected_csr = sptbr;
-                //Supervisor user shadows
-            SCYCLE : selected_csr = mcycle[XLEN-1:0];
-            STIME : selected_csr = mtime[XLEN-1:0];
-            SINSTRET : selected_csr = minst_ret[XLEN-1:0];
-            SCYCLEH : selected_csr = mcycle[TIMER_W-1:XLEN];
-            STIMEH : selected_csr = mtime[TIMER_W-1:XLEN];
-            SINSTRETH : selected_csr = minst_ret[TIMER_W-1:XLEN];
-
+            SATP : selected_csr = satp;
                 //User status
                 //Floating point
                 //User Counter Timers

@@ -4,7 +4,7 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -19,7 +19,7 @@
  * Author(s):
  *             Eric Matthews <ematthew@sfu.ca>
  */
- 
+
 import taiga_config::*;
 import taiga_types::*;
 
@@ -40,7 +40,7 @@ module decode(
         output alu_inputs_t alu_inputs,
         output load_store_inputs_t ls_inputs,
         output branch_inputs_t branch_inputs,
-        csr_inputs_interface.decode csr_inputs,
+        output csr_inputs_t csr_inputs,
         output mul_inputs_t mul_inputs,
         output  div_inputs_t div_inputs,
 
@@ -338,6 +338,8 @@ module decode(
             csr_inputs.rs1 <= csr_imm_op ? {27'b0, rs1_addr} : rf_decode.rs1_data; //immediate mode or rs1_addr reg
             csr_inputs.csr_addr <= ib.data_out.instruction[31:20];
             csr_inputs.csr_op <= fn3;
+            csr_inputs.rs1_is_zero <= (rs1_addr == 0);
+            csr_inputs.rd_is_zero <= (future_rd_addr == 0);
         end
     end
     //----------------------------------------------------------------------------------

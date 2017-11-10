@@ -4,7 +4,7 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -19,7 +19,7 @@
  * Author(s):
  *             Eric Matthews <ematthew@sfu.ca>
  */
- 
+
 import taiga_config::*;
 import taiga_types::*;
 
@@ -73,6 +73,7 @@ module dcache(
     logic [3:0] stage2_be;
     logic [2:0] stage2_fn3;
     logic [31:0] stage2_data_in;
+    logic [31:0] stage2_data;
 
     logic stage2_use_forwarded_data;
     logic [31:0] stage2_forwarded_data;
@@ -90,13 +91,13 @@ module dcache(
     logic [31:0] amo_result;
     logic [31:0] amo_rs2;
 
-    logic miss;
-
     logic[3:0] write_hit_be;
 
     logic second_cycle;
 
     logic request;
+
+    logic is_target_word;
 
     logic memory_complete;
     logic hit_allowed;
@@ -108,12 +109,7 @@ module dcache(
     logic read_miss_complete;
 
     logic store_complete;
-    logic store_conditional_complete;
     amo_alu_inputs_t amo_alu_inputs;
-    logic[47:0] write_request_count;
-    logic[47:0] read_request_count;
-    logic[47:0] read_request_count_internal;
-    logic[47:0] read_request_count_complete;
 
     const bit[DCACHE_SUB_LINE_ADDR_W-1:0] SUBLINE_PADDING= '0;
 
@@ -123,48 +119,16 @@ module dcache(
     always_ff @ (posedge clk) begin
         if (ls.new_request) begin
             stage2_addr <= ls_inputs.addr;
-            stage2_data_in <= ls_inputs.data_in;
             stage2_be <= ls_inputs.be;
             stage2_load <= ls_inputs.load;
             stage2_store <= ls_inputs.store;
+            stage2_data_in <= ls_inputs.data_in;
             stage2_use_forwarded_data <= use_forwarded_data;
             stage2_lr <= lr;
             stage2_is_amo <= is_amo; //excludes lr/sc
             stage2_sc <= sc;
             stage2_amo_op <= amo_op;
             stage2_fn3 <= ls_inputs.fn3;
-        end
-    end
-
-    always_ff @ (posedge clk) begin
-        if(rst)
-            write_request_count <= 0;
-        else if (ls.new_request & ls_inputs.store) begin
-            write_request_count <= write_request_count + 1;
-        end
-    end
-
-    always_ff @ (posedge clk) begin
-        if(rst)
-            read_request_count <= 0;
-        else if (~tag_hit & read_hit_allowed) begin
-            read_request_count <= read_request_count + 1;
-        end
-    end
-
-    always_ff @ (posedge clk) begin
-        if(rst)
-            read_request_count_internal <= 0;
-        else if (ls.new_request & ls_inputs.load) begin
-            read_request_count_internal <= read_request_count_internal + 1;
-        end
-    end
-
-    always_ff @ (posedge clk) begin
-        if(rst)
-            read_request_count_complete <= 0;
-        else if (ls.ack) begin
-            read_request_count_complete <= read_request_count_complete + 1;
         end
     end
 
@@ -199,13 +163,6 @@ module dcache(
 
     always_ff @ (posedge clk) begin
         if (rst)
-            miss <= 0;
-        else if (second_cycle)
-            miss <= ~(tag_hit & read_hit_allowed);
-    end
-
-    always_ff @ (posedge clk) begin
-        if (rst)
             tag_update <= 0;
         else if (second_cycle)
             tag_update <= dcache_on & stage2_load & ~tag_hit;        //Cache enabled, read miss
@@ -217,7 +174,7 @@ module dcache(
      * L1 Arbiter Interface
      *************************************/
     assign l1_request.addr = {stage2_addr[31:2], 2'b0} ;//Memory interface aligns request to burst size (done there to support AMO line-read word-write)
-    assign l1_request.data = stage2_use_forwarded_data ? stage2_forwarded_data : stage2_data_in;
+    assign l1_request.data = stage2_data;
     assign l1_request.rnw = stage2_load;
     assign l1_request.be = stage2_be;
     assign l1_request.size = stage2_load ? (DCACHE_LINE_W-1) : 0;//LR and AMO ops are included in load
@@ -230,7 +187,7 @@ module dcache(
         else if (l1_response.data_valid)
             word_count <= word_count + 1;
     end
-
+    assign is_target_word = (stage2_addr[DCACHE_SUB_LINE_ADDR_W+1:2]  == word_count);
 
     always_ff @ (posedge clk) begin
         if (rst)
@@ -276,7 +233,7 @@ module dcache(
         );
 
 
-    assign write_hit_be = stage2_be & {4{tag_hit}};
+    assign write_hit_be = stage2_be;// & {4{tag_hit}};
 
     //AMO op processing on incoming data
     always_ff @ (posedge clk) begin
@@ -290,36 +247,36 @@ module dcache(
     amo_alu amo_unit (.*, .result(amo_result));
 
     always_comb begin
-        if (stage2_is_amo && stage2_addr[DCACHE_SUB_LINE_ADDR_W+1:2]  == word_count)
+        if (stage2_is_amo & is_target_word)
             new_line_data = amo_result;
-        else if (sc_complete & sc_success)
+        else if (stage2_sc)
             new_line_data = stage2_data_in;//Only forwarding on STORE opcode
         else
             new_line_data = l1_response.data;
     end
 
     assign sc_write_index = stage2_addr[DCACHE_SUB_LINE_ADDR_W+1:2];
-    assign update_word_index = sc_complete ? sc_write_index : word_count;
+    assign update_word_index = stage2_sc ? sc_write_index : word_count;
     ////////////////////////////////////////////////////////
-
-
     always_comb begin
         unique case(stage2_fn3) //<--011, 110, 111, 100, 101 unused
             LS_B_fn3 : stage2_forwarded_data = {4{forwarded_data[7:0]}};
             LS_H_fn3 : stage2_forwarded_data = {2{forwarded_data[15:0]}};
-            LS_W_fn3 : stage2_forwarded_data =forwarded_data;
+            LS_W_fn3 : stage2_forwarded_data = forwarded_data;
         endcase
     end
+
+    assign stage2_data = stage2_use_forwarded_data ? stage2_forwarded_data : stage2_data_in;
 
     //Data Bank(s)
     ddata_bank #(DCACHE_LINES*DCACHE_LINE_W*DCACHE_WAYS) data_bank (
             .clk(clk),
-            .addr_a({stage2_addr[DCACHE_LINE_ADDR_W+DCACHE_SUB_LINE_ADDR_W+2-1:2], tag_hit_way_int}),
-            .addr_b({stage2_addr[DCACHE_LINE_ADDR_W+DCACHE_SUB_LINE_ADDR_W+2-1:DCACHE_SUB_LINE_ADDR_W+2], update_word_index, tag_update_way_int}),
-            .en_a(second_cycle),
+            .addr_a({tag_hit_way_int, stage2_addr[DCACHE_LINE_ADDR_W+DCACHE_SUB_LINE_ADDR_W+2-1:2]}),
+            .addr_b({tag_update_way_int, stage2_addr[DCACHE_LINE_ADDR_W+DCACHE_SUB_LINE_ADDR_W+2-1:DCACHE_SUB_LINE_ADDR_W+2], update_word_index}),
+            .en_a(tag_hit),
             .en_b(l1_response.data_valid | (sc_complete & sc_success)),
             .be_a(write_hit_be),
-            .data_in_a(stage2_use_forwarded_data ? stage2_forwarded_data : stage2_data_in),
+            .data_in_a(stage2_data),
             .data_in_b(new_line_data),
             .data_out_a(dbank_data_out)
         );
@@ -329,50 +286,51 @@ module dcache(
      * Output Muxing
      *************************************/
     always_ff @ (posedge clk) begin
-        if (l1_response.data_valid && stage2_addr[DCACHE_SUB_LINE_ADDR_W+1:2]  == word_count)
+        if (rst | read_miss_complete)
+            miss_data <= 0;
+        else if (l1_response.data_valid & is_target_word)
             miss_data <= l1_response.data;
-        else if (sc_complete)
+        else if (stage2_sc)
             miss_data <= {31'b0, sc_success};
     end
 
-    assign data_out = miss ? miss_data : dbank_data_out;
+    assign data_out = miss_data | dbank_data_out;
 
     /*************************************
      * Pipeline Advancement
      *************************************/
     assign line_complete = (l1_response.data_valid && (word_count == (DCACHE_LINE_W-1))); //covers load, LR, AMO
     assign store_complete = l1_request.ack & stage2_store & ~stage2_sc;
-    assign store_conditional_complete = sc_complete;
 
     always_ff @ (posedge clk) begin
         if (rst)
             memory_complete <= 0;
         else if (line_complete | (read_hit_allowed & tag_hit) | sc_complete) //read hit OR line fill OR SC complete
             memory_complete <= 1;
-        else if (ls.ack)
+        else
             memory_complete <= 0;
     end
 
     assign ls.data_valid = memory_complete;
 
-
+    //read miss complete includes store conditional complete
     always_ff @ (posedge clk) begin
         if (rst)
             read_miss_complete <= 0;
-        else if (line_complete) //read hit OR line fill OR SC complete
+        else if (line_complete | sc_complete) //read hit OR line fill OR SC complete
             read_miss_complete <= 1;
-        else if (ls.ack)
+        else
             read_miss_complete <= 0;
     end
 
-    assign ls.ready =  (read_hit_allowed & tag_hit) | store_complete | (read_miss_complete & ls.ack) | idle;
+    assign ls.ready =  (read_hit_allowed & tag_hit) | store_complete | (read_miss_complete) | idle;
 
     always_ff @ (posedge clk) begin
         if (rst)
             idle <= 1;
         else if (ls.new_request)
             idle <= 0;
-        else if ((read_hit_allowed & tag_hit) | (read_miss_complete & ls.ack)  | store_complete | store_conditional_complete ) //read miss OR write through complete
+        else if ((read_hit_allowed & tag_hit) | read_miss_complete | store_complete) //read miss OR write through complete
             idle <= 1;
     end
 

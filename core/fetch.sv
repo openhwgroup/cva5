@@ -4,7 +4,7 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -19,7 +19,7 @@
  * Author(s):
  *             Eric Matthews <ematthew@sfu.ca>
  */
- 
+
 import taiga_config::*;
 import taiga_types::*;
 
@@ -169,7 +169,7 @@ module fetch(
     assign new_mem_request =  pc_valid & tlb.complete & ~fetch_flush & ((stage2_valid & ~ib.early_full) |  (~stage2_valid & ~ib.full)) & mem_ready;
 
 
-    assign fetch_sub[BRAM_ID].new_request = new_mem_request;
+    assign fetch_sub[BRAM_ID].new_request = new_mem_request & bram_access;
     assign fetch_sub[ICACHE_ID].new_request = new_mem_request & cache_access;
 
     assign fetch_sub[BRAM_ID].stage1_addr = tlb.physical_address;
@@ -181,13 +181,19 @@ module fetch(
     //Memory interfaces
     generate if (USE_I_SCRATCH_MEM)
             ibram i_bram (.*, .fetch_sub(fetch_sub[BRAM_ID]));
-        else
+        else begin
             assign  fetch_sub[BRAM_ID].ready = 1;
+            assign fetch_sub[BRAM_ID].data_valid = 0;
+            assign fetch_sub[BRAM_ID].data_out = 0;
+        end
     endgenerate
     generate if (USE_ICACHE)
             icache i_cache (.*, .fetch_sub(fetch_sub[ICACHE_ID]));
-        else
+        else begin
             assign  fetch_sub[ICACHE_ID].ready = 1;
+            assign fetch_sub[ICACHE_ID].data_valid = 0;
+            assign fetch_sub[ICACHE_ID].data_out = 0;
+        end
     endgenerate
     //TODO potentially move support into cache so that we're not stalled on a request we no longer need due to a flush
     //If the cache is processing a miss when a flush occurs we need to discard the result once complete
@@ -201,13 +207,11 @@ module fetch(
     end
 
     assign mem_valid = ~(bt.flush | exception | delayed_flush);
-    assign new_issue =  mem_valid & ((fetch_sub[BRAM_ID].data_valid & ~stage2_cache_access) | fetch_sub[ICACHE_ID].data_valid);
+    assign new_issue =  mem_valid & (fetch_sub[BRAM_ID].data_valid | fetch_sub[ICACHE_ID].data_valid);
     assign ib.push = new_issue;
     assign ib.flush = bt.flush;
 
-    assign ib.data_in.instruction =
-        ({32{~stage2_cache_access}} & fetch_sub[BRAM_ID].data_out) |
-        ({32{stage2_cache_access}} & fetch_sub[ICACHE_ID].data_out);
+    assign ib.data_in.instruction = fetch_sub[BRAM_ID].data_out | fetch_sub[ICACHE_ID].data_out;
 
     assign ib.data_in.pc = stage2_phys_address;
     assign ib.data_in.prediction = stage2_prediction;

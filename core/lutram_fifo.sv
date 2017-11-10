@@ -4,7 +4,7 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -19,7 +19,7 @@
  * Author(s):
  *             Eric Matthews <ematthew@sfu.ca>
  */
- 
+
 import taiga_config::*;
 import taiga_types::*;
 
@@ -34,51 +34,70 @@ module lutram_fifo #(parameter DATA_WIDTH = 42, parameter FIFO_DEPTH = 4)
         fifo_interface.structure fifo
         );
 
-    logic[DATA_WIDTH-1:0] lut_ram[FIFO_DEPTH-1:0];
+    logic [DATA_WIDTH-1:0] lut_ram[FIFO_DEPTH-1:0];
 
-    logic[$clog2(FIFO_DEPTH)-1:0] write_index;
     logic[$clog2(FIFO_DEPTH)-1:0] read_index;
+    logic[$clog2(FIFO_DEPTH)-1:0] read_index_new;
+    logic[$clog2(FIFO_DEPTH)-1:0] write_index;
+    logic[$clog2(FIFO_DEPTH)-1:0] write_index_new;
 
-    logic count_v [FIFO_DEPTH:0];
+    logic two_plus;
     ////////////////////////////////////////////////////////
     //implementation
 
     assign fifo.data_out = lut_ram[read_index];
 
+    assign read_index_new = read_index + fifo.pop;
+    assign write_index_new = write_index + fifo.push;
+
     always_ff @ (posedge clk) begin
         if (rst) begin
-            read_index <= '0;
-            write_index <= '0;
+            read_index <= 0;
+            write_index <= 0;
         end
         else begin
-            read_index <= read_index + fifo.pop;
-            write_index <= write_index + fifo.push;
+            read_index <= read_index_new;
+            write_index <= write_index_new;
         end
     end
 
-    assign fifo.early_full = count_v[FIFO_DEPTH-1] | count_v[FIFO_DEPTH];
-    assign fifo.full = count_v[FIFO_DEPTH];
-    assign fifo.valid = ~count_v[0];
+
+    always_ff @ (posedge clk) begin
+        if (rst | (fifo.pop & ~fifo.push & ~fifo.full))
+            fifo.early_full <= 0;
+        else if (fifo.push & ~fifo.pop)
+            fifo.early_full <= (write_index+2 == read_index);
+    end
+
+    always_ff @ (posedge clk) begin
+        if (rst | (fifo.pop & ~fifo.push))
+            fifo.full <= 0;
+        else if (fifo.push & ~fifo.pop)
+            fifo.full <= (write_index_new == read_index);
+    end
+
+    always_ff @ (posedge clk) begin
+        if (rst | (fifo.pop & ~fifo.push && (read_index_new == write_index)))
+            fifo.valid <= 0;
+        else if (fifo.push)
+            fifo.valid <= 1;
+    end
+
+    always_ff @ (posedge clk) begin
+        if (rst | (fifo.pop & ~fifo.push && (read_index+2 == write_index)))
+            two_plus <= 0;
+        else if (fifo.valid & fifo.push & ~fifo.pop)
+            two_plus <= 1;
+    end
 
     always_ff @ (posedge clk) begin
         if (fifo.push)
             lut_ram[write_index] <= fifo.data_in;
     end
 
-    //set bit indicates occupancy, index zero is empty.
-    always_ff @ (posedge clk) begin
-        if (rst) begin
-            count_v[0] <= 1;
-            for (int i = 1; i <= FIFO_DEPTH; i++) count_v[i] <= 0;
-        end
-        else if (fifo.push & ~fifo.pop)
-            count_v <= {count_v[FIFO_DEPTH-1:0], 1'b0};
-        else if (~fifo.push & fifo.pop)
-            count_v <= {1'b0, count_v[FIFO_DEPTH:1]};
-    end
 
     //pushing, or more than one, or at least one and not popping
-    assign fifo.early_valid = fifo.push | (~count_v[0] & ~count_v[1]) | (~count_v[0] & ~fifo.pop);
+    assign fifo.early_valid = fifo.push | (two_plus) | (fifo.valid & ~fifo.pop);
 
 endmodule
 

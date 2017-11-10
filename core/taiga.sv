@@ -4,7 +4,7 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -19,7 +19,7 @@
  * Author(s):
  *             Eric Matthews <ematthew@sfu.ca>
  */
- 
+
 import taiga_config::*;
 import taiga_types::*;
 
@@ -57,7 +57,7 @@ module taiga (
     branch_inputs_t branch_inputs;
     mul_inputs_t mul_inputs;
     div_inputs_t div_inputs;
-    csr_inputs_interface csr_inputs();
+    csr_inputs_t csr_inputs;
 
     func_unit_ex_interface branch_ex();
     func_unit_ex_interface alu_ex();

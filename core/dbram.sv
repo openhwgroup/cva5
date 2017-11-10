@@ -4,7 +4,7 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -19,7 +19,7 @@
  * Author(s):
  *             Eric Matthews <ematthew@sfu.ca>
  */
- 
+
 import taiga_config::*;
 import taiga_types::*;
 
@@ -34,7 +34,7 @@ module dbram(
         bram_interface.user data_bram
         );
 
-    assign ls.ready = ~ ls.data_valid | ( ls.data_valid & ls.ack);
+    assign ls.ready = 1;
 
     assign data_bram.addr = ls_inputs.addr[31:2];
     assign data_bram.en = ls.new_request;
@@ -47,7 +47,7 @@ module dbram(
             ls.data_valid <= 0;
         else if (ls.new_request & ls_inputs.load)
             ls.data_valid <= 1;
-        else if (ls.ack)
+        else
             ls.data_valid <= 0;
     end
 

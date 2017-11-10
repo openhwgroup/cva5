@@ -4,7 +4,7 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -19,7 +19,7 @@
  * Author(s):
  *             Eric Matthews <ematthew@sfu.ca>
  */
- 
+
 import taiga_config::*;
 import taiga_types::*;
 
@@ -66,7 +66,7 @@ module axi_master
             ready <= 1;
         else if (ls.new_request)
             ready <= 0;
-        else if (ls.ack | m_axi.bvalid)
+        else if (m_axi.rvalid | m_axi.bvalid)
             ready <= 1;
     end
     assign ls.ready = ready;
@@ -76,7 +76,7 @@ module axi_master
             ls.data_valid <= 0;
         else if (m_axi.rvalid)
             ls.data_valid <= 1;
-        else if (ls.ack)
+        else
             ls.data_valid <= 0;
     end
 
@@ -91,7 +91,9 @@ module axi_master
     end
 
     always_ff @ (posedge clk) begin
-        if (m_axi.rvalid)
+        if (ls.data_valid)
+            data_out <= 0;
+        else if (m_axi.rvalid)
             data_out <= m_axi.rdata;
     end
 

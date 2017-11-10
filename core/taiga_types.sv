@@ -4,7 +4,7 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -101,34 +101,15 @@ package taiga_types;
         MSCRATCH = 12'h340,
         MEPC = 12'h341,
         MCAUSE = 12'h342,
-        MBADADDR = 12'h343,
+        MTVAL = 12'h343,
         MIP = 12'h344,
 
         //Machine Counters
         MCYCLE = 12'hB00,
-        MTIME = 12'hB01,
         MINSTRET = 12'hB02,
         MCYCLEH = 12'hB80,
-        MTIMEH = 12'hB81,
         MINSTRETH = 12'hB82,
 
-        //Machine Counter setup
-        MUCOUNTEREN = 12'h310,
-        MSCOUNTEREN = 12'h311,
-
-        //Deltas
-        MUCYCLE_DELTA = 12'h700,
-        MUTIME_DELTA = 12'h701,
-        MUINSTRET_DELTA = 12'h702,
-        MSCYCLE_DELTA = 12'h704,
-        MSTIME_DELTA = 12'h705,
-        MSINSTRET_DELTA = 12'h706,
-        MUCYCLE_DELTAH = 12'h780,
-        MUTIME_DELTAH = 12'h781,
-        MUINSTRET_DELTAH = 12'h782,
-        MSCYCLE_DELTAH = 12'h784,
-        MSTIME_DELTAH = 12'h785,
-        MSINSTRET_DELTAH = 12'h786,
         //Supervisor regs
         //Supervisor Trap Setup
         SSTATUS = 12'h100,
@@ -140,20 +121,12 @@ package taiga_types;
         //Supervisor trap handling
         SSCRATCH = 12'h140,
         SEPC = 12'h141,
-        SCAUSE = 12'hD42,
-        SBADADDR = 12'hD43,
+        SCAUSE = 12'h142,
+        STVAL = 12'h143,
         SIP = 12'h144,
 
-        //Supervisor Protection and Translation
-        SPTBR = 12'h180,
-
-        //Supervisor counters
-        SCYCLE = 12'hD00,
-        STIME = 12'hD01,
-        SINSTRET = 12'hD02,
-        SCYCLEH = 12'hD80,
-        STIMEH = 12'hD81,
-        SINSTRETH = 12'hD82,
+        //Supervisor address translation and protection
+        SATP = 12'h180,
 
         //User regs
         //USER Floating Point
@@ -166,7 +139,12 @@ package taiga_types;
         INSTRET = 12'hC02,
         CYCLEH = 12'hC80,
         TIMEH = 12'hC81,
-        INSTRETH = 12'hC82
+        INSTRETH = 12'hC82,
+
+        //Debug regs
+        DCSR = 12'h7B0,
+        DPC = 12'h7B1,
+        DSCRATCH = 12'h7B2
     } csr_t;
 
     typedef enum bit [2:0] {
@@ -340,6 +318,14 @@ package taiga_types;
         logic reuse_result;
         logic div_zero;
     } div_inputs_t;
+
+    typedef struct packed{
+        logic [XLEN-1:0] rs1;
+        logic [11:0] csr_addr;
+        logic [1:0] csr_op;
+        logic rs1_is_zero;
+        logic rd_is_zero;
+    } csr_inputs_t;
 
     typedef struct packed{
         logic [31:2] addr;

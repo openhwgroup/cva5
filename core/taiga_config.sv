@@ -4,7 +4,7 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -19,7 +19,7 @@
  * Author(s):
  *             Eric Matthews <ematthew@sfu.ca>
  */
- 
+
 package taiga_config;
 
     parameter FPGA_VENDOR = "xilinx"; //xilinx or intel
@@ -38,7 +38,7 @@ package taiga_config;
     parameter USE_DIV = 1;
     parameter USE_MUL = 1;
 
-    parameter USE_VARIABLE_LATENCY_DIV = 1;
+    parameter USE_VARIABLE_LATENCY_DIV = 0;
 
     parameter NUM_WB_UNITS = 6;
     parameter WB_UNITS_WIDTH = $clog2(NUM_WB_UNITS);
@@ -52,7 +52,7 @@ package taiga_config;
         DIV_UNIT_ID = 5
     } unit_ids;
 
-    parameter INFLIGHT_QUEUE_DEPTH = 4;
+    parameter INFLIGHT_QUEUE_DEPTH = 8;
     parameter FETCH_BUFFER_DEPTH = 4;
 
     parameter LS_INPUT_BUFFER_DEPTH=4;
@@ -80,6 +80,7 @@ package taiga_config;
     parameter BUS_BIT_CHECK = 4;
 
     //Bus
+    parameter USE_BUS = 1;
     parameter C_M_AXI_ADDR_WIDTH = 32;
     parameter C_M_AXI_DATA_WIDTH = 32;
 
@@ -109,7 +110,7 @@ package taiga_config;
     parameter ICACHE_SUB_LINE_ADDR_W = $clog2(ICACHE_LINE_W);
     parameter ICACHE_TAG_W = ADDR_W - ICACHE_LINE_ADDR_W - ICACHE_SUB_LINE_ADDR_W - 2;
 
-    parameter USE_BRANCH_PREDICTOR = 1;
+    parameter USE_BRANCH_PREDICTOR = 0;
     parameter BRANCH_TABLE_ENTRIES = 1024;
     parameter RAS_DEPTH = 8;
 

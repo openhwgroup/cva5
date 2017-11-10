@@ -4,7 +4,7 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -19,7 +19,7 @@
  * Author(s):
  *             Eric Matthews <ematthew@sfu.ca>
  */
- 
+
 import taiga_config::*;
 import taiga_types::*;
 
@@ -110,7 +110,7 @@ module write_back(
     assign rf_wb.valid_write_early = early_done[unit_id];
 
     generate
-        for (i=0; i<INFLIGHT_QUEUE_DEPTH; i=i+1) begin : iq_pop
+        for (i=0; i<INFLIGHT_QUEUE_DEPTH; i++) begin : iq_pop
             always_ff @(posedge clk) begin
                 if (rst)
                     iq.pop[i]  <= 0;
@@ -120,9 +120,8 @@ module write_back(
         end
     endgenerate
 
-
     generate
-        for (i=0; i<NUM_WB_UNITS; i=i+1) begin : wb_mux
+        for (i=0; i<NUM_WB_UNITS; i++) begin : wb_mux
             always_ff @(posedge clk) begin
                 if (rst)
                     accepted[i] <= 0;
