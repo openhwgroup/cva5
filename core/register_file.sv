@@ -39,44 +39,49 @@ module register_file(
     logic rs2_feedforward;
 
     logic in_use_match;
+    logic [$clog2(INFLIGHT_QUEUE_DEPTH)-1:0] in_use_by_id_r;
+
     //////////////////////////////////////////
-    assign in_use_match = (in_use_by[rf_wb.rd_addr] == rf_wb.id);
-
-    assign rs1_feedforward = (rf_decode.rs1_addr == rf_wb.rd_addr) && rf_wb.valid_write && in_use_match;
-    assign rs2_feedforward = (rf_decode.rs2_addr == rf_wb.rd_addr) && rf_wb.valid_write && in_use_match;
-
     //Assign zero to r0 and initialize all registers to zero
     initial begin
         for (integer i=0; i<32; i=i+1) begin
-            register[i] = '0;
+            register[i] = 0;
             inuse[i] = 0;
             in_use_by[i] = '0;
         end
     end
 
+    //Writeback unit does not assert rf_wb.valid_write when the target register is r0
     always_ff @ (posedge clk) begin
-        if (rf_wb.valid_write && rf_wb.rd_addr != 0 && (in_use_match || inorder)) //inorder needed for case when multiple outstanding writes to this register (common pattern: load, store, load) where the first load hasn't completed by the second causes an exception.  Without inorder we wouldn't commit the first load
+        if (rf_wb.valid_write & (in_use_match | inorder)) //inorder needed for case when multiple outstanding writes to this register (common pattern: load, store, load) where the first load hasn't completed by the second causes an exception.  Without inorder we wouldn't commit the first load
             register[rf_wb.rd_addr] <= rf_wb.rd_data;
     end
+
+    genvar i;
+    generate
+        assign inuse[0] = 0;
+        for (i= 1; i < 32; i=i+1) begin : inuse_g
+            always_ff @ (posedge clk) begin
+                if (rst)
+                    inuse[i] <= 0;
+                else if ((rf_decode.instruction_issued && rf_decode.future_rd_addr == i) || (rf_wb.valid_write && (rf_wb.rd_addr == i) && in_use_match))
+                    inuse[i] <= rf_decode.instruction_issued;
+            end
+        end
+    endgenerate
 
     always_ff @ (posedge clk) begin
         if (rf_decode.instruction_issued)
             in_use_by[rf_decode.future_rd_addr] <= rf_decode.id;
     end
+    //always_ff @ (posedge clk) begin
+        assign in_use_by_id_r = in_use_by[rf_wb.rd_addr];
+    //end
 
-    genvar i;
-    generate
-        for (i= 1; i < 32; i=i+1) begin : inuse_g
-            always_ff @ (posedge clk) begin
-                if (rst)
-                    inuse[i] <= 0;
-                else if (rf_decode.instruction_issued && rf_decode.future_rd_addr == i)
-                    inuse[i] <= 1;
-                else if ( rf_wb.valid_write && (rf_wb.rd_addr == i) && in_use_match)//  || inorder <-- when exception has occurred
-                    inuse[i] <= 0;
-            end
-        end
-    endgenerate
+    assign in_use_match = (in_use_by_id_r == rf_wb.id);
+
+    assign rs1_feedforward = (rf_decode.rs1_addr == rf_wb.rd_addr) && rf_wb.valid_write && in_use_match;
+    assign rs2_feedforward = (rf_decode.rs2_addr == rf_wb.rd_addr) && rf_wb.valid_write && in_use_match;
 
     assign rf_decode.rs1_data = rs1_feedforward ? rf_wb.rd_data : register[rf_decode.rs1_addr];
     assign rf_decode.rs2_data = rs2_feedforward ? rf_wb.rd_data : register[rf_decode.rs2_addr];
