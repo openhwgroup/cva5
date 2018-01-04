@@ -4,7 +4,7 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -19,7 +19,7 @@
  * Author(s):
  *             Eric Matthews <ematthew@sfu.ca>
  */
- 
+
 import taiga_config::*;
 import taiga_types::*;
 
@@ -42,28 +42,37 @@ module branch_unit(
     logic equal_ex;
     logic lessthan_ex;
 
-    logic [XLEN:0] sub_result;
     logic [31:0] pc_offset;
+    logic [31:0] pc_plus_4;
+
     logic [2:0] fn3_ex;
-    logic[31:0] rd_ex;
+    logic [31:0] rd_ex;
 
     logic [31:0] jump_count;
     logic [31:0] call_count;
     logic [31:0] ret_count;
     logic [31:0] br_count;
 
+    logic [32:0] rs1_sext;
+    logic [32:0] rs2_sext;
+
     logic jump_ex;
     logic bcomp_ex;
+    logic br_taken_dec;
 
     logic done;
     logic new_jal_jalr_dec;
 
-    assign equal = (branch_inputs.rs1 == branch_inputs.rs2);
-    //  assign sub_result = signed'({branch_inputs.rs1[XLEN-1] & branch_inputs.use_signed, branch_inputs.rs1}) - signed'({branch_inputs.rs2[XLEN-1] & branch_inputs.use_signed, branch_inputs.rs2});
-    assign lessthan = signed'({branch_inputs.rs1[XLEN-1] & branch_inputs.use_signed, branch_inputs.rs1}) <
-        signed'({branch_inputs.rs2[XLEN-1] & branch_inputs.use_signed, branch_inputs.rs2});
+    logic [31:0] carry_value;
+    logic [31:0] select_new_carry;
+    logic [31:0] carry;
 
-    //  sub_result[XLEN];
+
+    assign equal = (rs1_sext == rs2_sext);
+    assign rs1_sext = {branch_inputs.rs1[XLEN-1] & branch_inputs.use_signed, branch_inputs.rs1};
+    assign rs2_sext = {branch_inputs.rs2[XLEN-1] & branch_inputs.use_signed, branch_inputs.rs2};
+
+    assign lessthan = signed'(rs1_sext) < signed'(rs2_sext);
 
     always_comb begin
         unique case (fn3_ex) // <-- 010, 011 unused
@@ -90,53 +99,52 @@ module branch_unit(
     assign bt.prediction_dec = branch_inputs.prediction;
 
 
+    assign pc_plus_4 = branch_inputs.dec_pc + 4;
+
     assign bt.branch_ex = branch_ex.new_request;
     always_ff @(posedge clk) begin
-        if (branch_ex.new_request_dec) begin
-            fn3_ex <= branch_inputs.fn3;
-            equal_ex <= equal;
-            lessthan_ex <= lessthan;
-            bt.ex_pc <= branch_inputs.dec_pc;
-            bcomp_ex <= branch_inputs.branch_compare;
-            jump_ex <= branch_inputs.jal | branch_inputs.jalr;
-            bt.jump_pc <= (branch_inputs.jalr ? branch_inputs.rs1 : branch_inputs.dec_pc) + signed'(pc_offset);
-            bt.njump_pc <= branch_inputs.dec_pc + 4;
-            //bt.prediction_dec <= branch_inputs.prediction;
-
-        end
+        fn3_ex <= branch_inputs.fn3;
+        equal_ex <= equal;
+        lessthan_ex <= lessthan;
+        bt.ex_pc <= branch_inputs.dec_pc;
+        bcomp_ex <= branch_ex.new_request_dec & branch_inputs.branch_compare;
+        jump_ex <= branch_ex.new_request_dec & (branch_inputs.jal | branch_inputs.jalr);
+        bt.jump_pc <= (branch_inputs.jalr ? branch_inputs.rs1 : branch_inputs.dec_pc) + pc_offset;
+        bt.njump_pc <= pc_plus_4;
     end
 
 
-    assign new_jal_jalr_dec = branch_ex.new_request_dec & (branch_inputs.jal | branch_inputs.jalr)  & ~branch_inputs.rdx0;
+    assign new_jal_jalr_dec = branch_ex.possible_issue & (branch_inputs.jal | branch_inputs.jalr)  & ~branch_inputs.rdx0;
 
     always_ff @(posedge clk) begin
-        if (new_jal_jalr_dec) begin
-            rd_ex <= branch_inputs.dec_pc + 4;
+        if (branch_ex.new_request_dec & new_jal_jalr_dec) begin
+            rd_ex <= pc_plus_4;
         end
     end
 
     /*********************************
      *  RAS support
      *********************************/
-    logic rs1_link, rs1_eq_rd, rd_link;
-    logic is_call;
-    logic is_return;
+    generate if (USE_BRANCH_PREDICTOR) begin
+            logic rs1_link, rs1_eq_rd, rd_link;
+            logic is_call;
+            logic is_return;
 
-    assign rs1_link = (branch_inputs.rs1_addr ==?  5'b00?01);
-    assign rd_link = (branch_inputs.rd_addr ==?  5'b00?01);
-    assign rs1_eq_rd = (branch_inputs.rs1_addr == branch_inputs.rd_addr);
+            assign rs1_link = (branch_inputs.rs1_addr ==?  5'b00?01);
+            assign rd_link = (branch_inputs.rd_addr ==?  5'b00?01);
+            assign rs1_eq_rd = (branch_inputs.rs1_addr == branch_inputs.rd_addr);
 
-    always_ff @(posedge clk) begin
-        if (branch_ex.new_request_dec) begin
-            is_call <= ( (branch_inputs.jal & rd_link) |  (branch_inputs.jalr & rd_link) );
-            is_return <= ( (branch_inputs.jalr & ((rs1_link & ~rd_link) | (rs1_link & rd_link & ~rs1_eq_rd))) );
+            always_ff @(posedge clk) begin
+                is_call <= branch_ex.new_request_dec & ( (branch_inputs.jal & rd_link) |  (branch_inputs.jalr & rd_link) );
+                is_return <= branch_ex.new_request_dec & ( (branch_inputs.jalr & ((rs1_link & ~rd_link) | (rs1_link & rd_link & ~rs1_eq_rd))) );
+            end
+
+            assign ras.push = is_call;
+            assign ras.pop = is_return;
+            assign ras.new_addr = rd_ex;
+            assign bt.is_return_ex = is_return;
         end
-    end
-
-    assign ras.push = is_call & branch_ex.new_request;
-    assign ras.pop = is_return & branch_ex.new_request;
-    assign ras.new_addr = rd_ex;
-    assign bt.is_return_ex = is_return;
+    endgenerate
 
     /*********************************
      *  Output
@@ -148,50 +156,50 @@ module branch_unit(
     always_ff @(posedge clk) begin
         if (rst) begin
             done <= 0;
-        end else if (new_jal_jalr_dec) begin
+        end else if (branch_ex.new_request_dec & new_jal_jalr_dec) begin
             done <= 1;
         end else if (branch_wb.accepted) begin
             done <= 0;
         end
     end
 
-    assign branch_wb.done = done;
-    assign branch_wb.early_done =  new_jal_jalr_dec | (done & ~branch_wb.accepted);
+    assign branch_wb.done = (done & ~branch_wb.accepted);
+    assign branch_wb.early_done = new_jal_jalr_dec;
 
     /*********************************************/
 
-//---------- Simulation counters
-//    always_ff @(posedge clk) begin
-//        if (rst) begin
-//            jump_count <= 0;
-//        end else if (branch_ex.new_request & jump_ex & ~is_call & ~is_return) begin
-//            jump_count <= jump_count+1;
-//        end
-//    end
+    //---------- Simulation counters
+    //    always_ff @(posedge clk) begin
+    //        if (rst) begin
+    //            jump_count <= 0;
+    //        end else if (branch_ex.new_request & jump_ex & ~is_call & ~is_return) begin
+    //            jump_count <= jump_count+1;
+    //        end
+    //    end
 
-//    always_ff @(posedge clk) begin
-//        if (rst) begin
-//            call_count <= 0;
-//        end else if (is_call & branch_ex.new_request) begin
-//            call_count <= call_count+1;
-//        end
-//    end
+    //    always_ff @(posedge clk) begin
+    //        if (rst) begin
+    //            call_count <= 0;
+    //        end else if (is_call & branch_ex.new_request) begin
+    //            call_count <= call_count+1;
+    //        end
+    //    end
 
-//    always_ff @(posedge clk) begin
-//        if (rst) begin
-//            ret_count <= 0;
-//        end else if (is_return & branch_ex.new_request) begin
-//            ret_count <= ret_count+1;
-//        end
-//    end
+    //    always_ff @(posedge clk) begin
+    //        if (rst) begin
+    //            ret_count <= 0;
+    //        end else if (is_return & branch_ex.new_request) begin
+    //            ret_count <= ret_count+1;
+    //        end
+    //    end
 
-//    always_ff @(posedge clk) begin
-//        if (rst) begin
-//            br_count <= 0;
-//        end else if (branch_ex.new_request_dec & branch_inputs.branch_compare) begin
-//            br_count <= br_count+1;
-//        end
-//    end
+    //    always_ff @(posedge clk) begin
+    //        if (rst) begin
+    //            br_count <= 0;
+    //        end else if (branch_ex.new_request_dec & branch_inputs.branch_compare) begin
+    //            br_count <= br_count+1;
+    //        end
+    //    end
 
 
 endmodule

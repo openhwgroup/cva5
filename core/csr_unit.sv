@@ -226,10 +226,11 @@ module csr_unit (
     logic machine_trap;
     logic supervisor_trap;
 
+    logic done;
     //******************************************************************
 
     //TLB status --- used to mux physical/virtual address
-    assign tlb_on = mstatus.vm[3]; //We only support Sv32 or Mbare so only need to check one bit
+    assign tlb_on = 0;//mstatus.vm[3]; //We only support Sv32 or Mbare so only need to check one bit
     assign asid = satp.asid;
     //******************
 
@@ -262,35 +263,6 @@ module csr_unit (
 
     assign machine_trap = csr_exception.valid && next_privilege_level == MACHINE;
     assign supervisor_trap = csr_exception.valid && next_privilege_level == SUPERVISOR;
-
-    always_ff @(posedge clk) begin
-        if (rst) begin
-            csr_ex.ready <= 1;
-        end else if (csr_ex.new_request_dec) begin
-            csr_ex.ready <= 0;
-        end else if (csr_wb.accepted) begin
-            csr_ex.ready <= 1;
-        end
-    end
-
-    always_ff @(posedge clk) begin
-        if (csr_ex.new_request) begin
-            csr_wb.rd <= selected_csr;
-        end
-    end
-
-
-    assign csr_wb.early_done = csr_ex.new_request | (csr_wb.done & ~csr_wb.accepted);
-
-    always_ff @(posedge clk) begin
-        if (rst) begin
-            csr_wb.done <= 0;
-        end else if (csr_ex.new_request) begin
-            csr_wb.done <= 1;
-        end else if (csr_wb.accepted) begin
-            csr_wb.done <= 0;
-        end
-    end
 
     always_comb begin
         case (csr_inputs.csr_op)
@@ -663,6 +635,36 @@ module csr_unit (
 
             default : begin selected_csr = 0; invalid_addr = 1; end
         endcase
+    end
+
+
+    always_ff @(posedge clk) begin
+        if (rst) begin
+            csr_ex.ready <= 1;
+        end else if (csr_ex.new_request_dec) begin
+            csr_ex.ready <= 0;
+        end else if (csr_wb.accepted) begin
+            csr_ex.ready <= 1;
+        end
+    end
+
+    always_ff @(posedge clk) begin
+        if (csr_ex.new_request) begin
+            csr_wb.rd <= selected_csr;
+        end
+    end
+
+    assign csr_wb.early_done = 0;
+    assign csr_wb.done = csr_ex.new_request | (done & ~csr_wb.accepted);
+
+    always_ff @(posedge clk) begin
+        if (rst) begin
+            done <= 0;
+        end else if (csr_ex.new_request) begin
+            done <= 1;
+        end else if (csr_wb.accepted) begin
+            done <= 0;
+        end
     end
 
 

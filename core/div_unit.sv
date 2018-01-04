@@ -4,7 +4,7 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -19,7 +19,7 @@
  * Author(s):
  *             Eric Matthews <ematthew@sfu.ca>
  */
- 
+
 import taiga_config::*;
 import taiga_types::*;
 
@@ -137,15 +137,15 @@ module div_unit(
     /*********************************
      *  Output FIFO
      *********************************/
-    lutram_fifo #(.DATA_WIDTH(XLEN), .FIFO_DEPTH(DIV_OUTPUT_BUFFER_DEPTH)) output_fifo (.fifo(wb_fifo), .*);
+    lutram_fifo #(.DATA_WIDTH(XLEN), .FIFO_DEPTH(DIV_OUTPUT_BUFFER_DEPTH), .BYPASS_REG(0)) output_fifo (.fifo(wb_fifo), .*);
 
     assign wb_fifo.data_in = div_result_muxed;
     assign wb_fifo.push = div_done;
     assign wb_fifo.pop = div_wb.accepted;
     assign div_wb.rd = wb_fifo.data_out;
-    assign div_wb.done = wb_fifo.valid;
 
-    assign div_wb.early_done = wb_fifo.early_valid;//div_done | (div_wb.done & ~div_wb.accepted);
+    assign div_wb.done = wb_fifo.early_valid;
+    assign div_wb.early_done = 0;//div_done | (div_wb.done & ~div_wb.accepted);
 
     /*********************************************/
 

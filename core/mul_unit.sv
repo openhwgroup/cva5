@@ -79,15 +79,15 @@ module mul_unit(
     /*********************************
      *  Output FIFO
      *********************************/
-    lutram_fifo #(.DATA_WIDTH(XLEN), .FIFO_DEPTH(MUL_OUTPUT_BUFFER_DEPTH)) output_fifo (.fifo(wb_fifo), .*);
+    lutram_fifo #(.DATA_WIDTH(XLEN), .FIFO_DEPTH(MUL_OUTPUT_BUFFER_DEPTH), .BYPASS_REG(0)) output_fifo (.fifo(wb_fifo), .*);
 
     assign wb_fifo.data_in = result;
     assign wb_fifo.push = mul_done;
     assign wb_fifo.pop = mul_wb.accepted;
     assign mul_wb.rd = wb_fifo.data_out;
-    assign mul_wb.done = wb_fifo.valid;
+    assign mul_wb.done = wb_fifo.early_valid;
 
-    assign mul_wb.early_done = wb_fifo.early_valid;//mul_done | (mul_wb.done & ~mul_wb.accepted);
+    assign mul_wb.early_done = 0;//mul_done | (mul_wb.done & ~mul_wb.accepted);
     /*********************************************/
 
 endmodule

@@ -32,126 +32,108 @@ module write_back(
         register_file_writeback_interface.writeback rf_wb,
         inflight_queue_interface.wb iq,
         id_generator_interface.wb id_gen,
-        id_table_interface.wb idt,
         output logic instruction_complete
         );
 
-    logic done [NUM_WB_UNITS-1:0];
-    logic early_done [NUM_WB_UNITS-1:0];
-    logic [$clog2(INFLIGHT_QUEUE_DEPTH)-1:0] unit_ids [NUM_WB_UNITS-1:0];
+    logic [NUM_WB_UNITS-1:0] early_done;
+    logic [NUM_WB_UNITS-1:0] done;
 
-    logic accepted [NUM_WB_UNITS-1:0];
+    logic selected_unit_done;
+    logic entry_found;
+
+    logic [NUM_WB_UNITS-1:0] accepted;
     logic [XLEN-1:0] rd [NUM_WB_UNITS-1:0];
 
-    logic not_in_queue;
     logic [4:0] rd_addr, rd_addr_r;
     logic [WB_UNITS_WIDTH-1:0] unit_id, unit_id_r;
-    logic [$clog2(INFLIGHT_QUEUE_DEPTH)-1:0] iq_index, iq_index_corrected, iq_index_r;
     instruction_id_t issue_id, issue_id_r;
 
-    logic [INFLIGHT_QUEUE_DEPTH-1:0] id_early_done, id_done, id_done_r;
 
-    always_comb begin
-        for (int i = 0; i < INFLIGHT_QUEUE_DEPTH; i++) begin
-            id_early_done[i]=0;
-            for (int j = 0; j < NUM_WB_UNITS; j++) begin
-                id_early_done[i] |= early_done[j] && (unit_ids[j] == i);
-            end
-        end
-    end
-
+    //Re-assigning interface inputs to array types so that they can be dynamically indexed
     genvar i;
     generate
-        for (i=0; i<INFLIGHT_QUEUE_DEPTH; i++) begin : id_r
-            always_ff @(posedge clk) begin
-                if (rst | (issue_id == i))
-                    id_done_r[i]  <= 0;
-                else if (id_early_done[i])
-                    id_done_r[i] <= 1;
-            end
+        for (i=0; i< NUM_WB_UNITS; i++) begin : interface_to_array_g
+            assign done[i] = unit_wb[i].done;
+            assign early_done[i] = unit_wb[i].early_done;
+            assign rd[i] = unit_wb[i].rd;
+            assign unit_wb[i].accepted = accepted[i];
         end
-    endgenerate
-
-    assign id_done = id_early_done | id_done_r;
-    //Re-assigning interface inputs to array types so that they can be dynamically indexed
-    generate
-    for (i=0; i< NUM_WB_UNITS; i++) begin : interface_to_array_g
-        assign done[i] = unit_wb[i].done;
-        assign early_done[i] = unit_wb[i].early_done;
-        assign rd[i] = unit_wb[i].rd;
-        assign unit_ids[i] = unit_wb[i].id;
-        assign unit_wb[i].accepted = accepted[i];
-    end
     endgenerate
 
     //Unit output selection.  Oldest unit with instruction complete if in out-of-order mode, otherwise oldest unit
+    //Done signals are same as early_done for all but ALU and Branch units.  If an ALU or BRANCH op is in the queue
+    //it is already complete thus their done signals are registered to remove the combinational path through
+    //issue logic.
     always_comb begin
-        //queue input
-        not_in_queue = 1;
-        issue_id = iq.data_in.id;
-        iq_index = 0;
+        entry_found = 0;
+        iq.pop = 0;
+        selected_unit_done = 0;
 
-        //queue outputs
-        for (int i=0; i<INFLIGHT_QUEUE_DEPTH; i++) begin
-            if ( (inorder | (~inorder & id_done[iq.data_out[i].id]))) begin //if inorder set find oldest valid instruction, otherwise find oldest instruction that is done
-                not_in_queue = 0;
-                issue_id = iq.data_out[i].id;
-                iq_index = i;
+        for (int i=INFLIGHT_QUEUE_DEPTH; i>0; i--) begin
+            unit_id =  iq.data_out[i].unit_id;
+            issue_id = iq.data_out[i].id;
+
+            if (iq.valid[i]) begin
+                selected_unit_done = done[iq.data_out[i].unit_id];
+                iq.pop[i] = done[iq.data_out[i].unit_id];
+
+                if (inorder | (~inorder & done[iq.data_out[i].unit_id])) begin
+                    entry_found = 1;
+                    break;
+                end
             end
         end
-    end
 
-    assign idt.wb_instruction_id = issue_id;
-    assign unit_id = not_in_queue ? iq.data_in.unit_id : idt.wb_unit_id;
-    assign rd_addr = not_in_queue ? iq.data_in.rd_addr : idt.wb_rd_addr;
+        //Access rd_addr table in inflight_queue
+        iq.wb_id = issue_id;
+        rd_addr = iq.wb_rd_addr;
+
+        //No valid completing instructions in queue, check for new issues.
+        if (~entry_found) begin
+            unit_id = iq.data_out[0].unit_id;
+            issue_id = iq.data_out[0].id;
+            rd_addr = iq.future_rd_addr;
+            //Pop and unit done only if valid issue
+            selected_unit_done = early_done[iq.data_out[0].unit_id] & iq.valid[0];
+            iq.pop[0] = early_done[iq.data_out[0].unit_id] &  iq.valid[0];
+        end
+    end
 
     always_ff @(posedge clk) begin
         if (rst)
             instruction_complete <= 0;
         else
-            instruction_complete <= id_done[issue_id];
+            instruction_complete <= selected_unit_done;
     end
 
-    //As we decide our popping logic one cycle in advance we have to perform a correction in some cases
-    assign iq_index_corrected = (~not_in_queue & iq.shift_pop[iq_index]) ? iq_index + 1: iq_index;
-
     always_ff @(posedge clk) begin
-        iq_index_r <= iq_index_corrected;
         unit_id_r <= unit_id;
         issue_id_r <= issue_id;
         rd_addr_r <= rd_addr;
     end
 
-    //assign instruction_complete = unit_wb.done[unit_id];//iq.data_out[iq_index].valid & unit_wb.done[unit_id];
-
     assign rf_wb.rd_addr =  rd_addr_r;
     assign rf_wb.id =  issue_id_r;
 
     assign rf_wb.rd_data = rd[unit_id_r];
-    assign rf_wb.valid_write = instruction_complete;
+    always_ff @(posedge clk) begin
+        if (rst)
+            rf_wb.valid_write <= 0;
+        else
+            rf_wb.valid_write <= selected_unit_done && (rd_addr != 0);
+    end
 
-    assign rf_wb.rd_addr_early =  rd_addr;
+    assign rf_wb.rd_addr_early = rd_addr;
     assign rf_wb.id_early =  issue_id;
-    assign rf_wb.valid_write_early = id_done[issue_id];
+    assign rf_wb.valid_write_early = selected_unit_done;
 
     generate
-        for (i=0; i<INFLIGHT_QUEUE_DEPTH; i++) begin : iq_pop
-            always_ff @(posedge clk) begin
-                if (rst)
-                    iq.pop[i]  <= 0;
-                else
-                    iq.pop[i] <= id_done[issue_id] && (iq_index_corrected == i);
-            end
-        end
-    endgenerate
-
-    generate
-        for (i=0; i<NUM_WB_UNITS; i++) begin : wb_mux
+        for (i=0; i<NUM_WB_UNITS; i=i+1) begin : wb_mux
             always_ff @(posedge clk) begin
                 if (rst)
                     accepted[i] <= 0;
                 else
-                    accepted[i] <= id_done[issue_id] && (unit_id == i);
+                    accepted[i] <= selected_unit_done && (unit_id == i);
             end
         end
     endgenerate
