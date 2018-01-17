@@ -30,6 +30,7 @@ module xilinx_byte_enable_ram #(
         )
         (
         input logic clk,
+
         input logic[$clog2(LINES)-1:0] addr_a,
         input logic en_a,
         input logic[XLEN/8-1:0] be_a,
@@ -61,9 +62,7 @@ module xilinx_byte_enable_ram #(
     end
 
     always_ff @(posedge clk) begin
-        if (~en_a)
-            data_out_a <= 0;
-        else
+        if (en_a)
             data_out_a <= ram[addr_a];
     end
 
@@ -77,9 +76,7 @@ module xilinx_byte_enable_ram #(
     end
 
     always_ff @(posedge clk) begin
-        if (~en_b)
-            data_out_b <= 0;
-        else
+        if (en_b)
             data_out_b <= ram[addr_b];
     end
 

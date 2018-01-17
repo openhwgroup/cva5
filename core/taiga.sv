@@ -43,8 +43,8 @@ module taiga (
 
         );
 
-    l1_arbiter_request_interface l1_request[3:0]();
-    l1_arbiter_return_interface l1_response[3:0]();
+    l1_arbiter_request_interface l1_request[L1_CONNECTIONS-1:0]();
+    l1_arbiter_return_interface l1_response[L1_CONNECTIONS-1:0]();
     logic sc_complete;
     logic sc_success;
 
@@ -154,6 +154,14 @@ module taiga (
      *************************************/
     branch_unit branch_unit_block (.*, .branch_wb(unit_wb[BRANCH_UNIT_ID].unit));
     alu_unit alu_unit_block (.*, .alu_wb(unit_wb[ALU_UNIT_ID].unit));
+
+//    genvar i;
+//    generate
+//        for (i = 0; i < 5; i++) begin
+//            alu_unit single_cycle_accelerators (.*, .alu_ex(single_accel), .alu_wb(unit_wb[ACCEL+i].unit));
+//        end
+//    endgenerate
+//
     load_store_unit load_store_unit_block (.*, .dcache_on(1'b1), .clear_reservation(1'b0), .tlb(dtlb), .ls_wb(unit_wb[LS_UNIT_ID].unit), .l1_request(l1_request[L1_DCACHE_ID]), .l1_response(l1_response[L1_DCACHE_ID]));
     generate if (USE_MMU) begin
             tlb_lut_ram #(DTLB_WAYS, DTLB_DEPTH) d_tlb (.*, .tlb(dtlb), .mmu(dmmu));

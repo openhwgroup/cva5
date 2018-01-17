@@ -229,21 +229,24 @@ module taiga_wrapper (
 
     design_2 infra(.*);
 
-    l2_arbiter l2_arb (.*, .request(l2));
-
-    axi_to_arb l2_to_mem (.*, .l2(mem));
+    generate
+        if (USE_MMU || USE_ICACHE || USE_DCACHE) begin
+            l2_arbiter l2_arb (.*, .request(l2));
+            axi_to_arb l2_to_mem (.*, .l2(mem));
+        end
+    endgenerate
 
     arm proc(.*);
 
-    byte_en_BRAM #(8192) inst_data_ram (
+    byte_en_BRAM #(8192*4, "/home/ematthew/Research/RISCV/software2/riscv-tools/riscv-tests/benchmarks/dhrystone.riscv.hw_init", 1) inst_data_ram (
             .clk(clk),
-            .addr_a(instruction_bram.addr[$clog2(8192)- 1:0]),
+            .addr_a(instruction_bram.addr[$clog2(8192*4)- 1:0]),
             .en_a(instruction_bram.en),
             .be_a(instruction_bram.be),
             .data_in_a(instruction_bram.data_in),
             .data_out_a(instruction_bram.data_out),
 
-            .addr_b(data_bram.addr[$clog2(8192)- 1:0]),
+            .addr_b(data_bram.addr[$clog2(8192*4)- 1:0]),
             .en_b(data_bram.en),
             .be_b(data_bram.be),
             .data_in_b(data_bram.data_in),

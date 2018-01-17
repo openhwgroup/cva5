@@ -167,7 +167,6 @@ module decode(
 
     assign iq.future_rd_addr = future_rd_addr;
     assign iq.data_in.id = id_gen.issue_id;
-    assign iq.data_in.exception_barrier = ls_inputs.load;
     assign iq.new_issue = advance & uses_rd;
 
     assign id_gen.advance = advance & uses_rd;
@@ -181,7 +180,7 @@ module decode(
             (uses_rs1 && rf_decode.rs1_conflict) ||
             (uses_rs2 && rf_decode.rs2_conflict));
 
-    assign load_store_forward =((opcode_trim == STORE_T) && last_ls_request_was_load && (rs2_addr == load_rd));
+    assign load_store_forward = ((opcode_trim == STORE_T) && last_ls_request_was_load && (rs2_addr == load_rd));
 
     assign load_store_operands_ready =  !(
             (uses_rs1 && rf_decode.rs1_conflict) ||
@@ -194,14 +193,14 @@ module decode(
    assign new_request[LS_UNIT_ID] = (opcode_trim == LOAD_T || opcode_trim == STORE_T || opcode_trim == AMO_T);
     assign new_request[CSR_UNIT_ID] = (opcode_trim == SYSTEM_T);
     generate if (USE_MUL)
-            assign new_request[MUL_UNIT_ID] = mult_div_op & ~fn3[2] ;
+            assign new_request[MUL_UNIT_ID] = mult_div_op & ~fn3[2];
        else
-            assign new_request[MUL_UNIT_ID] = 0 ;
+            assign new_request[MUL_UNIT_ID] = 0;
     endgenerate
     generate if (USE_DIV)
-            assign new_request[DIV_UNIT_ID] = mult_div_op & fn3[2] ;
+            assign new_request[DIV_UNIT_ID] = mult_div_op & fn3[2];
         else
-            assign new_request[DIV_UNIT_ID] = 0 ;
+            assign new_request[DIV_UNIT_ID] = 0;
     endgenerate
 
 //    assign new_request[CUSTOM_ID_0] = (opcode_trim == CUSTOM_T)  && ~ib.data_out.instruction[25]  && ~ib.data_out.instruction[26];
@@ -329,7 +328,7 @@ module decode(
     assign ls_inputs.is_amo = USE_AMO ? (opcode_trim == AMO_T) : 0;
     assign ls_inputs.load = (opcode_trim == LOAD_T) || ((opcode_trim == AMO_T) && (ls_inputs.amo != AMO_SC)); //LR and AMO_ops perform a read operation as well
     assign ls_inputs.store = (opcode_trim == STORE_T);
-    assign ls_inputs.load_store_forward =  (opcode_trim == STORE_T) && rf_decode.rs2_conflict;
+    assign ls_inputs.load_store_forward = (opcode_trim == STORE_T) && rf_decode.rs2_conflict;
     assign ls_inputs.id = id_gen.issue_id;
 
     always_ff @(posedge clk) begin
@@ -420,7 +419,7 @@ module decode(
     assign div_inputs.rs1 = rf_decode.rs1_data;
     assign div_inputs.rs2 = rf_decode.rs2_data;
     assign div_inputs.op = fn3[1:0];
-    assign div_inputs.reuse_result = prev_div_result_valid && (prev_div_rs1_addr == rs1_addr) && (prev_div_rs2_addr == rs2_addr);
+    assign div_inputs.reuse_result = 0;//prev_div_result_valid && (prev_div_rs1_addr == rs1_addr) && (prev_div_rs2_addr == rs2_addr);
     assign div_inputs.div_zero = (rf_decode.rs2_data == 0);
 
     //----------------------------------------------------------------------------------

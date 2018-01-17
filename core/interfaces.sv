@@ -67,11 +67,12 @@ endinterface
 
 interface func_unit_ex_interface;
     logic new_request_dec;
+    logic possible_issue;
     logic new_request;
     logic ready;
 
-    modport decode (input ready, output new_request_dec, new_request);
-    modport unit (output ready, input new_request_dec, new_request);
+    modport decode (input ready, output possible_issue, new_request_dec, new_request);
+    modport unit (output ready, input possible_issue, new_request_dec, new_request);
 endinterface
 
 interface ras_interface;
@@ -87,7 +88,7 @@ interface ras_interface;
 endinterface
 
 interface unit_writeback_interface;
-    logic done ;
+    logic done;
     logic early_done;
     logic accepted;
     logic [XLEN-1:0] rd;
@@ -153,17 +154,20 @@ endinterface
 
 
 interface inflight_queue_interface;
-    logic[INFLIGHT_QUEUE_DEPTH-1:0] pop;
-    logic[INFLIGHT_QUEUE_DEPTH-1:0] shift_pop;
+    logic[INFLIGHT_QUEUE_DEPTH:0] pop;
+    logic[INFLIGHT_QUEUE_DEPTH:0] shift_pop;
     logic new_issue;
 
     inflight_queue_packet data_in;
-    inflight_queue_packet[INFLIGHT_QUEUE_DEPTH-1:0] data_out;
-    logic [INFLIGHT_QUEUE_DEPTH-1:0] valid;
+    logic [4:0] future_rd_addr;
+    inflight_queue_packet[INFLIGHT_QUEUE_DEPTH:0] data_out;
+    logic [4:0] wb_rd_addr;
+    instruction_id_t wb_id;
+    logic [INFLIGHT_QUEUE_DEPTH:0] valid;
 
-    modport queue (input pop, data_in, new_issue, output data_out, shift_pop, valid);
-    modport decode (output data_in, new_issue);
-    modport wb (input data_in, shift_pop, valid, data_out, output pop);
+    modport queue (input pop, data_in, new_issue, future_rd_addr, wb_id, output data_out, wb_rd_addr, shift_pop, valid);
+    modport decode (output data_in, future_rd_addr, new_issue);
+    modport wb (input data_in, future_rd_addr, shift_pop, valid, data_out, wb_rd_addr, output pop, wb_id);
 
 endinterface
 
@@ -199,7 +203,7 @@ interface instruction_buffer_interface;
 endinterface
 
 
-interface fifo_interface #(parameter DATA_WIDTH = 32);//#(parameter type data_type = logic[31:0]);
+interface fifo_interface #(parameter DATA_WIDTH = 42);//#(parameter type data_type = logic[31:0]);
     logic push;
     logic pop;
     logic [DATA_WIDTH-1:0] data_in;

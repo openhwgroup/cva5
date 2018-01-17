@@ -91,10 +91,10 @@ module axi_master
     end
 
     always_ff @ (posedge clk) begin
-        if (ls.data_valid)
-            data_out <= 0;
-        else if (m_axi.rvalid)
+        if (m_axi.rvalid)
             data_out <= m_axi.rdata;
+        else
+            data_out <= 0;
     end
 
     //write channel

@@ -30,7 +30,7 @@ module id_generator (
         id_generator_interface.generator id_gen
         );
 
-    logic inuse [0:INFLIGHT_QUEUE_DEPTH-1];
+    logic [0:INFLIGHT_QUEUE_DEPTH-1] inuse;
 
     always_ff @ (posedge clk) begin
         for (int i=0; i <INFLIGHT_QUEUE_DEPTH; i=i+1) begin
@@ -53,14 +53,8 @@ module id_generator (
         end
     end
 
-    always_comb begin
-        id_gen.id_avaliable = id_gen.complete;
-        for (int i=0; i <INFLIGHT_QUEUE_DEPTH; i=i+1) begin
-            if(~inuse[i])
-                id_gen.id_avaliable = 1;
-        end
-
-    end
+    //Instruction complete or at least one inuse bit is not set
+    assign id_gen.id_avaliable = id_gen.complete | ~(&inuse);
 
 endmodule
 

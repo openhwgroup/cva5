@@ -4,7 +4,7 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -19,7 +19,7 @@
  * Author(s):
  *             Eric Matthews <ematthew@sfu.ca>
  */
- 
+
 import taiga_config::*;
 import taiga_types::*;
 
@@ -95,10 +95,9 @@ module branch_table(
     assign ex_entry.prediction = bt.branch_taken;
     assign ex_entry.use_ras = bt.is_return_ex;
 
-
     assign miss_predict = bt.branch_ex && (
-            (bt.dec_pc != bt.jump_pc &&  bt.branch_taken) ||
-            (bt.dec_pc != bt.njump_pc &&  ~bt.branch_taken));
+        (bt.branch_taken && bt.dec_pc != bt.jump_pc) ||
+        (~bt.branch_taken && bt.dec_pc != bt.njump_pc));
 
     assign tag_match = ({if_entry.valid, if_entry.tag} == {(bt.next_pc_valid & bt_on), bt.if_pc[31:32-BTAG_W]});
     assign bt.predicted_pc = predicted_pc;

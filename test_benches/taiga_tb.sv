@@ -27,7 +27,7 @@ import taiga_config::*;
 import taiga_types::*;
 import l2_config_and_types::*;
 
-`define  MEMORY_FILE  "/home/ematthew/taiga/examples/zedboard/dhrystone.riscv.sim_init"
+`define  MEMORY_FILE  "/home/ematthew/Research/RISCV/software2/riscv-tools/riscv-tests/benchmarks/sqrt.riscv.sim_init"
 `define  UART_LOG  "/home/ematthew/uart.log"
 
 module taiga_tb ( );
@@ -181,6 +181,7 @@ module taiga_tb ( );
     
     integer output_file;
     
+    assign l2[1].request = 0;
     assign l2[1].request_push = 0;
     assign l2[1].wr_data_push = 0;
     assign l2[1].inv_ack = l2[1].inv_valid;
@@ -195,12 +196,18 @@ module taiga_tb ( );
         instruction_bram.data_out <= simulation_mem.readw(instruction_bram.addr);
         simulation_mem.writew(instruction_bram.addr,instruction_bram.data_in, instruction_bram.be);
       end
+      else begin
+        instruction_bram.data_out <= 0;
+      end
     end
     
     always_ff @(posedge processor_clk) begin
       if (data_bram.en) begin
         data_bram.data_out <= simulation_mem.readw(data_bram.addr);
         simulation_mem.writew(data_bram.addr,data_bram.data_in, data_bram.be);
+      end
+      else begin
+        data_bram.data_out <= 0;
       end
     end
         
@@ -231,7 +238,7 @@ module taiga_tb ( );
         end
         do_reset();
 
-        #1200000;
+        #3600000;
         $fclose(output_file);
         $finish;
     end

@@ -39,6 +39,23 @@ package taiga_types;
         //end of RV32I
     } opcodes_t;
 
+    typedef enum bit [4:0] {
+        LUI_T = 5'b01101,
+        AUIPC_T = 5'b00101,
+        JAL_T = 5'b11011,
+        JALR_T = 5'b11001,
+        BRANCH_T = 5'b11000,
+        LOAD_T = 5'b00000,
+        STORE_T = 5'b01000,
+        ARITH_IMM_T = 5'b00100,
+        ARITH_T = 5'b01100,//includes mul/div
+        FENCE_T = 5'b00011,
+        AMO_T = 5'b01011,
+        SYSTEM_T = 5'b11100,
+        //end of RV32I
+        CUSTOM_T = 5'b11110
+    } opcodes_trimmed_t;
+
     typedef enum bit [2:0] {
         ADD_SUB_fn3 = 3'b000,
         SLL_fn3 = 3'b001,
@@ -214,17 +231,23 @@ package taiga_types;
 
     typedef enum bit [1:0] {
         ALU_SLT = 2'b00,
-        ALU_LOGIC = 2'b01,
+        ALU_SHIFTR = 2'b01,
         ALU_SHIFT =2'b10,
-        ALU_ADD_SUB = 2'b11
+        ALU_LOGIC = 2'b11
     } alu_op_t;
+
+    typedef enum bit [1:0] {
+        ALU_XOR = 2'b00,
+        ALU_OR = 2'b01,
+        ALU_AND = 2'b10,
+        ALU_ADD_SUB = 2'b11
+    } alu_logicop_t;
 
     typedef logic[$clog2(INFLIGHT_QUEUE_DEPTH)-1:0] instruction_id_t;
 
 
     typedef struct packed{
         logic [WB_UNITS_WIDTH-1:0] unit_id;
-        logic [4:0] rd_addr;
         instruction_id_t id;
     } inflight_queue_packet;
 
@@ -241,12 +264,11 @@ package taiga_types;
     typedef struct packed{
         logic [XLEN-1:0] in1;
         logic [XLEN-1:0] in2;
-        logic [2:0] fn3;
-        logic add;
+        logic subtract;
         logic arith;
-        logic left_shift;
         logic [XLEN-1:0] shifter_in;
         logic sltu;
+        logic [1:0] logic_op;
         logic [1:0] op;
     }alu_inputs_t;
 
@@ -344,6 +366,12 @@ package taiga_types;
         logic [2:0] fn3;
         logic [31:0] data_in;
     } data_access_shared_inputs_t;
+
+    typedef enum  {
+        LUTRAM_FIFO,
+        NON_MUXED_INPUT_FIFO,
+        NON_MUXED_OUTPUT_FIFO
+    } fifo_type_t;
 
 endpackage
 

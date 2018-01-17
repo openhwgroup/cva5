@@ -4,7 +4,7 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -19,7 +19,7 @@
  * Author(s):
  *             Eric Matthews <ematthew@sfu.ca>
  */
- 
+
 import taiga_config::*;
 import taiga_types::*;
 
@@ -27,8 +27,9 @@ module barrel_shifter (
         input logic[XLEN-1:0] shifter_input,
         input logic[4:0] shift_amount,
         input logic arith,
-        input logic left_shift,
-        output logic[XLEN-1:0]shifted_result
+        output logic[XLEN-1:0] lshifted_result,
+        output logic[XLEN-1:0] rshifted_result
+
         );
 
     logic[XLEN-1:0] lshifter_input;
@@ -55,8 +56,9 @@ module barrel_shifter (
     end
     //assign lshifted = {<<{shifted}};//if stream operator supported
 
-    assign shifted_result = left_shift ? lshifted : shifted[31:0];
-
+    //assign shifted_result = left_shift ? lshifted : shifted[31:0];
+    assign lshifted_result = lshifted;
+    assign rshifted_result = shifted[31:0];
 
 endmodule
 

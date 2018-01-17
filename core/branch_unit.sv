@@ -68,24 +68,25 @@ module branch_unit(
     logic [31:0] carry;
 
 
-    assign equal = (rs1_sext == rs2_sext);
+    assign equal = (branch_inputs.rs1 == branch_inputs.rs2);
     assign rs1_sext = {branch_inputs.rs1[XLEN-1] & branch_inputs.use_signed, branch_inputs.rs1};
     assign rs2_sext = {branch_inputs.rs2[XLEN-1] & branch_inputs.use_signed, branch_inputs.rs2};
 
     assign lessthan = signed'(rs1_sext) < signed'(rs2_sext);
 
     always_comb begin
-        unique case (fn3_ex) // <-- 010, 011 unused
+        case (fn3_ex) // <-- 010, 011 unused
             BEQ_fn3 : result = equal_ex;
             BNE_fn3 : result = ~equal_ex;
             BLT_fn3 : result = lessthan_ex;
             BGE_fn3 : result = ~lessthan_ex;
             BLTU_fn3 : result = lessthan_ex;
             BGEU_fn3 : result = ~lessthan_ex;
+            default : result = 0;
         endcase
     end
 
-    assign  bt.branch_taken =  (bcomp_ex & result) | jump_ex;
+    assign  bt.branch_taken = (bcomp_ex & result) | jump_ex;
 
     always_comb begin
         if (branch_inputs.jal)
@@ -107,14 +108,14 @@ module branch_unit(
         equal_ex <= equal;
         lessthan_ex <= lessthan;
         bt.ex_pc <= branch_inputs.dec_pc;
-        bcomp_ex <= branch_ex.new_request_dec & branch_inputs.branch_compare;
-        jump_ex <= branch_ex.new_request_dec & (branch_inputs.jal | branch_inputs.jalr);
+        bcomp_ex <= branch_inputs.branch_compare;
+        jump_ex <= (branch_inputs.jal | branch_inputs.jalr);
         bt.jump_pc <= (branch_inputs.jalr ? branch_inputs.rs1 : branch_inputs.dec_pc) + pc_offset;
         bt.njump_pc <= pc_plus_4;
     end
 
 
-    assign new_jal_jalr_dec = branch_ex.possible_issue & (branch_inputs.jal | branch_inputs.jalr)  & ~branch_inputs.rdx0;
+    assign new_jal_jalr_dec = (branch_inputs.jal | branch_inputs.jalr) & ~branch_inputs.rdx0;
 
     always_ff @(posedge clk) begin
         if (branch_ex.new_request_dec & new_jal_jalr_dec) begin
@@ -150,8 +151,7 @@ module branch_unit(
      *  Output
      *********************************/
     assign branch_ex.ready = ~done | (done & branch_wb.accepted);
-
-    assign branch_wb.rd =  rd_ex;
+    assign branch_wb.rd = rd_ex;
 
     always_ff @(posedge clk) begin
         if (rst) begin
@@ -164,7 +164,7 @@ module branch_unit(
     end
 
     assign branch_wb.done = (done & ~branch_wb.accepted);
-    assign branch_wb.early_done = new_jal_jalr_dec;
+    assign branch_wb.early_done = branch_ex.possible_issue & new_jal_jalr_dec;
 
     /*********************************************/
 

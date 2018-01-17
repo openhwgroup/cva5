@@ -88,7 +88,7 @@ module load_store_unit (
     logic [NUM_SUB_UNITS-1:0] sub_unit_address_match;
 
     logic dcache_forward_data;
-    logic dcache_stage2_fn3;
+    logic [2:0] dcache_stage2_fn3;
 
     //AMO support
     //LR -- invalidates line if tag hit
@@ -128,6 +128,7 @@ module load_store_unit (
     assign units_ready = &unit_ready;
     assign data_valid = |unit_data_valid;
 
+    //Without cache to others (BRAM/BUS) forwarding no checking would be required for load_store_forwarding
     assign issue_request = ((stage1.load_store_forward & (data_valid | ~load_attributes.valid)) | (~stage1.load_store_forward)) & input_fifo.valid & units_ready & ~wb_fifo.early_full;
     assign load_complete = data_valid;
 
@@ -154,13 +155,14 @@ module load_store_unit (
     /*********************************
      *  Input FIFO
      *********************************/
-    lutram_fifo #(.DATA_WIDTH($bits(load_store_inputs_t)), .FIFO_DEPTH(LS_INPUT_BUFFER_DEPTH)) ls_input_fifo (.fifo(input_fifo), .*);
+    taiga_fifo #(.DATA_WIDTH($bits(load_store_inputs_t)), .FIFO_DEPTH(LS_INPUT_BUFFER_DEPTH), .FIFO_TYPE(NON_MUXED_INPUT_FIFO)
+            ) ls_input_fifo (.fifo(input_fifo), .*);
 
     assign input_fifo.data_in = ls_inputs;
     assign input_fifo.push = ls_ex.new_request_dec;
     assign ls_ex.ready = ~input_fifo.full;
     assign input_fifo.pop = issue_request;
-    assign inorder = input_fifo.valid;
+    assign inorder = 0;//input_fifo.valid;
     assign stage1 = input_fifo.data_out;
     /*********************************
      * TLB interface
@@ -230,22 +232,24 @@ module load_store_unit (
     assign d_inputs.be = be;
     assign d_inputs.fn3 = stage1.fn3;
     always_comb begin
-        unique case(dcache_forward_data ? dcache_stage2_fn3 : stage1.fn3) //<--011, 110, 111, 100, 101 unused
-            LS_B_fn3 : d_inputs.data_in = {4{stage1_raw_data[7:0]}};
-            LS_H_fn3 : d_inputs.data_in = {2{stage1_raw_data[15:0]}};
-            LS_W_fn3 : d_inputs.data_in = stage1_raw_data;
+        case(dcache_forward_data ? dcache_stage2_fn3[1:0] : stage1.fn3[1:0]) //<--011, 110, 111, 100, 101 unused
+            LS_H_fn3[1:0] : d_inputs.data_in = {2{stage1_raw_data[15:0]}};
+            LS_W_fn3[1:0] : d_inputs.data_in = stage1_raw_data;
+            default : d_inputs.data_in = {4{stage1_raw_data[7:0]}}; //LS_B_fn3
         endcase
     end
 
     /*********************************
      *  Load attributes FIFO
      *********************************/
-    lutram_fifo #(.DATA_WIDTH($bits(load_attributes_t)), .FIFO_DEPTH(ATTRIBUTES_DEPTH)) attributes_fifo (.fifo(load_attributes), .*);
-    assign load_attributes.pop = load_complete;
-    assign load_attributes.push = issue_request & stage1.load;
-    assign load_attributes.data_in = load_attributes_in;
+    taiga_fifo #(.DATA_WIDTH($bits(load_attributes_t)), .FIFO_DEPTH(ATTRIBUTES_DEPTH), .FIFO_TYPE(NON_MUXED_INPUT_FIFO)
+            ) attributes_fifo (.fifo(load_attributes), .*);
     assign load_attributes_in.fn3 = stage1.fn3;
     assign load_attributes_in.byte_addr = virtual_address[1:0];
+    assign load_attributes.data_in = load_attributes_in;
+
+    assign load_attributes.push = issue_request & stage1.load;
+    assign load_attributes.pop = load_complete;
 
     assign stage2_attr  = load_attributes.data_out;
 
@@ -287,7 +291,7 @@ module load_store_unit (
 
     //Cache
     generate if (USE_DCACHE)
-            dcache data_cache (.clk(clk), .rst(rst), .ls_inputs(d_inputs), .ls(ls_sub[DCACHE_ID]), .is_amo(is_amo),  .use_forwarded_data( stage1.load_store_forward), .forwarded_data(most_recent_load), .data_out(unit_data_array[DCACHE_ID]), .*);
+            dcache data_cache (.clk(clk), .rst(rst), .ls_inputs(d_inputs), .ls(ls_sub[DCACHE_ID]), .is_amo(is_amo), .use_forwarded_data(stage1.load_store_forward), .data_out(unit_data_array[DCACHE_ID]), .*);
     endgenerate
     /*************************************
      * Output Muxing
@@ -313,7 +317,7 @@ module load_store_unit (
 
     //Sign extending
     always_comb begin
-        unique case(stage2_attr.fn3)
+        case(stage2_attr.fn3)
             LS_B_fn3 : final_load_data = 32'(signed'(aligned_load_data[7:0]));
             LS_H_fn3 : final_load_data = 32'(signed'(aligned_load_data[15:0]));
             LS_W_fn3 : final_load_data = aligned_load_data;
@@ -322,6 +326,7 @@ module load_store_unit (
             L_HU_fn3 : final_load_data = 32'(unsigned'(aligned_load_data[15:0]));
                 //unused 110
                 //unused 111
+            default : final_load_data = aligned_load_data;
         endcase
     end
 
@@ -333,7 +338,8 @@ module load_store_unit (
     /*********************************
      *  Output FIFO
      *********************************/
-    lutram_fifo #(.DATA_WIDTH(XLEN), .FIFO_DEPTH(LS_OUTPUT_BUFFER_DEPTH), .BYPASS_REG(0)) output_fifo (.fifo(wb_fifo), .*);
+    taiga_fifo #(.DATA_WIDTH(XLEN), .FIFO_DEPTH(LS_OUTPUT_BUFFER_DEPTH),  .FIFO_TYPE(NON_MUXED_INPUT_FIFO)
+            ) output_fifo (.fifo(wb_fifo), .*);
 
     assign wb_fifo.data_in = final_load_data;
     assign wb_fifo.push = load_complete;

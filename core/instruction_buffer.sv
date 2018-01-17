@@ -4,7 +4,7 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -19,7 +19,7 @@
  * Author(s):
  *             Eric Matthews <ematthew@sfu.ca>
  */
- 
+
 import taiga_config::*;
 import taiga_types::*;
 
@@ -31,51 +31,34 @@ module instruction_buffer
         instruction_buffer_interface.buffer ib
         );
 
-    logic[$bits(instruction_buffer_packet)-1:0] shift_reg[FETCH_BUFFER_DEPTH-1:0];
-    logic[$bits(instruction_buffer_packet)-1:0] shift_reg_in;
-    instruction_buffer_packet shift_reg_out;
-
-
-    logic [$clog2(FETCH_BUFFER_DEPTH)-1:0] write_index;
-    logic [$clog2(FETCH_BUFFER_DEPTH)-1:0] read_index;
-
-    logic count_v [FETCH_BUFFER_DEPTH:0];
+    logic buffer_reset;
+    fifo_interface #(.DATA_WIDTH($bits(instruction_buffer_packet))) ib_fifo();
 
 
     //implementation
+    ////////////////////////////////////////////////////
+    //Control signals
+
+    assign buffer_reset = rst | ib.flush;
+
+    assign ib_fifo.push = ib.push;
+    assign ib_fifo.pop = ib.pop;
+    assign ib_fifo.data_in = ib.data_in;
+    assign ib.data_out = ib_fifo.data_out;
+    assign ib.valid = ib_fifo.valid;
+    assign ib.full = ib_fifo.full;
+    assign ib.early_full = ib_fifo.early_full;
+
+    taiga_fifo #(
+            .DATA_WIDTH($bits(instruction_buffer_packet)),
+            .FIFO_DEPTH(FETCH_BUFFER_DEPTH),
+            .FIFO_TYPE(LUTRAM_FIFO)
+        ) ib_fifo_block (.fifo(ib_fifo), .rst(buffer_reset), .*);
+
+    ////////////////////////////////////////////////////
+    //Assertions
     always_ff @ (posedge clk) begin
-        if (rst | ib.flush) begin
-            write_index <= 0;
-            read_index <= 0;
-        end
-        else begin
-            read_index <= read_index + ib.pop;
-            write_index <= write_index + ib.push;
-        end
+        assert (!(~rst & ib.flush & (ib.push | ib.pop))) else $error("ib push/pop during flush");
     end
-
-    assign ib.early_full = count_v[FETCH_BUFFER_DEPTH-1] | count_v[FETCH_BUFFER_DEPTH];
-    assign ib.full = count_v[FETCH_BUFFER_DEPTH];
-    assign ib.valid = ~count_v[0];
-
-    always_ff @ (posedge clk) begin
-        if (rst | ib.flush) begin
-            count_v[0] <= 1;
-            for (int i = 1; i <= FETCH_BUFFER_DEPTH; i++) count_v[i] <= 0;
-        end
-        else if (ib.push & ~ib.pop)
-            count_v <= {count_v[FETCH_BUFFER_DEPTH-1:0], 1'b0};
-        else if (~ib.push & ib.pop)
-            count_v <= {1'b0, count_v[FETCH_BUFFER_DEPTH:1]};
-    end
-
-    always_ff @ (posedge clk) begin
-        if (ib.push)
-            shift_reg[write_index] <=  ib.data_in;
-    end
-
-    assign ib.data_out = shift_reg[read_index];
 
 endmodule
-
-

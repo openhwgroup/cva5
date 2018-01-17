@@ -63,6 +63,7 @@ module fetch(
     logic [31:0] if_pc;
     logic stage1_prediction;
 
+    logic space_in_inst_buffer;
     logic new_mem_request;
 
     logic fetch_flush;
@@ -79,6 +80,8 @@ module fetch(
     logic pc_valid;
 
     logic[6:0] opcode;
+    logic[4:0] opcode_trimmed;
+
     logic[2:0] fn3;
 
     logic csr_imm_op;
@@ -101,11 +104,9 @@ module fetch(
     always_ff @(posedge clk) begin
         if (rst) begin
             if_pc <= RESET_VEC;
-            stage1_prediction <= 0;
         end
         else if (new_mem_request | flush) begin
             if_pc <= {next_pc[31:2], 2'b0};
-            stage1_prediction <= bt.use_prediction & bt.prediction;
         end
     end
 
@@ -142,15 +143,14 @@ module fetch(
         if(rst)
             stage2_valid <= 0;
         if (new_mem_request)
-            stage2_valid <= new_mem_request;
-        else if (new_issue)
+            stage2_valid <= 1;
+        else if (new_issue | fetch_flush)
             stage2_valid <= 0;
     end
 
     always_ff @(posedge clk) begin
         if (new_mem_request) begin
             stage2_phys_address <= tlb.physical_address;
-            stage2_prediction <= stage1_prediction;//not taken if no valid prediction
             stage2_cache_access <= cache_access;
         end
     end
@@ -166,8 +166,9 @@ module fetch(
     assign mem_ready = fetch_sub[ICACHE_ID].ready;
 
     assign fetch_flush = (bt.flush | exception);
-    assign new_mem_request =  pc_valid & tlb.complete & ~fetch_flush & ((stage2_valid & ~ib.early_full) |  (~stage2_valid & ~ib.full)) & mem_ready;
 
+    assign space_in_inst_buffer = (stage2_valid & ~ib.early_full) | (~stage2_valid & ~ib.full);
+    assign new_mem_request =  pc_valid & tlb.complete & ~fetch_flush & space_in_inst_buffer & mem_ready;
 
     assign fetch_sub[BRAM_ID].new_request = new_mem_request & bram_access;
     assign fetch_sub[ICACHE_ID].new_request = new_mem_request & cache_access;
@@ -182,7 +183,7 @@ module fetch(
     generate if (USE_I_SCRATCH_MEM)
             ibram i_bram (.*, .fetch_sub(fetch_sub[BRAM_ID]));
         else begin
-            assign  fetch_sub[BRAM_ID].ready = 1;
+            assign fetch_sub[BRAM_ID].ready = 1;
             assign fetch_sub[BRAM_ID].data_valid = 0;
             assign fetch_sub[BRAM_ID].data_out = 0;
         end
@@ -190,7 +191,7 @@ module fetch(
     generate if (USE_ICACHE)
             icache i_cache (.*, .fetch_sub(fetch_sub[ICACHE_ID]));
         else begin
-            assign  fetch_sub[ICACHE_ID].ready = 1;
+            assign fetch_sub[ICACHE_ID].ready = 1;
             assign fetch_sub[ICACHE_ID].data_valid = 0;
             assign fetch_sub[ICACHE_ID].data_out = 0;
         end
@@ -200,7 +201,7 @@ module fetch(
     always_ff @(posedge clk) begin
         if (rst)
             delayed_flush <= 0;
-        else if ((bt.flush | exception) & stage2_cache_access & ~fetch_sub[ICACHE_ID].data_valid)//& ~fetch_sub[ICACHE_ID].ready
+        else if ((bt.flush | exception) & stage2_valid & stage2_cache_access & ~fetch_sub[ICACHE_ID].data_valid)//& ~fetch_sub[ICACHE_ID].ready
             delayed_flush <= 1;
         else if (fetch_sub[ICACHE_ID].data_valid)
             delayed_flush <= 0;
@@ -211,24 +212,25 @@ module fetch(
     assign ib.push = new_issue;
     assign ib.flush = bt.flush;
 
-    assign ib.data_in.instruction = fetch_sub[BRAM_ID].data_out | fetch_sub[ICACHE_ID].data_out;
+    assign ib.data_in.instruction = ({32{~stage2_cache_access}} & fetch_sub[BRAM_ID].data_out) |
+        ({32{stage2_cache_access}} & fetch_sub[ICACHE_ID].data_out);
 
     assign ib.data_in.pc = stage2_phys_address;
-    assign ib.data_in.prediction = stage2_prediction;
-
 
     //Early decode
     assign fn3 =ib.data_in.instruction[14:12];
     assign opcode = ib.data_in.instruction[6:0];
+    assign opcode_trimmed = opcode[6:2];
 
-    assign csr_imm_op = (opcode == SYSTEM) && fn3[2];
-    assign sys_op =  (opcode == SYSTEM) && (fn3 == 0);
+    assign csr_imm_op = (opcode_trimmed == SYSTEM_T) && fn3[2];
+    assign sys_op =  (opcode_trimmed == SYSTEM_T) && (fn3 == 0);
 
-    assign jal_jalr_x0 = ((opcode == JAL) || (opcode == JALR)) && (ib.data_in.instruction[11:7] == 0);
+    assign jal_jalr_x0 = ((opcode_trimmed == JAL_T) || (opcode_trimmed == JALR_T)) && (ib.data_in.instruction[11:7] == 0);//rd is x0
 
-    assign ib.data_in.uses_rs1 = !((opcode == LUI) || (opcode == AUIPC) || (opcode == JAL) || (opcode == FENCE) || csr_imm_op || sys_op);
-    assign ib.data_in.uses_rs2 = ((opcode == BRANCH) || (opcode == STORE) || (opcode == ARITH) || (opcode == AMO));
-    assign ib.data_in.uses_rd = !((opcode == BRANCH) || (opcode == STORE) ||  (opcode == FENCE) || sys_op || jal_jalr_x0);
+    //TODO: function for set comparison
+    assign ib.data_in.uses_rs1 = !((opcode_trimmed == LUI_T) || (opcode_trimmed == AUIPC_T) || (opcode_trimmed == JAL_T) || (opcode_trimmed == FENCE_T) || csr_imm_op || sys_op);
+    assign ib.data_in.uses_rs2 = ((opcode_trimmed == BRANCH_T) || (opcode_trimmed == STORE_T) || (opcode_trimmed == ARITH_T) || (opcode_trimmed == AMO_T) || (opcode_trimmed == CUSTOM_T));
+    assign ib.data_in.uses_rd = !((opcode_trimmed == BRANCH_T) || (opcode_trimmed == STORE_T) ||  (opcode_trimmed == FENCE_T) || sys_op || jal_jalr_x0);
 
 
 endmodule

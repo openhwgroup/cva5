@@ -69,7 +69,8 @@ module div_unit(
     /*********************************
      *  Input FIFO
      *********************************/
-    lutram_fifo #(.DATA_WIDTH($bits(div_inputs_t)), .FIFO_DEPTH(DIV_INPUT_BUFFER_DEPTH)) div_input_fifo (.fifo(input_fifo), .*);
+    taiga_fifo #(.DATA_WIDTH($bits(div_inputs_t)), .FIFO_DEPTH(DIV_INPUT_BUFFER_DEPTH), .FIFO_TYPE(NON_MUXED_INPUT_FIFO)
+            ) div_input_fifo (.fifo(input_fifo), .*);
 
     assign input_fifo.data_in = div_inputs;
     assign input_fifo.push = div_ex.new_request_dec;
@@ -137,7 +138,8 @@ module div_unit(
     /*********************************
      *  Output FIFO
      *********************************/
-    lutram_fifo #(.DATA_WIDTH(XLEN), .FIFO_DEPTH(DIV_OUTPUT_BUFFER_DEPTH), .BYPASS_REG(0)) output_fifo (.fifo(wb_fifo), .*);
+    taiga_fifo #(.DATA_WIDTH(XLEN), .FIFO_DEPTH(DIV_OUTPUT_BUFFER_DEPTH), .FIFO_TYPE(NON_MUXED_INPUT_FIFO)
+            ) output_fifo (.fifo(wb_fifo), .*);
 
     assign wb_fifo.data_in = div_result_muxed;
     assign wb_fifo.push = div_done;

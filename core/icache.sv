@@ -4,7 +4,7 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -19,7 +19,7 @@
  * Author(s):
  *             Eric Matthews <ematthew@sfu.ca>
  */
- 
+
 import taiga_config::*;
 import taiga_types::*;
 
@@ -41,12 +41,13 @@ module icache(
     logic [ICACHE_WAYS-1:0] tag_update_way;
 
     logic [$clog2(ICACHE_LINE_W)-1:0] word_count;
+    logic is_target_word;
     logic line_complete;
 
     logic [31:0] data_out [ICACHE_WAYS-1:0];
     logic [31:0] miss_data;
 
-    logic miss;
+    logic miss_data_ready;
     logic second_cycle;
 
     logic idle;
@@ -71,13 +72,6 @@ module icache(
             second_cycle <= 0;
         else
             second_cycle <= fetch_sub.new_request;
-    end
-
-    always_ff @ (posedge clk) begin
-        if (rst | memory_complete)
-            miss <= 0;
-        else if (second_cycle)
-            miss <= ~tag_hit;
     end
 
     always_ff @ (posedge clk) begin
@@ -162,17 +156,31 @@ module icache(
     /*************************************
      * Output Muxing
      *************************************/
+    assign is_target_word = (fetch_sub.stage2_addr[ICACHE_SUB_LINE_ADDR_W+1:2] == word_count);
+
     always_ff @ (posedge clk) begin
-        if (l1_response.data_valid && fetch_sub.stage2_addr[ICACHE_SUB_LINE_ADDR_W+1:2] == word_count)
+        if (l1_response.data_valid & is_target_word)
             miss_data <= l1_response.data;
+        else
+            miss_data <= 0;
     end
 
+    always_ff @ (posedge clk) begin
+        if (rst)
+            miss_data_ready <= 0;
+        else
+            miss_data_ready <= l1_response.data_valid & is_target_word;
+    end
+
+
     always_comb begin
-        fetch_sub.data_out = miss_data & {32{miss}};
+        fetch_sub.data_out = miss_data;//zero if not a miss
         for (int i =0; i < ICACHE_WAYS; i++) begin
             fetch_sub.data_out = fetch_sub.data_out | (data_out[i] & {32{tag_hit_way[i]}});
         end
     end
+
+    assign fetch_sub.data_valid = miss_data_ready | (hit_allowed & tag_hit);
 
     /*************************************
      * Pipeline Advancement
@@ -182,13 +190,9 @@ module icache(
     always_ff @ (posedge clk) begin
         if (rst)
             memory_complete <= 0;
-        else if (fetch_sub.new_request | memory_complete)
-            memory_complete <= 0;
-        else if (line_complete) //read miss OR write through complete
-            memory_complete <= 1;
+        else
+            memory_complete <= line_complete;
     end
-
-    assign fetch_sub.data_valid = memory_complete | (hit_allowed & tag_hit);
 
     assign fetch_sub.ready = (hit_allowed & tag_hit) | memory_complete | idle;//~(second_cycle & ~tag_hit) & ~miss;
 

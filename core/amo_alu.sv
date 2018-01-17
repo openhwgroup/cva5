@@ -4,7 +4,7 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -19,7 +19,7 @@
  * Author(s):
  *             Eric Matthews <ematthew@sfu.ca>
  */
- 
+
 import taiga_config::*;
 import taiga_types::*;
 
@@ -30,7 +30,7 @@ module amo_alu(
 
 
     always_comb begin
-        unique case (amo_alu_inputs.op)// <--unique as not all codes are in use
+        case (amo_alu_inputs.op)// <--unique as not all codes are in use
             AMO_SWAP : result = amo_alu_inputs.rs2;
             AMO_ADD : result = amo_alu_inputs.rs1_load + amo_alu_inputs.rs2;
             AMO_XOR : result = amo_alu_inputs.rs1_load ^ amo_alu_inputs.rs2;

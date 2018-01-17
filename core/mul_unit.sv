@@ -79,7 +79,9 @@ module mul_unit(
     /*********************************
      *  Output FIFO
      *********************************/
-    lutram_fifo #(.DATA_WIDTH(XLEN), .FIFO_DEPTH(MUL_OUTPUT_BUFFER_DEPTH), .BYPASS_REG(0)) output_fifo (.fifo(wb_fifo), .*);
+    taiga_fifo #(
+            .DATA_WIDTH(XLEN), .FIFO_DEPTH(MUL_OUTPUT_BUFFER_DEPTH),  .FIFO_TYPE(NON_MUXED_INPUT_FIFO)
+            ) output_fifo (.fifo(wb_fifo), .*);
 
     assign wb_fifo.data_in = result;
     assign wb_fifo.push = mul_done;

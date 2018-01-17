@@ -4,7 +4,7 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -19,7 +19,7 @@
  * Author(s):
  *             Eric Matthews <ematthew@sfu.ca>
  */
- 
+
 import taiga_config::*;
 import taiga_types::*;
 import l2_config_and_types::*;
@@ -34,15 +34,36 @@ module l1_arbiter
         output sc_complete,
         output sc_success,
 
-        l1_arbiter_request_interface.arb l1_request[3:0],
-        l1_arbiter_return_interface.arb l1_response[3:0]
+        l1_arbiter_request_interface.arb l1_request[L1_CONNECTIONS-1:0],
+        l1_arbiter_return_interface.arb l1_response[L1_CONNECTIONS-1:0]
         );
 
-    l2_request_t[3:0] l2_requests;
+    l2_request_t[L1_CONNECTIONS-1:0] l2_requests;
+
+    logic [L1_CONNECTIONS-1:0] requests;
+    logic [L1_CONNECTIONS-1:0] acks;
 
     logic push_ready;
+    logic request_exists;
 
-    assign l2.inv_ack = l1_response[L1_DCACHE_ID].inv_ack;
+
+    //////////////////////////////////////
+    genvar i;
+
+    generate
+        for (i=0; i <L1_CONNECTIONS; i++) begin
+            assign requests[i] = l1_request[i].request;
+            assign l1_request[i].ack = acks[i];
+        end
+    endgenerate
+
+    generate
+        if (USE_DCACHE && USE_DTAG_INVALIDATIONS)
+            assign l2.inv_ack = l1_response[L1_DCACHE_ID].inv_ack;
+        else
+            assign l2.inv_ack = l2.inv_valid;
+    endgenerate
+
     assign l2.rd_data_ack = l2.rd_data_valid;
     assign sc_complete = l2.con_valid;
     assign sc_success = l2.con_result;
@@ -50,57 +71,105 @@ module l1_arbiter
     //arbiter can pop address FIFO at a different rate than the data FIFO, so check that both have space.
     assign push_ready = ~l2.request_full & ~l2.data_full;
 
-
-    assign l1_request[L1_DCACHE_ID].ack = l1_request[L1_DCACHE_ID].request & push_ready;
-    assign l1_request[L1_DMMU_ID].ack = l1_request[L1_DMMU_ID].request & push_ready & ~l1_request[L1_DCACHE_ID].request;
-    assign l1_request[L1_ICACHE_ID].ack = l1_request[L1_ICACHE_ID].request & push_ready & ~l1_request[L1_DCACHE_ID].request & ~l1_request[L1_DMMU_ID].request;
-    assign l1_request[L1_IMMU_ID].ack = l1_request[L1_IMMU_ID].request & push_ready & ~l1_request[L1_DCACHE_ID].request & ~l1_request[L1_DMMU_ID].request & ~l1_request[L1_ICACHE_ID].request;
-
-    assign l2.request_push = push_ready & (l1_request[L1_DCACHE_ID].request | l1_request[L1_DMMU_ID].request | l1_request[L1_ICACHE_ID].request | l1_request[L1_IMMU_ID].request);
-    assign l2.wr_data_push = push_ready & l1_request[L1_DCACHE_ID].request & ~l1_request[L1_DCACHE_ID].rnw; //Assumes data cache has highest priority
-
-
-
+    //priority 0-to-n
+    logic busy;
     always_comb begin
-        l2_requests[L1_DCACHE_ID].addr = l1_request[L1_DCACHE_ID].addr[31:2];
-        l2_requests[L1_DCACHE_ID].rnw = l1_request[L1_DCACHE_ID].rnw;
-        l2_requests[L1_DCACHE_ID].be = l1_request[L1_DCACHE_ID].be;
-        l2_requests[L1_DCACHE_ID].is_amo = l1_request[L1_DCACHE_ID].is_amo;
-        l2_requests[L1_DCACHE_ID].amo_type_or_burst_size = l1_request[L1_DCACHE_ID].is_amo ? l1_request[L1_DCACHE_ID].amo : l1_request[L1_DCACHE_ID].size;
-        l2_requests[L1_DCACHE_ID].sub_id = L1_DCACHE_ID;
+        request_exists = l1_request[0].request;
+        acks[0] = l1_request[0].request & push_ready;
+        busy = l1_request[0].request;
+        for (int i=1; i <L1_CONNECTIONS; i++) begin
+            request_exists |= requests[i];
+            acks[i] = requests[i] & push_ready & ~busy;
+            busy |= requests[i];
+        end
     end
 
+    assign l2.request_push = push_ready & request_exists;
 
-  //  assign l2_requests[L1_DCACHE_ID] = l1_request[L1_DCACHE_ID].to_l2(L1_DCACHE_ID);
-    assign l2_requests[L1_DMMU_ID] = l1_request[L1_DMMU_ID].to_l2(L1_DMMU_ID);
-    assign l2_requests[L1_ICACHE_ID] = l1_request[L1_ICACHE_ID].to_l2(L1_ICACHE_ID);
-    assign l2_requests[L1_IMMU_ID] = l1_request[L1_IMMU_ID].to_l2(L1_IMMU_ID);
+    generate
+        if (USE_DCACHE) begin
+            assign l2.wr_data_push = push_ready & l1_request[L1_DCACHE_ID].request & ~l1_request[L1_DCACHE_ID].rnw; //Assumes data cache has highest priority
+            assign l2.wr_data = l1_request[L1_DCACHE_ID].data;
+        end
+        else begin
+            assign l2.wr_data_push = 0;
+            assign l2.wr_data = 0;
+        end
+        if (USE_DTAG_INVALIDATIONS) begin
+            assign l1_response[L1_DCACHE_ID].inv_addr = l2.inv_addr;
+            assign l1_response[L1_DCACHE_ID].inv_valid = l2.inv_valid;
+        end
+        else begin
+            assign l1_response[L1_DCACHE_ID].inv_addr = 0;
+            assign l1_response[L1_DCACHE_ID].inv_valid = 0;
+        end
+    endgenerate
+
+    generate if (USE_DCACHE) begin
+            always_comb begin
+                l2_requests[L1_DCACHE_ID].addr = l1_request[L1_DCACHE_ID].addr[31:2];
+                l2_requests[L1_DCACHE_ID].rnw = l1_request[L1_DCACHE_ID].rnw;
+                l2_requests[L1_DCACHE_ID].be = l1_request[L1_DCACHE_ID].be;
+                l2_requests[L1_DCACHE_ID].is_amo = l1_request[L1_DCACHE_ID].is_amo;
+                l2_requests[L1_DCACHE_ID].amo_type_or_burst_size = l1_request[L1_DCACHE_ID].is_amo ? l1_request[L1_DCACHE_ID].amo : l1_request[L1_DCACHE_ID].size;
+                l2_requests[L1_DCACHE_ID].sub_id = L1_DCACHE_ID;
+            end
+        end
+    endgenerate
+
+    generate if (USE_ICACHE) begin
+            always_comb begin
+                l2_requests[L1_ICACHE_ID].addr = l1_request[L1_ICACHE_ID].addr[31:2];
+                l2_requests[L1_ICACHE_ID].rnw = l1_request[L1_ICACHE_ID].rnw;
+                l2_requests[L1_ICACHE_ID].be = l1_request[L1_ICACHE_ID].be;
+                l2_requests[L1_ICACHE_ID].is_amo = l1_request[L1_ICACHE_ID].is_amo;
+                l2_requests[L1_ICACHE_ID].amo_type_or_burst_size = l1_request[L1_ICACHE_ID].size;
+                l2_requests[L1_ICACHE_ID].sub_id = L1_ICACHE_ID;
+            end
+        end
+    endgenerate
+
+    generate if (USE_MMU) begin
+            always_comb begin
+                l2_requests[L1_DMMU_ID].addr = l1_request[L1_DMMU_ID].addr[31:2];
+                l2_requests[L1_DMMU_ID].rnw = l1_request[L1_DMMU_ID].rnw;
+                l2_requests[L1_DMMU_ID].be = l1_request[L1_DMMU_ID].be;
+                l2_requests[L1_DMMU_ID].is_amo = l1_request[L1_DMMU_ID].is_amo;
+                l2_requests[L1_DMMU_ID].amo_type_or_burst_size = l1_request[L1_DMMU_ID].size;
+                l2_requests[L1_DMMU_ID].sub_id = L1_DMMU_ID;
+
+                l2_requests[L1_IMMU_ID].addr = l1_request[L1_IMMU_ID].addr[31:2];
+                l2_requests[L1_IMMU_ID].rnw = l1_request[L1_IMMU_ID].rnw;
+                l2_requests[L1_IMMU_ID].be = l1_request[L1_IMMU_ID].be;
+                l2_requests[L1_IMMU_ID].is_amo = l1_request[L1_IMMU_ID].is_amo;
+                l2_requests[L1_IMMU_ID].amo_type_or_burst_size = l1_request[L1_IMMU_ID].size;
+                l2_requests[L1_IMMU_ID].sub_id = L1_IMMU_ID;
+            end
+        end
+    endgenerate
+
+
+    // generate
+    //      for (i=1; i <L1_CONNECTIONS; i++) begin
+    //          assign l2_requests[i] = l1_request[i].to_l2(i);
+    //        end
+    //    endgenerate
 
     always_comb begin
-        if (l1_request[L1_DCACHE_ID].request)
-            l2.request = l2_requests[L1_DCACHE_ID];
-        else if (l1_request[L1_DMMU_ID].request)
-            l2.request = l2_requests[L1_DMMU_ID];
-        else if (l1_request[L1_ICACHE_ID].request)
-            l2.request = l2_requests[L1_ICACHE_ID];
-        else
-            l2.request = l2_requests[L1_IMMU_ID];
+        l2.request = l2_requests[L1_CONNECTIONS-1];
+        for (int i = L1_CONNECTIONS-2; i >=0; i--) begin
+            if (requests[i])
+                l2.request = l2_requests[i];
+        end
     end
 
-    assign l2.wr_data = l1_request[L1_DCACHE_ID].data;
+    generate
+        for (i=0; i <L1_CONNECTIONS; i++) begin
+            assign l1_response[i].data = l2.rd_data;
+            assign l1_response[i].data_valid = l2.rd_data_valid && (l2.rd_sub_id == i);
+        end
+    endgenerate
 
-    assign l1_response[L1_DCACHE_ID].data = l2.rd_data;
-    assign l1_response[L1_DMMU_ID].data = l2.rd_data;
-    assign l1_response[L1_ICACHE_ID].data = l2.rd_data;
-    assign l1_response[L1_IMMU_ID].data = l2.rd_data;
-
-    assign l1_response[L1_DCACHE_ID].data_valid = l2.rd_data_valid && (l2.rd_sub_id == L1_DCACHE_ID);
-    assign l1_response[L1_DMMU_ID].data_valid = l2.rd_data_valid && (l2.rd_sub_id == L1_DMMU_ID);
-    assign l1_response[L1_ICACHE_ID].data_valid = l2.rd_data_valid && (l2.rd_sub_id == L1_ICACHE_ID);
-    assign l1_response[L1_IMMU_ID].data_valid = l2.rd_data_valid && (l2.rd_sub_id == L1_IMMU_ID);
-
-    assign l1_response[L1_DCACHE_ID].inv_addr = l2.inv_addr;
-    assign l1_response[L1_DCACHE_ID].inv_valid = l2.inv_valid;
 
 
 endmodule

@@ -39,7 +39,7 @@ module register_file(
     logic rs2_feedforward;
 
     logic in_use_match;
-    logic [$clog2(INFLIGHT_QUEUE_DEPTH)-1:0] in_use_by_id_r;
+    logic [$clog2(INFLIGHT_QUEUE_DEPTH)-1:0] in_use_by_id;
 
     //////////////////////////////////////////
     //Assign zero to r0 and initialize all registers to zero
@@ -64,8 +64,10 @@ module register_file(
             always_ff @ (posedge clk) begin
                 if (rst)
                     inuse[i] <= 0;
-                else if ((rf_decode.instruction_issued && rf_decode.future_rd_addr == i) || (rf_wb.valid_write && (rf_wb.rd_addr == i) && in_use_match))
-                    inuse[i] <= rf_decode.instruction_issued;
+                else if (rf_decode.future_rd_addr == i && rf_decode.instruction_issued)
+                    inuse[i] <= 1;
+                else if(rf_wb.rd_addr == i && rf_wb.valid_write && in_use_match)
+                    inuse[i] <= 0;
             end
         end
     endgenerate
@@ -74,11 +76,9 @@ module register_file(
         if (rf_decode.instruction_issued)
             in_use_by[rf_decode.future_rd_addr] <= rf_decode.id;
     end
-    //always_ff @ (posedge clk) begin
-        assign in_use_by_id_r = in_use_by[rf_wb.rd_addr];
-    //end
 
-    assign in_use_match = (in_use_by_id_r == rf_wb.id);
+    assign in_use_by_id = in_use_by[rf_wb.rd_addr];
+    assign in_use_match = (in_use_by_id == rf_wb.id);
 
     assign rs1_feedforward = (rf_decode.rs1_addr == rf_wb.rd_addr) && rf_wb.valid_write && in_use_match;
     assign rs2_feedforward = (rf_decode.rs2_addr == rf_wb.rd_addr) && rf_wb.valid_write && in_use_match;
