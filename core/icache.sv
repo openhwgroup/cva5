@@ -136,7 +136,7 @@ module icache(
     //Data Banks
     genvar i;
     generate
-        for (i=0; i < ICACHE_WAYS; i=i+1) begin : data_bank_gen
+        for (i=0; i < ICACHE_WAYS; i++) begin : data_bank_gen
             byte_en_BRAM #(ICACHE_LINES*ICACHE_LINE_W) data_bank (
                     .clk(clk),
                     .addr_a(fetch_sub.stage1_addr[ICACHE_LINE_ADDR_W+ICACHE_SUB_LINE_ADDR_W+2-1:2]),
@@ -144,7 +144,7 @@ module icache(
                     .en_a(fetch_sub.new_request),
                     .en_b(tag_update_way[i] & l1_response.data_valid),
                     .be_a('0),
-                    .be_b({4{l1_response.data_valid}}),
+                    .be_b('1),
                     .data_in_a('0),
                     .data_in_b(l1_response.data),
                     .data_out_a(data_out[i]),
