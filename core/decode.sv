@@ -340,8 +340,8 @@ module decode(
         if (rst)
             last_ls_request_was_load <= 0;
         else if (advance) begin
-            if (new_request[LS_UNIT_ID])
-                last_ls_request_was_load <= ls_inputs.load;
+            if (new_request[LS_UNIT_ID] & ls_inputs.load)
+                last_ls_request_was_load <= 1;
             else if (uses_rd && (load_rd == future_rd_addr))
                 last_ls_request_was_load <=0;
         end
