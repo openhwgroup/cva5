@@ -68,7 +68,7 @@ module load_store_unit (
     logic load_complete;
 
     logic [31:0] virtual_address;
-    logic [3:0]be;
+    logic [3:0] be;
 
     logic [31:0] unit_muxed_load_data;
     logic [31:0] aligned_load_data;
@@ -89,6 +89,9 @@ module load_store_unit (
 
     logic dcache_forward_data;
     logic [2:0] dcache_stage2_fn3;
+
+    logic [$clog2(LS_OUTPUT_BUFFER_DEPTH)-1:0] inflight_count;
+
 
     //AMO support
     //LR -- invalidates line if tag hit
@@ -117,6 +120,16 @@ module load_store_unit (
     /*********************************
      *  Primary control signals
      *********************************/
+    always_ff @(posedge clk) begin
+        if (rst)
+            inflight_count <= 0;
+        else if (issue_request & ~ls_wb.accepted)
+            inflight_count <= inflight_count + 1;
+        else if (~issue_request & ls_wb.accepted)
+            inflight_count <= inflight_count - 1;
+    end
+
+
     genvar i;
     generate
         for(i=0; i < NUM_SUB_UNITS; i++) begin
@@ -129,7 +142,7 @@ module load_store_unit (
     assign data_valid = |unit_data_valid;
 
     //Without cache to others (BRAM/BUS) forwarding no checking would be required for load_store_forwarding
-    assign issue_request = ((stage1.load_store_forward & (data_valid | ~load_attributes.valid)) | (~stage1.load_store_forward)) & input_fifo.valid & units_ready & ~wb_fifo.early_full;
+    assign issue_request = ((stage1.load_store_forward & (data_valid | ~load_attributes.valid)) | (~stage1.load_store_forward)) & input_fifo.valid & units_ready & (inflight_count < LS_OUTPUT_BUFFER_DEPTH);
     assign load_complete = data_valid;
 
     generate if (USE_D_SCRATCH_MEM) begin
