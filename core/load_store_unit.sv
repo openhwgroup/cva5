@@ -55,7 +55,7 @@ module load_store_unit (
     localparam DCACHE_ID = USE_D_SCRATCH_MEM+USE_BUS;
 
     //Should be equal to pipeline depth of longest load/store subunit
-    localparam ATTRIBUTES_DEPTH = 3;
+    localparam ATTRIBUTES_DEPTH = 2;
 
     typedef enum bit [2:0] {BU = 3'b000, HU = 3'b001, BS = 3'b010, HS = 3'b011, W = 3'b100} sign_type;
 
@@ -83,6 +83,8 @@ module load_store_unit (
     logic [31:0] unit_data_array [NUM_SUB_UNITS-1:0];
     logic [NUM_SUB_UNITS-1:0] unit_ready;
     logic [NUM_SUB_UNITS-1:0] unit_data_valid;
+    logic [NUM_SUB_UNITS-1:0] last_unit;
+    logic [NUM_SUB_UNITS-1:0] current_unit;
 
     logic unaligned_addr;
     logic [NUM_SUB_UNITS-1:0] sub_unit_address_match;
@@ -123,9 +125,9 @@ module load_store_unit (
     always_ff @(posedge clk) begin
         if (rst)
             inflight_count <= 0;
-        else if (issue_request & ~ls_wb.accepted)
+        else if (issue_request & stage1.load & ~ls_wb.accepted)
             inflight_count <= inflight_count + 1;
-        else if (~issue_request & ls_wb.accepted)
+        else if (~issue_request & stage1.load &  ls_wb.accepted)
             inflight_count <= inflight_count - 1;
     end
 
@@ -141,8 +143,17 @@ module load_store_unit (
     assign units_ready = &unit_ready;
     assign data_valid = |unit_data_valid;
 
-    //Without cache to others (BRAM/BUS) forwarding no checking would be required for load_store_forwarding
-    assign issue_request = ((stage1.load_store_forward & (data_valid | ~load_attributes.valid)) | (~stage1.load_store_forward)) & input_fifo.valid & units_ready & (inflight_count < LS_OUTPUT_BUFFER_DEPTH);
+
+    assign current_unit = sub_unit_address_match;
+    always_ff @ (posedge clk) begin
+        if (issue_request)
+            last_unit <= sub_unit_address_match;
+    end
+
+    //When switching units, ensure no outstanding loads so that there can be no timing collisions with results
+    assign unit_stall = (current_unit != last_unit) & ~load_attributes.empty;
+
+    assign issue_request = input_fifo.valid & units_ready & ~unit_stall & (inflight_count < LS_OUTPUT_BUFFER_DEPTH);
     assign load_complete = data_valid;
 
     generate if (USE_D_SCRATCH_MEM) begin
