@@ -32,11 +32,16 @@ module register_file(
         );
 
     (* ramstyle = "MLAB, no_rw_check" *) logic [XLEN-1:0] register [0:31];
-    logic  inuse [0:31];
     (* ramstyle = "MLAB, no_rw_check" *) logic  [$clog2(INFLIGHT_QUEUE_DEPTH)-1:0] in_use_by [0:31];
 
     logic rs1_feedforward;
     logic rs2_feedforward;
+
+    logic [0:31] future_rd_one_hot;
+    logic [0:31] wb_addr_one_hot;
+    logic [0:31] new_inuse;
+    logic [0:31] inuse;
+
 
     logic in_use_match;
     logic [$clog2(INFLIGHT_QUEUE_DEPTH)-1:0] in_use_by_id;
@@ -44,7 +49,7 @@ module register_file(
     //////////////////////////////////////////
     //Assign zero to r0 and initialize all registers to zero
     initial begin
-        for (integer i=0; i<32; i=i+1) begin
+        for (integer i=0; i<32; i++) begin
             register[i] = 0;
             inuse[i] = 0;
             in_use_by[i] = '0;
@@ -57,20 +62,23 @@ module register_file(
             register[rf_wb.rd_addr] <= rf_wb.rd_data;
     end
 
-    genvar i;
-    generate
-        assign inuse[0] = 0;
-        for (i= 1; i < 32; i=i+1) begin : inuse_g
-            always_ff @ (posedge clk) begin
-                if (rst)
-                    inuse[i] <= 0;
-                else if (rf_decode.future_rd_addr == i && rf_decode.instruction_issued)
-                    inuse[i] <= 1;
-                else if(rf_wb.rd_addr == i && rf_wb.valid_write && in_use_match)
-                    inuse[i] <= 0;
-            end
-        end
-    endgenerate
+    always_comb begin
+        future_rd_one_hot = 0;
+        future_rd_one_hot[rf_decode.future_rd_addr] = rf_decode.instruction_issued;
+
+        wb_addr_one_hot = 0;
+        wb_addr_one_hot[rf_wb.rd_addr] = rf_wb.valid_write & in_use_match;
+
+        new_inuse = (inuse & ~wb_addr_one_hot) | future_rd_one_hot;
+    end
+
+    assign inuse[0] = 0;
+    always_ff @ (posedge clk) begin
+        if (rst)
+            inuse[1:31] <= 0;
+        else
+            inuse[1:31] <= new_inuse[1:31];
+    end
 
     always_ff @ (posedge clk) begin
         if (rf_decode.instruction_issued)
