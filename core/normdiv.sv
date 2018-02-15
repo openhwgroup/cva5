@@ -4,7 +4,7 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -42,13 +42,20 @@ module normdiv
     logic [C_WIDTH:0] new_PR;
     logic [C_WIDTH:0] PR;
 
-    logic [$clog2(C_WIDTH):0] count;
+    logic [C_WIDTH-1:0] shift_count;
 
+    //implementation
+    ////////////////////////////////////////////////////
     assign  new_PR = {1'b0, PR} - {1'b0, B};
 
     always_ff @ (posedge clk) begin
+        shift_count[0] <= start;
+        shift_count[31:1] <= shift_count[30:0];
+        terminate <= shift_count[31];
+    end
+
+    always_ff @ (posedge clk) begin
         if (start) begin
-            count <= C_WIDTH;
             PR <= {{(C_WIDTH-2){1'b0}}, A[C_WIDTH-1]};
             Q <= {A[C_WIDTH-2:0], 1'b0};
         end
@@ -61,13 +68,10 @@ module normdiv
                 PR <= {new_PR[C_WIDTH-1:0], Q[C_WIDTH-1]};
                 Q <= {Q[C_WIDTH-2:0], 1'b1};
             end
-            count <= count - 1;
         end
     end
 
     assign R = PR[C_WIDTH:1];
-
-    assign terminate = (count == 0);
 
     always_ff @ (posedge clk) begin
         if (rst) begin
