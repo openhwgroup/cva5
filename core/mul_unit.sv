@@ -31,65 +31,58 @@ module mul_unit(
         unit_writeback_interface.unit mul_wb
         );
 
-    logic [$clog2(MUL_OUTPUT_BUFFER_DEPTH+1)-1:0] inflight_count;
+    logic [65:0] result;
+    logic [1:0] mulh;
+    logic [1:0] advance;
+    logic [1:0] valid;
 
-    struct packed{
-        logic [31:0] upper;
-        logic [31:0] lower;
-    } mul_result;
+    logic rs1_signed, rs2_signed;
+    logic [33:0] rs1_ext, rs2_ext;
+    logic [33:0] rs1_r, rs2_r;
 
-    logic [31:0] result;
-    logic mul_lower;
-    logic mul_done_lower;
-    logic signa, signb;
+    //implementation
+    ////////////////////////////////////////////////////
+    assign advance[0] = ~valid[0] | advance[1];
+    assign advance[1] = mul_wb.accepted | ~valid[1];
 
-    fifo_interface #(.DATA_WIDTH(XLEN)) wb_fifo();
-
-
-    always_ff @(posedge clk) begin
-        if (rst)
-            inflight_count <= 0;
-        else if (mul_ex.new_request_dec & ~mul_wb.accepted)
-            inflight_count <= inflight_count + 1;
-        else if (~mul_ex.new_request_dec & mul_wb.accepted)
-            inflight_count <= inflight_count - 1;
+    always_ff @ (posedge clk) begin
+        if (rst) begin
+            valid <= 2'b00;
+        end
+        else begin
+            if (advance[0])
+                valid[0] <=  mul_ex.new_request_dec;
+            if (advance[1])
+                valid[1] <=  valid[0];
+        end
     end
 
-    //Multiply pathway fully pipelined
-    always_ff @(posedge clk) begin
-        if (rst)
-            mul_ex.ready <= 1;
-        else if (mul_ex.new_request_dec && ~mul_wb.accepted && inflight_count == (MUL_OUTPUT_BUFFER_DEPTH-1))
-            mul_ex.ready <= 0;
-        else if (mul_wb.accepted)
-            mul_ex.ready <= 1;
+    assign rs1_signed = ~(mul_inputs.op[1:0] == MULHU_fn3[1:0]);
+    assign rs2_signed = ~mul_inputs.op[1];
+
+    assign rs1_ext = {mul_inputs.rs1[31] & rs1_signed, mul_inputs.rs1};
+    assign rs2_ext = {mul_inputs.rs2[31] & rs2_signed, mul_inputs.rs2};
+
+    //Input and output registered Multiply
+    always_ff @ (posedge clk) begin
+        if (mul_ex.new_request_dec) begin
+            rs1_r <= rs1_ext;
+            rs2_r <= rs2_ext;
+            mulh[0] <= ~(mul_inputs.op[1:0] == 0);
+        end
+        if (advance[1]) begin
+            result <= (rs1_r) * (rs2_r);
+            mulh[1] <= mulh[0];
+        end
     end
 
-    assign mul_lower = (mul_inputs.op[1:0] == 0);
+    //Issue/write-back handshaking
+    ////////////////////////////////////////////////////
+    assign mul_ex.ready = mul_wb.accepted | ~(&valid);
 
-    assign signa = ~(mul_inputs.op[1:0] == 2'b11);
-    assign signb = ~mul_inputs.op[1];
-
-    mul #(MUL_CYCLES) multiplier (.*, .A(mul_inputs.rs1), .B(mul_inputs.rs2),
-            .P(mul_result), .new_request(mul_ex.new_request_dec), .signa(signa), .signb(signb), .lower(mul_lower),
-            .done(mul_done), .completed_lower(mul_done_lower));
-
-    assign result = mul_done_lower ? mul_result.lower : mul_result.upper;
-
-    /*********************************
-     *  Output FIFO
-     *********************************/
-    taiga_fifo #(
-            .DATA_WIDTH(XLEN), .FIFO_DEPTH(MUL_OUTPUT_BUFFER_DEPTH),  .FIFO_TYPE(NON_MUXED_INPUT_FIFO)
-            ) output_fifo (.fifo(wb_fifo), .*);
-
-    assign wb_fifo.data_in = result;
-    assign wb_fifo.push = mul_done;
-    assign wb_fifo.pop = mul_wb.accepted;
-    assign mul_wb.rd = wb_fifo.data_out;
-    assign mul_wb.done = wb_fifo.early_valid;
-
-    assign mul_wb.early_done = 0;//mul_done | (mul_wb.done & ~mul_wb.accepted);
-    /*********************************************/
+    assign mul_wb.rd = mulh[1] ? result[63:32] : result[31:0];
+    assign mul_wb.done = valid[0] | (valid[1] & ~mul_wb.accepted);
+    assign mul_wb.early_done = 0;
+    ////////////////////////////////////////////////////
 
 endmodule
