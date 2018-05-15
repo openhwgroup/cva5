@@ -31,65 +31,44 @@ module alu_unit(
         input alu_inputs_t alu_inputs
         );
 
-    logic [XLEN:0] add_sub_result;
-    logic [XLEN-1:0] logic_result;
-
-    logic [XLEN-1:0] result;
-    logic [XLEN-1:0] result2;
+    logic[XLEN:0] add_sub_result;
+    logic[XLEN-1:0] logic_result;
+    logic[XLEN-1:0] shifter_result;
 
     logic done;
 
-    logic[XLEN:0] add_sub_1;
-    logic[XLEN:0] add_sub_2;
-    logic[XLEN-1:0] shifter_resultl;
-    logic[XLEN-1:0] shifter_resultr;
-
-
-    assign add_sub_1 = {(alu_inputs.in1[XLEN-1] & ~alu_inputs.sltu), alu_inputs.in1};
-    assign add_sub_2 = {(alu_inputs.in2[XLEN-1] & ~alu_inputs.sltu), alu_inputs.in2};
-
-    //Add sub op
-    //assign add_sub_result =  alu_inputs.subtract ? (add_sub_1 - add_sub_2) : (add_sub_1 + add_sub_2);
+    //implementation
+    ////////////////////////////////////////////////////
+    assign add_sub_result = alu_inputs.subtract ? alu_inputs.in1 - alu_inputs.in2 : alu_inputs.in1 + alu_inputs.in2;
     always_comb begin
-        case (alu_inputs.logic_op) // <-- 010, 011 unused
-            ALU_XOR : add_sub_result = add_sub_1 ^ add_sub_2;
-            ALU_OR : add_sub_result = add_sub_1 | add_sub_2;
-            ALU_AND : add_sub_result = add_sub_1 & add_sub_2;
-            ALU_ADD_SUB : add_sub_result = alu_inputs.subtract ? add_sub_1 - add_sub_2 : add_sub_1 + add_sub_2;
+        case (alu_inputs.fn3[1:0])
+            XOR_fn3 : logic_result = alu_inputs.in1[XLEN-1:0] ^ alu_inputs.in2[XLEN-1:0];
+            OR_fn3 : logic_result = alu_inputs.in1[XLEN-1:0] | alu_inputs.in2[XLEN-1:0];
+            default : logic_result = alu_inputs.in1[XLEN-1:0] & alu_inputs.in2[XLEN-1:0];
         endcase
     end
 
-    //alu_logic_ops_and_adder logic_and_adder (
-    //        .op_type(alu_inputs.op[1:0]),
-    //        .sub(alu_inputs.subtract),
-    //        .A(add_sub_1),
-    //        .B(add_sub_2),
-    //        .result(add_sub_result)
-     //   );
-
-    //Barrel Shifter (initial bit flipping occurs in decode/issue stage)
     barrel_shifter shifter (
-            .shifter_input(alu_inputs.shifter_in),
+            .shifter_input(alu_inputs.in1[XLEN-1:0]),
             .shift_amount(alu_inputs.in2[4:0]),
             .arith(alu_inputs.arith),
-            .lshifted_result(shifter_resultl),
-            .rshifted_result(shifter_resultr)
+            .lshift(alu_inputs.lshift),
+            .shifted_result(shifter_result)
         );
 
     //Result mux
     always_comb begin
         case (alu_inputs.op)
-            ALU_SLT : result = {31'b0, add_sub_result[XLEN]};
-            ALU_SHIFTR : result = shifter_resultr;
-            ALU_SHIFT : result = shifter_resultl;
-            ALU_ADD_SUB : result = add_sub_result[XLEN-1:0];
+            ALU_ADD_SUB : alu_wb.rd = add_sub_result[XLEN-1:0];
+            ALU_LOGIC : alu_wb.rd = logic_result;
+            ALU_SLT : alu_wb.rd = {31'b0, add_sub_result[XLEN]};
+            ALU_SHIFT : alu_wb.rd = shifter_result;
         endcase
     end
 
-
+    //Issue/write-back handshaking
+    ////////////////////////////////////////////////////
     assign alu_ex.ready =  ~done | (done & alu_wb.accepted);
-
-    assign alu_wb.rd = result;
 
     always_ff @(posedge clk) begin
         if (rst) begin
@@ -101,8 +80,8 @@ module alu_unit(
         end
     end
 
-    assign alu_wb.done = (done & ~alu_wb.accepted);
-    assign alu_wb.early_done = alu_ex.possible_issue;
-
+    assign alu_wb.done_next_cycle = (done & ~alu_wb.accepted);
+    assign alu_wb.done_on_first_cycle = 1;
+    ////////////////////////////////////////////////////
 
 endmodule

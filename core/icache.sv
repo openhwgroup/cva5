@@ -59,15 +59,6 @@ module icache(
      *************************************/
 
     always_ff @ (posedge clk) begin
-        if (rst) begin
-            hit_allowed <= 0;
-        end
-        else begin
-            hit_allowed <= fetch_sub.new_request & icache_on;
-        end
-    end
-
-    always_ff @ (posedge clk) begin
         if (rst)
             second_cycle <= 0;
         else
@@ -130,14 +121,14 @@ module icache(
             .stage2_addr(fetch_sub.stage2_addr),
             .update_way(tag_update_way),
             .update(tag_update),
-            .stage1_adv(fetch_sub.new_request)
+            .stage1_adv(fetch_sub.new_request & icache_on)
         );
 
     //Data Banks
     genvar i;
     generate
-        for (i=0; i < ICACHE_WAYS; i++) begin : data_bank_gen
-            byte_en_BRAM #(ICACHE_LINES*ICACHE_LINE_W) data_bank (
+        for (i=0; i < ICACHE_WAYS; i++) begin : idata_bank_gen
+            byte_en_BRAM #(ICACHE_LINES*ICACHE_LINE_W) idata_bank (
                     .clk(clk),
                     .addr_a(fetch_sub.stage1_addr[ICACHE_LINE_ADDR_W+ICACHE_SUB_LINE_ADDR_W+2-1:2]),
                     .addr_b({fetch_sub.stage2_addr[ICACHE_LINE_ADDR_W+ICACHE_SUB_LINE_ADDR_W+2-1:ICACHE_SUB_LINE_ADDR_W+2], word_count}),
@@ -180,7 +171,7 @@ module icache(
         end
     end
 
-    assign fetch_sub.data_valid = miss_data_ready | (hit_allowed & tag_hit);
+    assign fetch_sub.data_valid = miss_data_ready | tag_hit;
 
     /*************************************
      * Pipeline Advancement
@@ -194,14 +185,14 @@ module icache(
             memory_complete <= line_complete;
     end
 
-    assign fetch_sub.ready = (hit_allowed & tag_hit) | memory_complete | idle;//~(second_cycle & ~tag_hit) & ~miss;
+    assign fetch_sub.ready = tag_hit | memory_complete | idle;//~(second_cycle & ~tag_hit) & ~miss;
 
     always_ff @ (posedge clk) begin
         if (rst)
             idle <= 1;
         else if (fetch_sub.new_request)
             idle <= 0;
-        else if (memory_complete  | (hit_allowed & tag_hit)) //read miss OR write through complete
+        else if (memory_complete | tag_hit) //read miss OR write through complete
             idle <= 1;
     end
 

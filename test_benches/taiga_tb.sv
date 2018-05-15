@@ -27,7 +27,7 @@ import taiga_config::*;
 import taiga_types::*;
 import l2_config_and_types::*;
 
-`define  MEMORY_FILE  "/home/ematthew/Research/RISCV/software2/riscv-tools/riscv-tests/benchmarks/sqrt.riscv.sim_init"
+`define  MEMORY_FILE  "/home/ematthew/Research/RISCV/software2/riscv-tools/riscv-tests/benchmarks/fft.riscv.sim_init"
 `define  UART_LOG  "/home/ematthew/uart.log"
 
 module taiga_tb ( );
@@ -164,8 +164,8 @@ module taiga_tb ( );
     assign clk = simulator_clk;
     assign rst = processor_reset;
                 
-    bram_interface instruction_bram();
-    bram_interface data_bram();
+    local_memory_interface instruction_bram();
+    local_memory_interface data_bram();
     
     axi_interface m_axi();
     avalon_interface m_avalon();
@@ -238,7 +238,7 @@ module taiga_tb ( );
         end
         do_reset();
 
-        #3600000;
+        #1500000;
         $fclose(output_file);
         $finish;
     end

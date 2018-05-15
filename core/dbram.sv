@@ -31,7 +31,7 @@ module dbram(
         ls_sub_unit_interface.sub_unit ls,
         output logic[31:0] data_out,
 
-        bram_interface.user data_bram
+        local_memory_interface.master data_bram
         );
 
     assign ls.ready = 1;

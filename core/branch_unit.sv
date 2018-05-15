@@ -53,8 +53,8 @@ module branch_unit(
     logic [31:0] ret_count;
     logic [31:0] br_count;
 
-    logic [32:0] rs1_sext;
-    logic [32:0] rs2_sext;
+    logic signed [32:0] rs1_sext;
+    logic signed [32:0] rs2_sext;
 
     logic jump_ex;
     logic bcomp_ex;
@@ -67,7 +67,6 @@ module branch_unit(
     logic [31:0] select_new_carry;
     logic [31:0] carry;
 
-
     assign equal = (branch_inputs.rs1 == branch_inputs.rs2);
     assign rs1_sext = {branch_inputs.rs1[XLEN-1] & branch_inputs.use_signed, branch_inputs.rs1};
     assign rs2_sext = {branch_inputs.rs2[XLEN-1] & branch_inputs.use_signed, branch_inputs.rs2};
@@ -75,14 +74,13 @@ module branch_unit(
     assign lessthan = signed'(rs1_sext) < signed'(rs2_sext);
 
     always_comb begin
-        case (fn3_ex) // <-- 010, 011 unused
+        unique case (fn3_ex) // <-- 010, 011 unused
             BEQ_fn3 : result = equal_ex;
             BNE_fn3 : result = ~equal_ex;
             BLT_fn3 : result = lessthan_ex;
             BGE_fn3 : result = ~lessthan_ex;
             BLTU_fn3 : result = lessthan_ex;
             BGEU_fn3 : result = ~lessthan_ex;
-            default : result = 0;
         endcase
     end
 
@@ -104,7 +102,11 @@ module branch_unit(
 
     assign bt.branch_ex = branch_ex.new_request;
     always_ff @(posedge clk) begin
-        fn3_ex <= branch_inputs.fn3;
+        if (branch_ex.new_request_dec)
+            fn3_ex <= branch_inputs.fn3;
+    end
+
+    always_ff @(posedge clk) begin
         equal_ex <= equal;
         lessthan_ex <= lessthan;
         bt.ex_pc <= branch_inputs.dec_pc;
@@ -114,7 +116,7 @@ module branch_unit(
         bt.njump_pc <= pc_plus_4;
     end
 
-
+    //if the destination reg is zero, the result is not "written back" to the register file.
     assign new_jal_jalr_dec = (branch_inputs.jal | branch_inputs.jalr) & ~branch_inputs.rdx0;
 
     always_ff @(posedge clk) begin
@@ -163,8 +165,8 @@ module branch_unit(
         end
     end
 
-    assign branch_wb.done = (done & ~branch_wb.accepted);
-    assign branch_wb.early_done = branch_ex.possible_issue & new_jal_jalr_dec;
+    assign branch_wb.done_next_cycle = (done & ~branch_wb.accepted);
+    assign branch_wb.done_on_first_cycle = 1;//branch_ex.possible_issue & new_jal_jalr_dec;
 
     /*********************************************/
 

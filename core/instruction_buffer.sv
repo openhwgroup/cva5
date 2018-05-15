@@ -44,7 +44,13 @@ module instruction_buffer
     assign ib_fifo.push = ib.push;
     assign ib_fifo.pop = ib.pop;
     assign ib_fifo.data_in = ib.data_in;
-    assign ib.data_out = ib_fifo.data_out;
+
+    always_ff @ (posedge clk) begin
+        ib.data_out <= ib_fifo.data_out;
+    end
+
+    //assign ib.data_out = ib_fifo.data_out;
+
     assign ib.valid = ib_fifo.valid;
     assign ib.full = ib_fifo.full;
     assign ib.early_full = ib_fifo.early_full;

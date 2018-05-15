@@ -27,20 +27,18 @@ module taiga (
         input logic clk,
         input logic rst,
 
-        bram_interface.user instruction_bram,
-        bram_interface.user data_bram,
+        local_memory_interface.master instruction_bram,
+        local_memory_interface.master data_bram,
 
         axi_interface.master m_axi,
         avalon_interface.master m_avalon,
 
         l2_requester_interface.requester l2,
 
-        input logic interrupt,
-
-        //debug
+        output logic[31:0] dec_pc_debug,
         output logic[31:0] if2_pc_debug,
-        output logic[31:0] dec_pc_debug
 
+        input logic interrupt
         );
 
     l1_arbiter_request_interface l1_request[L1_CONNECTIONS-1:0]();
@@ -72,9 +70,6 @@ module taiga (
     id_generator_interface id_gen();
 
     unit_writeback_interface unit_wb [NUM_WB_UNITS-1:0]();
-
-    //writeback_unit_interface unit_wb();
-
     register_file_writeback_interface rf_wb();
 
     csr_exception_interface csr_exception();
@@ -110,11 +105,10 @@ module taiga (
     logic instruction_issued_no_rd;
     logic instruction_complete;
 
-    assign instruction_issued = dec_advance;
-
-
     assign if2_pc_debug = if2_pc;
     assign dec_pc_debug = dec_pc;
+
+    assign instruction_issued = dec_advance;
 
 
     /*************************************
@@ -154,14 +148,6 @@ module taiga (
      *************************************/
     branch_unit branch_unit_block (.*, .branch_wb(unit_wb[BRANCH_UNIT_ID].unit));
     alu_unit alu_unit_block (.*, .alu_wb(unit_wb[ALU_UNIT_ID].unit));
-
-//    genvar i;
-//    generate
-//        for (i = 0; i < 5; i++) begin
-//            alu_unit single_cycle_accelerators (.*, .alu_ex(single_accel), .alu_wb(unit_wb[ACCEL+i].unit));
-//        end
-//    endgenerate
-//
     load_store_unit load_store_unit_block (.*, .dcache_on(1'b1), .clear_reservation(1'b0), .tlb(dtlb), .ls_wb(unit_wb[LS_UNIT_ID].unit), .l1_request(l1_request[L1_DCACHE_ID]), .l1_response(l1_response[L1_DCACHE_ID]));
     generate if (USE_MMU) begin
             tlb_lut_ram #(DTLB_WAYS, DTLB_DEPTH) d_tlb (.*, .tlb(dtlb), .mmu(dmmu));

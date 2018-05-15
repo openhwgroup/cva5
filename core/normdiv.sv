@@ -36,7 +36,6 @@ module normdiv
         output logic complete
         );
 
-    logic running;
     logic terminate;
 
     logic [C_WIDTH:0] new_PR;
@@ -48,10 +47,10 @@ module normdiv
     ////////////////////////////////////////////////////
     assign  new_PR = {1'b0, PR} - {1'b0, B};
 
+    //Shift reg for
     always_ff @ (posedge clk) begin
         shift_count[0] <= start;
         shift_count[31:1] <= shift_count[30:0];
-        terminate <= shift_count[31];
     end
 
     always_ff @ (posedge clk) begin
@@ -74,23 +73,24 @@ module normdiv
     assign R = PR[C_WIDTH:1];
 
     always_ff @ (posedge clk) begin
-        if (rst) begin
-            running <= 0;
-            complete <= 0;
-        end
+        if (rst)
+            terminate <= 0;
         else begin
-            if (start) begin
-                running <= 1;
-                complete <= 0;
-            end
-            else if (running & terminate) begin
-                running <= 0;
+            if (start)
+                terminate <= 0;
+            if (shift_count[31])
+                terminate <= 1;
+        end
+    end
+
+    always_ff @ (posedge clk) begin
+        if (rst)
+            complete <= 0;
+        else begin
+            if (shift_count[31])
                 complete <= 1;
-            end
-            else if (ack) begin
-                running <= 0;
+            else if (ack)
                 complete <= 0;
-            end
         end
     end
 

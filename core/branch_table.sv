@@ -53,19 +53,18 @@ module branch_table(
     logic [31:0] miss_predict_ret;
     logic [31:0] miss_predict_jalr;
 
-
     logic miss_predict;
     logic miss_predict2;
 
     logic tag_match;
+    /////////////////////////////////////////
 
-    logic bt_on;
 
     initial begin
         for(int i=0; i<BRANCH_TABLE_ENTRIES; i=i+1) begin
             //foreach(branch_table_tag_ram[i]) begin
             branch_table_tag_ram[i] = 0;
-            branch_table_addr_ram[i] = 0;
+            branch_table_addr_ram[i] = RESET_VEC;
         end
     end
 
@@ -99,19 +98,13 @@ module branch_table(
         (bt.branch_taken && bt.dec_pc != bt.jump_pc) ||
         (~bt.branch_taken && bt.dec_pc != bt.njump_pc));
 
-    assign tag_match = ({if_entry.valid, if_entry.tag} == {(bt.next_pc_valid & bt_on), bt.if_pc[31:32-BTAG_W]});
+
+    assign tag_match = ({if_entry.valid, if_entry.tag} == {1'b1, bt.if_pc[31:32-BTAG_W]});
     assign bt.predicted_pc = predicted_pc;
     assign bt.prediction = if_entry.prediction;
 
-    always_ff @(posedge clk) begin
-        if (rst)
-            bt_on <= 0;
-        else if (bt.branch_ex)
-            bt_on <= 1;
-    end
-
     generate if (USE_BRANCH_PREDICTOR) begin
-        assign bt.use_prediction = bt_on & tag_match;
+        assign bt.use_prediction = tag_match;
         assign bt.flush = miss_predict;
     end else begin
         assign bt.use_prediction = 0;
@@ -128,8 +121,6 @@ module branch_table(
             miss_predict_br <= miss_predict_br+1;
         end
     end
-
-
 
     always_ff @(posedge clk) begin
         if (rst) begin

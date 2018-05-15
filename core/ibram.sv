@@ -28,22 +28,10 @@ module ibram(
         input logic rst,
 
         fetch_sub_unit_interface.sub_unit fetch_sub,
-        bram_interface.user instruction_bram
+        local_memory_interface.master instruction_bram
         );
 
-    logic stage2_adv;
-    logic address_range_valid;
-
     assign fetch_sub.ready = 1;
-
-    always_ff @ (posedge clk) begin
-        if (rst) begin
-            stage2_adv <= 0;
-        end
-        else begin
-            stage2_adv <= fetch_sub.new_request;
-        end
-    end
 
     assign instruction_bram.addr = fetch_sub.stage1_addr[31:2];
     assign instruction_bram.en = fetch_sub.new_request;
@@ -59,6 +47,5 @@ module ibram(
         else
             fetch_sub.data_valid <= 0;
     end
-
 
 endmodule

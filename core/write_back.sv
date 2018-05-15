@@ -35,26 +35,29 @@ module write_back(
         output logic instruction_complete
         );
 
-    logic [NUM_WB_UNITS-1:0] early_done;
-    logic [NUM_WB_UNITS-1:0] done;
+    logic [NUM_WB_UNITS-1:0] done_on_first_cycle;
+    logic [NUM_WB_UNITS-1:0] done_next_cycle;
 
-    logic selected_unit_done;
+    logic selected_unit_done_next_cycle;
     logic entry_found;
 
     logic [NUM_WB_UNITS-1:0] accepted;
+    logic [NUM_WB_UNITS-1:0] new_accepted;
+
     logic [XLEN-1:0] rd [NUM_WB_UNITS-1:0];
 
     logic [4:0] rd_addr, rd_addr_r;
+    logic rd_addr_not_zero;
     logic [WB_UNITS_WIDTH-1:0] unit_id, unit_id_r;
     instruction_id_t issue_id, issue_id_r;
-
+    int iq_index;
 
     //Re-assigning interface inputs to array types so that they can be dynamically indexed
     genvar i;
     generate
         for (i=0; i< NUM_WB_UNITS; i++) begin : interface_to_array_g
-            assign done[i] = unit_wb[i].done;
-            assign early_done[i] = unit_wb[i].early_done;
+            assign done_next_cycle[i] = unit_wb[i].done_next_cycle;
+            assign done_on_first_cycle[i] = unit_wb[i].done_on_first_cycle;
             assign rd[i] = unit_wb[i].rd;
             assign unit_wb[i].accepted = accepted[i];
         end
@@ -67,17 +70,17 @@ module write_back(
     always_comb begin
         entry_found = 0;
         iq.pop = 0;
-        selected_unit_done = 0;
+        selected_unit_done_next_cycle = 0;
 
-        for (int i=INFLIGHT_QUEUE_DEPTH; i>0; i--) begin
-            unit_id =  iq.data_out[i].unit_id;
-            issue_id = iq.data_out[i].id;
+        for (iq_index=INFLIGHT_QUEUE_DEPTH; iq_index>0; iq_index--) begin
+            unit_id =  iq.data_out[iq_index].unit_id;
+            issue_id = iq.data_out[iq_index].id;
 
-            if (iq.valid[i]) begin
-                selected_unit_done = done[iq.data_out[i].unit_id];
-                iq.pop[i] = done[iq.data_out[i].unit_id];
+            if (iq.valid[iq_index]) begin
+                selected_unit_done_next_cycle = done_next_cycle[unit_id];
+                iq.pop[iq_index] = selected_unit_done_next_cycle;
 
-                if (inorder | (~inorder & done[iq.data_out[i].unit_id])) begin
+                if (inorder | (~inorder & selected_unit_done_next_cycle)) begin
                     entry_found = 1;
                     break;
                 end
@@ -87,23 +90,30 @@ module write_back(
         //Access rd_addr table in inflight_queue
         iq.wb_id = issue_id;
         rd_addr = iq.wb_rd_addr;
+        rd_addr_not_zero = |rd_addr;//iq.wb_uses_rd;
 
         //No valid completing instructions in queue, check for new issues.
         if (~entry_found) begin
             unit_id = iq.data_out[0].unit_id;
             issue_id = iq.data_out[0].id;
             rd_addr = iq.future_rd_addr;
+            rd_addr_not_zero = iq.uses_rd;
+
             //Pop and unit done only if valid issue
-            selected_unit_done = early_done[iq.data_out[0].unit_id] & iq.valid[0];
-            iq.pop[0] = early_done[iq.data_out[0].unit_id] &  iq.valid[0];
+            if (iq.valid[0]) begin
+                selected_unit_done_next_cycle = done_on_first_cycle[unit_id];
+                iq.pop[0] = selected_unit_done_next_cycle;
+            end
         end
+
+
     end
 
     always_ff @(posedge clk) begin
         if (rst)
             instruction_complete <= 0;
         else
-            instruction_complete <= selected_unit_done;
+            instruction_complete <= selected_unit_done_next_cycle;
     end
 
     always_ff @(posedge clk) begin
@@ -120,23 +130,24 @@ module write_back(
         if (rst)
             rf_wb.valid_write <= 0;
         else
-            rf_wb.valid_write <= selected_unit_done && (rd_addr != 0);
+            rf_wb.valid_write <= selected_unit_done_next_cycle & rd_addr_not_zero;
     end
 
     assign rf_wb.rd_addr_early = rd_addr;
     assign rf_wb.id_early =  issue_id;
-    assign rf_wb.valid_write_early = selected_unit_done;
+    assign rf_wb.valid_write_early = selected_unit_done_next_cycle;
 
-    generate
-        for (i=0; i<NUM_WB_UNITS; i=i+1) begin : wb_mux
-            always_ff @(posedge clk) begin
-                if (rst)
-                    accepted[i] <= 0;
-                else
-                    accepted[i] <= selected_unit_done && (unit_id == i);
-            end
-        end
-    endgenerate
+    always_comb begin
+        new_accepted = 0;
+        new_accepted[unit_id] = selected_unit_done_next_cycle;
+    end
+
+    always_ff @(posedge clk) begin
+        if (rst)
+            accepted <= 0;
+        else
+            accepted <= new_accepted;
+    end
 
     //ID generator signals
     assign id_gen.complete = instruction_complete;

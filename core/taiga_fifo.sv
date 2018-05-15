@@ -34,42 +34,31 @@ module taiga_fifo #(parameter DATA_WIDTH = 42, parameter FIFO_DEPTH = 4, paramet
         fifo_interface.structure fifo
         );
 
-    logic[DATA_WIDTH-1:0] lut_ram[FIFO_DEPTH-1:0];
+    (* ramstyle = "MLAB, no_rw_check" *) logic[DATA_WIDTH-1:0] lut_ram[FIFO_DEPTH-1:0];
     logic[DATA_WIDTH-1:0] shift_reg[FIFO_DEPTH-1:0];
     logic[DATA_WIDTH-1:0] shift_reg_new[FIFO_DEPTH-1:0];
 
     logic[$clog2(FIFO_DEPTH)-1:0] write_index;
     logic[$clog2(FIFO_DEPTH)-1:0] read_index;
-
     logic two_plus;
-    logic[FIFO_DEPTH:0] valid_chain;
+
     genvar i;
 
     //implementation
     ////////////////////////////////////////////////////
     //Occupancy Tracking
-    always_ff @ (posedge clk) begin
-        if (rst)
-            valid_chain <= 1;
-        else if (fifo.push & ~fifo.pop)
-            valid_chain <= {valid_chain[FIFO_DEPTH-1:0], 1'b0};
-        else if (fifo.pop & ~fifo.push)
-            valid_chain <= {1'b0, valid_chain[FIFO_DEPTH:1]};
-    end
+    one_hot_occupancy #(.DEPTH(FIFO_DEPTH)) occupancy_tracking
+        (
+            .push(fifo.push), .pop(fifo.pop),
+            .early_full(fifo.early_full), .full(fifo.full),
+            .empty(fifo.empty), .valid(fifo.valid), .early_valid(fifo.early_valid), .two_plus(two_plus), .*
+        );
 
-    assign fifo.empty = valid_chain[0];
-    assign fifo.valid = ~valid_chain[0];
-    assign fifo.full = valid_chain[FIFO_DEPTH];
-    assign fifo.early_full = valid_chain[FIFO_DEPTH-1] | valid_chain[FIFO_DEPTH];
-
-    //pushing, or more than one, or at least one and not popping
-    assign two_plus = ~valid_chain[0] & ~valid_chain[1];
-    assign fifo.early_valid = fifo.push | (two_plus) | (fifo.valid & ~fifo.pop);
 
     ////////////////////////////////////////////////////
     //LUT-RAM version
     generate if (FIFO_TYPE == LUTRAM_FIFO) begin
-    ////////////////////////////////////////////////////
+            ////////////////////////////////////////////////////
 
             always_ff @ (posedge clk) begin
                 if (rst) begin
@@ -81,7 +70,6 @@ module taiga_fifo #(parameter DATA_WIDTH = 42, parameter FIFO_DEPTH = 4, paramet
                     write_index <= write_index + fifo.push;
                 end
             end
-
             assign fifo.data_out = lut_ram[read_index];
 
             always_ff @ (posedge clk) begin
@@ -94,13 +82,22 @@ module taiga_fifo #(parameter DATA_WIDTH = 42, parameter FIFO_DEPTH = 4, paramet
     ////////////////////////////////////////////////////
     //SRL version
     generate if (FIFO_TYPE == NON_MUXED_INPUT_FIFO) begin
-    ////////////////////////////////////////////////////
+            ////////////////////////////////////////////////////
+
+            //            always_ff @ (posedge clk) begin
+            //                if (rst)
+            //                    read_index <= 0;
+            //                else if ((fifo.valid & fifo.push) | (two_plus & fifo.pop))
+            //                    read_index <= read_index + fifo.push - fifo.pop;
+            //            end
 
             always_ff @ (posedge clk) begin
                 if (rst)
                     read_index <= 0;
-                else if ((fifo.valid & fifo.push) | (two_plus & fifo.pop))
-                    read_index <= read_index + fifo.push - fifo.pop;
+                else if ((fifo.valid & fifo.push) & ~fifo.pop)
+                    read_index <= read_index + 1;
+                else if (~fifo.push & (two_plus & fifo.pop))
+                    read_index <= read_index - 1;
             end
 
             assign fifo.data_out = shift_reg[read_index];
@@ -110,7 +107,7 @@ module taiga_fifo #(parameter DATA_WIDTH = 42, parameter FIFO_DEPTH = 4, paramet
                     shift_reg[0] <= fifo.data_in;
             end
 
-            for (i=1 ; i < FIFO_DEPTH; i++) begin : shift_reg_gen
+            for (i=1 ; i < FIFO_DEPTH; i++) begin : taiga_fifo_shift_reg_gen
                 always_ff @ (posedge clk) begin
                     if (fifo.push)
                         shift_reg[i] <= shift_reg[i-1];
@@ -122,7 +119,7 @@ module taiga_fifo #(parameter DATA_WIDTH = 42, parameter FIFO_DEPTH = 4, paramet
     ////////////////////////////////////////////////////
     //Non-muxed output version
     generate if (FIFO_TYPE == NON_MUXED_OUTPUT_FIFO) begin
-    ////////////////////////////////////////////////////
+            ////////////////////////////////////////////////////
 
             always_ff @ (posedge clk) begin
                 if (rst)
@@ -133,7 +130,7 @@ module taiga_fifo #(parameter DATA_WIDTH = 42, parameter FIFO_DEPTH = 4, paramet
 
             assign fifo.data_out = shift_reg[0];
 
-            for (i=0 ; i <FIFO_DEPTH; i++) begin : new_reg_non_muxed_gen
+            for (i=0 ; i <FIFO_DEPTH; i++) begin : taiga_fifo_new_reg_non_muxed_gen
                 always_comb begin
                     if (fifo.push && write_index == i)
                         shift_reg_new[i] =  fifo.data_in;
@@ -146,7 +143,7 @@ module taiga_fifo #(parameter DATA_WIDTH = 42, parameter FIFO_DEPTH = 4, paramet
                 shift_reg[FIFO_DEPTH-1] <= shift_reg_new[FIFO_DEPTH-1];
             end
 
-            for (i=0 ; i < FIFO_DEPTH-1; i++) begin : shift_reg_non_muxed_gen
+            for (i=0 ; i < FIFO_DEPTH-1; i++) begin : taiga_fifo_shift_reg_non_muxed_gen
                 always_ff @ (posedge clk) begin
                     if (fifo.pop)
                         shift_reg[i] <= shift_reg_new[i+1];
@@ -157,12 +154,6 @@ module taiga_fifo #(parameter DATA_WIDTH = 42, parameter FIFO_DEPTH = 4, paramet
 
         end
     endgenerate
-    ////////////////////////////////////////////////////
-    //Assertions
-    always_ff @ (posedge clk) begin
-        assert (!(~rst & valid_chain[FIFO_DEPTH] & fifo.push)) else $error("fifo overflow");
-        assert (!(~rst & valid_chain[0] & fifo.pop)) else $error("fifo underflow");
-    end
 
 endmodule
 

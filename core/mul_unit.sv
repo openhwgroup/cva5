@@ -31,14 +31,14 @@ module mul_unit(
         unit_writeback_interface.unit mul_wb
         );
 
-    logic [65:0] result;
+    logic signed [65:0] result;
     logic [1:0] mulh;
     logic [1:0] advance;
     logic [1:0] valid;
 
     logic rs1_signed, rs2_signed;
-    logic [33:0] rs1_ext, rs2_ext;
-    logic [33:0] rs1_r, rs2_r;
+    logic signed [33:0] rs1_ext, rs2_ext;
+    logic signed [33:0] rs1_r, rs2_r;
 
     //implementation
     ////////////////////////////////////////////////////
@@ -71,7 +71,7 @@ module mul_unit(
             mulh[0] <= ~(mul_inputs.op[1:0] == 0);
         end
         if (advance[1]) begin
-            result <= (rs1_r) * (rs2_r);
+            result <= signed'(rs1_r) * signed'(rs2_r);
             mulh[1] <= mulh[0];
         end
     end
@@ -81,8 +81,8 @@ module mul_unit(
     assign mul_ex.ready = mul_wb.accepted | ~(&valid);
 
     assign mul_wb.rd = mulh[1] ? result[63:32] : result[31:0];
-    assign mul_wb.done = valid[0] | (valid[1] & ~mul_wb.accepted);
-    assign mul_wb.early_done = 0;
+    assign mul_wb.done_next_cycle = valid[0] | (valid[1] & ~mul_wb.accepted);
+    assign mul_wb.done_on_first_cycle = 0;
     ////////////////////////////////////////////////////
 
 endmodule

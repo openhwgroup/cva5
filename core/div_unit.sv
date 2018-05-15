@@ -37,27 +37,23 @@ module div_unit(
     logic [31:0] quotient;
     logic [31:0] remainder;
 
-    logic [31:0] result;
-
     logic signed_divop;
     logic quotient_signed;
     logic remainder_signed;
     logic dividend_signed;
     logic divisor_signed;
 
-    logic div_abort;
-
     logic start;
     logic in_progress;
+    logic output_ready;
+    logic ack;
 
     logic [31:0] complementerA;
     logic [31:0] complementerB;
-    logic negateA;
-    logic negateB;
-    logic [31:0] inA;
-    logic [31:0] inB;
 
-    logic [31:0] div_result_muxed;
+    logic [31:0] result_input;
+    logic negateResult;
+
     logic [31:0] div_result_sign_corrected;
     logic [31:0] wb_div_result;
 
@@ -79,20 +75,21 @@ module div_unit(
     assign stage1 = input_fifo.data_out;
     /*********************************************/
 
-    assign start = input_fifo.valid & ( ~in_progress);
+    assign output_ready = ~div_wb.done_next_cycle | (div_wb.done_next_cycle & div_wb.accepted);
+    assign ack = div_complete & output_ready;
+
+    assign start = input_fifo.valid & (~in_progress) & ~(stage1.reuse_result | stage1.div_zero);
     //Abort prevents divider circuit from starting in the case that we are done in one cycle
-    assign div_abort =  input_fifo.valid & (stage1.div_zero | stage1.reuse_result);
-    assign div_done = (div_complete | div_abort) & ~wb_fifo.full;
+    assign div_done = (div_complete | (input_fifo.valid & (stage1.reuse_result | stage1.div_zero))) & output_ready;
 
     //If more than one cycle, set in_progress so that multiple start signals are not sent to the div unit.  Also in progress if an abort occurs but the output FIFO is full
     always_ff @(posedge clk) begin
-        if (rst) begin
+        if (rst)
             in_progress <= 0;
-        end else if (start & ((div_abort & wb_fifo.full) | (~div_abort))) begin
+        else if (start)
             in_progress <= 1;
-        end else if (div_done) begin
+        else if (ack)
             in_progress <= 0;
-        end
     end
 
     //Input and output sign determination
@@ -103,52 +100,42 @@ module div_unit(
 
     assign quotient_signed = signed_divop & (stage1.rs1[31] ^ stage1.rs2[31]);
     assign remainder_signed = signed_divop & (stage1.rs1[31]);
-
-    // Shared adders for sign conversion of inputs and outputs as they never occur on the same cycle
-    //(div_complete | stage1.reuse_result) instead of div_done as other signals are not relevant for sign conversion
     //************
-    assign inA = (div_complete | stage1.reuse_result) ? quotient : stage1.rs1;
-    assign inB = (div_complete | stage1.reuse_result) ? remainder : stage1.rs2;
 
-    assign negateA =  (div_complete | stage1.reuse_result) ? quotient_signed : dividend_signed;
-    assign negateB =  (div_complete | stage1.reuse_result) ? remainder_signed : divisor_signed;
+    assign complementerA = (dividend_signed ? ~stage1.rs1 : stage1.rs1) + dividend_signed;
+    assign complementerB = (divisor_signed ? ~stage1.rs2 : stage1.rs2) + divisor_signed;
 
-    assign complementerA = (negateA ? ~inA : inA) + negateA;
-    assign complementerB = (negateB ? ~inB : inB) + negateB;
+    assign result_input = stage1.op[1] ? remainder : quotient;
+    assign negateResult = (stage1.op[1] ? remainder_signed : quotient_signed);
+    assign div_result_sign_corrected = (negateResult ? ~result_input : result_input) + negateResult;
+    assign wb_div_result = stage1.div_zero ? (stage1.op[1] ? stage1.rs1 : '1) : div_result_sign_corrected;
     //*************
 
     //Synthesis time algorithm choice for divider
     generate
         if(USE_VARIABLE_LATENCY_DIV)
-            quickdiv #(XLEN) div (.*, .start(start & ~div_abort), .A(complementerA), .B(complementerB), .Q(quotient), .R(remainder), .complete(div_complete), .ack(div_done));
+            quickdiv #(XLEN) div (.*, .start(start), .A(complementerA), .B(complementerB), .Q(quotient), .R(remainder), .complete(div_complete), .ack(ack));
         else
-            normdiv #(XLEN) div (.*, .start(start & ~div_abort), .A(complementerA), .B(complementerB), .Q(quotient), .R(remainder), .complete(div_complete), .ack(div_done));
+            normdiv #(XLEN) div (.*, .start(start), .A(complementerA), .B(complementerB), .Q(quotient), .R(remainder), .complete(div_complete), .ack(ack));
     endgenerate
 
-    //Output muxing
-    always_comb begin
-        case (stage1.op)
-            DIV_fn3[1:0] : div_result_muxed <= stage1.div_zero ? '1 : complementerA;
-            DIVU_fn3[1:0] : div_result_muxed <= stage1.div_zero ? '1 : complementerA;
-            REM_fn3[1:0] : div_result_muxed <=stage1.div_zero ? stage1.rs1 : complementerB;
-            REMU_fn3[1:0] : div_result_muxed <= stage1.div_zero ? stage1.rs1 : complementerB;
-        endcase
+    /*********************************
+     *  Output registering/handshaking
+     *********************************/
+    always_ff @(posedge clk) begin
+        if (div_done)
+            div_wb.rd <= wb_div_result;
     end
 
-    /*********************************
-     *  Output FIFO
-     *********************************/
-    taiga_fifo #(.DATA_WIDTH(XLEN), .FIFO_DEPTH(DIV_OUTPUT_BUFFER_DEPTH), .FIFO_TYPE(NON_MUXED_INPUT_FIFO)
-            ) output_fifo (.fifo(wb_fifo), .*);
+    always_ff @(posedge clk) begin
+        if (rst)
+            div_wb.done_next_cycle <= 0;
+        else if (div_done)
+            div_wb.done_next_cycle <= 1;
+        else if (div_wb.accepted)
+            div_wb.done_next_cycle <= 0;
+    end
 
-    assign wb_fifo.data_in = div_result_muxed;
-    assign wb_fifo.push = div_done;
-    assign wb_fifo.pop = div_wb.accepted;
-    assign div_wb.rd = wb_fifo.data_out;
-
-    assign div_wb.done = wb_fifo.early_valid;
-    assign div_wb.early_done = 0;//div_done | (div_wb.done & ~div_wb.accepted);
-
-    /*********************************************/
+    assign div_wb.done_on_first_cycle = 0;
 
 endmodule

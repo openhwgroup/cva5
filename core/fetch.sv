@@ -34,7 +34,7 @@ module fetch(
         ras_interface.fetch ras,
 
         tlb_interface.mem tlb,
-        bram_interface.user instruction_bram,
+        local_memory_interface.master instruction_bram,
         input logic icache_on,
         l1_arbiter_request_interface.requester l1_request,
         l1_arbiter_return_interface.requester l1_response,
@@ -46,22 +46,24 @@ module fetch(
 
         );
 
+    localparam NUM_SUB_UNITS = USE_I_SCRATCH_MEM + USE_ICACHE;
+    localparam NUM_SUB_UNITS_W = $clog2(NUM_SUB_UNITS);
+
     localparam BRAM_ID = 0;
-    localparam ICACHE_ID = 1;
+    localparam ICACHE_ID = USE_I_SCRATCH_MEM;
 
-    fetch_sub_unit_interface fetch_sub[1:0]();
+    fetch_sub_unit_interface fetch_sub[NUM_SUB_UNITS-1:0]();
 
-    logic cache_access;
-    logic bram_access;
+    logic [NUM_SUB_UNITS-1:0] sub_unit_address_match;
+    logic [NUM_SUB_UNITS-1:0] last_sub_unit_id;
+    logic [NUM_SUB_UNITS-1:0] unit_ready;
+    logic [NUM_SUB_UNITS-1:0] unit_data_valid;
+    logic [31:0] unit_data_array [NUM_SUB_UNITS-1:0];
+    logic units_ready;
 
-    logic mem_ready;
 
-    logic [31:0] offset;
-    logic [31:0] next_pc_source;
     logic [31:0] next_pc;
-
     logic [31:0] if_pc;
-    logic stage1_prediction;
 
     logic space_in_inst_buffer;
     logic new_mem_request;
@@ -74,10 +76,8 @@ module fetch(
 
     logic [31:0] stage2_phys_address;
     logic stage2_valid;
-    logic stage2_prediction;
-    logic stage2_cache_access;
 
-    logic pc_valid;
+    logic update_pc;
 
     logic[6:0] opcode;
     logic[4:0] opcode_trimmed;
@@ -88,49 +88,51 @@ module fetch(
     logic sys_op;
     logic jal_jalr_x0;
 
-    assign flush = bt.flush | exception;
+    logic rs1_link, rd_link, rs1_eq_rd, use_ras;
+    logic predicted_control_flow;
 
-    always_ff @(posedge clk) begin
-        if (rst) begin
-            pc_valid <= 0;
-        end else begin
-            pc_valid <= 1;
+    logic[$clog2(FETCH_BUFFER_DEPTH+1)-1:0] inflight_count;
+    /////////////////////////////////////////
+
+    genvar i;
+    generate
+        for(i=0; i < NUM_SUB_UNITS; i++) begin
+            assign unit_ready[i] = fetch_sub[i].ready;
+            assign unit_data_valid[i] = fetch_sub[i].data_valid;
         end
-    end
+    endgenerate
+    assign units_ready = &unit_ready;
 
-    assign bt.next_pc_valid = pc_valid;
+    assign fetch_flush = (bt.flush | exception);
+    assign flush = fetch_flush;
+
+    assign update_pc = new_mem_request | fetch_flush;
 
     //Fetch PC
     always_ff @(posedge clk) begin
-        if (rst) begin
+        if (rst)
             if_pc <= RESET_VEC;
-        end
-        else if (new_mem_request | flush) begin
+        else if (update_pc)
             if_pc <= {next_pc[31:2], 2'b0};
-        end
     end
-
 
     always_comb begin
         if (exception)
             next_pc = RESET_VEC;
         else if (bt.flush)
             next_pc = bt.branch_taken ? bt.jump_pc : bt.njump_pc;
-        else if (bt.use_prediction) begin
-            if (bt.use_ras & ras.valid)
-                next_pc = ras.addr;
-            else
-                next_pc = bt.predicted_pc;
-        end
+        //else if (predicted_control_flow)
+        //    next_pc = (use_ras & ras.valid) ? ras.addr : bt.predicted_pc;
+        else if (bt.use_prediction)
+            next_pc = (bt.use_ras & ras.valid) ? ras.addr : bt.predicted_pc;
         else
             next_pc = if_pc + 4;
     end
 
-    assign bt.new_mem_request = new_mem_request | bt.flush;
+    assign bt.new_mem_request = update_pc;
     assign bt.next_pc = next_pc;
 
     assign if2_pc  = if_pc;
-
     assign bt.if_pc = if_pc;
     /*************************************
      * TLB
@@ -140,80 +142,82 @@ module fetch(
     assign tlb.rnw = 0;
 
     always_ff @(posedge clk) begin
-        if(rst)
-            stage2_valid <= 0;
-        if (new_mem_request)
-            stage2_valid <= 1;
-        else if (new_issue | fetch_flush)
-            stage2_valid <= 0;
-    end
-
-    always_ff @(posedge clk) begin
         if (new_mem_request) begin
             stage2_phys_address <= tlb.physical_address;
-            stage2_cache_access <= cache_access;
         end
     end
     //////////////////////////////////////////////
 
-
-    //Cache check done before cache access
-    assign cache_access = tlb.physical_address[31:32-MEMORY_BIT_CHECK] == MEMORY_ADDR_L[31:32-MEMORY_BIT_CHECK];
-
-    //BRAM check can be done a cycle later, can be used for address checking
-    assign bram_access = stage2_phys_address[31:32-SCRATCH_BIT_CHECK] == SCRATCH_ADDR_L[31:32-SCRATCH_BIT_CHECK];
-
-    assign mem_ready = fetch_sub[ICACHE_ID].ready;
-
-    assign fetch_flush = (bt.flush | exception);
-
-    assign space_in_inst_buffer = (stage2_valid & ~ib.early_full) | (~stage2_valid & ~ib.full);
-    assign new_mem_request =  pc_valid & tlb.complete & ~fetch_flush & space_in_inst_buffer & mem_ready;
-
-    assign fetch_sub[BRAM_ID].new_request = new_mem_request & bram_access;
-    assign fetch_sub[ICACHE_ID].new_request = new_mem_request & cache_access;
-
-    assign fetch_sub[BRAM_ID].stage1_addr = tlb.physical_address;
-    assign fetch_sub[ICACHE_ID].stage1_addr = tlb.physical_address;
-
-    assign fetch_sub[BRAM_ID].stage2_addr = stage2_phys_address;
-    assign fetch_sub[ICACHE_ID].stage2_addr = stage2_phys_address;
-
-    //Memory interfaces
-    generate if (USE_I_SCRATCH_MEM)
-            ibram i_bram (.*, .fetch_sub(fetch_sub[BRAM_ID]));
-        else begin
-            assign fetch_sub[BRAM_ID].ready = 1;
-            assign fetch_sub[BRAM_ID].data_valid = 0;
-            assign fetch_sub[BRAM_ID].data_out = 0;
-        end
-    endgenerate
-    generate if (USE_ICACHE)
-            icache i_cache (.*, .fetch_sub(fetch_sub[ICACHE_ID]));
-        else begin
-            assign fetch_sub[ICACHE_ID].ready = 1;
-            assign fetch_sub[ICACHE_ID].data_valid = 0;
-            assign fetch_sub[ICACHE_ID].data_out = 0;
-        end
-    endgenerate
-    //TODO potentially move support into cache so that we're not stalled on a request we no longer need due to a flush
-    //If the cache is processing a miss when a flush occurs we need to discard the result once complete
     always_ff @(posedge clk) begin
-        if (rst)
-            delayed_flush <= 0;
-        else if ((bt.flush | exception) & stage2_valid & stage2_cache_access & ~fetch_sub[ICACHE_ID].data_valid)//& ~fetch_sub[ICACHE_ID].ready
-            delayed_flush <= 1;
-        else if (fetch_sub[ICACHE_ID].data_valid)
-            delayed_flush <= 0;
+        if (rst | fetch_flush)
+            inflight_count <= 0;
+        else if (new_mem_request  & ~ib.pop)
+            inflight_count <= inflight_count + 1;
+        else if (~new_mem_request &  ib.pop)
+            inflight_count <= inflight_count - 1;
     end
 
-    assign mem_valid = ~(bt.flush | exception | delayed_flush);
-    assign new_issue =  mem_valid & (fetch_sub[BRAM_ID].data_valid | fetch_sub[ICACHE_ID].data_valid);
-    assign ib.push = new_issue;
-    assign ib.flush = bt.flush;
+    assign space_in_inst_buffer = inflight_count < FETCH_BUFFER_DEPTH;
+    assign new_mem_request = tlb.complete & (~fetch_flush) & space_in_inst_buffer & units_ready;
 
-    assign ib.data_in.instruction = ({32{~stage2_cache_access}} & fetch_sub[BRAM_ID].data_out) |
-        ({32{stage2_cache_access}} & fetch_sub[ICACHE_ID].data_out);
+    //Memory interfaces
+    generate if (USE_I_SCRATCH_MEM) begin
+            ibram i_bram (.*, .fetch_sub(fetch_sub[BRAM_ID]));
+            assign sub_unit_address_match[BRAM_ID] = (tlb.physical_address[31:32-SCRATCH_BIT_CHECK] == SCRATCH_ADDR_L[31:32-SCRATCH_BIT_CHECK]);
+            assign fetch_sub[BRAM_ID].new_request = new_mem_request & sub_unit_address_match[BRAM_ID];
+            assign fetch_sub[BRAM_ID].stage1_addr = tlb.physical_address;
+            assign fetch_sub[BRAM_ID].stage2_addr = stage2_phys_address;
+            assign unit_data_array[BRAM_ID] = fetch_sub[BRAM_ID].data_out;
+        end
+    endgenerate
+    generate if (USE_ICACHE) begin
+            icache i_cache (.*, .fetch_sub(fetch_sub[ICACHE_ID]));
+            assign sub_unit_address_match[ICACHE_ID] = tlb.physical_address[31:32-MEMORY_BIT_CHECK] == MEMORY_ADDR_L[31:32-MEMORY_BIT_CHECK];
+            assign fetch_sub[ICACHE_ID].new_request = new_mem_request & sub_unit_address_match[ICACHE_ID];
+            assign fetch_sub[ICACHE_ID].stage1_addr = tlb.physical_address;
+            assign fetch_sub[ICACHE_ID].stage2_addr = stage2_phys_address;
+            assign unit_data_array[ICACHE_ID] = fetch_sub[ICACHE_ID].data_out;
+
+            always_ff @(posedge clk) begin
+                if(rst)
+                    stage2_valid <= 0;
+                else if (new_mem_request)
+                    stage2_valid <= 1;
+                else if (new_issue | fetch_flush)
+                    stage2_valid <= 0;
+            end
+
+            always_ff @(posedge clk) begin
+                if (new_mem_request) begin
+                    last_sub_unit_id <= sub_unit_address_match;
+                end
+            end
+            //TODO potentially move support into cache so that we're not stalled on a request we no longer need due to a flush
+            //If the cache is processing a miss when a flush occurs we need to discard the result once complete
+            always_ff @(posedge clk) begin
+                if (rst)
+                    delayed_flush <= 0;
+                else if (fetch_flush & stage2_valid & last_sub_unit_id[ICACHE_ID] & ~fetch_sub[ICACHE_ID].data_valid)//& ~fetch_sub[ICACHE_ID].ready
+                    delayed_flush <= 1;
+                else if (fetch_sub[ICACHE_ID].data_valid)
+                    delayed_flush <= 0;
+            end
+        end else begin
+            assign delayed_flush = 0;
+        end
+    endgenerate
+
+    assign mem_valid = ~(bt.flush | exception | delayed_flush);
+    assign new_issue =  mem_valid & (|unit_data_valid);
+    assign ib.push = new_issue;
+    assign ib.flush = fetch_flush;
+
+    always_comb begin
+        ib.data_in.instruction = {32{unit_data_valid[0]}} & unit_data_array[0];
+        for(int i=1; i < NUM_SUB_UNITS; i++) begin
+            ib.data_in.instruction |= {32{unit_data_valid[i]}} & unit_data_array[i];
+        end
+    end
 
     assign ib.data_in.pc = stage2_phys_address;
 
@@ -225,12 +229,20 @@ module fetch(
     assign csr_imm_op = (opcode_trimmed == SYSTEM_T) && fn3[2];
     assign sys_op =  (opcode_trimmed == SYSTEM_T) && (fn3 == 0);
 
-    assign jal_jalr_x0 = ((opcode_trimmed == JAL_T) || (opcode_trimmed == JALR_T)) && (ib.data_in.instruction[11:7] == 0);//rd is x0
+    assign jal_jalr_x0 = (opcode_trimmed inside {JAL_T, JALR_T}) && (ib.data_in.instruction[11:7] == 0);//rd is x0
 
-    //TODO: function for set comparison
-    assign ib.data_in.uses_rs1 = !((opcode_trimmed == LUI_T) || (opcode_trimmed == AUIPC_T) || (opcode_trimmed == JAL_T) || (opcode_trimmed == FENCE_T) || csr_imm_op || sys_op);
-    assign ib.data_in.uses_rs2 = ((opcode_trimmed == BRANCH_T) || (opcode_trimmed == STORE_T) || (opcode_trimmed == ARITH_T) || (opcode_trimmed == AMO_T) || (opcode_trimmed == CUSTOM_T));
-    assign ib.data_in.uses_rd = !((opcode_trimmed == BRANCH_T) || (opcode_trimmed == STORE_T) ||  (opcode_trimmed == FENCE_T) || sys_op || jal_jalr_x0);
+    assign predicted_control_flow = opcode_trimmed inside {JAL_T, JALR_T, BRANCH_T};
+
+    assign rs1_link = (ib.data_in.instruction[19:15] ==?  5'b00?01);
+    assign rd_link = (ib.data_in.instruction[11:7] ==?  5'b00?01);
+    assign rs1_eq_rd = (ib.data_in.instruction[19:15] == ib.data_in.instruction[11:7]);
+    assign use_ras =  ((opcode_trimmed == JALR_T & ((rs1_link & ~rd_link) | (rs1_link & rd_link & ~rs1_eq_rd))));
+
+
+
+    assign ib.data_in.uses_rs1 = !(opcode_trimmed inside {LUI_T, AUIPC_T, JAL_T, FENCE_T} || csr_imm_op || sys_op);
+    assign ib.data_in.uses_rs2 = opcode_trimmed inside {BRANCH_T, STORE_T, ARITH_T, AMO_T, CUSTOM_T};
+    assign ib.data_in.uses_rd = !(opcode_trimmed inside {BRANCH_T, STORE_T, FENCE_T} || sys_op || jal_jalr_x0);
 
 
 endmodule

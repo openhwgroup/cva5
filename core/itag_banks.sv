@@ -77,7 +77,7 @@ module itag_banks(
                     .data_in_b(stage2_tag), .data_out_b()
                 );
 
-            assign tag_hit_way[i] = hit_allowed & (stage2_tag == tag_line[i]);
+            assign tag_hit_way[i] = ({hit_allowed,stage2_tag} == {1'b1,tag_line[i]});
 
         end
     endgenerate

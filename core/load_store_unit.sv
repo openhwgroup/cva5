@@ -41,7 +41,7 @@ module load_store_unit (
         axi_interface.master m_axi,
         avalon_interface.master m_avalon,
 
-        bram_interface.user data_bram,
+        local_memory_interface.master data_bram,
 
         output logic inorder,
         unit_writeback_interface.unit ls_wb
@@ -71,13 +71,15 @@ module load_store_unit (
     logic [3:0] be;
 
     logic [31:0] unit_muxed_load_data;
-    logic [31:0] aligned_load_data;
+    logic [7:0] byte_load_data;
+    logic [15:0] halfword_load_data;
+
     logic [31:0] final_load_data;
 
     logic [31:0] rs2_muxed;
     logic [31:0] most_recent_load;
     logic [31:0] forwarded_data;
-    logic [31:0] previous_load;
+    logic [31:0] previous_load, previous_load_r;
     logic [31:0] stage1_raw_data;
 
     logic [31:0] unit_data_array [NUM_SUB_UNITS-1:0];
@@ -92,7 +94,7 @@ module load_store_unit (
     logic dcache_forward_data;
     logic [2:0] dcache_stage2_fn3;
 
-    logic [$clog2(LS_OUTPUT_BUFFER_DEPTH)-1:0] inflight_count;
+    logic [1:0] inflight_count;
 
 
     //AMO support
@@ -125,9 +127,9 @@ module load_store_unit (
     always_ff @(posedge clk) begin
         if (rst)
             inflight_count <= 0;
-        else if (issue_request & stage1.load & ~ls_wb.accepted)
+        else if (load_attributes.push & ~ls_wb.accepted)
             inflight_count <= inflight_count + 1;
-        else if (~issue_request & stage1.load &  ls_wb.accepted)
+        else if (~load_attributes.push &  ls_wb.accepted)
             inflight_count <= inflight_count - 1;
     end
 
@@ -146,14 +148,14 @@ module load_store_unit (
 
     assign current_unit = sub_unit_address_match;
     always_ff @ (posedge clk) begin
-        if (issue_request)
+        if (load_attributes.push)
             last_unit <= sub_unit_address_match;
     end
 
     //When switching units, ensure no outstanding loads so that there can be no timing collisions with results
     assign unit_stall = (current_unit != last_unit) & ~load_attributes.empty;
 
-    assign issue_request = input_fifo.valid & units_ready & ~unit_stall & (inflight_count < LS_OUTPUT_BUFFER_DEPTH);
+    assign issue_request = input_fifo.valid & units_ready & (inflight_count < 2) & ~unit_stall;
     assign load_complete = data_valid;
 
     generate if (USE_D_SCRATCH_MEM) begin
@@ -180,7 +182,7 @@ module load_store_unit (
      *  Input FIFO
      *********************************/
     taiga_fifo #(.DATA_WIDTH($bits(load_store_inputs_t)), .FIFO_DEPTH(LS_INPUT_BUFFER_DEPTH), .FIFO_TYPE(NON_MUXED_INPUT_FIFO)
-            ) ls_input_fifo (.fifo(input_fifo), .*);
+        ) ls_input_fifo (.fifo(input_fifo), .*);
 
     assign input_fifo.data_in = ls_inputs;
     assign input_fifo.push = ls_ex.new_request_dec;
@@ -224,15 +226,18 @@ module load_store_unit (
      */
     always_comb begin
         for (integer i = 0; i < XLEN/8; i = i+ 1) begin
-            be[i] = stage1.store && (
-                    ((stage1.fn3[1:0] == LS_W_fn3[1:0])) ||
-                    ((stage1.fn3[1:0] == LS_H_fn3[1:0]) && (virtual_address[1] == i[1])) ||
-                    ((stage1.fn3[1:0] == LS_B_fn3[1:0]) && (virtual_address[1:0] == i)));
+            case(stage1.fn3[1:0])
+                LS_B_fn3[1:0] : be[i] = stage1.store && (virtual_address[1:0] == i);
+                LS_H_fn3[1:0] : be[i] = stage1.store && (virtual_address[1] == i[1]);
+                LS_W_fn3[1:0] : be[i] = stage1.store;
+                default : be[i] = 0;
+            endcase
         end
     end
 
-    assign most_recent_load = data_valid ? final_load_data : previous_load;
-    assign stage1_raw_data = (stage1.load_store_forward | dcache_forward_data) ? most_recent_load : stage1.rs2;
+    assign stage1_raw_data = (stage1.load_store_forward | dcache_forward_data) ?
+        (data_valid ? final_load_data : previous_load) :
+        stage1.rs2;
 
     //AMO identification for dcache
     generate
@@ -255,11 +260,12 @@ module load_store_unit (
     assign d_inputs.store = stage1.store;
     assign d_inputs.be = be;
     assign d_inputs.fn3 = stage1.fn3;
+
     always_comb begin
         case(dcache_forward_data ? dcache_stage2_fn3[1:0] : stage1.fn3[1:0]) //<--011, 110, 111, 100, 101 unused
+            LS_B_fn3[1:0] : d_inputs.data_in = {4{stage1_raw_data[7:0]}};
             LS_H_fn3[1:0] : d_inputs.data_in = {2{stage1_raw_data[15:0]}};
-            LS_W_fn3[1:0] : d_inputs.data_in = stage1_raw_data;
-            default : d_inputs.data_in = {4{stage1_raw_data[7:0]}}; //LS_B_fn3
+            default : d_inputs.data_in = stage1_raw_data;//LS_W_fn3
         endcase
     end
 
@@ -267,7 +273,7 @@ module load_store_unit (
      *  Load attributes FIFO
      *********************************/
     taiga_fifo #(.DATA_WIDTH($bits(load_attributes_t)), .FIFO_DEPTH(ATTRIBUTES_DEPTH), .FIFO_TYPE(NON_MUXED_INPUT_FIFO)
-            ) attributes_fifo (.fifo(load_attributes), .*);
+        ) attributes_fifo (.fifo(load_attributes), .*);
     assign load_attributes_in.fn3 = stage1.fn3;
     assign load_attributes_in.byte_addr = virtual_address[1:0];
     assign load_attributes.data_in = load_attributes_in;
@@ -327,52 +333,57 @@ module load_store_unit (
             unit_muxed_load_data |= unit_data_array[i];
     end
 
-    //Byte select
+    //Byte/halfword select: assumes aligned operations
     always_comb begin
-        aligned_load_data[31:16] = unit_muxed_load_data[31:16];
-        aligned_load_data[15:8] = stage2_attr.byte_addr[1] ? unit_muxed_load_data[31:24] : unit_muxed_load_data[15:8];
+        halfword_load_data = stage2_attr.byte_addr[1] ? unit_muxed_load_data[31:16] : unit_muxed_load_data[15:0];
         case(stage2_attr.byte_addr)
-            2'b00 : aligned_load_data[7:0] = unit_muxed_load_data[7:0];
-            2'b01 : aligned_load_data[7:0] = unit_muxed_load_data[15:8];
-            2'b10 : aligned_load_data[7:0] = unit_muxed_load_data[23:16];
-            2'b11 : aligned_load_data[7:0] = unit_muxed_load_data[31:24];
+            2'b00 : byte_load_data = unit_muxed_load_data[7:0];
+            2'b01 : byte_load_data = unit_muxed_load_data[15:8];
+            2'b10 : byte_load_data = unit_muxed_load_data[23:16];
+            2'b11 : byte_load_data = unit_muxed_load_data[31:24];
         endcase
     end
 
     //Sign extending
     always_comb begin
-        case(stage2_attr.fn3)
-            LS_B_fn3 : final_load_data = 32'(signed'(aligned_load_data[7:0]));
-            LS_H_fn3 : final_load_data = 32'(signed'(aligned_load_data[15:0]));
-            LS_W_fn3 : final_load_data = aligned_load_data;
+        unique case(stage2_attr.fn3)
+            LS_B_fn3 : final_load_data = 32'(signed'(byte_load_data));
+            LS_H_fn3 : final_load_data = 32'(signed'(halfword_load_data));
+            LS_W_fn3 : final_load_data = unit_muxed_load_data;
                 //unused 011
-            L_BU_fn3 : final_load_data = 32'(unsigned'(aligned_load_data[7:0]));
-            L_HU_fn3 : final_load_data = 32'(unsigned'(aligned_load_data[15:0]));
+            L_BU_fn3 : final_load_data = 32'(unsigned'(byte_load_data));
+            L_HU_fn3 : final_load_data = 32'(unsigned'(halfword_load_data));
                 //unused 110
                 //unused 111
-            default : final_load_data = aligned_load_data;
+            //default : final_load_data = unit_muxed_load_data;
         endcase
-    end
-
-    always_ff @ (posedge clk) begin
-        if (data_valid)
-            previous_load <= final_load_data;
     end
 
     /*********************************
      *  Output FIFO
      *********************************/
-    taiga_fifo #(.DATA_WIDTH(XLEN), .FIFO_DEPTH(LS_OUTPUT_BUFFER_DEPTH),  .FIFO_TYPE(NON_MUXED_INPUT_FIFO)
-            ) output_fifo (.fifo(wb_fifo), .*);
+    logic[2:0] valid_chain;
 
-    assign wb_fifo.data_in = final_load_data;
-    assign wb_fifo.push = load_complete;
-    assign wb_fifo.pop = ls_wb.accepted;
-    assign ls_wb.rd = wb_fifo.data_out;
-    assign ls_wb.done = wb_fifo.early_valid;
+    //Occupancy Tracking
+    always_ff @ (posedge clk) begin
+        if (rst)
+            valid_chain <= 1;
+        else if (load_complete & ~ls_wb.accepted)
+            valid_chain <= {valid_chain[2-1:0], 1'b0};
+        else if (ls_wb.accepted & ~load_complete)
+            valid_chain <= {1'b0, valid_chain[2:1]};
+    end
 
-    assign ls_wb.early_done = 0;
+    always_ff @ (posedge clk) begin
+        if (load_complete) begin
+            previous_load <= final_load_data;
+            previous_load_r <= previous_load;
+        end
+    end
+
+    assign ls_wb.rd = valid_chain[2] ? previous_load_r : previous_load;
+    assign ls_wb.done_next_cycle = load_complete | valid_chain[2] | (valid_chain[1] & ~ls_wb.accepted);
+    assign ls_wb.done_on_first_cycle = 0;
     /*********************************************/
-
 
 endmodule

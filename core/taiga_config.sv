@@ -41,33 +41,24 @@ package taiga_config;
 
     parameter USE_AMO = 0;
 
-    parameter NUM_WB_UNITS = 6;
+    parameter NUM_WB_UNITS = 4 + USE_MUL + USE_DIV;
     parameter WB_UNITS_WIDTH = $clog2(NUM_WB_UNITS);
 
-   typedef enum {//bit [WB_UNITS_WIDTH-1:0] {
-        ALU_UNIT_ID = 0,
-        BRANCH_UNIT_ID=1,
-        CSR_UNIT_ID = 2,
-        LS_UNIT_ID = 3,
-        MUL_UNIT_ID = 4,
-        DIV_UNIT_ID = 5,
-        CUSTOM_ID_0 = 6,
-        CUSTOM_ID_1 = 7,
-        CUSTOM_ID_2 = 8,
-        CUSTOM_ID_3 = 9
-    } unit_ids;
+    typedef logic[WB_UNITS_WIDTH-1:0] unit_ids;
+
+    parameter ALU_UNIT_ID = 0;
+    parameter BRANCH_UNIT_ID = 1;
+    parameter CSR_UNIT_ID = 2;
+    parameter LS_UNIT_ID = 3;
+    parameter MUL_UNIT_ID = LS_UNIT_ID + USE_MUL;
+    parameter DIV_UNIT_ID = LS_UNIT_ID + USE_MUL + USE_DIV;
+
 
     parameter INFLIGHT_QUEUE_DEPTH = 4;
     parameter FETCH_BUFFER_DEPTH = 4;
 
     parameter LS_INPUT_BUFFER_DEPTH = 4;
-    parameter LS_OUTPUT_BUFFER_DEPTH = 4;
-
-    parameter MUL_CYCLES = 1;
-    parameter MUL_OUTPUT_BUFFER_DEPTH = 2;
-
     parameter DIV_INPUT_BUFFER_DEPTH = 2;
-    parameter DIV_OUTPUT_BUFFER_DEPTH = 2;
 
     //Address space
     parameter USE_I_SCRATCH_MEM = 1;
@@ -94,10 +85,10 @@ package taiga_config;
     //Caches
     //Size in bytes: (DCACHE_LINES * DCACHE_WAYS * DCACHE_LINE_W * 4)
     parameter USE_DCACHE = 0;
-    parameter DCACHE_LINES = 512;
+    parameter DCACHE_LINES = 256;
     parameter DCACHE_WAYS = 2;
     parameter DCACHE_LINE_ADDR_W = $clog2(DCACHE_LINES);
-    parameter DCACHE_LINE_W = 8; //In words
+    parameter DCACHE_LINE_W = 4; //In words
     parameter DCACHE_SUB_LINE_ADDR_W = $clog2(DCACHE_LINE_W);
     parameter DCACHE_TAG_W = ADDR_W - DCACHE_LINE_ADDR_W - DCACHE_SUB_LINE_ADDR_W - 2;
 
@@ -110,14 +101,14 @@ package taiga_config;
     //Size in bytes: (ICACHE_LINES * ICACHE_WAYS * ICACHE_LINE_W * 4)
     //For optimal BRAM packing lines should not be less than 512
     parameter USE_ICACHE = 0;
-    parameter ICACHE_LINES = 128;
+    parameter ICACHE_LINES = 256;
     parameter ICACHE_WAYS = 2;
     parameter ICACHE_LINE_ADDR_W = $clog2(ICACHE_LINES);
-    parameter ICACHE_LINE_W = 8; //In words
+    parameter ICACHE_LINE_W = 4; //In words
     parameter ICACHE_SUB_LINE_ADDR_W = $clog2(ICACHE_LINE_W);
     parameter ICACHE_TAG_W = ADDR_W - ICACHE_LINE_ADDR_W - ICACHE_SUB_LINE_ADDR_W - 2;
 
-    parameter USE_BRANCH_PREDICTOR = 1;
+    parameter USE_BRANCH_PREDICTOR = 0;
     parameter BRANCH_TABLE_ENTRIES = 512;
     parameter RAS_DEPTH = 8;
 

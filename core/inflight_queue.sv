@@ -81,13 +81,16 @@ module inflight_queue
 
     //future rd_addt table
     logic [4:0] rd_addrs [INFLIGHT_QUEUE_DEPTH-1:0];
+    logic rd_addr_not_zero [INFLIGHT_QUEUE_DEPTH-1:0];
     always_ff @ (posedge clk) begin
         if (iq.new_issue) begin
             rd_addrs[iq.data_in.id] <= iq.future_rd_addr;
+            rd_addr_not_zero[iq.data_in.id] <= iq.uses_rd;
         end
     end
 
     assign iq.wb_rd_addr = rd_addrs[iq.wb_id];
+    assign iq.wb_uses_rd = rd_addr_not_zero[iq.wb_id];
 
 
 endmodule

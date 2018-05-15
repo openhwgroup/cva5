@@ -24,17 +24,6 @@ import taiga_config::*;
 import taiga_types::*;
 import l2_config_and_types::*;
 
-interface bram_interface;
-    logic[29:0] addr;
-    logic en;
-    logic[XLEN/8-1:0] be;
-    logic[XLEN-1:0] data_in;
-    logic[XLEN-1:0] data_out;
-
-    modport bram (input addr, en, be, data_in, output data_out);
-    modport user (output addr, en, be, data_in, input data_out);
-endinterface
-
 interface branch_table_interface;
     logic[31:0] if_pc;
     logic[31:0] dec_pc;
@@ -43,8 +32,6 @@ interface branch_table_interface;
     logic [31:0] njump_pc;
 
     logic[31:0] next_pc;
-
-    logic next_pc_valid;
 
     logic branch_taken;
     logic branch_ex;
@@ -58,8 +45,8 @@ interface branch_table_interface;
     logic use_prediction;
     logic use_ras;
     logic flush;
-    modport branch_table (input if_pc, dec_pc, ex_pc, next_pc, njump_pc, jump_pc, branch_taken, branch_ex, is_return_ex, prediction_dec, next_pc_valid, new_mem_request, output predicted_pc, prediction, use_prediction, use_ras, flush);
-    modport fetch (input predicted_pc, prediction, use_prediction, branch_taken, flush, njump_pc, jump_pc, use_ras, output if_pc, next_pc, next_pc_valid, new_mem_request);
+    modport branch_table (input if_pc, dec_pc, ex_pc, next_pc, njump_pc, jump_pc, branch_taken, branch_ex, is_return_ex, prediction_dec, new_mem_request, output predicted_pc, prediction, use_prediction, use_ras, flush);
+    modport fetch (input predicted_pc, prediction, use_prediction, branch_taken, flush, njump_pc, jump_pc, use_ras, output if_pc, next_pc, new_mem_request);
     modport decode (output dec_pc);
     modport branch_unit (output branch_taken, prediction_dec, branch_ex, is_return_ex, ex_pc, njump_pc, jump_pc);
 
@@ -88,12 +75,12 @@ interface ras_interface;
 endinterface
 
 interface unit_writeback_interface;
-    logic done;
-    logic early_done;
+    logic done_next_cycle;
+    logic done_on_first_cycle;
     logic accepted;
     logic [XLEN-1:0] rd;
-    modport writeback (input done, early_done, rd, output accepted);
-    modport unit (output done, early_done, rd, input accepted);
+    modport writeback (input done_next_cycle, done_on_first_cycle, rd, output accepted);
+    modport unit (output done_next_cycle, done_on_first_cycle, rd, input accepted);
 endinterface
 
 //********************************
@@ -160,14 +147,17 @@ interface inflight_queue_interface;
 
     inflight_queue_packet data_in;
     logic [4:0] future_rd_addr;
+    logic uses_rd;
+    logic wb_uses_rd;
+
     inflight_queue_packet[INFLIGHT_QUEUE_DEPTH:0] data_out;
     logic [4:0] wb_rd_addr;
     instruction_id_t wb_id;
     logic [INFLIGHT_QUEUE_DEPTH:0] valid;
 
-    modport queue (input pop, data_in, new_issue, future_rd_addr, wb_id, output data_out, wb_rd_addr, shift_pop, valid);
-    modport decode (output data_in, future_rd_addr, new_issue);
-    modport wb (input data_in, future_rd_addr, shift_pop, valid, data_out, wb_rd_addr, output pop, wb_id);
+    modport queue (input pop, data_in, new_issue, future_rd_addr, uses_rd, wb_id, output data_out, wb_rd_addr, wb_uses_rd, shift_pop, valid);
+    modport decode (output data_in, future_rd_addr, uses_rd, new_issue);
+    modport wb (input data_in, future_rd_addr, uses_rd, wb_uses_rd, shift_pop, valid, data_out, wb_rd_addr, output pop, wb_id);
 
 endinterface
 
@@ -197,7 +187,7 @@ interface instruction_buffer_interface;
     logic early_full;
 
     modport buffer (input push, pop, flush, data_in, output data_out, valid, full, early_full);
-    modport fetch (input full, early_full, output push, data_in, flush);
+    modport fetch (input full, early_full, pop, output push, data_in, flush);
     modport decode (input valid, data_out, output pop);
     //modport exception_control (output flush);
 endinterface

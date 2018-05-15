@@ -654,8 +654,8 @@ module csr_unit (
         end
     end
 
-    assign csr_wb.early_done = 0;
-    assign csr_wb.done = csr_ex.new_request | (done & ~csr_wb.accepted);
+    assign csr_wb.done_on_first_cycle = 0;
+    assign csr_wb.done_next_cycle = csr_ex.new_request | (done & ~csr_wb.accepted);
 
     always_ff @(posedge clk) begin
         if (rst) begin
