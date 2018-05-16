@@ -31,8 +31,9 @@ module div_unit(
         unit_writeback_interface.unit div_wb
         );
 
-    logic div_complete;
+    logic computation_complete;
     logic div_done;
+    logic done;
 
     logic [31:0] quotient;
     logic [31:0] remainder;
@@ -45,6 +46,7 @@ module div_unit(
 
     logic start;
     logic in_progress;
+    logic abort;
     logic output_ready;
     logic ack;
 
@@ -75,12 +77,14 @@ module div_unit(
     assign stage1 = input_fifo.data_out;
     /*********************************************/
 
-    assign output_ready = ~div_wb.done_next_cycle | (div_wb.done_next_cycle & div_wb.accepted);
-    assign ack = div_complete & output_ready;
+    assign output_ready = ~done | (done & div_wb.accepted);
+    assign ack = computation_complete & output_ready;
 
-    assign start = input_fifo.valid & (~in_progress) & ~(stage1.reuse_result | stage1.div_zero);
     //Abort prevents divider circuit from starting in the case that we are done in one cycle
-    assign div_done = (div_complete | (input_fifo.valid & (stage1.reuse_result | stage1.div_zero))) & output_ready;
+    assign abort = stage1.reuse_result | stage1.div_zero;
+
+    assign start = input_fifo.valid & (~in_progress) & ~abort;
+    assign div_done = (computation_complete | (input_fifo.valid & abort)) & output_ready;
 
     //If more than one cycle, set in_progress so that multiple start signals are not sent to the div unit.  Also in progress if an abort occurs but the output FIFO is full
     always_ff @(posedge clk) begin
@@ -114,9 +118,9 @@ module div_unit(
     //Synthesis time algorithm choice for divider
     generate
         if(USE_VARIABLE_LATENCY_DIV)
-            quickdiv #(XLEN) div (.*, .start(start), .A(complementerA), .B(complementerB), .Q(quotient), .R(remainder), .complete(div_complete), .ack(ack));
+            quickdiv #(XLEN) div (.*, .start(start), .A(complementerA), .B(complementerB), .Q(quotient), .R(remainder), .complete(computation_complete), .ack(ack));
         else
-            normdiv #(XLEN) div (.*, .start(start), .A(complementerA), .B(complementerB), .Q(quotient), .R(remainder), .complete(div_complete), .ack(ack));
+            normdiv #(XLEN) div (.*, .start(start), .A(complementerA), .B(complementerB), .Q(quotient), .R(remainder), .complete(computation_complete), .ack(ack));
     endgenerate
 
     /*********************************
@@ -129,13 +133,14 @@ module div_unit(
 
     always_ff @(posedge clk) begin
         if (rst)
-            div_wb.done_next_cycle <= 0;
+            done <= 0;
         else if (div_done)
-            div_wb.done_next_cycle <= 1;
+            done <= 1;
         else if (div_wb.accepted)
-            div_wb.done_next_cycle <= 0;
+            done <= 0;
     end
 
+    assign div_wb.done_next_cycle = div_done | (done & ~div_wb.accepted);
     assign div_wb.done_on_first_cycle = 0;
 
 endmodule
