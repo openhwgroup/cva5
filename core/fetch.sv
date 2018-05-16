@@ -59,6 +59,8 @@ module fetch(
     logic [NUM_SUB_UNITS-1:0] unit_ready;
     logic [NUM_SUB_UNITS-1:0] unit_data_valid;
     logic [31:0] unit_data_array [NUM_SUB_UNITS-1:0];
+    logic [31:0] anded_unit_data_array [NUM_SUB_UNITS-1:0];
+
     logic units_ready;
 
 
@@ -212,10 +214,13 @@ module fetch(
     assign ib.push = new_issue;
     assign ib.flush = fetch_flush;
 
+
+    //bitwise AND all subunit outputs with valid signal then or all outputs together
     always_comb begin
-        ib.data_in.instruction = {32{unit_data_valid[0]}} & unit_data_array[0];
-        for(int i=1; i < NUM_SUB_UNITS; i++) begin
-            ib.data_in.instruction |= {32{unit_data_valid[i]}} & unit_data_array[i];
+        ib.data_in.instruction = 0;
+        foreach (unit_data_array[i]) begin
+            anded_unit_data_array[i] = unit_data_array[i] & {$size(unit_data_array){unit_data_valid[i]}};
+            ib.data_in.instruction |= anded_unit_data_array[i];
         end
     end
 
