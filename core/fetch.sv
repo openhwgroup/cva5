@@ -219,7 +219,7 @@ module fetch(
     always_comb begin
         ib.data_in.instruction = 0;
         foreach (unit_data_array[i]) begin
-            anded_unit_data_array[i] = unit_data_array[i] & {$size(unit_data_array){unit_data_valid[i]}};
+            anded_unit_data_array[i] = unit_data_array[i] & {$bits(unit_data_array[i]){unit_data_valid[i]}};
             ib.data_in.instruction |= anded_unit_data_array[i];
         end
     end
