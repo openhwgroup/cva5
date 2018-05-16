@@ -46,9 +46,8 @@ module mul_unit(
     assign advance[1] = mul_wb.accepted | ~valid[1];
 
     always_ff @ (posedge clk) begin
-        if (rst) begin
-            valid <= 2'b00;
-        end
+        if (rst)
+            valid <= 0;
         else begin
             if (advance[0])
                 valid[0] <=  mul_ex.new_request_dec;
@@ -57,28 +56,28 @@ module mul_unit(
         end
     end
 
-    assign rs1_signed = ~(mul_inputs.op[1:0] == MULHU_fn3[1:0]);
-    assign rs2_signed = ~mul_inputs.op[1];
+    assign rs1_signed = mul_inputs.op[1:0] inside {MULH_fn3[1:0], MULHSU_fn3[1:0]};//MUL doesn't matter
+    assign rs2_signed = mul_inputs.op[1:0] inside {MUL_fn3[1:0], MULH_fn3[1:0]};//MUL doesn't matter
 
-    assign rs1_ext = {mul_inputs.rs1[31] & rs1_signed, mul_inputs.rs1};
-    assign rs2_ext = {mul_inputs.rs2[31] & rs2_signed, mul_inputs.rs2};
+    assign rs1_ext = signed'({mul_inputs.rs1[31] & rs1_signed, mul_inputs.rs1});
+    assign rs2_ext = signed'({mul_inputs.rs2[31] & rs2_signed, mul_inputs.rs2});
 
     //Input and output registered Multiply
     always_ff @ (posedge clk) begin
         if (mul_ex.new_request_dec) begin
             rs1_r <= rs1_ext;
             rs2_r <= rs2_ext;
-            mulh[0] <= ~(mul_inputs.op[1:0] == 0);
+            mulh[0] <= (mul_inputs.op[1:0] != MUL_fn3[1:0]);
         end
         if (advance[1]) begin
-            result <= signed'(rs1_r) * signed'(rs2_r);
+            result <= rs1_r * rs2_r;
             mulh[1] <= mulh[0];
         end
     end
 
     //Issue/write-back handshaking
     ////////////////////////////////////////////////////
-    assign mul_ex.ready = mul_wb.accepted | ~(&valid);
+    assign mul_ex.ready = mul_wb.accepted | ~(&valid);//If any stage is not valid we can accept a new request
 
     assign mul_wb.rd = mulh[1] ? result[63:32] : result[31:0];
     assign mul_wb.done_next_cycle = valid[0] | (valid[1] & ~mul_wb.accepted);
