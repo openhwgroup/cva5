@@ -84,13 +84,6 @@ module taiga_fifo #(parameter DATA_WIDTH = 42, parameter FIFO_DEPTH = 4, paramet
     generate if (FIFO_TYPE == NON_MUXED_INPUT_FIFO) begin
             ////////////////////////////////////////////////////
 
-            //            always_ff @ (posedge clk) begin
-            //                if (rst)
-            //                    read_index <= 0;
-            //                else if ((fifo.valid & fifo.push) | (two_plus & fifo.pop))
-            //                    read_index <= read_index + fifo.push - fifo.pop;
-            //            end
-
             always_ff @ (posedge clk) begin
                 if (rst)
                     read_index <= 0;
