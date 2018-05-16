@@ -80,7 +80,7 @@ module div_unit_tb ( );
             firstPop         <= 1'b1;
             response_latency <= 32'hFFFFFFFF;
         end else begin
-            if (div_wb.done) begin
+            if (div_wb.done_next_cycle) begin
                 wb_done_acc <= wb_done_acc + 1;
             end else begin
                 wb_done_acc <= 32'h1;
@@ -95,7 +95,7 @@ module div_unit_tb ( );
         end 
     end
     
-    assign wb_done = div_wb.done & (wb_done_acc >= response_latency);
+    assign wb_done = div_wb.done_next_cycle & (wb_done_acc >= response_latency);
 
     always_ff @(posedge clk) begin
         if (rst)
