@@ -75,6 +75,9 @@ module write_back(
         for (iq_index=INFLIGHT_QUEUE_DEPTH; iq_index>0; iq_index--) begin
             unit_id =  iq.data_out[iq_index].unit_id;
             issue_id = iq.data_out[iq_index].id;
+            //Access rd_addr table in inflight_queue
+            iq.wb_id = issue_id;
+            rd_addr = iq.wb_rd_addr;
 
             if (iq.valid[iq_index]) begin
                 selected_unit_done_next_cycle = done_next_cycle[unit_id];
@@ -87,17 +90,11 @@ module write_back(
             end
         end
 
-        //Access rd_addr table in inflight_queue
-        iq.wb_id = issue_id;
-        rd_addr = iq.wb_rd_addr;
-        rd_addr_not_zero = |rd_addr;//iq.wb_uses_rd;
-
         //No valid completing instructions in queue, check for new issues.
         if (~entry_found) begin
             unit_id = iq.data_out[0].unit_id;
             issue_id = iq.data_out[0].id;
             rd_addr = iq.future_rd_addr;
-            rd_addr_not_zero = iq.uses_rd;
 
             //Pop and unit done only if valid issue
             if (iq.valid[0]) begin
@@ -105,15 +102,12 @@ module write_back(
                 iq.pop[0] = selected_unit_done_next_cycle;
             end
         end
-
+        rd_addr_not_zero = |rd_addr;
 
     end
 
     always_ff @(posedge clk) begin
-        if (rst)
-            instruction_complete <= 0;
-        else
-            instruction_complete <= selected_unit_done_next_cycle;
+        instruction_complete <= selected_unit_done_next_cycle;
     end
 
     always_ff @(posedge clk) begin
@@ -122,20 +116,17 @@ module write_back(
         rd_addr_r <= rd_addr;
     end
 
-    assign rf_wb.rd_addr =  rd_addr_r;
-    assign rf_wb.id =  issue_id_r;
+    assign rf_wb.rd_addr_early = rd_addr;
+    assign rf_wb.id_early = issue_id;
+    assign rf_wb.valid_write_early = selected_unit_done_next_cycle;
 
-    assign rf_wb.rd_data = rd[unit_id_r];
+    assign rf_wb.rd_addr = rd_addr_r;
+    assign rf_wb.id = issue_id_r;
     always_ff @(posedge clk) begin
-        if (rst)
-            rf_wb.valid_write <= 0;
-        else
             rf_wb.valid_write <= selected_unit_done_next_cycle & rd_addr_not_zero;
     end
 
-    assign rf_wb.rd_addr_early = rd_addr;
-    assign rf_wb.id_early =  issue_id;
-    assign rf_wb.valid_write_early = selected_unit_done_next_cycle;
+    assign rf_wb.rd_data = unit_id_r;//rd[unit_id_r];
 
     always_comb begin
         new_accepted = 0;
@@ -143,10 +134,7 @@ module write_back(
     end
 
     always_ff @(posedge clk) begin
-        if (rst)
-            accepted <= 0;
-        else
-            accepted <= new_accepted;
+        accepted <= new_accepted;
     end
 
     //ID generator signals
