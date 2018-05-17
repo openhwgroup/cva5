@@ -31,18 +31,29 @@ module id_generator (
         );
 
     logic [0:INFLIGHT_QUEUE_DEPTH-1] inuse;
+    logic [0:INFLIGHT_QUEUE_DEPTH-1] new_inuse;
+    logic [0:INFLIGHT_QUEUE_DEPTH-1] clear_inuse;
+    logic [0:INFLIGHT_QUEUE_DEPTH-1] set_inuse;
+    //implementation
+    ////////////////////////////////////////////////////
+
+    //Clear inuse on instruction completion, set on instruction issue
+    //Set takes precedence over clearing.
+    always_comb begin
+        set_inuse = 0;
+        set_inuse[id_gen.issue_id] = id_gen.advance;
+
+        clear_inuse = 0;
+        clear_inuse[id_gen.complete_id] = id_gen.complete;
+
+        new_inuse = (inuse & ~clear_inuse) | set_inuse;
+    end
 
     always_ff @ (posedge clk) begin
-        for (int i=0; i <INFLIGHT_QUEUE_DEPTH; i=i+1) begin
-            if(rst)
-                inuse[i] <= 0;
-            begin
-                if(id_gen.advance && id_gen.issue_id == i)
-                    inuse[i] <= 1;
-                else if (id_gen.complete && id_gen.complete_id == i)
-                    inuse[i] <= 0;
-            end
-        end
+        if(rst)
+            inuse <= 0;
+        else
+            inuse <= new_inuse;
     end
 
     always_comb begin
