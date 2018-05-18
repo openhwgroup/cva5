@@ -55,6 +55,10 @@ module taiga_wrapper (
         output logic sout
 
         );
+        
+        
+    parameter SCRATCH_MEM_KB = 16;
+    parameter MEM_LINES = (SCRATCH_MEM_KB*1024)/4;
 
     logic clk;
     logic rst;
@@ -238,15 +242,15 @@ module taiga_wrapper (
 
     arm proc(.*);
 
-    byte_en_BRAM #(8192, "/home/ematthew/Research/RISCV/software2/riscv-tools/riscv-tests/benchmarks/dhrystone.riscv.hw_init", 1) inst_data_ram (
+    byte_en_BRAM #(MEM_LINES, "/home/ematthew/Research/RISCV/software2/riscv-tools/riscv-tests/benchmarks/dhrystone.riscv.hw_init", 1) inst_data_ram (
             .clk(clk),
-            .addr_a(instruction_bram.addr[$clog2(8192)- 1:0]),
+            .addr_a(instruction_bram.addr[$clog2(MEM_LINES)- 1:0]),
             .en_a(instruction_bram.en),
             .be_a(instruction_bram.be),
             .data_in_a(instruction_bram.data_in),
             .data_out_a(instruction_bram.data_out),
 
-            .addr_b(data_bram.addr[$clog2(8192)- 1:0]),
+            .addr_b(data_bram.addr[$clog2(MEM_LINES)- 1:0]),
             .en_b(data_bram.en),
             .be_b(data_bram.be),
             .data_in_b(data_bram.data_in),
