@@ -654,8 +654,8 @@ module csr_unit (
         end
     end
 
-    assign csr_wb.done_on_first_cycle = 0;
-    assign csr_wb.done_next_cycle = csr_ex.new_request | (done & ~csr_wb.accepted);
+    assign csr_wb.done_next_cycle = 1;//if in queue, will be done on next cycle, no-pipelining
+    assign csr_wb.done_on_first_cycle = 0;//registered output, done after one cycle
 
     always_ff @(posedge clk) begin
         if (rst) begin

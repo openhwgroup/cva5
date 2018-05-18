@@ -165,8 +165,8 @@ module branch_unit(
         end
     end
 
-    assign branch_wb.done_next_cycle = (done & ~branch_wb.accepted);
-    assign branch_wb.done_on_first_cycle = 1;//branch_ex.possible_issue & new_jal_jalr_dec;
+    assign branch_wb.done_next_cycle = 1;//in queue, already done
+    assign branch_wb.done_on_first_cycle = 1;//not in queue, always done next cycle
 
     /*********************************************/
 

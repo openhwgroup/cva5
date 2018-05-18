@@ -118,16 +118,13 @@ endinterface
 
 interface register_file_writeback_interface;
     logic[4:0] rd_addr;
-    logic[4:0] rd_addr_early;
     logic valid_write;
-    logic valid_write_early;
 
     logic[XLEN-1:0] rd_data;
     instruction_id_t id;
-    instruction_id_t id_early;
 
-    modport writeback (output rd_addr, rd_addr_early, valid_write, valid_write_early, rd_data, id, id_early);
-    modport unit (input rd_addr, rd_addr_early, valid_write, valid_write_early, rd_data, id, id_early);
+    modport writeback (output rd_addr, valid_write, rd_data, id);
+    modport unit (input rd_addr, valid_write, rd_data, id);
 
 endinterface
 

@@ -248,6 +248,8 @@ package taiga_types;
     typedef struct packed{
         logic [WB_UNITS_WIDTH-1:0] unit_id;
         instruction_id_t id;
+        logic [4:0] rd_addr;
+        logic rd_addr_nzero;
     } inflight_queue_packet;
 
     typedef struct packed{

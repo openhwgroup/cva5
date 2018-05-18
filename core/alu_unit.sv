@@ -80,8 +80,8 @@ module alu_unit(
         end
     end
 
-    assign alu_wb.done_next_cycle = (done & ~alu_wb.accepted);
-    assign alu_wb.done_on_first_cycle = 1;
+    assign alu_wb.done_next_cycle = 1;//in queue, already done
+    assign alu_wb.done_on_first_cycle = 1;//not in queue, always done next cycle
     ////////////////////////////////////////////////////
 
 endmodule

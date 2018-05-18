@@ -156,6 +156,9 @@ module decode(
     assign iq.future_rd_addr = future_rd_addr;
     assign iq.uses_rd = uses_rd && (future_rd_addr != 0);
     assign iq.data_in.id = id_gen.issue_id;
+    assign iq.data_in.rd_addr = future_rd_addr;
+    assign iq.data_in.rd_addr_nzero = (future_rd_addr != 0);
+
     assign iq.new_issue = advance & uses_rd;
 
     assign id_gen.advance = advance & uses_rd;
@@ -165,15 +168,15 @@ module decode(
     assign issue_valid =  ib.valid & id_gen.id_avaliable & ~flush;
 
 
-    assign operands_ready =  !(
-            (uses_rs1 && rf_decode.rs1_conflict) ||
-            (uses_rs2 && rf_decode.rs2_conflict));
+    assign operands_ready =  ~(
+            (uses_rs1 & rf_decode.rs1_conflict) |
+            (uses_rs2 & rf_decode.rs2_conflict));
 
     assign load_store_forward = ((opcode_trim == STORE_T) && last_ls_request_was_load && (rs2_addr == load_rd));
 
-    assign load_store_operands_ready =  !(
-            (uses_rs1 && rf_decode.rs1_conflict) ||
-            (uses_rs2 && rf_decode.rs2_conflict && ~load_store_forward));
+    assign load_store_operands_ready =  ~(
+            (uses_rs1 & rf_decode.rs1_conflict) |
+            (uses_rs2 & rf_decode.rs2_conflict & ~load_store_forward));
 
     assign mult_div_op = (opcode_trim == ARITH_T) && ib.data_out.instruction[25];
 
@@ -355,15 +358,16 @@ module decode(
     //----------------------------------------------------------------------------------
     //Mul Div unit inputs
     //----------------------------------------------------------------------------------
-    generate if (USE_MUL)
+    generate if (USE_MUL) begin
             assign mul_ex.new_request_dec = issue[MUL_UNIT_ID];
-        assign mul_inputs.rs1 = rf_decode.rs1_data;
-        assign mul_inputs.rs2 = rf_decode.rs2_data;
-        assign mul_inputs.op = fn3[1:0];
+            assign mul_inputs.rs1 = rf_decode.rs1_data;
+            assign mul_inputs.rs2 = rf_decode.rs2_data;
+            assign mul_inputs.op = fn3[1:0];
+        end
     endgenerate
     //If a subsequent div request uses the same inputs then
     //don't rerun div operation
-    generate if (USE_DIV)
+    generate if (USE_DIV) begin
             always_ff @(posedge clk) begin
                 if (issue[DIV_UNIT_ID]) begin
                     prev_div_rs1_addr <= rs1_addr;
@@ -371,41 +375,33 @@ module decode(
                 end
             end
 
-        always_ff @(posedge clk) begin
-            if (rst)
-                prev_div_result_valid <= 0;
-            else if (advance) begin
-                if(new_request[DIV_UNIT_ID] && !(future_rd_addr inside {rs1_addr, rs2_addr}))
-                    prev_div_result_valid <=1;
-                else if (uses_rd && (future_rd_addr inside {prev_div_rs1_addr, prev_div_rs2_addr}))
-                    prev_div_result_valid <=0;
+            always_ff @(posedge clk) begin
+                if (rst)
+                    prev_div_result_valid <= 0;
+                else if (advance) begin
+                    if(new_request[DIV_UNIT_ID] && !(future_rd_addr inside {rs1_addr, rs2_addr}))
+                        prev_div_result_valid <=1;
+                    else if (uses_rd && (future_rd_addr inside {prev_div_rs1_addr, prev_div_rs2_addr}))
+                        prev_div_result_valid <=0;
+                end
             end
-        end
 
-        assign div_ex.new_request_dec = issue[DIV_UNIT_ID];
-        assign div_inputs.rs1 = rf_decode.rs1_data;
-        assign div_inputs.rs2 = rf_decode.rs2_data;
-        assign div_inputs.op = fn3[1:0];
-        assign div_inputs.reuse_result = prev_div_result_valid && (prev_div_rs1_addr == rs1_addr) && (prev_div_rs2_addr == rs2_addr);
-        assign div_inputs.div_zero = (rf_decode.rs2_data == 0);
+            assign div_ex.new_request_dec = issue[DIV_UNIT_ID];
+            assign div_inputs.rs1 = rf_decode.rs1_data;
+            assign div_inputs.rs2 = rf_decode.rs2_data;
+            assign div_inputs.op = fn3[1:0];
+            assign div_inputs.reuse_result = prev_div_result_valid && (prev_div_rs1_addr == rs1_addr) && (prev_div_rs2_addr == rs2_addr);
+            assign div_inputs.div_zero = (rf_decode.rs2_data == 0);
+        end
     endgenerate
     //----------------------------------------------------------------------------------
     always_ff @(posedge clk) begin
-        if(rst) begin
-            branch_ex.new_request <= 0;
-            alu_ex.new_request <= 0;
-            ls_ex.new_request <= 0;
-            csr_ex.new_request <= 0;
-            mul_ex.new_request <= 0;
-            div_ex.new_request <= 0;
-        end else begin
-            branch_ex.new_request <= issue[BRANCH_UNIT_ID];
-            alu_ex.new_request <= issue[ALU_UNIT_ID];
-            ls_ex.new_request <= issue[LS_UNIT_ID];
-            csr_ex.new_request <= issue[CSR_UNIT_ID];
-            mul_ex.new_request <= issue[MUL_UNIT_ID];
-            div_ex.new_request <= issue[DIV_UNIT_ID];
-        end
+        branch_ex.new_request <= issue[BRANCH_UNIT_ID];
+        alu_ex.new_request <= issue[ALU_UNIT_ID];
+        ls_ex.new_request <= issue[LS_UNIT_ID];
+        csr_ex.new_request <= issue[CSR_UNIT_ID];
+        mul_ex.new_request <= issue[MUL_UNIT_ID];
+        div_ex.new_request <= issue[DIV_UNIT_ID];
     end
 
     assign branch_ex.possible_issue = new_request[BRANCH_UNIT_ID];
