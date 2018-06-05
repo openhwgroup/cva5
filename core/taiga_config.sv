@@ -46,13 +46,12 @@ package taiga_config;
 
     typedef logic[WB_UNITS_WIDTH-1:0] unit_ids;
 
-    parameter ALU_UNIT_ID = 0;
-    parameter BRANCH_UNIT_ID = 1;
-    parameter CSR_UNIT_ID = 2;
-    parameter LS_UNIT_ID = 3;
-    parameter MUL_UNIT_ID = LS_UNIT_ID + USE_MUL;
-    parameter DIV_UNIT_ID = LS_UNIT_ID + USE_MUL + USE_DIV;
-
+    parameter LS_UNIT_ID = 0;//non-constant done signals
+    parameter DIV_UNIT_ID = USE_DIV;//non-constant done signals
+    parameter ALU_UNIT_ID = USE_DIV + 1;//constant done signals
+    parameter BRANCH_UNIT_ID = ALU_UNIT_ID + 1;//constant done signals
+    parameter CSR_UNIT_ID = BRANCH_UNIT_ID + 1;//constant done signals
+    parameter MUL_UNIT_ID = CSR_UNIT_ID + USE_MUL;//constant done signals
 
     parameter INFLIGHT_QUEUE_DEPTH = 4;
     parameter FETCH_BUFFER_DEPTH = 4;
@@ -108,7 +107,7 @@ package taiga_config;
     parameter ICACHE_SUB_LINE_ADDR_W = $clog2(ICACHE_LINE_W);
     parameter ICACHE_TAG_W = ADDR_W - ICACHE_LINE_ADDR_W - ICACHE_SUB_LINE_ADDR_W - 2;
 
-    parameter USE_BRANCH_PREDICTOR = 0;
+    parameter USE_BRANCH_PREDICTOR = 1;
     parameter BRANCH_TABLE_ENTRIES = 512;
     parameter RAS_DEPTH = 8;
 

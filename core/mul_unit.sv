@@ -80,8 +80,9 @@ module mul_unit(
     assign mul_ex.ready = mul_wb.accepted | ~(&valid);//If any stage is not valid we can accept a new request
 
     assign mul_wb.rd = mulh[1] ? result[63:32] : result[31:0];
-    assign mul_wb.done_next_cycle = valid[0] | (valid[1] & ~mul_wb.accepted);
-    assign mul_wb.done_on_first_cycle = 0;
+
+    assign mul_wb.done_next_cycle = 1;//if in queue, will be done on next cycle
+    assign mul_wb.done_on_first_cycle = 0;//registered output, done after one cycle
     ////////////////////////////////////////////////////
 
 endmodule

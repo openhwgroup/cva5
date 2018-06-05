@@ -71,12 +71,9 @@ module load_store_unit (
     logic [3:0] be;
 
     logic [31:0] unit_muxed_load_data;
-    logic [7:0] byte_load_data;
-    logic [15:0] halfword_load_data;
-
+    logic [31:0] aligned_load_data;
     logic [31:0] final_load_data;
 
-    logic [31:0] rs2_muxed;
     logic [31:0] most_recent_load;
     logic [31:0] forwarded_data;
     logic [31:0] previous_load, previous_load_r;
@@ -329,35 +326,37 @@ module load_store_unit (
     //unit mux
     always_comb begin
         unit_muxed_load_data = 0;
-        for (int i=0; i < NUM_SUB_UNITS; i++)
+        foreach (unit_data_array[i])
             unit_muxed_load_data |= unit_data_array[i];
     end
 
     //Byte/halfword select: assumes aligned operations
     always_comb begin
-        halfword_load_data = stage2_attr.byte_addr[1] ? unit_muxed_load_data[31:16] : unit_muxed_load_data[15:0];
+        aligned_load_data[31:16] = unit_muxed_load_data[31:16];
+        aligned_load_data[15:8] = stage2_attr.byte_addr[1] ? unit_muxed_load_data[31:24] : unit_muxed_load_data[15:8];
         case(stage2_attr.byte_addr)
-            2'b00 : byte_load_data = unit_muxed_load_data[7:0];
-            2'b01 : byte_load_data = unit_muxed_load_data[15:8];
-            2'b10 : byte_load_data = unit_muxed_load_data[23:16];
-            2'b11 : byte_load_data = unit_muxed_load_data[31:24];
+            2'b00 : aligned_load_data[7:0] = unit_muxed_load_data[7:0];
+            2'b01 : aligned_load_data[7:0] = unit_muxed_load_data[15:8];
+            2'b10 : aligned_load_data[7:0] = unit_muxed_load_data[23:16];
+            2'b11 : aligned_load_data[7:0] = unit_muxed_load_data[31:24];
         endcase
     end
 
     //Sign extending
     always_comb begin
-        unique case(stage2_attr.fn3)
-            LS_B_fn3 : final_load_data = 32'(signed'(byte_load_data));
-            LS_H_fn3 : final_load_data = 32'(signed'(halfword_load_data));
-            LS_W_fn3 : final_load_data = unit_muxed_load_data;
+        case(stage2_attr.fn3)
+            LS_B_fn3 : final_load_data = 32'(signed'(aligned_load_data[7:0]));
+            LS_H_fn3 : final_load_data = 32'(signed'(aligned_load_data[15:0]));
+            //LS_W_fn3 : final_load_data = aligned_load_data;
                 //unused 011
-            L_BU_fn3 : final_load_data = 32'(unsigned'(byte_load_data));
-            L_HU_fn3 : final_load_data = 32'(unsigned'(halfword_load_data));
+            L_BU_fn3 : final_load_data = 32'(unsigned'(aligned_load_data[7:0]));
+            L_HU_fn3 : final_load_data = 32'(unsigned'(aligned_load_data[15:0]));
                 //unused 110
                 //unused 111
-            //default : final_load_data = unit_muxed_load_data;
+            default : final_load_data = aligned_load_data;
         endcase
     end
+
 
     /*********************************
      *  Output FIFO

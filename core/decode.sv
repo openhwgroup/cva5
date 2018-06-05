@@ -243,14 +243,28 @@ module decode(
             alu_rs2_data = rf_decode.rs2_data;
     end
 
+
+    always_comb begin
+        case (fn3)
+            SLT_fn3 : alu_logic_op = ALU_LOGIC_ADD;
+            SLTU_fn3 : alu_logic_op = ALU_LOGIC_ADD;
+            SLL_fn3 : alu_logic_op = ALU_LOGIC_ADD;
+            XOR_fn3 : alu_logic_op = ALU_LOGIC_XOR;
+            OR_fn3 : alu_logic_op = ALU_LOGIC_OR;
+            AND_fn3 : alu_logic_op = ALU_LOGIC_AND;
+            SRA_fn3 : alu_logic_op = ALU_LOGIC_ADD;
+            ADD_SUB_fn3 : alu_logic_op = ALU_LOGIC_ADD;
+        endcase
+    end
+
     always_comb begin
         case (fn3)
             SLT_fn3 : alu_op = ALU_SLT;
             SLTU_fn3 : alu_op = ALU_SLT;
             SLL_fn3 : alu_op = ALU_SHIFT;
-            XOR_fn3 : alu_op = ALU_LOGIC;
-            OR_fn3 : alu_op = ALU_LOGIC;
-            AND_fn3 : alu_op = ALU_LOGIC;
+            XOR_fn3 : alu_op = ALU_ADD_SUB;
+            OR_fn3 : alu_op = ALU_ADD_SUB;
+            AND_fn3 : alu_op = ALU_ADD_SUB;
             SRA_fn3 : alu_op = ALU_SHIFT;
             ADD_SUB_fn3 : alu_op = ALU_ADD_SUB;
         endcase
@@ -264,19 +278,22 @@ module decode(
         end
     end
 
-    //Add cases: LUI, AUIPC, ADD[I]
+    //Add cases: LUI, AUIPC, JAL, JALR, ADD[I]
     //sub cases: SUB, SLT[U][I] (and not LUI AUIPC)
-    assign alu_sub = ~(opcode[2] | (~opcode[2] & ~(|fn3) & (~opcode[5] | (opcode[5] & ~ib.data_out.instruction[30]))));
+    assign alu_sub = opcode[2] ? 0 : ((fn3 inside {SLTU_fn3, SLT_fn3}) || ((fn3 == ADD_SUB_fn3) && ib.data_out.instruction[30]) && opcode[5]);
+
+        //~(opcode[2] | (~opcode[2] & ~(|fn3) & (~opcode[5] | (opcode[5] & ~ib.data_out.instruction[30]))));
     //assign alu_sub = ((opcode == ARITH && ib.data_out.instruction[30]) || ((opcode == ARITH || opcode == ARITH_IMM) &&  (fn3 ==SLTU_fn3 || fn3 ==SLT_fn3)));//SUB instruction
 
     always_ff @(posedge clk) begin
         if (issue[ALU_UNIT_ID]) begin
             alu_inputs.in1 <= {(alu_rs1_data[XLEN-1] & ~fn3[0]), alu_rs1_data};//(fn3[0]  is SLTU_fn3);
             alu_inputs.in2 <= {(alu_rs2_data[XLEN-1] & ~fn3[0]), alu_rs2_data};
+            alu_inputs.shifter_in <= fn3[2] ? rf_decode.rs1_data : left_shift_in;
             alu_inputs.subtract <= alu_sub;
             alu_inputs.arith <= alu_rs1_data[XLEN-1] & ib.data_out.instruction[30];//shift in bit
             alu_inputs.lshift <= ~fn3[2];
-            alu_inputs.fn3 <= fn3;
+            alu_inputs.logic_op <= opcode[2] ? ALU_LOGIC_ADD : alu_logic_op;//put LUI and AUIPC through adder path
             alu_inputs.op <= opcode[2] ? ALU_ADD_SUB : alu_op;//put LUI and AUIPC through adder path
         end
     end
@@ -288,12 +305,16 @@ module decode(
     assign ls_ex.new_request_dec = issue[LS_UNIT_ID];
 
     assign ls_inputs.offset = opcode[5] ? {ib.data_out.instruction[31:25], ib.data_out.instruction[11:7]} : ib.data_out.instruction[31:20];
-    assign ls_inputs.virtual_address = rf_decode.rs1_data + 32'(signed'(ls_inputs.offset));
+    assign ls_inputs.virtual_address = rf_decode.rs1_data;// + 32'(signed'(ls_inputs.offset));
     assign ls_inputs.rs2 = rf_decode.rs2_data;
     assign ls_inputs.pc = ib.data_out.pc;
     assign ls_inputs.fn3 = ls_inputs.is_amo ? LS_W_fn3 : fn3;
-    assign ls_inputs.amo = USE_AMO ? ib.data_out.instruction[31:27] : 0;
-    assign ls_inputs.is_amo = USE_AMO ? (opcode_trim == AMO_T) : 0;
+    generate if (USE_AMO)
+        begin
+            assign ls_inputs.amo = ib.data_out.instruction[31:27];
+            assign ls_inputs.is_amo = (opcode_trim == AMO_T);
+        end
+    endgenerate
     assign ls_inputs.load = (opcode_trim inside {LOAD_T, AMO_T}) && (ls_inputs.amo != AMO_SC); //LR and AMO_ops perform a read operation as well
     assign ls_inputs.store = (opcode_trim == STORE_T);
     assign ls_inputs.load_store_forward = (opcode_trim == STORE_T) && rf_decode.rs2_conflict;

@@ -31,62 +31,39 @@ module barrel_shifter (
         output logic[XLEN-1:0] shifted_result
         );
 
-    logic[XLEN-1:0] lshifter_input;
-    logic[XLEN-1:0] shifter_in;
-    logic[XLEN-1:0] lshifted;
-    logic[XLEN-1:0] shifted;
-    logic[XLEN-1:0] shiftx16, shiftx4, shiftx1;
-    logic[XLEN*2-1:0] shiftx16_padded, shiftx4_padded;
+    logic[XLEN-1:0] shiftx8, shiftx2, shiftx1, shiftx1_l;
 
-    //Flip left shift input
-    always_comb begin
-        for (int i =0; i < 32; i++) begin
-            lshifter_input[i] = shifter_input[31-i];
-        end
-    end
-    assign shifter_in = lshift ? lshifter_input : shifter_input;
     //Bit flipping shared shifter
     //left shift occurs in decode logic
-
-    always_comb begin
-        case ({shift_amount[4],lshift})
-            0: shiftx16 = shifter_input;
-            1: shiftx16 = lshifter_input;
-            2: shiftx16 = {{16{arith}}, shifter_input[15:0]};
-            3: shiftx16 =  {{16{arith}}, lshifter_input[15:0]};
+    always_comb begin//8
+        case (shift_amount[4:3])
+            0: shiftx8 = shifter_input;
+            1: shiftx8 = {{8{arith}}, shifter_input[31:8]};
+            2: shiftx8 = {{16{arith}}, shifter_input[31:16]};
+            3: shiftx8 =  {{24{arith}}, shifter_input[31:24]};
         endcase
     end
 
-    assign shiftx16_padded = {{32{arith}}, shiftx16};
-
-    always_comb begin
-        case (shift_amount[3:2])
-            0:  shiftx4 <= shiftx16_padded[31:0];
-            1:  foreach (shiftx4[i]) shiftx4[i] <= shiftx16_padded[i+4];
-            2:  foreach (shiftx4[i]) shiftx4[i] <= shiftx16_padded[i+8];
-            3:  foreach (shiftx4[i]) shiftx4[i] <= shiftx16_padded[i+12];
+    always_comb begin//2
+        case (shift_amount[2:1])
+            0: shiftx2 = shiftx8[31:0];
+            1: shiftx2 = {{2{arith}},shiftx8[31:2]};
+            2: shiftx2 = {{4{arith}},shiftx8[31:4]};
+            3: shiftx2 = {{6{arith}},shiftx8[31:6]};
         endcase
     end
 
-    assign shiftx4_padded = {{32{arith}}, shiftx4};
-
+    assign shiftx1_l = {arith,shiftx2[31:1]};
     always_comb begin
-        case (shift_amount[1:0])
-            0:  shiftx1 <= shiftx4_padded[31:0];
-            1:  foreach (shiftx1[i]) shiftx1[i] <= shiftx4_padded[i+1];
-            2:  foreach (shiftx1[i]) shiftx1[i] <= shiftx4_padded[i+2];
-            3:  foreach (shiftx1[i]) shiftx1[i] <= shiftx4_padded[i+3];
+        case ({lshift, shift_amount[0]})
+            0: shiftx1 = shiftx2[31:0];
+            1: shiftx1 = shiftx1_l;
+            2: foreach (shiftx1[i]) shiftx1[i] = shiftx2[31-i];
+            3: foreach (shiftx1[i]) shiftx1[i] = shiftx1_l[31-i];
         endcase
     end
 
-    //Flip left shift output
-    always_comb begin
-        for (int i =0; i < 32; i++) begin
-            lshifted[i] = shiftx1[31-i];
-        end
-    end
-
-   assign shifted_result =  lshift ? lshifted : shiftx1;
+   assign shifted_result = shiftx1;
 
     //assign shifted_result =  lshift ? signed'({arith,shifter_input} <<< shift_amount) : signed'({arith,shifter_input} >>> shift_amount);
 

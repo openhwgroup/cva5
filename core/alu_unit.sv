@@ -32,24 +32,41 @@ module alu_unit(
         );
 
     logic[XLEN:0] add_sub_result;
-    logic[XLEN-1:0] logic_result;
     logic[XLEN-1:0] shifter_result;
 
     logic done;
+    logic[XLEN:0] adder_in1;
+    logic[XLEN:0] adder_in2;
+    logic[XLEN:0] adder_in2_logic;
 
     //implementation
     ////////////////////////////////////////////////////
-    assign add_sub_result = alu_inputs.subtract ? alu_inputs.in1 - alu_inputs.in2 : alu_inputs.in1 + alu_inputs.in2;
+
+    //Logic ops put through the adder carry chain to reduce resources
     always_comb begin
-        case (alu_inputs.fn3[1:0])
-            XOR_fn3 : logic_result = alu_inputs.in1[XLEN-1:0] ^ alu_inputs.in2[XLEN-1:0];
-            OR_fn3 : logic_result = alu_inputs.in1[XLEN-1:0] | alu_inputs.in2[XLEN-1:0];
-            default : logic_result = alu_inputs.in1[XLEN-1:0] & alu_inputs.in2[XLEN-1:0];
+        case (alu_inputs.logic_op)
+            ALU_LOGIC_XOR : adder_in1 = alu_inputs.in1 ^ alu_inputs.in2;
+            ALU_LOGIC_OR : adder_in1 = alu_inputs.in1 | alu_inputs.in2;
+            ALU_LOGIC_AND : adder_in1 = alu_inputs.in1 & alu_inputs.in2;
+            ALU_LOGIC_ADD : adder_in1 = alu_inputs.in1;
         endcase
     end
 
+    always_comb begin
+        case (alu_inputs.logic_op)
+            ALU_LOGIC_XOR : adder_in2_logic = 0;
+            ALU_LOGIC_OR : adder_in2_logic = 0;
+            ALU_LOGIC_AND : adder_in2_logic = 0;
+            ALU_LOGIC_ADD : adder_in2_logic = alu_inputs.in2;
+        endcase
+    end
+
+    assign adder_in2 = alu_inputs.subtract ? ~alu_inputs.in2 : adder_in2_logic;
+
+    assign add_sub_result = adder_in1 + adder_in2 + alu_inputs.subtract;
+
     barrel_shifter shifter (
-            .shifter_input(alu_inputs.in1[XLEN-1:0]),
+            .shifter_input(alu_inputs.shifter_in),
             .shift_amount(alu_inputs.in2[4:0]),
             .arith(alu_inputs.arith),
             .lshift(alu_inputs.lshift),
@@ -60,9 +77,8 @@ module alu_unit(
     always_comb begin
         case (alu_inputs.op)
             ALU_ADD_SUB : alu_wb.rd = add_sub_result[XLEN-1:0];
-            ALU_LOGIC : alu_wb.rd = logic_result;
             ALU_SLT : alu_wb.rd = {31'b0, add_sub_result[XLEN]};
-            ALU_SHIFT : alu_wb.rd = shifter_result;
+            default: alu_wb.rd = shifter_result;
         endcase
     end
 

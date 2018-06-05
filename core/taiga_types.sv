@@ -67,19 +67,20 @@ package taiga_types;
         AND_fn3 = 3'b111
     } fn3_arith_t;
 
-    typedef enum bit [1:0] {
-        ALU_ADD_SUB = 2'b00,
-        ALU_LOGIC = 2'b01,
-        ALU_SLT = 2'b10,
-        ALU_SHIFT =2'b11
-    } alu_op_t;
 
     typedef enum bit [1:0] {
-        ALU_XOR = 2'b00,
-        ALU_OR = 2'b01,
-        ALU_AND = 2'b10,
-        ALU_ADD_SUB2 = 2'b11
-    } alu_logicop_t;
+        ALU_LOGIC_XOR = 2'b00,
+        ALU_LOGIC_OR = 2'b01,
+        ALU_LOGIC_AND =2'b10,
+        ALU_LOGIC_ADD = 2'b11
+    } alu_logic_op_t;
+
+    typedef enum bit [1:0] {
+        ALU_ADD_SUB = 2'b00,
+        ALU_SLT = 2'b01,
+        ALU_SHIFT =2'b10
+        //unused 11
+    } alu_op_t;
 
     typedef enum bit [2:0] {
         LS_B_fn3 = 3'b000,
@@ -265,10 +266,11 @@ package taiga_types;
     typedef struct packed{
         logic [XLEN:0] in1;//contains sign padding bit for slt operation
         logic [XLEN:0] in2;//contains sign padding bit for slt operation
+        logic [XLEN-1:0] shifter_in;
         logic subtract;
         logic arith;//contains sign padding bit for arithmetic shift right operation
         logic lshift;
-        logic [2:0] fn3;
+        logic [1:0] logic_op;
         logic [1:0] op;
     }alu_inputs_t;
 
@@ -337,7 +339,6 @@ package taiga_types;
         logic [XLEN-1:0] rs1;
         logic [XLEN-1:0] rs2;
         logic [1:0] op;
-        logic skip_algo;
         logic reuse_result;
         logic div_zero;
     } div_inputs_t;
