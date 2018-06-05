@@ -1,26 +1,35 @@
+/*
+ * Copyright © 2017 Eric Matthews,  Lesley Shannon
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ * Initial code developed under the supervision of Dr. Lesley Shannon,
+ * Reconfigurable Computing Lab, Simon Fraser University.
+ *
+ * Author(s):
+ *             Alec Lu <fla30@sfu.ca>
+ *             Eric Matthews <ematthew@sfu.ca>
+ */
+
 `timescale 1ns / 1ps
-//////////////////////////////////////////////////////////////////////////////////
-// Company: 
-// Engineer: 
-// 
-// Create Date: 05/14/2018 02:55:10 PM
-// Design Name: 
-// Module Name: mul_unit_tb
-// Project Name: taiga
-// Target Devices: 
-// Tool Versions: 
-// Description: 
-// 
-// Dependencies: 
-// 
-// Revision:
-// Revision 0.01 - File Created
-// Additional Comments:
-// 
-//////////////////////////////////////////////////////////////////////////////////
 
 import taiga_config::*;
 import taiga_types::*;
+
+typedef struct packed{
+    mul_inputs_t    module_input;
+    logic [31: 0]   expected_result;
+} mul_result_t;
 
 module mul_unit_tb();
     //DUT Regs and Wires
@@ -42,8 +51,8 @@ module mul_unit_tb();
     logic [31: 0]       result_rand; 
     logic [ 1: 0]       op_rand;
     //Result
-    logic [31: 0]       result_queue[$];
-    logic [31: 0]       temp_result;
+    mul_result_t        result_queue[$];
+    mul_result_t        temp_result;
     //Latency
     parameter           MAX_RESPONSE_LATENCY = 32'hF;
     logic               wb_done;
@@ -109,7 +118,13 @@ module mul_unit_tb();
         if (mul_wb.accepted) begin
             test_number <= test_number + 1;
             temp_result = result_queue.pop_front();
-            assert (mul_wb.rd == temp_result) else $error("Incorrect result on test number %d. (%h, should be: %h)", test_number, mul_wb.rd, temp_result);
+            if (temp_result.expected_result != 32'hxxxxxxxx) begin
+                assert (mul_wb.rd == temp_result.expected_result)
+                    else $error("Incorrect result on test number %d. (%h, should be: %h)\n\t Input: rs1: %d, rs2: %d, op: %b", 
+                        test_number, mul_wb.rd, temp_result.expected_result,
+                        temp_result.module_input.rs1, temp_result.module_input.rs2,
+                        temp_result.module_input.op);
+            end
         end
     end
 
@@ -119,7 +134,7 @@ module mul_unit_tb();
         mul_inputs.rs1 = a;
         mul_inputs.rs2 = b;
         mul_inputs.op = op;
-        result_queue.push_back(result);
+        result_queue.push_back({mul_inputs, result});
         latency_queue.push_back(latency);
         mul_ex.new_request_dec = 1; #2
         mul_ex.new_request_dec = 0;

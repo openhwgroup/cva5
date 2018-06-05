@@ -18,6 +18,7 @@
  *
  * Author(s):
  *             Eric Matthews <ematthew@sfu.ca>
+ *             Alec Lu <fla30@sfu.ca>
  */
 
 `timescale 1ns / 1ps
@@ -25,7 +26,12 @@
 import taiga_config::*;
 import taiga_types::*;
 
-module div_unit_tb ( );
+typedef struct packed{
+    div_inputs_t    module_input;
+    logic [31: 0]   expected_result;
+} div_result_t;
+
+module div_unit_tb ();
     //DUT Regs and Wires
     logic                       clk;
     logic                       rst;
@@ -44,8 +50,9 @@ module div_unit_tb ( );
     logic [ 1: 0]   op_rand;
     logic           reuse_rand;
     //Result
-    logic [31: 0]   result_queue[$];
-    logic [31: 0]   temp_result;
+    div_result_t    result_queue[$];
+    div_result_t    temp_result;
+
     //Latency
     parameter       MAX_RESPONSE_LATENCY = 32'hF;
     logic           wb_done;
@@ -111,7 +118,12 @@ module div_unit_tb ( );
         if (div_wb.accepted) begin
             test_number <= test_number + 1;
             temp_result = result_queue.pop_front();
-            assert (div_wb.rd == temp_result) else $error("Incorrect result on test number %d. (%d, should be: %d)", test_number, div_wb.rd, temp_result);
+            assert (div_wb.rd == temp_result.expected_result)
+                else $error("Incorrect result on test number %d. (%h, should be: %h)\n\t Input: rs1: %d, rs2: %d, op: %b, div_zero: %b, reuse_result: %b", 
+                    test_number, div_wb.rd, temp_result.expected_result,
+                    temp_result.module_input.rs1, temp_result.module_input.rs2, 
+                    temp_result.module_input.op, temp_result.module_input.div_zero,
+                    temp_result.module_input.reuse_result);
         end
     end
 
@@ -123,7 +135,7 @@ module div_unit_tb ( );
         div_inputs.op = op;
         div_inputs.div_zero = (div_inputs.rs2 == 0);
         div_inputs.reuse_result = reuse;
-        result_queue.push_back(result);
+        result_queue.push_back({div_inputs, result});
         latency_queue.push_back(latency);
         div_ex.new_request_dec = 1; #2
         div_ex.new_request_dec = 0;
