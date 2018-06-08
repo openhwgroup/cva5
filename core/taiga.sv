@@ -56,11 +56,13 @@ module taiga (
     mul_inputs_t mul_inputs;
     div_inputs_t div_inputs;
     csr_inputs_t csr_inputs;
+    ec_inputs_t ec_inputs;
 
     func_unit_ex_interface branch_ex();
     func_unit_ex_interface alu_ex();
     func_unit_ex_interface ls_ex();
     func_unit_ex_interface csr_ex();
+    func_unit_ex_interface ec_ex();
     func_unit_ex_interface mul_ex();
     func_unit_ex_interface div_ex();
 
@@ -146,9 +148,9 @@ module taiga (
     /*************************************
      * Units
      *************************************/
-    branch_unit branch_unit_block (.*, .branch_wb(unit_wb[BRANCH_UNIT_ID].unit));
-    alu_unit alu_unit_block (.*, .alu_wb(unit_wb[ALU_UNIT_ID].unit));
-    load_store_unit load_store_unit_block (.*, .dcache_on(1'b1), .clear_reservation(1'b0), .tlb(dtlb), .ls_wb(unit_wb[LS_UNIT_ID].unit), .l1_request(l1_request[L1_DCACHE_ID]), .l1_response(l1_response[L1_DCACHE_ID]));
+    branch_unit branch_unit_block (.*, .branch_wb(unit_wb[BRANCH_UNIT_WB_ID].unit));
+    alu_unit alu_unit_block (.*, .alu_wb(unit_wb[ALU_UNIT_WB_ID].unit));
+    load_store_unit load_store_unit_block (.*, .dcache_on(1'b1), .clear_reservation(1'b0), .tlb(dtlb), .ls_wb(unit_wb[LS_UNIT_WB_ID].unit), .l1_request(l1_request[L1_DCACHE_ID]), .l1_response(l1_response[L1_DCACHE_ID]));
     generate if (USE_MMU) begin
             tlb_lut_ram #(DTLB_WAYS, DTLB_DEPTH) d_tlb (.*, .tlb(dtlb), .mmu(dmmu));
             mmu d_mmu (.*, .mmu(dmmu), .l1_request(l1_request[L1_DMMU_ID]), .l1_response(l1_response[L1_DMMU_ID]), .mmu_exception());
@@ -158,12 +160,14 @@ module taiga (
             assign dtlb.physical_address = dtlb.virtual_address;
         end
     endgenerate
-    csr_unit csr_unit_block (.*, .csr_wb(unit_wb[CSR_UNIT_ID].unit));
+    csr_unit csr_unit_block (.*, .csr_wb(unit_wb[CSR_UNIT_WB_ID].unit));
+    ec_unit ec_unit_block (.*);
+
     generate if (USE_MUL)
-            mul_unit mul_unit_block (.*, .mul_wb(unit_wb[MUL_UNIT_ID].unit));
+            mul_unit mul_unit_block (.*, .mul_wb(unit_wb[MUL_UNIT_WB_ID].unit));
     endgenerate
     generate if (USE_DIV)
-            div_unit div_unit_block (.*, .div_wb(unit_wb[DIV_UNIT_ID].unit));
+            div_unit div_unit_block (.*, .div_wb(unit_wb[DIV_UNIT_WB_ID].unit));
     endgenerate
 
     /*************************************

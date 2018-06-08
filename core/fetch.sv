@@ -1,5 +1,5 @@
 /*
- * Copyright © 2017 Eric Matthews,  Lesley Shannon
+ * Copyright © 2017, 2018 Eric Matthews,  Lesley Shannon
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -83,7 +83,9 @@ module fetch(
 
     logic[6:0] opcode;
     logic[4:0] opcode_trimmed;
-
+    logic [4:0] rs1_addr;
+    logic [4:0] rs2_addr;
+    logic [4:0] rd_addr;
     logic[2:0] fn3;
 
     logic csr_imm_op;
@@ -91,8 +93,6 @@ module fetch(
     logic jal_jalr_x0;
 
     logic rs1_link, rd_link, rs1_eq_rd, use_ras;
-    logic predicted_control_flow;
-
     logic[$clog2(FETCH_BUFFER_DEPTH+1)-1:0] inflight_count;
     /////////////////////////////////////////
 
@@ -123,8 +123,6 @@ module fetch(
             next_pc = RESET_VEC;
         else if (bt.flush)
             next_pc = bt.branch_taken ? bt.jump_pc : bt.njump_pc;
-        //else if (predicted_control_flow)
-        //    next_pc = (use_ras & ras.valid) ? ras.addr : bt.predicted_pc;
         else if (bt.use_prediction)
             next_pc = (bt.use_ras & ras.valid) ? ras.addr : bt.predicted_pc;
         else
@@ -226,28 +224,36 @@ module fetch(
 
     assign ib.data_in.pc = stage2_phys_address;
 
+    ///////////////////////////////////
     //Early decode
+    ///////////////////////////////////
     assign fn3 =ib.data_in.instruction[14:12];
     assign opcode = ib.data_in.instruction[6:0];
     assign opcode_trimmed = opcode[6:2];
 
+    assign rs1_addr = ib.data_in.instruction[19:15];
+    assign rs2_addr = ib.data_in.instruction[24:20];
+    assign rd_addr  = ib.data_in.instruction[11:7];
+
     assign csr_imm_op = (opcode_trimmed == SYSTEM_T) && fn3[2];
     assign sys_op =  (opcode_trimmed == SYSTEM_T) && (fn3 == 0);
 
-    assign jal_jalr_x0 = (opcode_trimmed inside {JAL_T, JALR_T}) && (ib.data_in.instruction[11:7] == 0);//rd is x0
+    assign jal_jalr_x0 = (opcode_trimmed inside {JAL_T, JALR_T}) && ib.data_in.rd_zero;
 
-    assign predicted_control_flow = opcode_trimmed inside {JAL_T, JALR_T, BRANCH_T};
+    //RAS support ///////////////////
+    assign rs1_link = (rs1_addr inside {1,5});
+    assign rd_link = (rd_addr inside {1,5});
+    assign rs1_eq_rd = (rs1_addr == rd_addr);
+    assign use_ras =  (opcode_trimmed == JALR_T) && ((rs1_link & ~rd_link) | (rs1_link & rd_link & ~rs1_eq_rd));
+    ///////////////////////////////////
 
-    assign rs1_link = (ib.data_in.instruction[19:15] ==?  5'b00?01);
-    assign rd_link = (ib.data_in.instruction[11:7] ==?  5'b00?01);
-    assign rs1_eq_rd = (ib.data_in.instruction[19:15] == ib.data_in.instruction[11:7]);
-    assign use_ras =  ((opcode_trimmed == JALR_T & ((rs1_link & ~rd_link) | (rs1_link & rd_link & ~rs1_eq_rd))));
-
-
-
+    //Output FIFO
     assign ib.data_in.uses_rs1 = !(opcode_trimmed inside {LUI_T, AUIPC_T, JAL_T, FENCE_T} || csr_imm_op || sys_op);
-    assign ib.data_in.uses_rs2 = opcode_trimmed inside {BRANCH_T, STORE_T, ARITH_T, AMO_T, CUSTOM_T};
+    assign ib.data_in.uses_rs2 = opcode_trimmed inside {BRANCH_T, STORE_T, ARITH_T, AMO_T};
     assign ib.data_in.uses_rd = !(opcode_trimmed inside {BRANCH_T, STORE_T, FENCE_T} || sys_op || jal_jalr_x0);
+    assign ib.data_in.rd_zero = (rd_addr == 0);
 
+    assign ib.data_in.is_return = use_ras;
+    assign ib.data_in.is_call = (opcode_trimmed inside {JAL_T, JALR_T}) && rd_link;
 
 endmodule

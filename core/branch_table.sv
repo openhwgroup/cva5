@@ -1,5 +1,5 @@
 /*
- * Copyright © 2017 Eric Matthews,  Lesley Shannon
+ * Copyright © 2017, 2018 Eric Matthews,  Lesley Shannon
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,7 +35,6 @@ module branch_table(
     typedef struct packed {
         logic valid;
         logic [BTAG_W-1:0] tag;
-        logic prediction;
         logic use_ras;
     } branch_table_entry_t;
 
@@ -91,7 +90,6 @@ module branch_table(
     //Predict next branch to same location/direction as current
     assign ex_entry.valid = 1;
     assign ex_entry.tag = bt.ex_pc[31:32-BTAG_W];
-    assign ex_entry.prediction = bt.branch_taken;
     assign ex_entry.use_ras = bt.is_return_ex;
 
     assign miss_predict = bt.branch_ex && (
@@ -101,7 +99,6 @@ module branch_table(
 
     assign tag_match = ({if_entry.valid, if_entry.tag} == {1'b1, bt.if_pc[31:32-BTAG_W]});
     assign bt.predicted_pc = predicted_pc;
-    assign bt.prediction = if_entry.prediction;
 
     generate if (USE_BRANCH_PREDICTOR) begin
         assign bt.use_prediction = tag_match;

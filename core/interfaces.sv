@@ -1,5 +1,5 @@
 /*
- * Copyright © 2017 Eric Matthews,  Lesley Shannon
+ * Copyright © 2017, 2018 Eric Matthews,  Lesley Shannon
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,20 +35,18 @@ interface branch_table_interface;
 
     logic branch_taken;
     logic branch_ex;
-    logic prediction_dec;
     logic is_return_ex;
 
     logic new_mem_request;
 
     logic[31:0]  predicted_pc;
-    logic prediction;
     logic use_prediction;
     logic use_ras;
     logic flush;
-    modport branch_table (input if_pc, dec_pc, ex_pc, next_pc, njump_pc, jump_pc, branch_taken, branch_ex, is_return_ex, prediction_dec, new_mem_request, output predicted_pc, prediction, use_prediction, use_ras, flush);
-    modport fetch (input predicted_pc, prediction, use_prediction, branch_taken, flush, njump_pc, jump_pc, use_ras, output if_pc, next_pc, new_mem_request);
+    modport branch_table (input if_pc, dec_pc, ex_pc, next_pc, njump_pc, jump_pc, branch_taken, branch_ex, is_return_ex, new_mem_request, output predicted_pc, use_prediction, use_ras, flush);
+    modport fetch (input predicted_pc, use_prediction, branch_taken, flush, njump_pc, jump_pc, use_ras, output if_pc, next_pc, new_mem_request);
     modport decode (output dec_pc);
-    modport branch_unit (output branch_taken, prediction_dec, branch_ex, is_return_ex, ex_pc, njump_pc, jump_pc);
+    modport branch_unit (output branch_taken, branch_ex, is_return_ex, ex_pc, njump_pc, jump_pc);
 
 endinterface
 

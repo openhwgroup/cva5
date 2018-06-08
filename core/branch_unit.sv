@@ -1,5 +1,5 @@
 /*
- * Copyright © 2017 Eric Matthews,  Lesley Shannon
+ * Copyright © 2017, 2018 Eric Matthews,  Lesley Shannon
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,6 +41,10 @@ module branch_unit(
 
     logic equal_ex;
     logic lessthan_ex;
+
+    logic[19:0] jal_imm;
+    logic[11:0] jalr_imm;
+    logic[11:0] br_imm;
 
     logic [31:0] pc_offset;
     logic [31:0] pc_plus_4;
@@ -84,36 +88,31 @@ module branch_unit(
         endcase
     end
 
-    assign  bt.branch_taken = (bcomp_ex & result) | jump_ex;
+    assign  bt.branch_taken = (~jump_ex & result) | jump_ex;
+
+
+    assign jal_imm = {branch_inputs.instruction[31], branch_inputs.instruction[19:12], branch_inputs.instruction[20], branch_inputs.instruction[30:21]};
+    assign jalr_imm = branch_inputs.instruction[31:20];
+    assign br_imm = {branch_inputs.instruction[31], branch_inputs.instruction[7], branch_inputs.instruction[30:25], branch_inputs.instruction[11:8]};
 
     always_comb begin
         if (branch_inputs.jal)
-            pc_offset = 32'(signed'({branch_inputs.jal_imm, 1'b0}));
-        else if (branch_inputs.jalr)
-            pc_offset = 32'(signed'(branch_inputs.jalr_imm));
+            pc_offset = 32'(signed'({jal_imm, 1'b0}));
         else
-            pc_offset = 32'(signed'({branch_inputs.br_imm, 1'b0}));
+            pc_offset = 32'(signed'({br_imm, 1'b0}));
     end
-
-    assign bt.prediction_dec = branch_inputs.prediction;
-
 
     assign pc_plus_4 = branch_inputs.dec_pc + 4;
-
     assign bt.branch_ex = branch_ex.new_request;
-    always_ff @(posedge clk) begin
-        if (branch_ex.new_request_dec)
-            fn3_ex <= branch_inputs.fn3;
-    end
 
     always_ff @(posedge clk) begin
-        equal_ex <= equal;
-        lessthan_ex <= lessthan;
-        bt.ex_pc <= branch_inputs.dec_pc;
-        bcomp_ex <= branch_inputs.branch_compare;
-        jump_ex <= (branch_inputs.jal | branch_inputs.jalr);
-        bt.jump_pc <= (branch_inputs.jalr ? branch_inputs.rs1 : branch_inputs.dec_pc) + pc_offset;
-        bt.njump_pc <= pc_plus_4;
+            fn3_ex <= branch_inputs.fn3;
+            equal_ex <= equal;
+            lessthan_ex <= lessthan;
+            bt.ex_pc <= branch_inputs.dec_pc;
+            jump_ex <= (branch_inputs.jal | branch_inputs.jalr);
+            bt.jump_pc <= branch_inputs.jalr ? (branch_inputs.rs1 + 32'(signed'(jalr_imm))) : (branch_inputs.dec_pc + pc_offset);
+            bt.njump_pc <= pc_plus_4;
     end
 
     //if the destination reg is zero, the result is not "written back" to the register file.
@@ -129,17 +128,12 @@ module branch_unit(
      *  RAS support
      *********************************/
     generate if (USE_BRANCH_PREDICTOR) begin
-            logic rs1_link, rs1_eq_rd, rd_link;
             logic is_call;
             logic is_return;
 
-            assign rs1_link = (branch_inputs.rs1_addr ==?  5'b00?01);
-            assign rd_link = (branch_inputs.rd_addr ==?  5'b00?01);
-            assign rs1_eq_rd = (branch_inputs.rs1_addr == branch_inputs.rd_addr);
-
             always_ff @(posedge clk) begin
-                is_call <= branch_ex.new_request_dec & ( (branch_inputs.jal & rd_link) |  (branch_inputs.jalr & rd_link) );
-                is_return <= branch_ex.new_request_dec & ( (branch_inputs.jalr & ((rs1_link & ~rd_link) | (rs1_link & rd_link & ~rs1_eq_rd))) );
+                is_call <= branch_ex.new_request_dec & branch_inputs.is_call;
+                is_return <= branch_ex.new_request_dec & branch_inputs.is_return;
             end
 
             assign ras.push = is_call;

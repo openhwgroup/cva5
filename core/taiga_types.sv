@@ -1,5 +1,5 @@
 /*
- * Copyright © 2017 Eric Matthews,  Lesley Shannon
+ * Copyright © 2017, 2018 Eric Matthews,  Lesley Shannon
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -259,7 +259,9 @@ package taiga_types;
         logic uses_rs1;
         logic uses_rs2;
         logic uses_rd;
-        logic prediction;
+        logic rd_zero;
+        logic is_call;
+        logic is_return;
     } instruction_buffer_packet;
 
 
@@ -283,13 +285,9 @@ package taiga_types;
         logic jal;
         logic jalr;
         logic rdx0;
-        logic[4:0] rs1_addr;
-        logic[4:0] rd_addr;
-        logic branch_compare;
-        logic[19:0] jal_imm;
-        logic[11:0] jalr_imm;
-        logic[11:0] br_imm;
-        logic prediction;
+        logic is_call;
+        logic is_return;
+        logic [31:0] instruction;
     } branch_inputs_t;
 
 
@@ -350,6 +348,11 @@ package taiga_types;
         logic rs1_is_zero;
         logic rd_is_zero;
     } csr_inputs_t;
+
+    typedef struct packed{
+        logic [31:0] pc;
+        logic [1:0] op;
+    } ec_inputs_t;
 
     typedef struct packed{
         logic [31:2] addr;

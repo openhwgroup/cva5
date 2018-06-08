@@ -41,17 +41,30 @@ package taiga_config;
 
     parameter USE_AMO = 0;
 
+    //EX and WB ids must match if unit has a writeback interface
+    parameter NUM_EX_UNITS = 5 + USE_MUL + USE_DIV;
+    parameter EX_UNITS_WIDTH = $clog2(NUM_EX_UNITS);
+
+    parameter LS_UNIT_EX_ID = 0;//non-constant done signals
+    parameter DIV_UNIT_EX_ID = USE_DIV;//non-constant done signals
+    parameter ALU_UNIT_EX_ID = USE_DIV + 1;//constant done signals
+    parameter CSR_UNIT_EX_ID = ALU_UNIT_EX_ID + 1;//constant done signals
+    parameter MUL_UNIT_EX_ID = CSR_UNIT_EX_ID + USE_MUL;//constant done signal
+    parameter BRANCH_UNIT_EX_ID = MUL_UNIT_EX_ID + 1;//constant done signals
+    parameter EC_UNIT_EX_ID = BRANCH_UNIT_EX_ID + 1;//constant done signals
+
+
     parameter NUM_WB_UNITS = 4 + USE_MUL + USE_DIV;
     parameter WB_UNITS_WIDTH = $clog2(NUM_WB_UNITS);
 
     typedef logic[WB_UNITS_WIDTH-1:0] unit_ids;
 
-    parameter LS_UNIT_ID = 0;//non-constant done signals
-    parameter DIV_UNIT_ID = USE_DIV;//non-constant done signals
-    parameter ALU_UNIT_ID = USE_DIV + 1;//constant done signals
-    parameter BRANCH_UNIT_ID = ALU_UNIT_ID + 1;//constant done signals
-    parameter CSR_UNIT_ID = BRANCH_UNIT_ID + 1;//constant done signals
-    parameter MUL_UNIT_ID = CSR_UNIT_ID + USE_MUL;//constant done signals
+    parameter LS_UNIT_WB_ID = 0;//non-constant done signals
+    parameter DIV_UNIT_WB_ID = USE_DIV;//non-constant done signals
+    parameter ALU_UNIT_WB_ID = USE_DIV + 1;//constant done signals
+    parameter CSR_UNIT_WB_ID = ALU_UNIT_WB_ID + 1;//constant done signals
+    parameter MUL_UNIT_WB_ID = CSR_UNIT_WB_ID + USE_MUL;//constant done signals
+    parameter BRANCH_UNIT_WB_ID = MUL_UNIT_WB_ID + 1;//constant done signals
 
     parameter INFLIGHT_QUEUE_DEPTH = 4;
     parameter FETCH_BUFFER_DEPTH = 4;
