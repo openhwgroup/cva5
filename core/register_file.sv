@@ -97,4 +97,11 @@ module register_file(
     assign rf_decode.rs1_conflict = inuse[rf_decode.rs1_addr]  & ~rs1_feedforward;
     assign rf_decode.rs2_conflict = inuse[rf_decode.rs2_addr]  & ~rs2_feedforward;
 
+
+    ////////////////////////////////////////////////////
+    //Assertions
+    always_ff @ (posedge clk) begin
+        assert (!(rf_wb.valid_write && rf_wb.rd_addr == 0)) else $error("Register file write to zero register occured!");
+    end
+
 endmodule
