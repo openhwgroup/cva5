@@ -1,5 +1,5 @@
 /*
- * Copyright © 2017 Eric Matthews,  Lesley Shannon
+ * Copyright © 2017, 2018 Eric Matthews,  Lesley Shannon
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,9 +20,11 @@
  *             Eric Matthews <ematthew@sfu.ca>
  */
 
+//This module requires the input always be encoded as a one-hot signal
+//as all possible conditions are ORed together
 module one_hot_to_integer
         #(
-        parameter C_WIDTH = 32
+        parameter C_WIDTH = 6
         )
         (
         input logic [C_WIDTH-1:0] one_hot,
@@ -31,8 +33,13 @@ module one_hot_to_integer
 
     always_comb begin
         int_out = 0;
-        foreach(one_hot[i])
-            if (one_hot[i]) int_out = i;
+        foreach (one_hot[i])
+            if (one_hot[i]) int_out |= i;
+
+        ////////////////////////////////////////////////////
+        //Assertions
+        assert ((one_hot & (one_hot -1)) == 0) else $error("One-hot signal has multiple bits set!");
     end
+
 
 endmodule
