@@ -4,7 +4,7 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -19,7 +19,7 @@
  * Author(s):
  *             Eric Matthews <ematthew@sfu.ca>
  */
- 
+
 import taiga_config::*;
 import taiga_types::*;
 
@@ -50,13 +50,13 @@ module tlb_lut_ram #(
 
     logic [TLB_TAG_W-1:0] virtual_tag;
 
-    tlb_entry_t ram [0:DEPTH-1][0:WAYS-1];
-    logic [0:DEPTH-1] valid [0:WAYS-1];
+    tlb_entry_t ram [DEPTH-1:0][WAYS-1:0];
+    logic [DEPTH-1:0] valid [WAYS-1:0];
 
-    logic [0:WAYS-1] tag_hit;
-    logic [0:WAYS-1] replacement_way;
+    logic [WAYS-1:0] tag_hit;
+    logic [WAYS-1:0] replacement_way;
 
-    tlb_entry_t ram_data [0:WAYS-1];
+    tlb_entry_t ram_data [WAYS-1:0];
     tlb_entry_t new_entry;
 
     logic flush_in_progress;
@@ -64,7 +64,7 @@ module tlb_lut_ram #(
 
     logic hit;
 
-    logic [0:WAYS-1] tlb_write;
+    logic [WAYS-1:0] tlb_write;
 
     assign virtual_tag = tlb.virtual_address[31:32-TLB_TAG_W];
     assign tlb_read_addr = tlb.virtual_address[$clog2(DEPTH)+11:12];
@@ -108,7 +108,7 @@ module tlb_lut_ram #(
         if (rst)
             tlb.flush_complete <= 0;
         else
-            tlb.flush_complete <= (flush_addr == DEPTH - 1);
+            tlb.flush_complete <= (flush_addr == (DEPTH-1));
     end
 
 

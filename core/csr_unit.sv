@@ -38,7 +38,7 @@ module csr_unit (
 
         //TLBs
         output logic tlb_on,
-        output logic [9:0] asid,
+        output logic [6:0] asid,
 
         //MMUs
         mmu_interface.csr immu,
@@ -55,15 +55,15 @@ module csr_unit (
         );
 
     typedef struct packed {
-        logic [2:0] rw_bits;
-        logic [2:0] privilege;
-        logic [7:0] sub_addr;
+        logic [3:0] rw_bits;
+        logic [1:0] privilege;
+        logic [5:0] sub_addr;
     } csr_addr_t;
 
     //Constant registers
     typedef struct packed {
         logic[1:0] base; //RV32I
-        logic[2:0] reserved;
+        logic[3:0] reserved;
         logic Z;
         logic Y;
         logic X;
@@ -159,7 +159,8 @@ module csr_unit (
     } mie_t;
 
     struct packed {
-        logic [9:0] asid;
+        logic mode;
+        logic [8:0] asid;
         logic [21:0] ppn;
     } satp;
 
@@ -357,7 +358,7 @@ module csr_unit (
 //    assign mstatus_mask = machine_write ? mstatus_mmask : mstatus_smask;
 
 //    assign mstatus_write = (mstatus & ~mstatus_mask) | (updated_csr & mstatus_mask);
-//    assign msr_write = (machine_write && csr_addr.sub_addr == MSTATUS[7:0]) | (supervisor_write && csr_addr.sub_addr == SSTATUS[7:0]);
+//    assign msr_write = (machine_write && csr_addr.sub_addr == MSTATUS[5:0]) | (supervisor_write && csr_addr.sub_addr == SSTATUS[5:0]);
 
 
 //    //read_write portion of machine status register
@@ -404,7 +405,7 @@ module csr_unit (
 //    always_ff @(posedge clk) begin
 //        if (rst) begin
 //            mtvec <= {RESET_VEC[XLEN-1:2], 2'b00};
-//        end else if (machine_write && csr_addr.sub_addr == MTVEC[7:0]) begin
+//        end else if (machine_write && csr_addr.sub_addr == MTVEC[5:0]) begin
 //            mtvec <= {updated_csr[XLEN-1:2], 2'b00};
 //        end
 //    end
@@ -414,7 +415,7 @@ module csr_unit (
 //    always_ff @(posedge clk) begin
 //        if (rst) begin
 //            medeleg <= '0;
-//        end else if (machine_write && csr_addr.sub_addr == MEDELEG[7:0]) begin
+//        end else if (machine_write && csr_addr.sub_addr == MEDELEG[5:0]) begin
 //            medeleg <= updated_csr;
 //        end
 //    end
@@ -423,7 +424,7 @@ module csr_unit (
 //    always_ff @(posedge clk) begin
 //        if (rst) begin
 //            mideleg <= '0;
-//        end else if (machine_write && csr_addr.sub_addr == MIDELEG[7:0]) begin
+//        end else if (machine_write && csr_addr.sub_addr == MIDELEG[5:0]) begin
 //            // mideleg <= (mideleg & ~mideleg_mask) | (updated_csr & mideleg_mask);
 //        end
 //    end
@@ -434,7 +435,7 @@ module csr_unit (
 //        if (rst) begin
 //            mip <= 0;
 //        end
-//        else if (machine_write && csr_addr.sub_addr == MIP[7:0]) begin
+//        else if (machine_write && csr_addr.sub_addr == MIP[5:0]) begin
 //            mip <= (mip & ~mip_mask) | (updated_csr & mip_mask);
 //        end
 //    end
@@ -447,10 +448,10 @@ module csr_unit (
 //        if (rst) begin
 //            mie_reg <= '0;
 //        end
-//        else if (machine_write && csr_addr.sub_addr == MIE[7:0]) begin
+//        else if (machine_write && csr_addr.sub_addr == MIE[5:0]) begin
 //            mie_reg <= (mie_reg & ~mie_mask) | (updated_csr & mie_mask);
 //        end
-//        else if (supervisor_write && csr_addr.sub_addr == SIE[7:0]) begin
+//        else if (supervisor_write && csr_addr.sub_addr == SIE[5:0]) begin
 //            mie_reg <= (mie_reg & ~sie_mask) | (updated_csr & sie_mask);
 //        end
 //    end
@@ -461,7 +462,7 @@ module csr_unit (
 //    // always_ff @(posedge clk) begin
 //    //    if (rst) begin
 //    //       mtimecmp <= '0;
-//    //    end else if (machine_write && csr_addr.sub_addr == MTIMECMP[7:0]) begin
+//    //    end else if (machine_write && csr_addr.sub_addr == MTIMECMP[5:0]) begin
 //    //       mtimecmp <= updated_csr;
 //    //    end
 //    //end
@@ -472,7 +473,7 @@ module csr_unit (
 //        if (machine_trap) begin
 //            mepc <= csr_exception.pc;
 //        end
-//        else if (machine_write && csr_addr.sub_addr == MEPC[7:0]) begin
+//        else if (machine_write && csr_addr.sub_addr == MEPC[5:0]) begin
 //            mepc <= {updated_csr[XLEN-1:2], 2'b00};
 //        end
 //    end
@@ -483,7 +484,7 @@ module csr_unit (
 //        if (machine_trap) begin
 //            mcause[ECODE_W-1:0] = csr_exception.code;
 //        end
-//        else if (machine_write && csr_addr.sub_addr == MCAUSE[7:0]) begin
+//        else if (machine_write && csr_addr.sub_addr == MCAUSE[5:0]) begin
 //            mcause[ECODE_W-1:0] <= updated_csr[ECODE_W-1:0];
 //        end
 //    end
@@ -493,7 +494,7 @@ module csr_unit (
 //        if (machine_trap) begin
 //            mtval <= csr_exception.addr;
 //        end
-//        else if (machine_write && csr_addr.sub_addr == MTVAL[7:0]) begin
+//        else if (machine_write && csr_addr.sub_addr == MTVAL[5:0]) begin
 //            mtval <= updated_csr;
 //        end
 //    end
@@ -502,7 +503,7 @@ module csr_unit (
 
 //    //scratch regs
 //    always_ff @(posedge clk) begin
-//        if ((machine_write && csr_addr.sub_addr == MSCRATCH[7:0]) || (supervisor_write && csr_addr.sub_addr == SSCRATCH[7:0])) begin
+//        if ((machine_write && csr_addr.sub_addr == MSCRATCH[5:0]) || (supervisor_write && csr_addr.sub_addr == SSCRATCH[5:0])) begin
 //            scratch_regs[csr_addr.privilege] <= updated_csr;
 //        end
 //    end
@@ -517,7 +518,7 @@ module csr_unit (
 //        if (supervisor_trap) begin
 //            sepc <= csr_exception.pc;
 //        end
-//        else if (supervisor_write && csr_addr.sub_addr == SEPC[7:0]) begin
+//        else if (supervisor_write && csr_addr.sub_addr == SEPC[5:0]) begin
 //            sepc <= updated_csr;
 //        end
 //    end
@@ -528,7 +529,7 @@ module csr_unit (
 //        if (supervisor_trap) begin
 //            scause[ECODE_W-1:0] = csr_exception.code;
 //        end
-//        else if (supervisor_write && csr_addr.sub_addr == SCAUSE[7:0]) begin
+//        else if (supervisor_write && csr_addr.sub_addr == SCAUSE[5:0]) begin
 //            scause[ECODE_W-1:0] <= updated_csr[ECODE_W-1:0];
 //        end
 //    end
@@ -538,7 +539,7 @@ module csr_unit (
 //        if (supervisor_trap) begin
 //            stval <= csr_exception.addr;
 //        end
-//        else if (supervisor_write && csr_addr.sub_addr == STVAL[7:0]) begin
+//        else if (supervisor_write && csr_addr.sub_addr == STVAL[5:0]) begin
 //            stval <= updated_csr;
 //        end
 //    end
@@ -547,7 +548,7 @@ module csr_unit (
 //    always_ff @(posedge clk) begin
 //        if (rst) begin
 //            satp <= 0;
-//        end else if (supervisor_write && csr_addr.sub_addr == SATP[7:0]) begin
+//        end else if (supervisor_write && csr_addr.sub_addr == SATP[5:0]) begin
 //            satp <= updated_csr;
 //        end
 //    end

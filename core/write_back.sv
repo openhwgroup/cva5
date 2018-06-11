@@ -74,10 +74,6 @@ module write_back(
 
         for (iq_index=INFLIGHT_QUEUE_DEPTH; iq_index>0; iq_index--) begin
             unit_id =  iq.data_out[iq_index].unit_id;
-           // issue_id = iq.data_out[iq_index].id;
-            //Access rd_addr table in inflight_queue
-            //iq.wb_id = issue_id;
-            //rd_addr = iq.wb_rd_addr;
 
             if (iq.valid[iq_index]) begin
                 selected_unit_done_next_cycle = done_next_cycle[unit_id];
@@ -93,8 +89,6 @@ module write_back(
         //No valid completing instructions in queue, check for new issues.
         if (~entry_found) begin
             unit_id = iq.data_out[0].unit_id;
-           // issue_id = iq.data_out[0].id;
-            //rd_addr = iq.future_rd_addr;
 
             //Pop and unit done only if valid issue
             if (iq.valid[0]) begin
@@ -106,9 +100,6 @@ module write_back(
         issue_id = iq.data_out[iq_index].id;
         rd_addr = iq.data_out[iq_index].rd_addr;
         rd_addr_not_zero = iq.data_out[iq_index].rd_addr_nzero;
-
-        //rd_addr_not_zero = |rd_addr;
-
     end
 
     always_ff @(posedge clk) begin

@@ -47,10 +47,10 @@ package taiga_config;
 
     parameter LS_UNIT_EX_ID = 0;//non-constant done signals
     parameter DIV_UNIT_EX_ID = USE_DIV;//non-constant done signals
-    parameter ALU_UNIT_EX_ID = USE_DIV + 1;//constant done signals
-    parameter CSR_UNIT_EX_ID = ALU_UNIT_EX_ID + 1;//constant done signals
-    parameter MUL_UNIT_EX_ID = CSR_UNIT_EX_ID + USE_MUL;//constant done signal
-    parameter BRANCH_UNIT_EX_ID = MUL_UNIT_EX_ID + 1;//constant done signals
+    parameter MUL_UNIT_EX_ID = DIV_UNIT_EX_ID + USE_MUL;//constant done signal
+    parameter CSR_UNIT_EX_ID = MUL_UNIT_EX_ID + 1;//constant done signals
+    parameter ALU_UNIT_EX_ID = CSR_UNIT_EX_ID + 1;//constant done signals
+    parameter BRANCH_UNIT_EX_ID = ALU_UNIT_EX_ID + 1;//constant done signals
     parameter EC_UNIT_EX_ID = BRANCH_UNIT_EX_ID + 1;//constant done signals
 
 
@@ -61,10 +61,10 @@ package taiga_config;
 
     parameter LS_UNIT_WB_ID = 0;//non-constant done signals
     parameter DIV_UNIT_WB_ID = USE_DIV;//non-constant done signals
-    parameter ALU_UNIT_WB_ID = USE_DIV + 1;//constant done signals
-    parameter CSR_UNIT_WB_ID = ALU_UNIT_WB_ID + 1;//constant done signals
-    parameter MUL_UNIT_WB_ID = CSR_UNIT_WB_ID + USE_MUL;//constant done signals
-    parameter BRANCH_UNIT_WB_ID = MUL_UNIT_WB_ID + 1;//constant done signals
+    parameter MUL_UNIT_WB_ID = DIV_UNIT_WB_ID + USE_MUL;//constant done signals
+    parameter CSR_UNIT_WB_ID = MUL_UNIT_WB_ID + 1;//constant done signals
+    parameter ALU_UNIT_WB_ID = CSR_UNIT_WB_ID + 1;//constant done signals
+    parameter BRANCH_UNIT_WB_ID = ALU_UNIT_WB_ID + 1;//constant done signals
 
     parameter INFLIGHT_QUEUE_DEPTH = 4;
     parameter FETCH_BUFFER_DEPTH = 4;
@@ -92,11 +92,11 @@ package taiga_config;
     parameter C_M_AXI_ADDR_WIDTH = 32;
     parameter C_M_AXI_DATA_WIDTH = 32;
 
-    parameter USE_MMU = 0;
+    parameter USE_MMU = 1;
 
     //Caches
     //Size in bytes: (DCACHE_LINES * DCACHE_WAYS * DCACHE_LINE_W * 4)
-    parameter USE_DCACHE = 0;
+    parameter USE_DCACHE = 1;
     parameter DCACHE_LINES = 256;
     parameter DCACHE_WAYS = 2;
     parameter DCACHE_LINE_ADDR_W = $clog2(DCACHE_LINES);
@@ -112,7 +112,7 @@ package taiga_config;
 
     //Size in bytes: (ICACHE_LINES * ICACHE_WAYS * ICACHE_LINE_W * 4)
     //For optimal BRAM packing lines should not be less than 512
-    parameter USE_ICACHE = 0;
+    parameter USE_ICACHE = 1;
     parameter ICACHE_LINES = 256;
     parameter ICACHE_WAYS = 2;
     parameter ICACHE_LINE_ADDR_W = $clog2(ICACHE_LINES);

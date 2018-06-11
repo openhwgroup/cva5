@@ -157,7 +157,7 @@ module decode(
     end
 
     //Exception Control unit
-    one_hot_to_integer #(NUM_WB_UNITS) iq_id (.one_hot(new_request[NUM_EX_UNITS-1:NUM_EX_UNITS-NUM_WB_UNITS]), .int_out(iq.data_in.unit_id));
+    one_hot_to_integer #(NUM_WB_UNITS) iq_id (.one_hot(new_request[NUM_EX_UNITS-2:0]), .int_out(iq.data_in.unit_id));
 
     assign iq.future_rd_addr = future_rd_addr;
     assign iq.uses_rd = ~ib.data_out.rd_zero;
@@ -318,12 +318,8 @@ module decode(
     assign ls_inputs.rs2 = rf_decode.rs2_data;
     assign ls_inputs.pc = ib.data_out.pc;
     assign ls_inputs.fn3 = ls_inputs.is_amo ? LS_W_fn3 : fn3;
-    generate if (USE_AMO)
-        begin
-            assign ls_inputs.amo = ib.data_out.instruction[31:27];
-            assign ls_inputs.is_amo = (opcode_trim == AMO_T);
-        end
-    endgenerate
+    assign ls_inputs.amo = USE_AMO ? ib.data_out.instruction[31:27] : 0;
+    assign ls_inputs.is_amo = USE_AMO ? (opcode_trim == AMO_T) : 0;
     assign ls_inputs.load = (opcode_trim inside {LOAD_T, AMO_T}) && (ls_inputs.amo != AMO_SC); //LR and AMO_ops perform a read operation as well
     assign ls_inputs.store = (opcode_trim == STORE_T);
     assign ls_inputs.load_store_forward = (opcode_trim == STORE_T) && rf_decode.rs2_conflict;
@@ -373,7 +369,7 @@ module decode(
         if (issue[CSR_UNIT_EX_ID]) begin
             csr_inputs.rs1 <= csr_imm_op ? {27'b0, rs1_addr} : rf_decode.rs1_data; //immediate mode or rs1_addr reg
             csr_inputs.csr_addr <= ib.data_out.instruction[31:20];
-            csr_inputs.csr_op <= fn3;
+            csr_inputs.csr_op <= fn3[1:0];
             csr_inputs.rs1_is_zero <= (rs1_addr == 0);
             csr_inputs.rd_is_zero <= ib.data_out.rd_zero;
         end
@@ -405,9 +401,9 @@ module decode(
                 if (rst)
                     prev_div_result_valid <= 0;
                 else if (advance) begin
-                    if(new_request[DIV_UNIT_EX_ID] && !(future_rd_addr inside {rs1_addr, rs2_addr}))
+                    if(new_request[DIV_UNIT_EX_ID] && !(future_rd_addr == rs1_addr ||  future_rd_addr == rs2_addr))
                         prev_div_result_valid <=1;
-                    else if (uses_rd && (future_rd_addr inside {prev_div_rs1_addr, prev_div_rs2_addr}))
+                    else if (uses_rd && (future_rd_addr == prev_div_rs1_addr || future_rd_addr == prev_div_rs2_addr))
                         prev_div_result_valid <=0;
                 end
             end

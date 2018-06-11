@@ -4,7 +4,7 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -19,7 +19,7 @@
  * Author(s):
  *             Eric Matthews <ematthew@sfu.ca>
  */
- 
+
 import taiga_config::*;
 import taiga_types::*;
 
@@ -31,7 +31,7 @@ module dtag_banks(
         input logic[31:0] stage2_addr,
         input logic[31:0] inv_addr,
 
-        input logic[0:DCACHE_WAYS-1] update_way,
+        input logic[DCACHE_WAYS-1:0] update_way,
         input logic update,
 
         input logic stage1_adv,
@@ -41,7 +41,7 @@ module dtag_banks(
         output logic extern_inv_complete,
 
         output tag_hit,
-        output logic[0:DCACHE_WAYS-1] tag_hit_way
+        output logic[DCACHE_WAYS-1:0] tag_hit_way
         );
 
     typedef logic [DCACHE_TAG_W : 0] dtag_entry_t;
@@ -65,8 +65,8 @@ module dtag_banks(
 
     logic inv_tags_accessed;
 
-    logic[0:DCACHE_WAYS-1] inv_hit_way;
-    logic[0:DCACHE_WAYS-1] inv_hit_way_r;
+    logic[DCACHE_WAYS-1:0] inv_hit_way;
+    logic[DCACHE_WAYS-1:0] inv_hit_way_r;
 
 
     logic [DCACHE_LINE_ADDR_W-1:0] update_port_addr;

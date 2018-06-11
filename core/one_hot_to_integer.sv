@@ -31,7 +31,7 @@ module one_hot_to_integer
 
     always_comb begin
         int_out = 0;
-        for (int i=1; i < C_WIDTH; i=i+1)
+        foreach(one_hot[i])
             if (one_hot[i]) int_out = i;
     end
 

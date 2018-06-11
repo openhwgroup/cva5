@@ -45,7 +45,7 @@ module normdiv
 
     //implementation
     ////////////////////////////////////////////////////
-    assign  new_PR = {1'b0, PR} - {1'b0, B};
+    assign  new_PR = PR - {1'b0, B};
 
     //Shift reg for
     always_ff @ (posedge clk) begin
@@ -55,7 +55,7 @@ module normdiv
 
     always_ff @ (posedge clk) begin
         if (start) begin
-            PR <= {{(C_WIDTH-2){1'b0}}, A[C_WIDTH-1]};
+            PR <= {{(C_WIDTH){1'b0}}, A[C_WIDTH-1]};
             Q <= {A[C_WIDTH-2:0], 1'b0};
         end
         else if (~terminate) begin

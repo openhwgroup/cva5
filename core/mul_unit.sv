@@ -37,8 +37,8 @@ module mul_unit(
     logic [1:0] valid;
 
     logic rs1_signed, rs2_signed;
-    logic signed [33:0] rs1_ext, rs2_ext;
-    logic signed [33:0] rs1_r, rs2_r;
+    logic signed [32:0] rs1_ext, rs2_ext;
+    logic signed [32:0] rs1_r, rs2_r;
 
     //implementation
     ////////////////////////////////////////////////////

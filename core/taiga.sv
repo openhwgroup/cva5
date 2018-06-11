@@ -79,7 +79,7 @@ module taiga (
     tlb_interface itlb();
     tlb_interface dtlb();
     logic tlb_on;
-    logic [9:0] asid;
+    logic [6:0] asid;
     logic return_from_exception;
 
     mmu_interface immu();
@@ -106,6 +106,7 @@ module taiga (
 
     logic instruction_issued_no_rd;
     logic instruction_complete;
+    logic instruction_issued;
 
     assign if2_pc_debug = if2_pc;
     assign dec_pc_debug = dec_pc;

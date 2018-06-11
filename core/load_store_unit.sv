@@ -92,7 +92,7 @@ module load_store_unit (
     logic [2:0] dcache_stage2_fn3;
 
     logic [1:0] inflight_count;
-
+    logic unit_stall;
 
     //AMO support
     //LR -- invalidates line if tag hit
@@ -190,7 +190,7 @@ module load_store_unit (
     /*********************************
      * TLB interface
      *********************************/
-    assign virtual_address = stage1.virtual_address;// + 32'(signed'(stage1.offset));
+    assign virtual_address = stage1.virtual_address + 32'(signed'(stage1.offset));
 
     assign tlb.virtual_address = virtual_address;
     assign tlb.new_request = input_fifo.valid;
@@ -335,10 +335,10 @@ module load_store_unit (
         aligned_load_data[31:16] = unit_muxed_load_data[31:16];
         aligned_load_data[15:8] = stage2_attr.byte_addr[1] ? unit_muxed_load_data[31:24] : unit_muxed_load_data[15:8];
         case(stage2_attr.byte_addr)
-            2'b00 : aligned_load_data[7:0] = unit_muxed_load_data[7:0];
-            2'b01 : aligned_load_data[7:0] = unit_muxed_load_data[15:8];
-            2'b10 : aligned_load_data[7:0] = unit_muxed_load_data[23:16];
-            2'b11 : aligned_load_data[7:0] = unit_muxed_load_data[31:24];
+            0 : aligned_load_data[7:0] = unit_muxed_load_data[7:0];
+            1 : aligned_load_data[7:0] = unit_muxed_load_data[15:8];
+            2 : aligned_load_data[7:0] = unit_muxed_load_data[23:16];
+            3 : aligned_load_data[7:0] = unit_muxed_load_data[31:24];
         endcase
     end
 
@@ -347,7 +347,7 @@ module load_store_unit (
         case(stage2_attr.fn3)
             LS_B_fn3 : final_load_data = 32'(signed'(aligned_load_data[7:0]));
             LS_H_fn3 : final_load_data = 32'(signed'(aligned_load_data[15:0]));
-            //LS_W_fn3 : final_load_data = aligned_load_data;
+            LS_W_fn3 : final_load_data = aligned_load_data;
                 //unused 011
             L_BU_fn3 : final_load_data = 32'(unsigned'(aligned_load_data[7:0]));
             L_HU_fn3 : final_load_data = 32'(unsigned'(aligned_load_data[15:0]));
