@@ -1,10 +1,10 @@
 /*
- * Copyright © 2017 Eric Matthews,  Lesley Shannon
+ * Copyright © 2017, 2018 Eric Matthews,  Lesley Shannon
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -19,7 +19,7 @@
  * Author(s):
  *             Eric Matthews <ematthew@sfu.ca>
  */
- 
+
 
 module  cycler
         #(
@@ -34,18 +34,14 @@ module  cycler
 
     generate
         if (C_WIDTH == 1) begin
-            assign one_hot = 1'b1;
+            assign one_hot = 1;
         end
         else begin
             always_ff @ (posedge clk) begin
-                if (rst) begin
-                    one_hot[C_WIDTH-1:1] <= '0;
-                    one_hot[0] <= 1'b1;
-                end
-                else if (en) begin
-                    one_hot[C_WIDTH-1:1] <= one_hot[C_WIDTH-2:0];
-                    one_hot[0] <= one_hot[C_WIDTH-1];
-                end
+                if (rst)
+                    one_hot <= 1;
+                else if (en)
+                    one_hot <= {one_hot[C_WIDTH-2:0],one_hot[C_WIDTH-1]};//rotate left
             end
         end
     endgenerate
