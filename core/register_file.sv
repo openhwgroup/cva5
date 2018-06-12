@@ -27,6 +27,7 @@ module register_file(
         input logic clk,
         input logic rst,
         input logic inorder,
+        input logic inuse_clear,
         register_file_writeback_interface.unit rf_wb,
         register_file_decode_interface.unit rf_decode
         );
@@ -34,14 +35,11 @@ module register_file(
     (* ramstyle = "MLAB, no_rw_check" *) logic [XLEN-1:0] register [0:31];
     (* ramstyle = "MLAB, no_rw_check" *) logic  [$clog2(INFLIGHT_QUEUE_DEPTH)-1:0] in_use_by [0:31];
 
+    logic rs1_inuse;
+    logic rs2_inuse;
+
     logic rs1_feedforward;
     logic rs2_feedforward;
-
-    logic [0:31] future_rd_one_hot;
-    logic [0:31] wb_addr_one_hot;
-    logic [0:31] new_inuse;
-    logic [0:31] inuse;
-
 
     logic in_use_match;
     logic [$clog2(INFLIGHT_QUEUE_DEPTH)-1:0] in_use_by_id;
@@ -51,7 +49,6 @@ module register_file(
     initial begin
         for (integer i=0; i<32; i++) begin
             register[i] = 0;
-            inuse[i] = 0;
             in_use_by[i] = '0;
         end
     end
@@ -62,23 +59,15 @@ module register_file(
             register[rf_wb.rd_addr] <= rf_wb.rd_data;
     end
 
-    always_comb begin
-        future_rd_one_hot = 0;
-        future_rd_one_hot[rf_decode.future_rd_addr] = rf_decode.instruction_issued;
-
-        wb_addr_one_hot = 0;
-        wb_addr_one_hot[rf_wb.rd_addr] = rf_wb.valid_write & in_use_match;
-
-        new_inuse = (inuse & ~wb_addr_one_hot) | future_rd_one_hot;
-    end
-
-    assign inuse[0] = 0;
-    always_ff @ (posedge clk) begin
-        if (rst)
-            inuse[1:31] <= 0;
-        else
-            inuse[1:31] <= new_inuse[1:31];
-    end
+    inuse inuse_mem (.*,
+            .clr(inuse_clear),
+            .rs1_addr(rf_decode.rs1_addr),.rs2_addr(rf_decode.rs2_addr), .decode_rd_addr(rf_decode.future_rd_addr),
+            .wb_rd_addr(rf_wb.rd_addr),
+            .issued(rf_decode.instruction_issued),
+            .completed(rf_wb.valid_write & in_use_match),
+            .rs1_inuse(rs1_inuse),
+            .rs2_inuse(rs2_inuse)
+            );
 
     always_ff @ (posedge clk) begin
         if (rf_decode.instruction_issued)
@@ -94,9 +83,8 @@ module register_file(
     assign rf_decode.rs1_data = rs1_feedforward ? rf_wb.rd_data : register[rf_decode.rs1_addr];
     assign rf_decode.rs2_data = rs2_feedforward ? rf_wb.rd_data : register[rf_decode.rs2_addr];
 
-    assign rf_decode.rs1_conflict = inuse[rf_decode.rs1_addr]  & ~rs1_feedforward;
-    assign rf_decode.rs2_conflict = inuse[rf_decode.rs2_addr]  & ~rs2_feedforward;
-
+    assign rf_decode.rs1_conflict = rs1_inuse  & ~rs1_feedforward;
+    assign rf_decode.rs2_conflict = rs2_inuse  & ~rs2_feedforward;
 
     ////////////////////////////////////////////////////
     //Assertions

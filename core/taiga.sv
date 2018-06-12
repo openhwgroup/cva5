@@ -104,6 +104,8 @@ module taiga (
     logic [31:0] dec_pc;
     logic [31:0] pc_ex;
 
+    logic inuse_clear;
+
     logic instruction_issued_no_rd;
     logic instruction_complete;
     logic instruction_issued;
