@@ -135,24 +135,19 @@ interface exception_wb_interface_wb;
 endinterface
 
 
-interface inflight_queue_interface;
-    logic[INFLIGHT_QUEUE_DEPTH:0] pop;
-    logic[INFLIGHT_QUEUE_DEPTH:0] shift_pop;
+interface inflight_queue_interface;   
     logic new_issue;
-
     inflight_queue_packet data_in;
-    logic [4:0] future_rd_addr;
-    logic uses_rd;
-    logic wb_uses_rd;
+    
+    logic wb_accepting_input;
+    logic[INFLIGHT_QUEUE_DEPTH-1:0] pop;
 
-    inflight_queue_packet[INFLIGHT_QUEUE_DEPTH:0] data_out;
-    logic [4:0] wb_rd_addr;
-    instruction_id_t wb_id;
-    logic [INFLIGHT_QUEUE_DEPTH:0] valid;
+    logic [INFLIGHT_QUEUE_DEPTH-1:0] valid;
+    inflight_queue_packet[INFLIGHT_QUEUE_DEPTH-1:0] data_out;
 
-    modport queue (input pop, data_in, new_issue, future_rd_addr, uses_rd, wb_id, output data_out, wb_rd_addr, wb_uses_rd, shift_pop, valid);
-    modport decode (output data_in, future_rd_addr, uses_rd, new_issue);
-    modport wb (input data_in, future_rd_addr, uses_rd, wb_uses_rd, shift_pop, valid, data_out, wb_rd_addr, output pop, wb_id);
+    modport queue (input new_issue, data_in, wb_accepting_input, pop, output valid, data_out);
+    modport decode (output new_issue, data_in);
+    modport wb (input new_issue, data_in, valid, data_out, output wb_accepting_input, pop);
 
 endinterface
 

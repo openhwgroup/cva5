@@ -156,11 +156,7 @@ module decode(
         end
     end
 
-    //Exception Control unit
     one_hot_to_integer #(NUM_WB_UNITS) iq_id (.one_hot(new_request[NUM_EX_UNITS-2:0]), .int_out(iq.data_in.unit_id));
-
-    assign iq.future_rd_addr = future_rd_addr;
-    assign iq.uses_rd = ~ib.data_out.rd_zero;
     assign iq.data_in.id = id_gen.issue_id;
     assign iq.data_in.rd_addr = future_rd_addr;
     assign iq.data_in.rd_addr_nzero = ~ib.data_out.rd_zero;
@@ -287,9 +283,10 @@ module decode(
         end
     end
 
-    //Add cases: LUI, AUIPC, JAL, JALR, ADD[I]
+    //Add cases: LUI, AUIPC, ADD[I]
     //sub cases: SUB, SLT[U][I] (and not LUI AUIPC)
-    assign alu_sub = opcode[2] ? 0 : ((fn3 inside {SLTU_fn3, SLT_fn3}) || ((fn3 == ADD_SUB_fn3) && ib.data_out.instruction[30]) && opcode[5]);
+    //assign alu_sub = opcode[2] ? 0 : ((fn3 inside {SLTU_fn3, SLT_fn3}) || ((fn3 == ADD_SUB_fn3) && ib.data_out.instruction[30]) && opcode[5]);
+    assign alu_sub = ~(opcode[2] | (~opcode[2] & ~(|fn3) & (~opcode[5] | (opcode[5] & ~ib.data_out.instruction[30]))));
 
         //~(opcode[2] | (~opcode[2] & ~(|fn3) & (~opcode[5] | (opcode[5] & ~ib.data_out.instruction[30]))));
     //assign alu_sub = ((opcode == ARITH && ib.data_out.instruction[30]) || ((opcode == ARITH || opcode == ARITH_IMM) &&  (fn3 ==SLTU_fn3 || fn3 ==SLT_fn3)));//SUB instruction

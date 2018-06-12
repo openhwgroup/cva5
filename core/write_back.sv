@@ -69,10 +69,11 @@ module write_back(
     //issue logic.
     always_comb begin
         entry_found = 0;
-        iq.pop = 0;
         selected_unit_done_next_cycle = 0;
+        iq.pop = 0;
+        iq.wb_accepting_input = 0;
 
-        for (iq_index=INFLIGHT_QUEUE_DEPTH; iq_index>0; iq_index--) begin
+        for (iq_index=INFLIGHT_QUEUE_DEPTH-1; iq_index>=0; iq_index--) begin
             unit_id =  iq.data_out[iq_index].unit_id;
 
             if (iq.valid[iq_index]) begin
@@ -86,20 +87,23 @@ module write_back(
             end
         end
 
-        //No valid completing instructions in queue, check for new issues.
-        if (~entry_found) begin
-            unit_id = iq.data_out[0].unit_id;
-
-            //Pop and unit done only if valid issue
-            if (iq.valid[0]) begin
-                selected_unit_done_next_cycle = done_on_first_cycle[unit_id];
-                iq.pop[0] = selected_unit_done_next_cycle;
-            end
-        end
-
         issue_id = iq.data_out[iq_index].id;
         rd_addr = iq.data_out[iq_index].rd_addr;
         rd_addr_not_zero = iq.data_out[iq_index].rd_addr_nzero;
+
+        //No valid completing instructions in queue, check for new issues.
+        if (~entry_found) begin
+            unit_id = iq.data_in.unit_id;
+            issue_id = iq.data_in.id;
+            rd_addr = iq.data_in.rd_addr;
+            rd_addr_not_zero = iq.data_in.rd_addr_nzero;
+
+            //Pop and unit done only if valid issue
+            if (iq.new_issue) begin
+                selected_unit_done_next_cycle = done_on_first_cycle[unit_id];
+                iq.wb_accepting_input = selected_unit_done_next_cycle;
+            end
+        end
     end
 
     always_ff @(posedge clk) begin

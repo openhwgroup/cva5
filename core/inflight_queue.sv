@@ -28,70 +28,58 @@ module inflight_queue
         (
         input logic clk,
         input logic rst,
-        input logic instruction_complete,
         inflight_queue_interface.queue iq
         );
 
-    logic[$bits(inflight_queue_packet)-1:0] shift_reg[INFLIGHT_QUEUE_DEPTH:0];
-
-    //implementation
-   //    CARRY4 CARRY4_inst (
-   //         .CO(iq.shift_pop[4:1]),         // 4-bit carry out
-    //        .O(),           // 4-bit carry chain XOR data out
-   //         .CI(),         // 1-bit carry cascade input
-   //         .CYINIT(1'b0), // 1-bit carry initialization
-   //         .DI(4'b1111),         // 4-bit carry-MUX data in
-    //        .S(iq.pop[4:1] | ~iq.valid[4:1])            // 4-bit carry-MUX select input
-   //      );
+    logic [$bits(inflight_queue_packet)-1:0] shift_reg [INFLIGHT_QUEUE_DEPTH-1:0];
+    logic [INFLIGHT_QUEUE_DEPTH-1:1] shift_pop;
 
     always_comb begin
-        iq.shift_pop[INFLIGHT_QUEUE_DEPTH] = iq.pop[INFLIGHT_QUEUE_DEPTH] | ~iq.valid[INFLIGHT_QUEUE_DEPTH];
-        for (int i=INFLIGHT_QUEUE_DEPTH-1; i >=0; i--) begin
-            iq.shift_pop[i] = iq.shift_pop[i+1] | (iq.pop[i] | ~iq.valid[i]);
+        shift_pop[INFLIGHT_QUEUE_DEPTH-1] = iq.pop[INFLIGHT_QUEUE_DEPTH-1] | ~iq.valid[INFLIGHT_QUEUE_DEPTH-1];
+        for (int i=INFLIGHT_QUEUE_DEPTH-2; i >0; i--) begin
+            shift_pop[i] = shift_pop[i+1] | (iq.pop[i] | ~iq.valid[i]);
         end
     end
 
-    assign iq.valid[0] = iq.new_issue;
-    assign shift_reg[0] = iq.data_in;
+
+    //Push into shift register only if the instruction is not being accepted this cycle by the writeback stage
+    always_ff @ (posedge clk) begin
+        if (rst)
+            iq.valid[0] <= 0;
+        else
+            iq.valid[0] <= iq.new_issue & ~iq.wb_accepting_input;
+    end
 
     genvar i;
     generate
-        for (i=1 ; i <= INFLIGHT_QUEUE_DEPTH; i++) begin : iq_valid_g
+        for (i=1 ; i < INFLIGHT_QUEUE_DEPTH; i++) begin : iq_valid_g
             always_ff @ (posedge clk) begin
                 if (rst)
                     iq.valid[i] <= 0;
-                else if (iq.shift_pop[i]) begin
+                else if (shift_pop[i]) begin
                     iq.valid[i] <= iq.valid[i-1] & ~iq.pop[i-1];
                 end
             end
         end
     endgenerate
 
+
     //Data portion
+    always_ff @ (posedge clk) begin
+        if (iq.new_issue & ~iq.wb_accepting_input)
+            shift_reg[0] <= iq.data_in;
+    end
     assign iq.data_out[0] = shift_reg[0];
+
     generate
-        for (i=1 ; i <= INFLIGHT_QUEUE_DEPTH; i++) begin : shift_reg_gen
+        for (i=1 ; i < INFLIGHT_QUEUE_DEPTH; i++) begin : shift_reg_gen
             assign iq.data_out[i] = shift_reg[i];
             always_ff @ (posedge clk) begin
-                if (iq.shift_pop[i])
+                if (shift_pop[i])
                     shift_reg[i] <= shift_reg[i-1];
             end
         end
     endgenerate
-
-    //future rd_addt table
-    logic [4:0] rd_addrs [INFLIGHT_QUEUE_DEPTH-1:0];
-    logic rd_addr_not_zero [INFLIGHT_QUEUE_DEPTH-1:0];
-    always_ff @ (posedge clk) begin
-        if (iq.new_issue) begin
-            rd_addrs[iq.data_in.id] <= iq.future_rd_addr;
-            rd_addr_not_zero[iq.data_in.id] <= iq.uses_rd;
-        end
-    end
-
-    assign iq.wb_rd_addr = rd_addrs[iq.wb_id];
-    assign iq.wb_uses_rd = rd_addr_not_zero[iq.wb_id];
-
 
 endmodule
 
