@@ -138,7 +138,7 @@ module decode(
     assign rf_decode.rs1_addr  =  rs1_addr;
     assign rf_decode.rs2_addr  =  rs2_addr;
     assign rf_decode.future_rd_addr  =  future_rd_addr;
-    assign rf_decode.instruction_issued = advance & uses_rd;
+    assign rf_decode.instruction_issued = advance & uses_rd & ~ib.data_out.rd_zero;
     assign rf_decode.id = id_gen.issue_id;
     //Issue logic
 
