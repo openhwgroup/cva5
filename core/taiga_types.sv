@@ -378,6 +378,41 @@ package taiga_types;
         NON_MUXED_OUTPUT_FIFO
     } fifo_type_t;
 
+    //Assembly register definitions for simulation purposes
+    typedef struct packed{
+        logic [XLEN-1:0] zero;
+        logic [XLEN-1:0] ra;
+        logic [XLEN-1:0] sp;
+        logic [XLEN-1:0] gp;
+        logic [XLEN-1:0] tp;
+        logic [XLEN-1:0] t0;
+        logic [XLEN-1:0] t1;
+        logic [XLEN-1:0] t2;
+        logic [XLEN-1:0] s0_fp;
+        logic [XLEN-1:0] s1;
+        logic [XLEN-1:0] a0;
+        logic [XLEN-1:0] a1;
+        logic [XLEN-1:0] a2;
+        logic [XLEN-1:0] a3;
+        logic [XLEN-1:0] a4;
+        logic [XLEN-1:0] a5;
+        logic [XLEN-1:0] a6;
+        logic [XLEN-1:0] a7;
+        logic [XLEN-1:0] s2;
+        logic [XLEN-1:0] s3;
+        logic [XLEN-1:0] s4;
+        logic [XLEN-1:0] s5;
+        logic [XLEN-1:0] s6;
+        logic [XLEN-1:0] s7;
+        logic [XLEN-1:0] s8;
+        logic [XLEN-1:0] s9;
+        logic [XLEN-1:0] s10;
+        logic [XLEN-1:0] s11;
+        logic [XLEN-1:0] t3;
+        logic [XLEN-1:0] t4;
+        logic [XLEN-1:0] t5;
+        logic [XLEN-1:0] t6;
+} simulation_named_regfile;
 endpackage
 
 

@@ -144,6 +144,8 @@ module taiga (
      * Decode/Issue/Control
      *************************************/
     decode decode_block (.*);
+    //temp
+    assign inuse_clear = 0;
     register_file register_file_block (.*);
     id_generator id_gen_block (.*);
     inflight_queue inst_queue(.*);

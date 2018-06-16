@@ -37,7 +37,6 @@ module one_hot_occupancy #(parameter DEPTH = 2)
         output logic two_plus
         );
 
-
     logic[DEPTH:0] valid_chain;
 
     //Occupancy Tracking
@@ -54,29 +53,10 @@ module one_hot_occupancy #(parameter DEPTH = 2)
     assign valid = ~valid_chain[0];
     assign full = valid_chain[DEPTH];
 
-//    always_ff @ (posedge clk) begin
-//        if (rst)
-//            early_full <= 0;
-//        else if (push & ~pop & valid_chain[DEPTH-2])
-//            early_full <= 1;
-//        else if (pop & ~push & valid_chain[DEPTH-1])
-//            early_full <= 0;
-//    end
-
-
     assign early_full = valid_chain[DEPTH-1] | valid_chain[DEPTH];
 
     //pushing, or more than one, or at least one and not popping
-    always_ff @ (posedge clk) begin
-        if (rst)
-            two_plus <= 0;
-        else if ((valid & push) & ~pop)
-            two_plus <= 1;
-        else if (~push & (two_plus & pop))
-            two_plus <= 0;
-    end
-
-   // assign two_plus = ~valid_chain[0] & ~valid_chain[1];
+    assign two_plus = ~valid_chain[0] & ~valid_chain[1];
     assign early_valid = push | (two_plus) | (valid & ~pop);
 
     ////////////////////////////////////////////////////

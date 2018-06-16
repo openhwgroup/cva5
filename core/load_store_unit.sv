@@ -142,17 +142,19 @@ module load_store_unit (
     assign units_ready = &unit_ready;
     assign data_valid = |unit_data_valid;
 
-
+    //initial last_unit = 0;//For simulator
     assign current_unit = sub_unit_address_match;
     always_ff @ (posedge clk) begin
-        if (load_attributes.push)
+        if (rst)
+            last_unit <= 0;
+        else if (load_attributes.push)
             last_unit <= sub_unit_address_match;
     end
 
     //When switching units, ensure no outstanding loads so that there can be no timing collisions with results
-    assign unit_stall = (current_unit != last_unit) & ~load_attributes.empty;
+    assign unit_stall = (current_unit != last_unit) && ~load_attributes.empty;
 
-    assign issue_request = input_fifo.valid & units_ready & (inflight_count < 2) & ~unit_stall;
+    assign issue_request = input_fifo.valid && units_ready && (inflight_count < 2) && ~unit_stall;
     assign load_complete = data_valid;
 
     generate if (USE_D_SCRATCH_MEM) begin

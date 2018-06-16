@@ -32,51 +32,64 @@ module inflight_queue
         );
 
     logic [$bits(inflight_queue_packet)-1:0] shift_reg [INFLIGHT_QUEUE_DEPTH-1:0];
-    logic [INFLIGHT_QUEUE_DEPTH-1:1] shift_pop;
+    logic [$bits(inflight_queue_packet)-1:0] shift_reg_new [INFLIGHT_QUEUE_DEPTH:0];
 
+    logic [INFLIGHT_QUEUE_DEPTH-1:0] shift_pop;
+    logic [INFLIGHT_QUEUE_DEPTH:0] new_valid;
+
+    logic [INFLIGHT_QUEUE_DEPTH-1:0] valid_reversed;
+    logic [INFLIGHT_QUEUE_DEPTH-1:0] pop_reversed;
+    logic [INFLIGHT_QUEUE_DEPTH-1:0] shift_pop_reversed;
+
+    //Carry chain more scalable for larger depths, but requires manual instantiation as it
+    //is not possible to infer with FPGA tools
     always_comb begin
+//        foreach (iq.valid[i]) begin
+//            valid_reversed[i] = iq.valid[INFLIGHT_QUEUE_DEPTH-1-i];
+//            pop_reversed[i] = iq.pop[INFLIGHT_QUEUE_DEPTH-1-i];
+//        end
+//
+//        foreach (shift_pop_reversed[i]) begin
+//            shift_pop[i] = shift_pop_reversed[INFLIGHT_QUEUE_DEPTH-1-i];
+//        end
+
         shift_pop[INFLIGHT_QUEUE_DEPTH-1] = iq.pop[INFLIGHT_QUEUE_DEPTH-1] | ~iq.valid[INFLIGHT_QUEUE_DEPTH-1];
-        for (int i=INFLIGHT_QUEUE_DEPTH-2; i >0; i--) begin
+        for (int i=INFLIGHT_QUEUE_DEPTH-2; i >=0; i--) begin
             shift_pop[i] = shift_pop[i+1] | (iq.pop[i] | ~iq.valid[i]);
         end
     end
 
-
-    //Push into shift register only if the instruction is not being accepted this cycle by the writeback stage
-    always_ff @ (posedge clk) begin
-        if (rst)
-            iq.valid[0] <= 0;
-        else
-            iq.valid[0] <= iq.new_issue & ~iq.wb_accepting_input;
-    end
+//    CARRY4 CARRY4_inst (
+//            .CO(shift_pop_reversed[3:0]),         // 4-bit carry out
+//            .O(),           // 4-bit carry chain XOR data out
+//            .CI(),         // 1-bit carry cascade input
+//            .CYINIT(1'b0), // 1-bit carry initialization
+//            .DI(4'b1111),         // 4-bit carry-MUX data in
+//            .S(pop_reversed[3:0] | ~valid_reversed[3:0])            // 4-bit carry-MUX select input
+//        );
 
     genvar i;
     generate
-        for (i=1 ; i < INFLIGHT_QUEUE_DEPTH; i++) begin : iq_valid_g
+    //Push into shift register only if the instruction is not being accepted this cycle by the writeback stage
+        assign new_valid[0] = iq.new_issue & ~iq.wb_accepting_input;
+        for (i=0 ; i < INFLIGHT_QUEUE_DEPTH; i++) begin : iq_valid_g
+            assign new_valid[i+1] = iq.valid[i] & ~iq.pop[i];
             always_ff @ (posedge clk) begin
                 if (rst)
                     iq.valid[i] <= 0;
-                else if (shift_pop[i]) begin
-                    iq.valid[i] <= iq.valid[i-1] & ~iq.pop[i-1];
-                end
+                else if (shift_pop[i])
+                    iq.valid[i] <= new_valid[i];
             end
         end
-    endgenerate
 
-
-    //Data portion
-    always_ff @ (posedge clk) begin
-        if (iq.new_issue & ~iq.wb_accepting_input)
-            shift_reg[0] <= iq.data_in;
-    end
-    assign iq.data_out[0] = shift_reg[0];
-
-    generate
-        for (i=1 ; i < INFLIGHT_QUEUE_DEPTH; i++) begin : shift_reg_gen
+        assign shift_reg_new[0] = iq.data_in;
+        for (i=0 ; i < INFLIGHT_QUEUE_DEPTH; i++) begin : shift_reg_gen
+            assign shift_reg_new[i+1] = shift_reg[i];
             assign iq.data_out[i] = shift_reg[i];
+
             always_ff @ (posedge clk) begin
                 if (shift_pop[i])
-                    shift_reg[i] <= shift_reg[i-1];
+                    shift_reg[i] <= shift_reg_new[i];
             end
         end
     endgenerate

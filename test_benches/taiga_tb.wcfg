@@ -15,15 +15,15 @@
       </db_ref>
    </db_ref_list>
    <zoom_setting>
-      <ZoomStartTime time="1120488000fs"></ZoomStartTime>
-      <ZoomEndTime time="1164638001fs"></ZoomEndTime>
-      <Cursor1Time time="1110438000fs"></Cursor1Time>
+      <ZoomStartTime time="717500000fs"></ZoomStartTime>
+      <ZoomEndTime time="981000001fs"></ZoomEndTime>
+      <Cursor1Time time="773000000fs"></Cursor1Time>
    </zoom_setting>
    <column_width_setting>
       <NameColumnWidth column_width="297"></NameColumnWidth>
-      <ValueColumnWidth column_width="133"></ValueColumnWidth>
+      <ValueColumnWidth column_width="124"></ValueColumnWidth>
    </column_width_setting>
-   <WVObjectSize size="197" />
+   <WVObjectSize size="212" />
    <wvobject type="logic" fp_name="/taiga_tb/clk">
       <obj_property name="ElementShortName">clk</obj_property>
       <obj_property name="ObjectShortName">clk</obj_property>
@@ -320,22 +320,9 @@
       <obj_property name="label">Register File</obj_property>
       <obj_property name="DisplayName">label</obj_property>
    </wvobject>
-   <wvobject type="array" fp_name="/taiga_tb/uut/register_file_block/register">
-      <obj_property name="ElementShortName">register[0:31][31:0]</obj_property>
-      <obj_property name="ObjectShortName">register[0:31][31:0]</obj_property>
-      <obj_property name="isExpanded"></obj_property>
-   </wvobject>
-   <wvobject type="array" fp_name="/taiga_tb/uut/write_back_mux/rd_addr">
-      <obj_property name="ElementShortName">rd_addr[4:0]</obj_property>
-      <obj_property name="ObjectShortName">rd_addr[4:0]</obj_property>
-   </wvobject>
-   <wvobject type="array" fp_name="/taiga_tb/uut/write_back_mux/rd_addr_r">
-      <obj_property name="ElementShortName">rd_addr_r[4:0]</obj_property>
-      <obj_property name="ObjectShortName">rd_addr_r[4:0]</obj_property>
-   </wvobject>
-   <wvobject type="array" fp_name="/taiga_tb/uut/register_file_block/inuse">
-      <obj_property name="ElementShortName">inuse[0:31]</obj_property>
-      <obj_property name="ObjectShortName">inuse[0:31]</obj_property>
+   <wvobject type="array" fp_name="/taiga_tb/uut/register_file_block/sim_register">
+      <obj_property name="ElementShortName">sim_register</obj_property>
+      <obj_property name="ObjectShortName">sim_register</obj_property>
    </wvobject>
    <wvobject type="logic" fp_name="/taiga_tb/uut/rf_wb/valid_write">
       <obj_property name="ElementShortName">valid_write</obj_property>
@@ -349,6 +336,18 @@
       <obj_property name="ElementShortName">inorder</obj_property>
       <obj_property name="ObjectShortName">inorder</obj_property>
    </wvobject>
+   <wvobject type="logic" fp_name="/taiga_tb/uut/register_file_block/inuse_mem/rs1_inuse">
+      <obj_property name="ElementShortName">rs1_inuse</obj_property>
+      <obj_property name="ObjectShortName">rs1_inuse</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/taiga_tb/uut/register_file_block/inuse_mem/rs2_inuse">
+      <obj_property name="ElementShortName">rs2_inuse</obj_property>
+      <obj_property name="ObjectShortName">rs2_inuse</obj_property>
+   </wvobject>
+   <wvobject type="array" fp_name="/taiga_tb/uut/register_file_block/inuse_mem/sim_inuse">
+      <obj_property name="ElementShortName">sim_inuse[31:0]</obj_property>
+      <obj_property name="ObjectShortName">sim_inuse[31:0]</obj_property>
+   </wvobject>
    <wvobject type="logic" fp_name="/taiga_tb/uut/register_file_block/in_use_match">
       <obj_property name="ElementShortName">in_use_match</obj_property>
       <obj_property name="ObjectShortName">in_use_match</obj_property>
@@ -358,10 +357,6 @@
       <obj_property name="ObjectShortName">in_use_by[0:31][1:0]</obj_property>
       <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
    </wvobject>
-   <wvobject type="logic" fp_name="/taiga_tb/uut/write_back_mux/entry_found">
-      <obj_property name="ElementShortName">entry_found</obj_property>
-      <obj_property name="ObjectShortName">entry_found</obj_property>
-   </wvobject>
    <wvobject fp_name="divider3001" type="divider">
       <obj_property name="label">WB &amp; Inst queue</obj_property>
       <obj_property name="DisplayName">label</obj_property>
@@ -370,17 +365,33 @@
       <obj_property name="ElementShortName">new_issue</obj_property>
       <obj_property name="ObjectShortName">new_issue</obj_property>
    </wvobject>
-   <wvobject type="array" fp_name="/taiga_tb/uut/inst_queue/iq/wb/valid">
-      <obj_property name="ElementShortName">valid[4:0]</obj_property>
-      <obj_property name="ObjectShortName">valid[4:0]</obj_property>
+   <wvobject type="array" fp_name="/taiga_tb/uut/iq/data_in">
+      <obj_property name="ElementShortName">data_in</obj_property>
+      <obj_property name="ObjectShortName">data_in</obj_property>
    </wvobject>
-   <wvobject type="array" fp_name="/taiga_tb/uut/inst_queue/shift_reg">
-      <obj_property name="ElementShortName">shift_reg[4:0][10:0]</obj_property>
-      <obj_property name="ObjectShortName">shift_reg[4:0][10:0]</obj_property>
+   <wvobject type="array" fp_name="/taiga_tb/uut/inst_queue/iq/wb/valid">
+      <obj_property name="ElementShortName">valid[3:0]</obj_property>
+      <obj_property name="ObjectShortName">valid[3:0]</obj_property>
+   </wvobject>
+   <wvobject type="array" fp_name="/taiga_tb/uut/iq/data_out">
+      <obj_property name="ElementShortName">data_out[3:0]</obj_property>
+      <obj_property name="ObjectShortName">data_out[3:0]</obj_property>
+   </wvobject>
+   <wvobject type="array" fp_name="/taiga_tb/uut/write_back_mux/iq/pop">
+      <obj_property name="ElementShortName">pop[3:0]</obj_property>
+      <obj_property name="ObjectShortName">pop[3:0]</obj_property>
    </wvobject>
    <wvobject type="array" fp_name="/taiga_tb/uut/write_back_mux/unit_id">
       <obj_property name="ElementShortName">unit_id[2:0]</obj_property>
       <obj_property name="ObjectShortName">unit_id[2:0]</obj_property>
+   </wvobject>
+   <wvobject type="array" fp_name="/taiga_tb/uut/write_back_mux/rd_addr">
+      <obj_property name="ElementShortName">rd_addr[4:0]</obj_property>
+      <obj_property name="ObjectShortName">rd_addr[4:0]</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/taiga_tb/uut/write_back_mux/rd_addr_not_zero">
+      <obj_property name="ElementShortName">rd_addr_not_zero</obj_property>
+      <obj_property name="ObjectShortName">rd_addr_not_zero</obj_property>
    </wvobject>
    <wvobject type="array" fp_name="/taiga_tb/uut/write_back_mux/issue_id">
       <obj_property name="ElementShortName">issue_id[1:0]</obj_property>
@@ -402,6 +413,10 @@
       <obj_property name="ElementShortName">done_next_cycle[5:0]</obj_property>
       <obj_property name="ObjectShortName">done_next_cycle[5:0]</obj_property>
    </wvobject>
+   <wvobject type="logic" fp_name="/taiga_tb/uut/write_back_mux/iq/wb_accepting_input">
+      <obj_property name="ElementShortName">wb_accepting_input</obj_property>
+      <obj_property name="ObjectShortName">wb_accepting_input</obj_property>
+   </wvobject>
    <wvobject type="logic" fp_name="/taiga_tb/uut/write_back_mux/selected_unit_done_next_cycle">
       <obj_property name="ElementShortName">selected_unit_done_next_cycle</obj_property>
       <obj_property name="ObjectShortName">selected_unit_done_next_cycle</obj_property>
@@ -421,6 +436,18 @@
    <wvobject type="array" fp_name="/taiga_tb/uut/load_store_unit_block/ls_inputs">
       <obj_property name="ElementShortName">ls_inputs</obj_property>
       <obj_property name="ObjectShortName">ls_inputs</obj_property>
+   </wvobject>
+   <wvobject type="array" fp_name="/taiga_tb/uut/load_store_unit_block/last_unit">
+      <obj_property name="ElementShortName">last_unit[2:0]</obj_property>
+      <obj_property name="ObjectShortName">last_unit[2:0]</obj_property>
+   </wvobject>
+   <wvobject type="array" fp_name="/taiga_tb/uut/load_store_unit_block/current_unit">
+      <obj_property name="ElementShortName">current_unit[2:0]</obj_property>
+      <obj_property name="ObjectShortName">current_unit[2:0]</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/taiga_tb/uut/load_store_unit_block/unit_stall">
+      <obj_property name="ElementShortName">unit_stall</obj_property>
+      <obj_property name="ObjectShortName">unit_stall</obj_property>
    </wvobject>
    <wvobject type="logic" fp_name="/taiga_tb/uut/load_store_unit_block/issue_request">
       <obj_property name="ElementShortName">issue_request</obj_property>
@@ -531,6 +558,38 @@
    <wvobject type="logic" fp_name="/taiga_tb/uut/load_store_unit_block/load_attributes/valid">
       <obj_property name="ElementShortName">valid</obj_property>
       <obj_property name="ObjectShortName">valid</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/taiga_tb/uut/load_store_unit_block/\genblk8.data_cache /replacement_policy/clk">
+      <obj_property name="ElementShortName">clk</obj_property>
+      <obj_property name="ObjectShortName">clk</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/taiga_tb/uut/load_store_unit_block/\genblk8.data_cache /replacement_policy/rst">
+      <obj_property name="ElementShortName">rst</obj_property>
+      <obj_property name="ObjectShortName">rst</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/taiga_tb/uut/load_store_unit_block/\genblk8.data_cache /replacement_policy/en">
+      <obj_property name="ElementShortName">en</obj_property>
+      <obj_property name="ObjectShortName">en</obj_property>
+   </wvobject>
+   <wvobject type="array" fp_name="/taiga_tb/uut/load_store_unit_block/\genblk8.data_cache /replacement_policy/one_hot">
+      <obj_property name="ElementShortName">one_hot[1:0]</obj_property>
+      <obj_property name="ObjectShortName">one_hot[1:0]</obj_property>
+   </wvobject>
+   <wvobject type="array" fp_name="/taiga_tb/uut/load_store_unit_block/\genblk8.data_cache /replacement_policy/C_WIDTH">
+      <obj_property name="ElementShortName">C_WIDTH[31:0]</obj_property>
+      <obj_property name="ObjectShortName">C_WIDTH[31:0]</obj_property>
+   </wvobject>
+   <wvobject type="array" fp_name="/taiga_tb/uut/load_store_unit_block/\genblk8.data_cache /update_way_conv/one_hot">
+      <obj_property name="ElementShortName">one_hot[1:0]</obj_property>
+      <obj_property name="ObjectShortName">one_hot[1:0]</obj_property>
+   </wvobject>
+   <wvobject type="array" fp_name="/taiga_tb/uut/load_store_unit_block/\genblk8.data_cache /update_way_conv/int_out">
+      <obj_property name="ElementShortName">int_out[0:0]</obj_property>
+      <obj_property name="ObjectShortName">int_out[0:0]</obj_property>
+   </wvobject>
+   <wvobject type="array" fp_name="/taiga_tb/uut/load_store_unit_block/\genblk8.data_cache /update_way_conv/C_WIDTH">
+      <obj_property name="ElementShortName">C_WIDTH[31:0]</obj_property>
+      <obj_property name="ObjectShortName">C_WIDTH[31:0]</obj_property>
    </wvobject>
    <wvobject fp_name="divider2998" type="divider">
       <obj_property name="label">L2</obj_property>
