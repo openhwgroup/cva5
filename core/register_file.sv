@@ -92,4 +92,16 @@ module register_file(
         assert (!(rf_wb.valid_write && rf_wb.rd_addr == 0)) else $error("Register file write to zero register occured!");
     end
 
+    ////////////////////////////////////////////////////
+    //Simulation Only
+    // synthesis translate_off
+    logic [0:31][0:31] sim_registers_unamed;
+    simulation_named_regfile sim_register;
+    always_comb begin
+        foreach(register[i])
+            sim_registers_unamed[i] = register[i];
+        sim_register = sim_registers_unamed;
+    end
+    // synthesis translate_on
+
 endmodule

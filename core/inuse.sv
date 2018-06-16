@@ -47,7 +47,16 @@ module inuse (
 
     logic write_collision;
 
-    assign write_collision = (decode_rd_addr == wb_rd_addr);
+    //////////////////////////////////////////
+    //Initialize to zero
+    initial begin
+        foreach(bankA[i]) begin
+            bankA[i] = 0;
+            bankB[i] = 0;
+        end
+    end
+
+    assign write_collision = issued && (decode_rd_addr == wb_rd_addr);
 
     //After reset, clear is held for at least 32 cycles to reset memory block
     assign wb_rd_addr_muxed = clr ? w_clear : wb_rd_addr;
@@ -75,6 +84,16 @@ module inuse (
     always_ff @ (posedge clk) begin
         assert (!(clr & issued)) else $error("Write ocured to inuse memory during clear operation!");
     end
+
+    ////////////////////////////////////////////////////
+    //Simulation Only
+    // synthesis translate_off
+    logic sim_inuse [31:0];
+    always_comb begin
+        foreach (sim_inuse[i])
+            sim_inuse[i] = bankA[i] ^ bankB[i];
+    end
+    // synthesis translate_on
 
 endmodule
 
