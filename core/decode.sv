@@ -156,7 +156,7 @@ module decode(
         end
     end
 
-    one_hot_to_integer #(NUM_WB_UNITS) iq_id (.one_hot(new_request[NUM_EX_UNITS-2:0]), .int_out(iq.data_in.unit_id));
+    one_hot_to_integer #(NUM_WB_UNITS) iq_id (.*, .one_hot(new_request[NUM_EX_UNITS-2:0]), .int_out(iq.data_in.unit_id));
     assign iq.data_in.id = id_gen.issue_id;
     assign iq.data_in.rd_addr = future_rd_addr;
     assign iq.data_in.rd_addr_nzero = ~ib.data_out.rd_zero;

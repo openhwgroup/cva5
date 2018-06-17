@@ -231,8 +231,8 @@ module dcache(
     cycler #(DCACHE_WAYS) replacement_policy (.*, .en(1'b1), .one_hot(replacement_way));
 
     //One-hot tag hit / update logic to binary int
-    one_hot_to_integer #(DCACHE_WAYS) hit_way_conv (.one_hot(tag_hit_way), .int_out(tag_hit_way_int));
-    one_hot_to_integer #(DCACHE_WAYS) update_way_conv (.one_hot(replacement_way), .int_out(replacement_way_int));
+    one_hot_to_integer #(DCACHE_WAYS) hit_way_conv (.*, .one_hot(tag_hit_way), .int_out(tag_hit_way_int));
+    one_hot_to_integer #(DCACHE_WAYS) update_way_conv (.*, .one_hot(replacement_way), .int_out(replacement_way_int));
 
 
     //If atomic load (LR or AMO op) and there's a tag hit reuse same line

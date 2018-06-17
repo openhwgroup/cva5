@@ -27,6 +27,7 @@ module one_hot_to_integer
         parameter C_WIDTH = 6
         )
         (
+        input logic clk,//for assertion
         input logic [C_WIDTH-1:0] one_hot,
         output logic [$clog2(C_WIDTH)-1:0] int_out
         );
@@ -35,9 +36,10 @@ module one_hot_to_integer
         int_out = 0;
         foreach (one_hot[i])
             if (one_hot[i]) int_out |= i;
-
-        ////////////////////////////////////////////////////
-        //Assertions
+    end
+    ////////////////////////////////////////////////////
+    //Assertions
+    always_ff @ (posedge clk) begin
         assert ((one_hot & (one_hot -1)) == 0) else $error("One-hot signal has multiple bits set!");
     end
 
