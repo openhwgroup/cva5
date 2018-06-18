@@ -286,13 +286,9 @@ module decode(
         end
     end
 
-    //Add cases: LUI, AUIPC, ADD[I]
-    //sub cases: SUB, SLT[U][I] (and not LUI AUIPC)
-    //assign alu_sub = opcode[2] ? 0 : ((fn3 inside {SLTU_fn3, SLT_fn3}) || ((fn3 == ADD_SUB_fn3) && ib.data_out.instruction[30]) && opcode[5]);
-    assign alu_sub = ~(opcode[2] | (~opcode[2] & ~(|fn3) & (~opcode[5] | (opcode[5] & ~ib.data_out.instruction[30]))));
-
-        //~(opcode[2] | (~opcode[2] & ~(|fn3) & (~opcode[5] | (opcode[5] & ~ib.data_out.instruction[30]))));
-    //assign alu_sub = ((opcode == ARITH && ib.data_out.instruction[30]) || ((opcode == ARITH || opcode == ARITH_IMM) &&  (fn3 ==SLTU_fn3 || fn3 ==SLT_fn3)));//SUB instruction
+    //Add cases: LUI, AUIPC, ADD[I], all logic ops
+    //sub cases: SUB, SLT[U][I]
+    assign alu_sub = opcode[2] ? 0 : ((fn3 inside {SLTU_fn3, SLT_fn3}) || ((fn3 == ADD_SUB_fn3) && ib.data_out.instruction[30]) && opcode[5]);
 
     always_ff @(posedge clk) begin
         if (issue[ALU_UNIT_EX_ID]) begin
