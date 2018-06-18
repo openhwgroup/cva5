@@ -284,7 +284,7 @@ package taiga_types;
         logic use_signed;
         logic jal;
         logic jalr;
-        logic rdx0;
+        logic uses_rd;
         logic is_call;
         logic is_return;
         logic [31:0] instruction;
@@ -352,7 +352,7 @@ package taiga_types;
     typedef struct packed{
         logic [31:0] pc;
         logic [1:0] op;
-    } ec_inputs_t;
+    } gc_inputs_t;
 
     typedef struct packed{
         logic [31:2] addr;

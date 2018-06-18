@@ -51,7 +51,7 @@ package taiga_config;
     parameter CSR_UNIT_EX_ID = MUL_UNIT_EX_ID + 1;//constant done signals
     parameter ALU_UNIT_EX_ID = CSR_UNIT_EX_ID + 1;//constant done signals
     parameter BRANCH_UNIT_EX_ID = ALU_UNIT_EX_ID + 1;//constant done signals
-    parameter EC_UNIT_EX_ID = BRANCH_UNIT_EX_ID + 1;//constant done signals
+    parameter GC_UNIT_EX_ID = BRANCH_UNIT_EX_ID + 1;//constant done signals
 
 
     parameter NUM_WB_UNITS = 4 + USE_MUL + USE_DIV;

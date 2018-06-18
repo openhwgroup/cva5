@@ -35,52 +35,52 @@ module branch_unit(
         unit_writeback_interface.unit branch_wb
         );
 
+    logic[19:0] jal_imm;
+    logic[11:0] jalr_imm;
+    logic[11:0] br_imm;
+
+    logic [31:0] pc_offset;
+    logic [31:0] jump_base;
+    logic [31:0] jump_pc_dec;
+
+    logic [31:0] pc_plus_4;
+
+    logic signed [32:0] rs1_sext;
+    logic signed [32:0] rs2_sext;
+
     logic result;
     logic equal;
     logic lessthan;
 
     logic equal_ex;
     logic lessthan_ex;
-
-    logic[19:0] jal_imm;
-    logic[11:0] jalr_imm;
-    logic[11:0] br_imm;
-
-    logic [31:0] pc_offset;
-    logic [31:0] pc_plus_4;
-
     logic [2:0] fn3_ex;
     logic [31:0] rd_ex;
+    logic jump_ex;
 
+    logic done;
+    logic new_jal_jalr_dec_with_rd;
+
+    //Perf monitoring
     logic [31:0] jump_count;
     logic [31:0] call_count;
     logic [31:0] ret_count;
     logic [31:0] br_count;
 
-    logic signed [32:0] rs1_sext;
-    logic signed [32:0] rs2_sext;
-
-    logic jump_ex;
-    logic bcomp_ex;
-    logic br_taken_dec;
-
-    logic done;
-    logic new_jal_jalr_dec;
-
-    logic [31:0] carry_value;
-    logic [31:0] select_new_carry;
-    logic [31:0] carry;
-
+    //implementation
+    ////////////////////////////////////////////////////
     assign equal = (branch_inputs.rs1 == branch_inputs.rs2);
-    assign rs1_sext = {branch_inputs.rs1[XLEN-1] & branch_inputs.use_signed, branch_inputs.rs1};
-    assign rs2_sext = {branch_inputs.rs2[XLEN-1] & branch_inputs.use_signed, branch_inputs.rs2};
+    assign rs1_sext = signed'({branch_inputs.rs1[XLEN-1] & branch_inputs.use_signed, branch_inputs.rs1});
+    assign rs2_sext = signed'({branch_inputs.rs2[XLEN-1] & branch_inputs.use_signed, branch_inputs.rs2});
 
-    assign lessthan = signed'(rs1_sext) < signed'(rs2_sext);
+    assign lessthan = rs1_sext < rs2_sext;
 
     always_comb begin
-        unique case (fn3_ex) // <-- 010, 011 unused
+        case (fn3_ex) // <-- 010, 011 unused
             BEQ_fn3 : result = equal_ex;
             BNE_fn3 : result = ~equal_ex;
+            3'b010 : result = equal_ex;
+            3'b011 : result = ~equal_ex;
             BLT_fn3 : result = lessthan_ex;
             BGE_fn3 : result = ~lessthan_ex;
             BLTU_fn3 : result = lessthan_ex;
@@ -96,30 +96,42 @@ module branch_unit(
     assign br_imm = {branch_inputs.instruction[31], branch_inputs.instruction[7], branch_inputs.instruction[30:25], branch_inputs.instruction[11:8]};
 
     always_comb begin
-        if (branch_inputs.jal)
+        unique if (branch_inputs.jalr)
+            pc_offset = 32'(signed'(jalr_imm));
+        else if (branch_inputs.jal)
             pc_offset = 32'(signed'({jal_imm, 1'b0}));
         else
             pc_offset = 32'(signed'({br_imm, 1'b0}));
     end
 
+    always_comb begin
+        if (branch_inputs.jalr)
+            jump_base = branch_inputs.rs1;
+        else
+            jump_base = branch_inputs.dec_pc;
+    end
+
+    assign jump_pc_dec = jump_base + pc_offset;
     assign pc_plus_4 = branch_inputs.dec_pc + 4;
+
     assign bt.branch_ex = branch_ex.new_request;
 
     always_ff @(posedge clk) begin
-            fn3_ex <= branch_inputs.fn3;
-            equal_ex <= equal;
-            lessthan_ex <= lessthan;
-            bt.ex_pc <= branch_inputs.dec_pc;
-            jump_ex <= (branch_inputs.jal | branch_inputs.jalr);
-            bt.jump_pc <= branch_inputs.jalr ? (branch_inputs.rs1 + 32'(signed'(jalr_imm))) : (branch_inputs.dec_pc + pc_offset);
-            bt.njump_pc <= pc_plus_4;
+        fn3_ex <= branch_inputs.fn3;
+        equal_ex <= equal;
+        lessthan_ex <= lessthan;
+        bt.ex_pc <= branch_inputs.dec_pc;
+        jump_ex <= (branch_inputs.jal | branch_inputs.jalr);
+        bt.jump_pc[31:1] <= jump_pc_dec[31:1];
+        bt.jump_pc[0] <= 0;
+        bt.njump_pc <= pc_plus_4;
     end
 
     //if the destination reg is zero, the result is not "written back" to the register file.
-    assign new_jal_jalr_dec = (branch_inputs.jal | branch_inputs.jalr) & ~branch_inputs.rdx0;
+    assign new_jal_jalr_dec_with_rd = branch_ex.new_request_dec & branch_inputs.uses_rd;
 
     always_ff @(posedge clk) begin
-        if (branch_ex.new_request_dec & new_jal_jalr_dec) begin
+        if (new_jal_jalr_dec_with_rd) begin
             rd_ex <= pc_plus_4;
         end
     end
@@ -152,7 +164,7 @@ module branch_unit(
     always_ff @(posedge clk) begin
         if (rst) begin
             done <= 0;
-        end else if (branch_ex.new_request_dec & new_jal_jalr_dec) begin
+        end else if (new_jal_jalr_dec_with_rd) begin
             done <= 1;
         end else if (branch_wb.accepted) begin
             done <= 0;

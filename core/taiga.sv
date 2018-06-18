@@ -56,13 +56,13 @@ module taiga (
     mul_inputs_t mul_inputs;
     div_inputs_t div_inputs;
     csr_inputs_t csr_inputs;
-    ec_inputs_t ec_inputs;
+    gc_inputs_t gc_inputs;
 
     func_unit_ex_interface branch_ex();
     func_unit_ex_interface alu_ex();
     func_unit_ex_interface ls_ex();
     func_unit_ex_interface csr_ex();
-    func_unit_ex_interface ec_ex();
+    func_unit_ex_interface gc_ex();
     func_unit_ex_interface mul_ex();
     func_unit_ex_interface div_ex();
 
@@ -85,6 +85,11 @@ module taiga (
     mmu_interface immu();
     mmu_interface dmmu();
 
+    //Global Control
+    logic gc_issue_hold;
+    logic gc_issue_flush;
+    logic gc_fetch_hold;
+    logic gc_fetch_flush;
     logic inorder;
 
 
@@ -144,8 +149,6 @@ module taiga (
      * Decode/Issue/Control
      *************************************/
     decode decode_block (.*);
-    //temp
-    assign inuse_clear = 0;
     register_file register_file_block (.*);
     id_generator id_gen_block (.*);
     inflight_queue inst_queue(.*);
@@ -166,7 +169,7 @@ module taiga (
         end
     endgenerate
     csr_unit csr_unit_block (.*, .csr_wb(unit_wb[CSR_UNIT_WB_ID].unit));
-    ec_unit ec_unit_block (.*);
+    gc_unit gc_unit_block (.*);
 
     generate if (USE_MUL)
             mul_unit mul_unit_block (.*, .mul_wb(unit_wb[MUL_UNIT_WB_ID].unit));
@@ -179,5 +182,12 @@ module taiga (
      * Writeback Mux
      *************************************/
     write_back write_back_mux (.*);
+
+    ////////////////////////////////////////////////////
+    //Assertions
+    //Ensure that reset is held for at least 32 cycles to clear shift regs
+    always_ff @ (posedge clk) begin
+        assert property(@(posedge clk) $rose (rst) |=> rst[*32]) else $error("Reset not held for long enough!");
+    end
 
 endmodule

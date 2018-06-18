@@ -41,7 +41,7 @@ module decode(
         output load_store_inputs_t ls_inputs,
         output branch_inputs_t branch_inputs,
         output csr_inputs_t csr_inputs,
-        output ec_inputs_t ec_inputs,
+        output gc_inputs_t gc_inputs,
         output mul_inputs_t mul_inputs,
         output  div_inputs_t div_inputs,
 
@@ -49,9 +49,12 @@ module decode(
         func_unit_ex_interface.decode ls_ex,
         func_unit_ex_interface.decode branch_ex,
         func_unit_ex_interface.decode csr_ex,
-        func_unit_ex_interface.decode ec_ex,
+        func_unit_ex_interface.decode gc_ex,
         func_unit_ex_interface.decode mul_ex,
         func_unit_ex_interface.decode div_ex,
+
+        input logic gc_issue_hold,
+        input logic gc_issue_flush,
 
         output instruction_issued_no_rd,
         input logic instruction_complete,
@@ -167,7 +170,7 @@ module decode(
 
     assign bt.dec_pc = ib.data_out.pc;
 
-    assign issue_valid =  ib.valid & id_gen.id_avaliable & ~flush;
+    assign issue_valid =  ib.valid & id_gen.id_avaliable & ~flush & ~gc_issue_hold & ~gc_issue_flush;
 
 
     assign operands_ready =  ~(
@@ -186,7 +189,7 @@ module decode(
     assign new_request[ALU_UNIT_EX_ID] =  ((opcode_trim == ARITH_T)  && ~ib.data_out.instruction[25]) || opcode_trim inside {ARITH_IMM_T, AUIPC_T, LUI_T};
     assign new_request[LS_UNIT_EX_ID] = opcode_trim inside {LOAD_T, STORE_T, AMO_T};
     assign new_request[CSR_UNIT_EX_ID] = (opcode_trim == SYSTEM_T) && (fn3 != 0);
-    assign new_request[EC_UNIT_EX_ID] = ((opcode_trim == SYSTEM_T) && (fn3 == 0)) || (opcode_trim == FENCE_T);
+    assign new_request[GC_UNIT_EX_ID] = ((opcode_trim == SYSTEM_T) && (fn3 == 0)) || (opcode_trim == FENCE_T);
 
     generate if (USE_MUL)
             assign new_request[MUL_UNIT_EX_ID] = mult_div_op & ~fn3[2];
@@ -199,7 +202,7 @@ module decode(
     assign issue_ready[ALU_UNIT_EX_ID] = new_request[ALU_UNIT_EX_ID] & alu_ex.ready;
     assign issue_ready[LS_UNIT_EX_ID] = new_request[LS_UNIT_EX_ID] & ls_ex.ready;
     assign issue_ready[CSR_UNIT_EX_ID] = new_request[CSR_UNIT_EX_ID] & csr_ex.ready;
-    assign issue_ready[EC_UNIT_EX_ID] = new_request[EC_UNIT_EX_ID] & ec_ex.ready;
+    assign issue_ready[GC_UNIT_EX_ID] = new_request[GC_UNIT_EX_ID] & gc_ex.ready;
     generate if (USE_MUL)
             assign issue_ready[MUL_UNIT_EX_ID] = new_request[MUL_UNIT_EX_ID] & mul_ex.ready;
     endgenerate
@@ -211,7 +214,7 @@ module decode(
     assign issue[ALU_UNIT_EX_ID] = issue_valid & operands_ready & issue_ready[ALU_UNIT_EX_ID];
     assign issue[LS_UNIT_EX_ID] = issue_valid & load_store_operands_ready & issue_ready[LS_UNIT_EX_ID];
     assign issue[CSR_UNIT_EX_ID] = issue_valid & operands_ready &  issue_ready[CSR_UNIT_EX_ID];
-    assign issue[EC_UNIT_EX_ID] = issue_valid & operands_ready &  issue_ready[EC_UNIT_EX_ID];
+    assign issue[GC_UNIT_EX_ID] = issue_valid & operands_ready &  issue_ready[GC_UNIT_EX_ID];
     generate if (USE_MUL)
             assign issue[MUL_UNIT_EX_ID] = issue_valid & operands_ready & issue_ready[MUL_UNIT_EX_ID];
     endgenerate
@@ -349,14 +352,14 @@ module decode(
     assign branch_inputs.fn3 = fn3;
     assign branch_inputs.dec_pc = ib.data_out.pc;
     assign branch_inputs.use_signed = !(fn3 inside {BLTU_fn3, BGEU_fn3});
-    assign branch_inputs.rdx0 = ~uses_rd;//(future_rd_addr == 0); jal jalr x0
-    assign branch_inputs.is_call = ib.data_out.is_call;
-    assign branch_inputs.is_return = ib.data_out.is_return;
-
     assign branch_inputs.jal = opcode[3];//(opcode == JAL);
     assign branch_inputs.jalr = ~opcode[3] & opcode[2];//(opcode == JALR);
+    assign branch_inputs.uses_rd = uses_rd;//not (future_rd_addr == 0); jal jalr x0
+    assign branch_inputs.is_call = ib.data_out.is_call;
+    assign branch_inputs.is_return = ib.data_out.is_return;
     assign branch_inputs.instruction = ib.data_out.instruction;
     //----------------------------------------------------------------------------------
+
 
     //----------------------------------------------------------------------------------
     //CSR unit inputs

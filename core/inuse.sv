@@ -48,13 +48,16 @@ module inuse (
     logic write_collision;
 
     //////////////////////////////////////////
-    //Initialize to zero
+    //Initialize to all inuse (0,1) for simulation,
+    //will be cleared by GC after reset in hardware
+    // synthesis translate_off
     initial begin
         foreach(bankA[i]) begin
             bankA[i] = 0;
-            bankB[i] = 0;
+            bankB[i] = 1;
         end
     end
+    // synthesis translate_on
 
     assign write_collision = issued && (decode_rd_addr == wb_rd_addr);
 
