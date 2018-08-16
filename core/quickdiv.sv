@@ -21,7 +21,7 @@
  *             Alec Lu <fla30@sfu.ca>
  */
 
-module quickdiv_64bitshift
+module quickdiv
         #(
         parameter C_WIDTH = 32
 
