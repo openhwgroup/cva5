@@ -27,23 +27,63 @@ module msb
         );
 
     logic [2:0] sub_msb [3:0];
-    logic [3:0] bit_found;
+    logic index16thBit;
+    logic index8thBit;
 
-    //Finds MSB for 4x 8-bit segments in parallel
-    //Is smaller and faster than checking the full width sequentially (i.e. from 0 to 31)
     always_comb begin
-		  for (int i=0; i<4; i=i+1) begin
-            bit_found[i] = |msb_input[i*8+:8];
-            sub_msb[i] = 0;
-            for (int j=1;j<8; j++) begin
-                if (msb_input[(i*8)+j])
-                    sub_msb[i] = j;
-            end
-        end
+        msb[4] = |msb_input[31:16];
+        msb[3] = (|msb_input[31:24]) | (|msb_input[15:8] & ~|msb_input[23:16]);
 
-        msb = {2'b0,sub_msb[0]};
-        for (int i=1; i<4; i=i+1) begin
-            if(bit_found[i]) msb = {i[1:0],sub_msb[i]};
-        end
-    end
+        casex (msb_input[31:25])
+            7'b1xxxxxx: sub_msb[3] = 7;
+            7'b01xxxxx: sub_msb[3] = 6;
+            7'b001xxxx: sub_msb[3] = 5;
+            7'b0001xxx: sub_msb[3] = 4;
+            7'b00001xx: sub_msb[3] = 3;
+            7'b000001x: sub_msb[3] = 2;
+            7'b0000001: sub_msb[3] = 1;
+            default: sub_msb[3] = 0;
+        endcase
+
+        casex (msb_input[23:17])
+            7'b1xxxxxx: sub_msb[2] = 7;
+            7'b01xxxxx: sub_msb[2] = 6;
+            7'b001xxxx: sub_msb[2] = 5;
+            7'b0001xxx: sub_msb[2] = 4;
+            7'b00001xx: sub_msb[2] = 3;
+            7'b000001x: sub_msb[2] = 2;
+            7'b0000001: sub_msb[2] = 1;
+            default: sub_msb[2] = 0;
+        endcase
+
+        casex (msb_input[15: 9])
+            7'b1xxxxxx: sub_msb[1] = 7;
+            7'b01xxxxx: sub_msb[1] = 6;
+            7'b001xxxx: sub_msb[1] = 5;
+            7'b0001xxx: sub_msb[1] = 4;
+            7'b00001xx: sub_msb[1] = 3;
+            7'b000001x: sub_msb[1] = 2;
+            7'b0000001: sub_msb[1] = 1;
+            default: sub_msb[1] = 0;
+        endcase
+        
+        casex (msb_input[ 7: 1])
+            7'b1xxxxxx: sub_msb[0] = 7;
+            7'b01xxxxx: sub_msb[0] = 6;
+            7'b001xxxx: sub_msb[0] = 5;
+            7'b0001xxx: sub_msb[0] = 4;
+            7'b00001xx: sub_msb[0] = 3;
+            7'b000001x: sub_msb[0] = 2;
+            7'b0000001: sub_msb[0] = 1;
+            default: sub_msb[0] = 0;
+        endcase
+
+        case (msb[4:3])
+            0: msb[2:0] = sub_msb[0];
+            1: msb[2:0] = sub_msb[1];
+            2: msb[2:0] = sub_msb[2];
+            3: msb[2:0] = sub_msb[3];
+        endcase
+    end 
+    
 endmodule
