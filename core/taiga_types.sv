@@ -198,11 +198,11 @@ package taiga_types;
 
     const bit[1:0] CSR_READ_ONLY = 2'b11;
 
-    typedef enum bit [1:0] {
-        USER = 2'b00,
-        SUPERVISOR = 2'b01,
-        HYPERVISOR =2'b10,
-        MACHINE = 2'b11
+    typedef enum logic [1:0] {
+        USER_PRIV = 2'b00,
+        SUPERVISOR_PRIV = 2'b01,
+        //reserved
+        MACHINE_PRIV = 2'b11
     } privilege_t;
 
 
@@ -213,7 +213,7 @@ package taiga_types;
 
     typedef enum bit [3:0] {
         INST_ADDR_MISSALIGNED = 4'd0,
-        INST_FAULT = 4'd1,
+        INST_ACCESS_FAULT = 4'd1,
         ILLEGAL_INST = 4'd2,
         BREAK = 4'd3,
         LOAD_ADDR_MISSALIGNED = 4'd4,
@@ -222,8 +222,13 @@ package taiga_types;
         STORE_AMO_FAULT = 4'd7,
         ECALL_U = 4'd8,
         ECALL_S = 4'd9,
-        ECALL_H = 4'd10,
-        ECALL_M = 4'd11
+        //reserved
+        ECALL_M = 4'd11,
+        INST_PAGE_FAULT = 4'd12,
+        LOAD_PAGE_FAULT = 4'd13,
+        //reserved
+        STORE_OR_AMO_PAGE_FAULT = 4'd15
+        //reserved
     } exception_code_t;
     parameter ECODE_W = 4;
 
@@ -231,15 +236,15 @@ package taiga_types;
     typedef enum bit [3:0] {
         U_SOFTWARE_INTERRUPT = 4'd0,
         S_SOFTWARE_INTERRUPT = 4'd1,
-        H_SOFTWARE_INTERRUPT = 4'd2,
+        //RESERVED
         M_SOFTWARE_INTERRUPT = 4'd3,
         U_TIMER_INTERRUPT = 4'd4,
         S_TIMER_INTERRUPT = 4'd5,
-        H_TIMER_INTERRUPT = 4'd6,
+        //RESERVED
         M_TIMER_INTERRUPT = 4'd7,
         U_EXTERNAL_INTERRUPT = 4'd8,
         S_EXTERNAL_INTERRUPT = 4'd9,
-        H_EXTERNAL_INTERRUPT = 4'd10,
+        //RESERVED
         M_EXTERNAL_INTERRUPT = 4'd11
     } interrupt_code_t;
 
@@ -350,8 +355,12 @@ package taiga_types;
     } csr_inputs_t;
 
     typedef struct packed{
+        logic [31:0] dec_pc;
         logic [31:0] pc;
-        logic [1:0] op;
+        logic [XLEN-1:0] rs1;
+        logic [XLEN-1:0] rs2;
+        logic [6:0] funct7;
+        logic [11:0] funct12;
     } gc_inputs_t;
 
     typedef struct packed{
@@ -412,7 +421,5 @@ package taiga_types;
         logic [XLEN-1:0] t4;
         logic [XLEN-1:0] t5;
         logic [XLEN-1:0] t6;
-} simulation_named_regfile;
+    } simulation_named_regfile;
 endpackage
-
-

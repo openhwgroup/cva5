@@ -38,6 +38,7 @@ module taiga (
         output logic[31:0] dec_pc_debug,
         output logic[31:0] if2_pc_debug,
 
+        input logic timer_interrupt,
         input logic interrupt
         );
 
@@ -74,7 +75,9 @@ module taiga (
     unit_writeback_interface unit_wb [NUM_WB_UNITS-1:0]();
     register_file_writeback_interface rf_wb();
 
-    csr_exception_interface csr_exception();
+    exception_interface csr_exception();
+    exception_interface  ls_exception();
+    csr_exception_interface gc_exception();
 
     tlb_interface itlb();
     tlb_interface dtlb();
@@ -86,11 +89,22 @@ module taiga (
     mmu_interface dmmu();
 
     //Global Control
+    logic load_store_FIFO_emptying;
     logic gc_issue_hold;
     logic gc_issue_flush;
     logic gc_fetch_hold;
     logic gc_fetch_flush;
+    logic gc_supress_writeback;
     logic inorder;
+    logic inuse_clear;
+    instruction_id_t oldest_id;
+    logic inflight_queue_empty;
+    logic load_store_issue;
+
+    logic mret;
+    logic sret;
+    logic ecall;
+    logic ebreak;
 
 
     //Branch Unit and Fetch Unit
@@ -109,7 +123,6 @@ module taiga (
     logic [31:0] dec_pc;
     logic [31:0] pc_ex;
 
-    logic inuse_clear;
 
     logic instruction_issued_no_rd;
     logic instruction_complete;

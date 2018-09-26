@@ -50,18 +50,13 @@ module alu_unit(
             ALU_LOGIC_AND : adder_in1 = alu_inputs.in1 & alu_inputs.in2;
             ALU_LOGIC_ADD : adder_in1 = alu_inputs.in1;
         endcase
-    end
-
-    always_comb begin
         case (alu_inputs.logic_op)
-            ALU_LOGIC_XOR : adder_in2_logic = 0;
-            ALU_LOGIC_OR : adder_in2_logic = 0;
-            ALU_LOGIC_AND : adder_in2_logic = 0;
-            ALU_LOGIC_ADD : adder_in2_logic = alu_inputs.in2;
+            ALU_LOGIC_XOR : adder_in2 = 0;
+            ALU_LOGIC_OR : adder_in2 = 0;
+            ALU_LOGIC_AND : adder_in2 = 0;
+            ALU_LOGIC_ADD : adder_in2 = alu_inputs.subtract ? ~alu_inputs.in2 : alu_inputs.in2;
         endcase
     end
-
-    assign adder_in2 = alu_inputs.subtract ? ~alu_inputs.in2 : adder_in2_logic;
 
     assign add_sub_result = adder_in1 + adder_in2 + alu_inputs.subtract;
 

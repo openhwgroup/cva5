@@ -27,7 +27,7 @@ import taiga_config::*;
 import taiga_types::*;
 import l2_config_and_types::*;
 
-`define  MEMORY_FILE  "/home/ematthew/Research/RISCV/software2/riscv-tools/riscv-tests/benchmarks/fft.riscv.sim_init"
+`define  MEMORY_FILE  "/home/ematthew/Research/RISCV/software/riscv-tools/riscv-tests/benchmarks/dhrystone.riscv.sim_init"
 `define  UART_LOG  "/home/ematthew/uart.log"
 
 module taiga_tb ( );
@@ -175,7 +175,8 @@ module taiga_tb ( );
         
 
     logic interrupt;
-    
+    logic timer_interrupt;
+
     logic[31:0] dec_pc_debug;
     logic[31:0] if2_pc_debug;
     
@@ -226,7 +227,8 @@ module taiga_tb ( );
     
     initial begin
         simulator_clk = 0;
-        interrupt = '0;
+        interrupt = 0;
+        timer_interrupt = 0;
         simulator_resetn = 0;
                 
         simulation_mem.load_program(`MEMORY_FILE, RESET_VEC);
@@ -238,7 +240,7 @@ module taiga_tb ( );
         end
         do_reset();
 
-        #1500000;
+        #1800000;
         $fclose(output_file);
         $finish;
     end

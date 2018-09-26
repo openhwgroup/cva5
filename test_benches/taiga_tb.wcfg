@@ -15,15 +15,15 @@
       </db_ref>
    </db_ref_list>
    <zoom_setting>
-      <ZoomStartTime time="717500000fs"></ZoomStartTime>
-      <ZoomEndTime time="981000001fs"></ZoomEndTime>
-      <Cursor1Time time="773000000fs"></Cursor1Time>
+      <ZoomStartTime time="778020000fs"></ZoomStartTime>
+      <ZoomEndTime time="788800001fs"></ZoomEndTime>
+      <Cursor1Time time="781640000fs"></Cursor1Time>
    </zoom_setting>
    <column_width_setting>
       <NameColumnWidth column_width="297"></NameColumnWidth>
-      <ValueColumnWidth column_width="124"></ValueColumnWidth>
+      <ValueColumnWidth column_width="112"></ValueColumnWidth>
    </column_width_setting>
-   <WVObjectSize size="212" />
+   <WVObjectSize size="230" />
    <wvobject type="logic" fp_name="/taiga_tb/clk">
       <obj_property name="ElementShortName">clk</obj_property>
       <obj_property name="ObjectShortName">clk</obj_property>
@@ -67,6 +67,14 @@
    <wvobject type="array" fp_name="/taiga_tb/uut/branch_unit_block/br_imm">
       <obj_property name="ElementShortName">br_imm[11:0]</obj_property>
       <obj_property name="ObjectShortName">br_imm[11:0]</obj_property>
+   </wvobject>
+   <wvobject type="array" fp_name="/taiga_tb/uut/branch_unit_block/jump_base">
+      <obj_property name="ElementShortName">jump_base[31:0]</obj_property>
+      <obj_property name="ObjectShortName">jump_base[31:0]</obj_property>
+   </wvobject>
+   <wvobject type="array" fp_name="/taiga_tb/uut/branch_unit_block/pc_offset">
+      <obj_property name="ElementShortName">pc_offset[31:0]</obj_property>
+      <obj_property name="ObjectShortName">pc_offset[31:0]</obj_property>
    </wvobject>
    <wvobject type="array" fp_name="/taiga_tb/uut/bt/jump_pc">
       <obj_property name="ElementShortName">jump_pc[31:0]</obj_property>
@@ -223,6 +231,54 @@
       <obj_property name="ElementShortName">data_valid</obj_property>
       <obj_property name="ObjectShortName">data_valid</obj_property>
    </wvobject>
+   <wvobject fp_name="divider254" type="divider">
+      <obj_property name="label">Global Control</obj_property>
+      <obj_property name="DisplayName">label</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/taiga_tb/uut/gc_unit_block/clk">
+      <obj_property name="ElementShortName">clk</obj_property>
+      <obj_property name="ObjectShortName">clk</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/taiga_tb/uut/gc_unit_block/rst">
+      <obj_property name="ElementShortName">rst</obj_property>
+      <obj_property name="ObjectShortName">rst</obj_property>
+   </wvobject>
+   <wvobject type="array" fp_name="/taiga_tb/uut/gc_unit_block/state">
+      <obj_property name="ElementShortName">state[31:0]</obj_property>
+      <obj_property name="ObjectShortName">state[31:0]</obj_property>
+   </wvobject>
+   <wvobject type="array" fp_name="/taiga_tb/uut/gc_unit_block/next_state">
+      <obj_property name="ElementShortName">next_state[31:0]</obj_property>
+      <obj_property name="ObjectShortName">next_state[31:0]</obj_property>
+   </wvobject>
+   <wvobject type="array" fp_name="/taiga_tb/uut/gc_unit_block/clear_shift_count">
+      <obj_property name="ElementShortName">clear_shift_count[31:0]</obj_property>
+      <obj_property name="ObjectShortName">clear_shift_count[31:0]</obj_property>
+   </wvobject>
+   <wvobject type="array" fp_name="/taiga_tb/uut/gc_unit_block/tlb_clear_shift_count">
+      <obj_property name="ElementShortName">tlb_clear_shift_count[31:0]</obj_property>
+      <obj_property name="ObjectShortName">tlb_clear_shift_count[31:0]</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/taiga_tb/uut/gc_unit_block/gc_issue_hold">
+      <obj_property name="ElementShortName">gc_issue_hold</obj_property>
+      <obj_property name="ObjectShortName">gc_issue_hold</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/taiga_tb/uut/gc_unit_block/gc_issue_flush">
+      <obj_property name="ElementShortName">gc_issue_flush</obj_property>
+      <obj_property name="ObjectShortName">gc_issue_flush</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/taiga_tb/uut/gc_unit_block/gc_fetch_hold">
+      <obj_property name="ElementShortName">gc_fetch_hold</obj_property>
+      <obj_property name="ObjectShortName">gc_fetch_hold</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/taiga_tb/uut/gc_unit_block/gc_fetch_flush">
+      <obj_property name="ElementShortName">gc_fetch_flush</obj_property>
+      <obj_property name="ObjectShortName">gc_fetch_flush</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/taiga_tb/uut/gc_unit_block/inuse_clear">
+      <obj_property name="ElementShortName">inuse_clear</obj_property>
+      <obj_property name="ObjectShortName">inuse_clear</obj_property>
+   </wvobject>
    <wvobject fp_name="divider7359" type="divider">
       <obj_property name="label">Decode/Issue</obj_property>
       <obj_property name="DisplayName">label</obj_property>
@@ -335,6 +391,22 @@
    <wvobject type="logic" fp_name="/taiga_tb/uut/register_file_block/inorder">
       <obj_property name="ElementShortName">inorder</obj_property>
       <obj_property name="ObjectShortName">inorder</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/taiga_tb/uut/register_file_block/inuse_mem/clr">
+      <obj_property name="ElementShortName">clr</obj_property>
+      <obj_property name="ObjectShortName">clr</obj_property>
+   </wvobject>
+   <wvobject type="array" fp_name="/taiga_tb/uut/register_file_block/inuse_mem/bankA">
+      <obj_property name="ElementShortName">bankA[31:0]</obj_property>
+      <obj_property name="ObjectShortName">bankA[31:0]</obj_property>
+   </wvobject>
+   <wvobject type="array" fp_name="/taiga_tb/uut/register_file_block/inuse_mem/bankB">
+      <obj_property name="ElementShortName">bankB[31:0]</obj_property>
+      <obj_property name="ObjectShortName">bankB[31:0]</obj_property>
+   </wvobject>
+   <wvobject type="array" fp_name="/taiga_tb/uut/register_file_block/inuse_mem/w_clear">
+      <obj_property name="ElementShortName">w_clear[4:0]</obj_property>
+      <obj_property name="ObjectShortName">w_clear[4:0]</obj_property>
    </wvobject>
    <wvobject type="logic" fp_name="/taiga_tb/uut/register_file_block/inuse_mem/rs1_inuse">
       <obj_property name="ElementShortName">rs1_inuse</obj_property>

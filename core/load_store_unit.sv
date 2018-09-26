@@ -43,7 +43,9 @@ module load_store_unit (
 
         local_memory_interface.master data_bram,
 
-        output logic inorder,
+        output logic load_store_FIFO_emptying,
+        exception_interface.unit  ls_exception,
+
         unit_writeback_interface.unit ls_wb
         );
 
@@ -187,7 +189,7 @@ module load_store_unit (
     assign input_fifo.push = ls_ex.new_request_dec;
     assign ls_ex.ready = ~input_fifo.full;
     assign input_fifo.pop = issue_request;
-    assign inorder = 0;//input_fifo.valid;
+    assign load_store_FIFO_emptying = input_fifo.early_empty;
     assign stage1 = input_fifo.data_out;
     /*********************************
      * TLB interface

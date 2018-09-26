@@ -32,6 +32,7 @@ module one_hot_occupancy #(parameter DEPTH = 2)
         output logic early_full,
         output logic full,
         output logic empty,
+        output logic early_empty,
         output logic valid,
         output logic early_valid,
         output logic two_plus
@@ -50,6 +51,8 @@ module one_hot_occupancy #(parameter DEPTH = 2)
     end
 
     assign empty = valid_chain[0];
+    assign early_empty = valid_chain[1] & pop & ~push;
+
     assign valid = ~valid_chain[0];
     assign full = valid_chain[DEPTH];
 

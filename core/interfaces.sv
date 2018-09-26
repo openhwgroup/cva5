@@ -97,6 +97,19 @@ interface csr_exception_interface;
 
 endinterface
 
+interface exception_interface;
+    logic valid;
+    logic ack;
+    
+    exception_code_t code;
+    logic [31:0] pc;
+    logic [31:0] addr;
+    instruction_id_t id;
+
+    modport econtrol (output valid, code, pc, addr, id, input ack);
+    modport unit (input valid, code, pc, addr, id, output ack);
+endinterface
+
 interface register_file_decode_interface;
     logic[4:0] future_rd_addr; //if not a storing instruction required to be zero
     logic[4:0] rs1_addr;
@@ -124,14 +137,6 @@ interface register_file_writeback_interface;
     modport writeback (output rd_addr, valid_write, rd_data, id);
     modport unit (input rd_addr, valid_write, rd_data, id);
 
-endinterface
-
-interface exception_wb_interface_wb;
-    logic exception;
-    logic [3:0] exception_code;
-    logic [31:0] exception_addr;
-    modport wb (output exception, exception_code, exception_addr);
-    modport csr (input exception, exception_code, exception_addr);
 endinterface
 
 
@@ -193,9 +198,10 @@ interface fifo_interface #(parameter DATA_WIDTH = 42);//#(parameter type data_ty
     logic empty;
     logic early_full;
     logic early_valid;
+    logic early_empty;
     modport enqueue (input  early_full, full, empty, output data_in, push);
-    modport dequeue (input early_valid, valid, data_out, output pop);
-    modport structure(input push, pop, data_in, output data_out, early_valid, valid, early_full, full, empty);
+    modport dequeue (input early_valid, valid, early_empty, data_out, output pop);
+    modport structure(input push, pop, data_in, output data_out, early_valid, valid, early_full, full, empty, early_empty);
 endinterface
 
 interface axi_interface;

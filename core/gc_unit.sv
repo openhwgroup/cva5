@@ -27,13 +27,32 @@ module gc_unit(
         input logic clk,
         input logic rst,
         input logic interrupt,
+
         func_unit_ex_interface.unit gc_ex,
         input gc_inputs_t gc_inputs,
+
+        input instruction_id_t oldest_id,
+        input logic inflight_queue_empty,
+
+        exception_interface.econtrol ls_exception,
+        input logic load_store_issue,
+        input logic load_store_FIFO_emptying,
+
+        exception_interface.econtrol csr_exception,
+        output logic mret,
+        output logic sret,
+        output logic ecall,
+        output logic ebreak,
+
+        csr_exception_interface.econtrol gc_exception,
+
         output logic gc_issue_hold,
         output logic gc_issue_flush,
         output logic gc_fetch_hold,
         output logic gc_fetch_flush,
+        output logic gc_supress_writeback,
 
+        output logic inorder,
         output logic inuse_clear
         );
 
@@ -45,14 +64,57 @@ module gc_unit(
     logic [CLEAR_DEPTH-1:0] clear_shift_count;
     logic [TLB_CLEAR_DEPTH-1:0] tlb_clear_shift_count;
     ////////////////////////////////////////////////////
+    enum {ECALL, EBREAK, SRET, MRET, SFENCE, FENCE, FENCEI} operation;
 
+    //Instructions
+    //All instructions are processed only if in IDLE state, meaning there can be no exceptions caused by instructions already further in the pipeline.
+    //FENCE:
+    //    Drain Load/Store FIFO (i.e. not in in-order mode)
+    //FENCE.I:
+    //    flush and hold fetch until L/S unit empty
+    //SFENCE
+    //    flush and hold fetch, wait until L/S input FIFO empty, hold fetch until TLB update complete
+    //ECALL, EBREAK, SRET, MRET:
+    //    flush fetch, update CSRs (could be illegal instruction exception as well)
 
-    enum {RST_STATE, PRE_CLEAR_STATE, CLEAR_STATE, IDLE_STATE, TLB_CLEAR_STATE} state, next_state;
+    //Interrupt
+    //Hold issue, wait until IDLE state, flush fetch, take exception
 
+    //Fetch Exception
+    //flush fetch, wait until IDLE state, take exception.  If decode stage or later exception occurs first, exception is overridden
+
+    //Illegal opcode (decode stage)
+    //fetch flush, issue hold, wait until IDLE state, take exception.  If execute or later exception occurs first, exception is overridden
+
+    //CSR exceptions
+    //fetch flush, issue hold, capture ID/rd_non_zero and drain instruction queue, take exception.
+
+    //LS exceptions (miss-aligned, TLB and MMU)
+    //fetch flush, issue hold, capture ID/rd_non_zero and drain instruction queue, take exception.
+
+    //Instruction queue drain:
+    //  Two possibilities:
+    //      1. Instruction stores to reg file.  ID in instruction queue, wait until that ID is oldest (either find oldest valid, or for small cycle penalty just look at last entry and wait for ID and valid)
+    //      2. Instruction does not store to reg file.  If IQ not empty, wait for previously issued ID to complete, if empty no waiting required.
+    //
+    //      After all preceding instructions have been committed, continue popping instructions from queue but supress write-back operation until queue is drained.
+
+    //In-order mode:
+    //  Turn on when an instruction in the execute phase could cause an interrupt (L/S or CSR)
+    //  Turn off when exception can no-longer occur (after one cycle for CSR, when L/S input FIFO will be empty)
+
+    //*Complete issued instructions before exception
+    //*Drain L/S FIFO then Hold fetch/issue during TLB clear
+    //*Hold fetch until all stores committed
+    //*Turn on inorder mode when L/S issued, turn off when no instruction can cause interrupt
+    //     *If in-order mode and inflight queue empty, disable zero cycle write-back (eg. ALU)
+    //*Hold fetch during potential fetch exception, when fetch buffer drained, if no other exceptions trigger exception
+
+    enum {RST_STATE, PRE_CLEAR_STATE, CLEAR_STATE, IDLE_STATE, TLB_CLEAR_STATE, LS_EXCEPTION_POSSIBLE, IQ_DRAIN} state, next_state;
 
     //implementation
     ////////////////////////////////////////////////////
-    always_ff @(posedge clk) begin
+    always @(posedge clk) begin
         if (rst)
             state <= RST_STATE;
         else
@@ -65,8 +127,9 @@ module gc_unit(
             RST_STATE : next_state = PRE_CLEAR_STATE;
             PRE_CLEAR_STATE : next_state = CLEAR_STATE;
             CLEAR_STATE : if (clear_shift_count[CLEAR_DEPTH-1]) next_state = IDLE_STATE;
-            IDLE_STATE : if (interrupt) next_state = TLB_CLEAR_STATE;
+            IDLE_STATE : if (load_store_issue) next_state = LS_EXCEPTION_POSSIBLE;
             TLB_CLEAR_STATE : if (tlb_clear_shift_count[TLB_CLEAR_DEPTH-1]) next_state = IDLE_STATE;
+            LS_EXCEPTION_POSSIBLE : if (load_store_FIFO_emptying) next_state = IDLE_STATE;
             default : next_state = RST_STATE;
         endcase
     end
@@ -74,10 +137,15 @@ module gc_unit(
 
     assign gc_issue_hold = state inside {PRE_CLEAR_STATE, CLEAR_STATE, TLB_CLEAR_STATE};
     assign inuse_clear = state inside {CLEAR_STATE};
+    assign inorder = state inside {LS_EXCEPTION_POSSIBLE, IQ_DRAIN};
 
     assign gc_issue_flush = 0;
     assign gc_fetch_hold = 0;
     assign gc_fetch_flush = 0;
+    assign gc_supress_writeback = 0;
+
+
+
 
     //CLEAR state shift reg
     always_ff @ (posedge clk) begin
@@ -94,6 +162,12 @@ module gc_unit(
     ////////////////////////////////////////////////////
     assign gc_ex.ready = 1;
 
+
+    ////////////////////////////////////////////////////
+    //Assertions
+    always_ff @ (posedge clk) begin
+        assert ((gc_ex.new_request && state == IDLE_STATE) || !gc_ex.new_request) else $error("Request when not idle.");
+    end
 
     ////////////////////////////////////////////////////
 

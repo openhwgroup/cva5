@@ -39,9 +39,9 @@ module one_hot_to_integer
     end
     ////////////////////////////////////////////////////
     //Assertions
-    always_ff @ (posedge clk) begin
-        assert ((one_hot & (one_hot -1)) == 0) else $error("One-hot signal has multiple bits set!");
-    end
+    //always_ff @ (posedge clk) begin
+    //    assert ((one_hot & (one_hot -1)) == 0) else $error("One-hot signal has multiple bits set!");
+    //end
 
 
 endmodule

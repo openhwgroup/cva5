@@ -28,6 +28,7 @@ module write_back(
         input logic rst,
 
         input logic inorder,
+        input logic gc_supress_writeback,
         unit_writeback_interface.writeback unit_wb[NUM_WB_UNITS-1:0],
         register_file_writeback_interface.writeback rf_wb,
         inflight_queue_interface.wb iq,
@@ -107,7 +108,7 @@ module write_back(
     end
 
     always_ff @(posedge clk) begin
-        instruction_complete <= selected_unit_done_next_cycle;
+        instruction_complete <= selected_unit_done_next_cycle & ~gc_supress_writeback;
     end
 
     always_ff @(posedge clk) begin
@@ -119,7 +120,7 @@ module write_back(
     assign rf_wb.rd_addr = rd_addr_r;
     assign rf_wb.id = issue_id_r;
     always_ff @(posedge clk) begin
-            rf_wb.valid_write <= selected_unit_done_next_cycle & rd_addr_not_zero;
+            rf_wb.valid_write <= selected_unit_done_next_cycle & rd_addr_not_zero & ~gc_supress_writeback;
     end
 
     assign rf_wb.rd_data = rd[unit_id_r];

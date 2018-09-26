@@ -1,5 +1,5 @@
 /*
- * Copyright © 2017 Eric Matthews,  Lesley Shannon
+ * Copyright © 2017, 2018 Eric Matthews,  Lesley Shannon
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@
 
 import taiga_config::*;
 import taiga_types::*;
+import csr_types::*;
 
 module csr_unit (
         input logic clk,
@@ -34,7 +35,10 @@ module csr_unit (
         input logic instruction_issued_no_rd,
 
         //exception_control
-        csr_exception_interface.csr csr_exception,
+        exception_interface.unit csr_exception,
+        csr_exception_interface.csr gc_exception,
+        input logic mret,
+        input logic sret,
 
         //TLBs
         output logic tlb_on,
@@ -50,47 +54,10 @@ module csr_unit (
         input logic return_from_exception,
 
         //External
-        input logic interrupt
+        input logic interrupt,
+        input logic timer_interrupt
 
         );
-
-    typedef struct packed {
-        logic [3:0] rw_bits;
-        logic [1:0] privilege;
-        logic [5:0] sub_addr;
-    } csr_addr_t;
-
-    //Constant registers
-    typedef struct packed {
-        logic[1:0] base; //RV32I
-        logic[3:0] reserved;
-        logic Z;
-        logic Y;
-        logic X;
-        logic W;
-        logic V;
-        logic U; //User mode
-        logic T;
-        logic S; //Supervisor mode
-        logic R;
-        logic Q;
-        logic P;
-        logic O;
-        logic N;
-        logic M; //multiply divide
-        logic L;
-        logic K;
-        logic J;
-        logic I; //Base
-        logic H;
-        logic G;
-        logic F;
-        logic E;
-        logic D;
-        logic C;
-        logic B;
-        logic A; //Atomic
-    } misa_t;
 
     misa_t misa;
 
@@ -100,74 +67,13 @@ module csr_unit (
     bit [XLEN-1:0] mhartid = CPU_ID;
 
 
-    typedef struct packed {
-        logic  sd;
-        logic [XLEN-2:29] zero_bits1;
-        logic [4:0] vm;
-        logic [23:20] zero_bits2;
-        logic mxr;
-        logic pum;
-        logic mprv;
-        logic [1:0] xs;
-        logic [1:0] fs;
-        logic [1:0] mpp;
-        logic [1:0] hpp;
-        logic spp;
-        logic mpie;
-        logic hpie;
-        logic spie;
-        logic upie;
-        logic mie;
-        logic hie;
-        logic sie;
-        logic uie;
-    } mstatus_t;
-
-    mstatus_t mstatus, mstatus_write, mstatus_exception, mstatus_return, mstatus_next, mstatus_mask, mstatus_mmask, mstatus_smask;
-
-
-    typedef struct packed {
-        logic [XLEN-1:12] zeros;
-        logic meip;
-        logic heip;
-        logic seip;
-        logic ueip;
-        logic mtip;
-        logic htip;
-        logic stip;
-        logic utip;
-        logic msip;
-        logic hsip;
-        logic ssip;
-        logic usip;
-    } mip_t;
-
-    typedef struct packed {
-        logic [XLEN-1:12] zeros;
-        logic meie;
-        logic heie;
-        logic seie;
-        logic ueie;
-        logic mtie;
-        logic htie;
-        logic stie;
-        logic utie;
-        logic msie;
-        logic hsie;
-        logic ssie;
-        logic usie;
-    } mie_t;
-
-    struct packed {
-        logic mode;
-        logic [8:0] asid;
-        logic [21:0] ppn;
-    } satp;
-
     //Non-constant registers
+    mstatus_t mstatus;
+    mstatus_t mstatus_smask;
+    logic [1:0] privilege_level, next_privilege_level;
 
     //scratch ram
-    logic[XLEN-1:0] scratch_regs [15:0];//Only 0x1 and 0x3 used by supervisor and machine mode respectively
+    logic[XLEN-1:0] scratch_regs [31:0];//Only 0x1 and 0x3 used by supervisor and machine mode respectively
     logic[XLEN-1:0] scratch_out;
 
 
@@ -196,7 +102,6 @@ module csr_unit (
     logic[XLEN-1:0] sstatus;
     logic[XLEN-1:0] stvec;
 
-
     logic[TIMER_W-1:0] mcycle;
     logic[TIMER_W-1:0] mtime;
     logic[TIMER_W-1:0] minst_ret;
@@ -211,59 +116,58 @@ module csr_unit (
     csr_addr_t csr_addr;
     logic privilege_exception;
 
-    logic msr_write;
-    logic msr_update;
 
-
-    logic [1:0] privilege_level;
-    logic [1:0] next_privilege_level;
 
     logic [31:0] selected_csr;
     logic [31:0] updated_csr;
 
     logic invalid_addr;
-    logic mcounter_addr;
 
     logic machine_trap;
     logic supervisor_trap;
 
     logic done;
-    //******************************************************************
 
+    logic [63:0] swrite_decoder;
+    logic [63:0] mwrite_decoder;
+
+    //******************************************************************
     //TLB status --- used to mux physical/virtual address
-    assign tlb_on = 0;//mstatus.vm[3]; //We only support Sv32 or Mbare so only need to check one bit
+    assign tlb_on = satp.mode;
     assign asid = satp.asid;
     //******************
 
     //MMU interface
     assign immu.mxr = mstatus.mxr;
     assign dmmu.mxr = mstatus.mxr;
-    assign immu.pum = mstatus.pum;
-    assign dmmu.pum = mstatus.pum;
+    assign immu.pum = mstatus.sum;
+    assign dmmu.pum = mstatus.sum;
     assign immu.privilege = privilege_level;
     assign dmmu.privilege = mstatus.mprv ? mstatus.mpp : privilege_level;
     assign immu.ppn = satp.ppn;
     assign dmmu.ppn = satp.ppn;
     //******************
 
-    //Machine ISA register
-    assign misa = '{default:0, base:1, U:1, S:1, M:1, I:1};
 
-
-    //assign exception = interrupt | misaligned_fetch | instruction_fault | illegal_opcode | unaligned_load | unaligned_store | load_fault | store_fault;
+    always_comb begin
+        swrite_decoder = 0;
+        swrite_decoder[csr_addr.sub_addr] = supervisor_write ;
+        mwrite_decoder = 0;
+        mwrite_decoder[csr_addr.sub_addr] = machine_write ;
+    end
 
     //convert addr into packed struct form
     assign  csr_addr = csr_inputs.csr_addr;
     assign privilege_exception = csr_ex.new_request  && (csr_addr.privilege > privilege_level);
 
-    assign user_write = !privilege_exception && (csr_addr.rw_bits != CSR_READ_ONLY && csr_addr.privilege == USER);
-    assign supervisor_write = !privilege_exception && (csr_addr.rw_bits != CSR_READ_ONLY && csr_addr.privilege == SUPERVISOR);
-    assign machine_write = !privilege_exception && (csr_addr.rw_bits != CSR_READ_ONLY && csr_addr.privilege == MACHINE);
+    assign user_write = !privilege_exception && (csr_addr.rw_bits != CSR_READ_ONLY && csr_addr.privilege == USER_PRIV);
+    assign supervisor_write = !privilege_exception && (csr_addr.rw_bits != CSR_READ_ONLY && csr_addr.privilege == SUPERVISOR_PRIV);
+    assign machine_write = !privilege_exception && (csr_addr.rw_bits != CSR_READ_ONLY && csr_addr.privilege == MACHINE_PRIV);
 
-    assign csr_exception.illegal_instruction = invalid_addr | privilege_exception;
+    assign gc_exception.illegal_instruction = invalid_addr | privilege_exception;
 
-    assign machine_trap = csr_exception.valid && next_privilege_level == MACHINE;
-    assign supervisor_trap = csr_exception.valid && next_privilege_level == SUPERVISOR;
+    assign machine_trap = gc_exception.valid && next_privilege_level == MACHINE_PRIV;
+    assign supervisor_trap = gc_exception.valid && next_privilege_level == SUPERVISOR_PRIV;
 
     always_comb begin
         case (csr_inputs.csr_op)
@@ -274,284 +178,146 @@ module csr_unit (
         endcase
     end
 
-    //In progress---------------------------
-//    always_comb begin
-//        next_privilege_level = MACHINE;
-//        if (interrupt) begin
-//            next_privilege_level = MACHINE;
-//        end
-//        else if (csr_exception.valid) begin
-//            if (medeleg[csr_exception.code])
-//                next_privilege_level = SUPERVISOR;
-//        end
-//        else if (return_from_exception) begin
-//            next_privilege_level = USER;
-//        end
-//    end
-//    //Current privilege level
-//    always_ff @(posedge clk) begin
-//        if (rst) begin
-//            privilege_level <= MACHINE;
-//        end else if (csr_exception.valid | return_from_exception) begin
-//            privilege_level <= next_privilege_level;
-//        end
-//    end
+    //Machine ISA register
+    assign misa = '{default:0, base:1, A:1, S:1, M:1, I:1};
+    //assign misa = '{default:0, base:1, A:0, S:1, M:1, I:1};
+    //assign misa = '{default:0, base:1, A:0, S:1, M:0, I:1};
 
-//    //save previous interrupt and privilege info on exception
-//    always_comb begin
-//        mstatus_exception = mstatus;
-//        unique case (next_privilege_level)
-//            SUPERVISOR: begin
-//                mstatus_exception.spie = (privilege_level == SUPERVISOR) ? mstatus.sie : mstatus.uie;
-//                mstatus_exception.sie = 0;
-//                mstatus_exception.spp = privilege_level[0]; //one if from supervisor-mode, zero if from user-mode
-//            end
-//            MACHINE: begin
-//                mstatus_exception.mpie = (privilege_level == MACHINE) ? mstatus.mie : ((privilege_level == SUPERVISOR) ? mstatus.sie : mstatus.uie);
-//                mstatus_exception.mie = 0;
-//                mstatus_exception.mpp = privilege_level; //machine,supervisor or user
-//            end
-//        endcase
-//    end
+    //mstatus and privilege
+    mstatus_priv_reg mstatus_and_privilege_regs (.*, .exception(gc_exception.valid),
+            .interrupt_delegated(mideleg[gc_exception.code]), .exception_delegated(medeleg[gc_exception.code]),
+            .write_msr_m(mwrite_decoder[MSTATUS[5:0]]),.write_msr_s(swrite_decoder[SSTATUS[5:0]])
+            );
 
-//    //return from trap
-//    always_comb begin
-//        mstatus_return = mstatus;
-//        unique case (next_privilege_level)
-//            SUPERVISOR: begin
-//                if (mstatus.spp) begin //supervisor
-//                    mstatus_return.sie = mstatus.spie;
-//                    mstatus_return.spie = 1;
-//                    mstatus_return.spp = 0;
-//                end
-//                else begin //user
-//                    mstatus_return.spie = 1;
-//                    mstatus_return.spp = 0;
-//                end
-//            end
-//            MACHINE: begin
-//                unique case(mstatus.mpp)
-//                    USER: begin
-//                        mstatus_return.mpie = 1;
-//                        mstatus_return.mpp = USER;
-//                    end
-//                    SUPERVISOR: begin
-//                        mstatus_return.sie = mstatus.mpie;
-//                        mstatus_return.mpie = 1;
-//                        mstatus_return.mpp = USER;
-//                    end
-//                    MACHINE: begin
-//                        mstatus_return.mie = mstatus.mpie;
-//                        mstatus_return.mpie = 1;
-//                        mstatus_return.mpp = USER;
-//                    end
-//                endcase
-//            end
-//        endcase
-//    end
+    //medeleg
+    logic [31:0] medeleg_mask;
+    always_comb begin
+        medeleg_mask = 0;
+        medeleg_mask[INST_ADDR_MISSALIGNED] = 1;
+        medeleg_mask[INST_ACCESS_FAULT] = 1;
+        medeleg_mask[ILLEGAL_INST] = 1;
+        medeleg_mask[BREAK] = 1;//?
+        medeleg_mask[LOAD_FAULT] = 1;
+        medeleg_mask[STORE_AMO_FAULT] = 1;
+        medeleg_mask[ECALL_U] = 1;
+        medeleg_mask[INST_PAGE_FAULT] = 1;
+        medeleg_mask[LOAD_PAGE_FAULT] = 1;
+        medeleg_mask[STORE_OR_AMO_PAGE_FAULT] = 1;
+    end
+    always_ff @(posedge clk) begin
+        if (rst)
+            medeleg <= '0;
+        else if (mwrite_decoder[MEDELEG[5:0]])
+            medeleg <= (updated_csr & medeleg_mask);
+    end
 
-//    //machine status mask
-//    assign mstatus_mmask = '{default:0, vm:SV32, mxr:1, pum:1, mprv:1, mpp:'1, spp:1, mpie:1, spie:1, mie:1, sie:1};
-//    //supervisor status mask
-//    assign mstatus_smask  = '{default:0, pum:1, spp:1, spie:1, sie:1};
+    //mideleg
+    logic [31:0] mideleg_mask;
+    always_comb begin
+        mideleg_mask = 0;
+        mideleg_mask[S_SOFTWARE_INTERRUPT] = 1;
+        mideleg_mask[S_TIMER_INTERRUPT] = 1;
+        mideleg_mask[S_EXTERNAL_INTERRUPT] = 1;
+    end
+    always_ff @(posedge clk) begin
+        if (rst)
+            mideleg <= '0;
+        else if (mwrite_decoder[MIDELEG[5:0]])
+            mideleg <= (updated_csr & mideleg_mask);
+    end
 
-//    assign mstatus_mask = machine_write ? mstatus_mmask : mstatus_smask;
+    //mip
+    assign mip_mask = '{default:0, stip:1, ssip:1};
+    always_ff @(posedge clk) begin
+        if (rst)
+            mip <= 0;
+        else if (mwrite_decoder[MIP[5:0]])
+            mip <= (updated_csr & mip_mask);
+    end
 
-//    assign mstatus_write = (mstatus & ~mstatus_mask) | (updated_csr & mstatus_mask);
-//    assign msr_write = (machine_write && csr_addr.sub_addr == MSTATUS[5:0]) | (supervisor_write && csr_addr.sub_addr == SSTATUS[5:0]);
+    //mie
+    assign mie_mask = '{default:0, meie:1, seie:1, mtie:1, stie:1, msie:1, ssie:1};
+    assign sie_mask = '{default:0, seie:1, stie:1, ssie:1};
+
+    always_ff @(posedge clk) begin
+        if (rst)
+            mie_reg <= '0;
+        else if (mwrite_decoder[MIE[5:0]])
+            mie_reg <= (updated_csr & mie_mask);
+        else if (swrite_decoder[SIE[5:0]])
+            mie_reg <= (updated_csr & sie_mask);
+    end
 
 
-//    //read_write portion of machine status register
-//    always_ff @(posedge clk) begin
-//        if (rst) begin
-//            mstatus. vm <= BARE;
-//            mstatus.mxr <= 0;
-//            mstatus.pum <= 0;
-//            mstatus.mprv <= 0;
-//            mstatus.mpp <= MACHINE;
-//            mstatus.spp <= 0;
-//            mstatus.mpie <= 0;
-//            mstatus.spie <= 0;
-//            mstatus.mie <= 0;
-//            mstatus.sie <= 0;
-//            //*****************
-//            // Constant zeros
-//            //*****************
-//            //No FPU or custom extensions with state
-//            mstatus.sd <= 0;
-//            mstatus. zero_bits1 <= 0;
-//            mstatus. zero_bits2 <= 0;
-//            mstatus.xs <= 0;
-//            mstatus.fs <= 0;
-//            //No hypervisor
-//            mstatus.hpp <= 0;
-//            mstatus.hpie <= 0;
-//            mstatus.hie <= 0;
-//            //No user mode interrupts
-//            mstatus.upie <= 0;
-//            mstatus.uie <= 0;
-//        end
-//        else if (csr_exception.valid)
-//            mstatus <= mstatus_exception;
-//        else if (return_from_exception)
-//            mstatus <= mstatus_return;
-//        else if (msr_write)
-//            mstatus <= mstatus_write;
-//    end
+    //mtvec
+    logic [31:0] mtvec_mask = '1;
+    always_ff @(posedge clk) begin
+        if (rst)
+            mtvec <= {RESET_VEC[XLEN-1:2], 2'b00};
+        else if (mwrite_decoder[MTVEC[5:0]])
+            mtvec <= (updated_csr & mtvec_mask);
+    end
+
+    //mepc
+    logic [31:0] mepc_mask;
+    assign mepc_mask = {30'b1, 2'b0};
+    //mcause
+    logic [31:0] mcause_mask;
+    always_comb begin
+        mcause_mask = 0;
+        mcause_mask[31] = 1;
+        mcause_mask[ECODE_W-1:0] = '1;
+    end
+    //scratch regs
+    logic [31:0] scratch_mask;
+    assign scratch_mask = '1;
+
+    logic [31:0] lut_reg_mask;
+    always_comb begin
+        if (csr_addr.sub_addr[2:0] == MEPC[2:0])
+            lut_reg_mask = mepc_mask;
+        else if (csr_addr.sub_addr[2:0] == MCAUSE[2:0])
+            lut_reg_mask = mcause_mask;
+        else
+            lut_reg_mask = '1;
+    end
+
+    always_ff @(posedge clk) begin
+        if (mwrite_decoder[MSCRATCH[5:0]] | mwrite_decoder[MEPC[5:0]] | mwrite_decoder[MCAUSE[5:0]] | mwrite_decoder[MTVAL[5:0]] |
+                swrite_decoder[SSCRATCH[5:0]] | swrite_decoder[SEPC[5:0]] | swrite_decoder[SCAUSE[5:0]] | swrite_decoder[STVAL[5:0]]
+            )
+            scratch_regs[{csr_addr.privilege, csr_addr.sub_addr[2:0]}] <= (updated_csr & lut_reg_mask);
+    end
+    assign scratch_out = scratch_regs[{csr_addr.privilege, csr_addr.sub_addr[2:0]}];
 
 
 
-//    //mtvec
-//    always_ff @(posedge clk) begin
-//        if (rst) begin
-//            mtvec <= {RESET_VEC[XLEN-1:2], 2'b00};
-//        end else if (machine_write && csr_addr.sub_addr == MTVEC[5:0]) begin
-//            mtvec <= {updated_csr[XLEN-1:2], 2'b00};
-//        end
-//    end
-
-//    //medeleg
-//    //assign medeleg_mask = '{default:0, seip:1, stip:1, ssip:1};
-//    always_ff @(posedge clk) begin
-//        if (rst) begin
-//            medeleg <= '0;
-//        end else if (machine_write && csr_addr.sub_addr == MEDELEG[5:0]) begin
-//            medeleg <= updated_csr;
-//        end
-//    end
-
-//    //mideleg
-//    always_ff @(posedge clk) begin
-//        if (rst) begin
-//            mideleg <= '0;
-//        end else if (machine_write && csr_addr.sub_addr == MIDELEG[5:0]) begin
-//            // mideleg <= (mideleg & ~mideleg_mask) | (updated_csr & mideleg_mask);
-//        end
-//    end
-
-//    //mip
-//    assign mip_mask = '{default:0, stip:1, ssip:1};
-//    always_ff @(posedge clk) begin
-//        if (rst) begin
-//            mip <= 0;
-//        end
-//        else if (machine_write && csr_addr.sub_addr == MIP[5:0]) begin
-//            mip <= (mip & ~mip_mask) | (updated_csr & mip_mask);
-//        end
-//    end
-
-//    //mie
-//    assign mie_mask = '{default:0, meie:1, seie:1, mtie:1, stie:1, msie:1, ssie:1};
-//    assign sie_mask = '{default:0, seie:1, stie:1, ssie:1};
-
-//    always_ff @(posedge clk) begin
-//        if (rst) begin
-//            mie_reg <= '0;
-//        end
-//        else if (machine_write && csr_addr.sub_addr == MIE[5:0]) begin
-//            mie_reg <= (mie_reg & ~mie_mask) | (updated_csr & mie_mask);
-//        end
-//        else if (supervisor_write && csr_addr.sub_addr == SIE[5:0]) begin
-//            mie_reg <= (mie_reg & ~sie_mask) | (updated_csr & sie_mask);
-//        end
-//    end
+    //END OF MACHINE REGS
 
 
 
-//    //mtimecmp
-//    // always_ff @(posedge clk) begin
-//    //    if (rst) begin
-//    //       mtimecmp <= '0;
-//    //    end else if (machine_write && csr_addr.sub_addr == MTIMECMP[5:0]) begin
-//    //       mtimecmp <= updated_csr;
-//    //    end
-//    //end
+    //BEGIN OF SUPERVISOR REGS
 
+    assign sip_mask =  '{default:0, seip:1, stip:1, ssip:1};
 
-//    //mepc
-//    always_ff @(posedge clk) begin
-//        if (machine_trap) begin
-//            mepc <= csr_exception.pc;
-//        end
-//        else if (machine_write && csr_addr.sub_addr == MEPC[5:0]) begin
-//            mepc <= {updated_csr[XLEN-1:2], 2'b00};
-//        end
-//    end
+    //stvec
+    logic [31:0] stvec_mask = '1;
+    always_ff @(posedge clk) begin
+        if (rst)
+            stvec <= {RESET_VEC[XLEN-1:2], 2'b00};
+        else if (swrite_decoder[STVEC[5:0]])
+            stvec <= (updated_csr & stvec_mask);
+    end
 
-//    //mcause
-//    assign mcause[XLEN-1:ECODE_W] = 0;
-//    always_ff @(posedge clk) begin
-//        if (machine_trap) begin
-//            mcause[ECODE_W-1:0] = csr_exception.code;
-//        end
-//        else if (machine_write && csr_addr.sub_addr == MCAUSE[5:0]) begin
-//            mcause[ECODE_W-1:0] <= updated_csr[ECODE_W-1:0];
-//        end
-//    end
-
-//    //mtval
-//    always_ff @(posedge clk) begin
-//        if (machine_trap) begin
-//            mtval <= csr_exception.addr;
-//        end
-//        else if (machine_write && csr_addr.sub_addr == MTVAL[5:0]) begin
-//            mtval <= updated_csr;
-//        end
-//    end
-
-//    //END OF MACHINE REGS
-
-//    //scratch regs
-//    always_ff @(posedge clk) begin
-//        if ((machine_write && csr_addr.sub_addr == MSCRATCH[5:0]) || (supervisor_write && csr_addr.sub_addr == SSCRATCH[5:0])) begin
-//            scratch_regs[csr_addr.privilege] <= updated_csr;
-//        end
-//    end
-//    assign scratch_out = scratch_regs[csr_addr.privilege];
-
-//    //BEGIN OF SUPERVISOR REGS
-
-//    assign sip_mask =  '{default:0, seip:1, stip:1, ssip:1};
-
-//    //sepc
-//    always_ff @(posedge clk) begin
-//        if (supervisor_trap) begin
-//            sepc <= csr_exception.pc;
-//        end
-//        else if (supervisor_write && csr_addr.sub_addr == SEPC[5:0]) begin
-//            sepc <= updated_csr;
-//        end
-//    end
-
-//    //scause
-//    assign scause[XLEN-1:ECODE_W] = 0;
-//    always_ff @(posedge clk) begin
-//        if (supervisor_trap) begin
-//            scause[ECODE_W-1:0] = csr_exception.code;
-//        end
-//        else if (supervisor_write && csr_addr.sub_addr == SCAUSE[5:0]) begin
-//            scause[ECODE_W-1:0] <= updated_csr[ECODE_W-1:0];
-//        end
-//    end
-
-//    //stval
-//    always_ff @(posedge clk) begin
-//        if (supervisor_trap) begin
-//            stval <= csr_exception.addr;
-//        end
-//        else if (supervisor_write && csr_addr.sub_addr == STVAL[5:0]) begin
-//            stval <= updated_csr;
-//        end
-//    end
-
-//    //satp
-//    always_ff @(posedge clk) begin
-//        if (rst) begin
-//            satp <= 0;
-//        end else if (supervisor_write && csr_addr.sub_addr == SATP[5:0]) begin
-//            satp <= updated_csr;
-//        end
-//    end
+    //satp
+    logic[XLEN-1:0] satp_mask;
+    assign satp_mask = '1;
+    always_ff @(posedge clk) begin
+        if (rst)
+            satp <= 0;
+        else if (swrite_decoder[SATP[5:0]])
+            satp <= (updated_csr & satp_mask);
+    end
 
     //Timers and Counters
 
@@ -581,7 +347,6 @@ module csr_unit (
         end
     end
 
-    //assign mcounter_addr = (csr_addr >= 12'hB00 && csr_addr < 12'hBA0);
 
     always_comb begin
         invalid_addr = 0;
@@ -600,9 +365,9 @@ module csr_unit (
             MTVEC : selected_csr = mtvec;
                 //Machine trap handling
             MSCRATCH : selected_csr = scratch_out;
-            MEPC : selected_csr = mepc;
-            MCAUSE : selected_csr = mcause;
-            MTVAL : selected_csr = mtval;
+            MEPC : selected_csr = scratch_out;
+            MCAUSE : selected_csr = scratch_out;
+            MTVAL : selected_csr = scratch_out;
             MIP : selected_csr = mip;
                 //Machine Timers and Counters
             MCYCLE : selected_csr = mcycle[XLEN-1:0];
@@ -610,17 +375,17 @@ module csr_unit (
             MCYCLEH : selected_csr = mcycle[TIMER_W-1:XLEN];
             MINSTRETH : selected_csr = minst_ret[TIMER_W-1:XLEN];
 
-            //Supervisor Trap Setup
+                //Supervisor Trap Setup
             SSTATUS : selected_csr = (mstatus & mstatus_smask);
-            SEDELEG : selected_csr = 0;
-            SIDELEG : selected_csr = 0;
+            //SEDELEG : selected_csr = 0; //No user-level interrupts/exception handling
+            //SIDELEG : selected_csr = 0;
             SIE : selected_csr = (mie_reg & sie_mask);
             STVEC : selected_csr = stvec;
                 //Supervisor trap handling
             SSCRATCH : selected_csr = scratch_out;
-            SEPC : selected_csr = sepc;
-            SCAUSE : selected_csr = scause;
-            STVAL : selected_csr = stval;
+            SEPC : selected_csr = scratch_out;
+            SCAUSE : selected_csr = scratch_out;
+            STVAL : selected_csr = scratch_out;
             SIP : selected_csr = (mip & sip_mask);
                 //Supervisor Protection and Translation
             SATP : selected_csr = satp;

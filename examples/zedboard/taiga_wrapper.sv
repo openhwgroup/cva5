@@ -231,7 +231,7 @@ module taiga_wrapper (
 
     taiga cpu(.*, .l2(l2[0]));
 
-    design_2 infra(.*);
+    //design_2 infra(.*);
 
     generate
         if (USE_MMU || USE_ICACHE || USE_DCACHE) begin
@@ -240,7 +240,7 @@ module taiga_wrapper (
         end
     endgenerate
 
-    arm proc(.*);
+    //arm proc(.*);
 
     byte_en_BRAM #(MEM_LINES, "/home/ematthew/Research/RISCV/software2/riscv-tools/riscv-tests/benchmarks/dhrystone.riscv.hw_init", 1) inst_data_ram (
             .clk(clk),

@@ -27,7 +27,7 @@ import taiga_types::*;
  *  FIFOs Not underflow/overflow safe.
  *  Intended for small FIFO depths.
  */
-module taiga_fifo #(parameter DATA_WIDTH = 42, parameter FIFO_DEPTH = 4, parameter fifo_type_t FIFO_TYPE = NON_MUXED_INPUT_FIFO)
+module taiga_fifo #(parameter DATA_WIDTH = 32, parameter FIFO_DEPTH = 4, parameter fifo_type_t FIFO_TYPE = NON_MUXED_INPUT_FIFO)
         (
         input logic clk,
         input logic rst,
@@ -46,19 +46,20 @@ module taiga_fifo #(parameter DATA_WIDTH = 42, parameter FIFO_DEPTH = 4, paramet
 
     //implementation
     ////////////////////////////////////////////////////
-    //Occupancy Tracking
-    one_hot_occupancy #(.DEPTH(FIFO_DEPTH)) occupancy_tracking
-        (
-            .push(fifo.push), .pop(fifo.pop),
-            .early_full(fifo.early_full), .full(fifo.full),
-            .empty(fifo.empty), .valid(fifo.valid), .early_valid(fifo.early_valid), .two_plus(two_plus), .*
-        );
+
 
 
     ////////////////////////////////////////////////////
     //LUT-RAM version
     generate if (FIFO_TYPE == LUTRAM_FIFO) begin
             ////////////////////////////////////////////////////
+            //Occupancy Tracking
+            one_hot_occupancy #(.DEPTH(FIFO_DEPTH)) occupancy_tracking
+                (
+                    .push(fifo.push), .pop(fifo.pop),
+                    .early_full(fifo.early_full), .full(fifo.full),
+                    .empty(fifo.empty), .early_empty(fifo.early_empty), .valid(fifo.valid), .early_valid(fifo.early_valid), .two_plus(two_plus), .*
+                );
 
             always_ff @ (posedge clk) begin
                 if (rst) begin
@@ -81,19 +82,34 @@ module taiga_fifo #(parameter DATA_WIDTH = 42, parameter FIFO_DEPTH = 4, paramet
     endgenerate
     ////////////////////////////////////////////////////
     //SRL version
+    //Uses a read index 2x the size of the FIFO to allow for simpler status determination
+    //FIFO valid starts at FIFO_DEPTH to allow fifo.valid to come from the index reg
     generate if (FIFO_TYPE == NON_MUXED_INPUT_FIFO) begin
+
             ////////////////////////////////////////////////////
+            localparam SRL_DEPTH = FIFO_DEPTH+1;
+            localparam SRL_DEPTH_W = $clog2(SRL_DEPTH);
+
+            logic [SRL_DEPTH_W-1:0] srl_index;
 
             always_ff @ (posedge clk) begin
                 if (rst)
-                    read_index <= 0;
-                else if ((fifo.valid & fifo.push) & ~fifo.pop)
-                    read_index <= read_index + 1;
-                else if (~fifo.push & (two_plus & fifo.pop))
-                    read_index <= read_index - 1;
+                    srl_index <= FIFO_DEPTH-1;
+                else if (fifo.push & ~fifo.pop)
+                    srl_index <= srl_index + 1;
+                else if (~fifo.push & fifo.pop)
+                    srl_index <= srl_index - 1;
             end
 
-            assign fifo.data_out = shift_reg[read_index];
+            assign fifo.data_out = shift_reg[srl_index[SRL_DEPTH_W-2:0]];
+
+            assign fifo.valid = srl_index[SRL_DEPTH_W-1];
+            assign fifo.empty = ~fifo.valid;
+            assign fifo.full = (srl_index[SRL_DEPTH_W-1:1] == FIFO_DEPTH);
+
+            assign fifo.early_valid = fifo.push | (fifo.valid & ~fifo.pop) | (srl_index[SRL_DEPTH_W-1:1] > 1);
+            assign fifo.early_empty = (srl_index[SRL_DEPTH_W-1:1] == 0) && fifo.pop && ~fifo.push;
+            assign fifo.early_full = fifo.full | (srl_index[SRL_DEPTH_W-1:1] == FIFO_DEPTH-2);
 
             always_ff @ (posedge clk) begin
                 if (fifo.push)

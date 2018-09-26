@@ -89,8 +89,8 @@ module mmu
 
     //Not ((user-mode and non-user page) OR (supervisor-mode and user-page and user protected))
     assign privilege_check = !(
-            ((mmu.privilege == USER) && ~pte.u) |
-            ((mmu.privilege == SUPERVISOR) && pte.u && mmu.pum)
+            ((mmu.privilege == USER_PRIV) && ~pte.u) |
+            ((mmu.privilege == SUPERVISOR_PRIV) && pte.u && mmu.pum)
             );
 
     assign permissions_check = privilege_check & ((mmu.execute & pte.x) | //execute and exec bit set

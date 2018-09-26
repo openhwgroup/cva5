@@ -27,24 +27,24 @@ import taiga_config::*;
 import taiga_types::*;
 import l2_config_and_types::*;
 
-`define  MEMORY_FILE  "/home/zaguila/Documents/taiga_zedboard/dhrystone.riscv.sim_init" //change this to appropriate location
-`define  UART_LOG  "/home/zaguila/Documents/taiga_zedboard/uart.log" //change this to appropriate location
+`define  MEMORY_FILE  "/home/ematthew/Research/RISCV/software/riscv-tools/riscv-tests/benchmarks/dhrystone.riscv.sim_init" //change this to appropriate location
+`define  UART_LOG  "/home/ematthew/uart.log" //change this to appropriate location
 
 module taiga_full_simulation ();
     logic [3:0] WRITE_COUNTER_MAX;
     logic [3:0] READ_COUNTER_MAX;
     assign READ_COUNTER_MAX = 4'b0101;
     assign WRITE_COUNTER_MAX = 4'b0101;
-    
+
     logic simulator_clk;
     logic simulator_resetn;
     logic peripheral_resetn;
     logic interconnect_resetn;
     //axi block diagram inputs
     logic axi_clk;
-    logic resetn; 
+    logic resetn;
     logic sin;
-    
+
     //AXI memory
     logic [31:0]axi_araddr;
     logic [1:0]axi_arburst;
@@ -89,52 +89,52 @@ module taiga_full_simulation ();
 
 
     axi_interface ddr_axi();
-  
+
     //axi block diagram outputs
     logic processor_reset;
     logic processor_clk;
     logic sout;
-    
+
     logic clk;
     logic rst;
 
 
     //*****************************
-        
+
     assign axi_clk = simulator_clk;
     assign processor_clk = simulator_clk;
     assign resetn = simulator_resetn;
-        
+
     assign clk = simulator_clk;
     assign rst = processor_reset;
-                
+
     local_memory_interface instruction_bram();
     local_memory_interface data_bram();
-    
+
     axi_interface m_axi();
     avalon_interface m_avalon();
 
     l2_requester_interface l2[L2_NUM_PORTS-1:0]();
     l2_memory_interface mem();
-        
+
 
     logic interrupt;
     logic timer_interrupt;
 
     logic[31:0] dec_pc_debug;
     logic[31:0] if2_pc_debug;
-    
+
     integer output_file;
-    
+
     assign l2[1].request = 0;
     assign l2[1].request_push = 0;
     assign l2[1].wr_data_push = 0;
     assign l2[1].inv_ack = l2[1].inv_valid;
     assign l2[1].rd_data_ack = l2[1].rd_data_valid;
-    
+
     sim_mem simulation_mem = new();
 
-    
+
     //RAM Block
     always_ff @(posedge processor_clk) begin
       if (instruction_bram.en) begin
@@ -145,7 +145,7 @@ module taiga_full_simulation ();
         instruction_bram.data_out <= 0;
       end
     end
-    
+
     always_ff @(posedge processor_clk) begin
       if (data_bram.en) begin
         data_bram.data_out <= simulation_mem.readw(data_bram.addr);
@@ -155,28 +155,28 @@ module taiga_full_simulation ();
         data_bram.data_out <= 0;
       end
     end
-        
+
     taiga uut (.*, .l2(l2[0]));
-    
+
     //design_2 infra(.*);
 
     l2_arbiter l2_arb (.*, .request(l2));
-        
+
     axi_to_arb l2_to_mem (.*, .l2(mem));
-    
+
     axi_mem_sim #(`MEMORY_FILE) ddr_interface (.*, .axi(ddr_axi), .if_pc(if2_pc_debug), .dec_pc(dec_pc_debug));
-    
+
     always
         #1 simulator_clk = ~simulator_clk;
-    
+
     initial begin
         simulator_clk = 0;
         interrupt = 0;
         timer_interrupt = 0;
         simulator_resetn = 0;
-                
+
         simulation_mem.load_program(`MEMORY_FILE, RESET_VEC);
-        
+
         output_file = $fopen(`UART_LOG, "w");
         if (output_file == 0) begin
             $error ("couldn't open log file");
@@ -184,11 +184,11 @@ module taiga_full_simulation ();
         end
         do_reset();
 
-        #1800000;
+        #1200000;
         $fclose(output_file);
         $finish;
     end
-    
+
     task do_reset;
     begin
         interconnect_resetn = 1'b0;
@@ -199,11 +199,11 @@ module taiga_full_simulation ();
          #100 processor_reset = 1'b0;
     end
     endtask
-    
+
      //read channel
     logic[3:0] read_counter;
     logic begin_read_counter;
-    
+
     always_ff @(posedge simulator_clk) begin
         if (!peripheral_resetn) begin
             m_axi.rvalid <= 0;
@@ -217,7 +217,7 @@ module taiga_full_simulation ();
                 begin_read_counter <= 1;
                 m_axi.rdata <= 32'hFFFFFF21;
             end
-            
+
             if(begin_read_counter) begin
                 if(read_counter == 0) begin
                    m_axi.rvalid <= 1;
@@ -230,9 +230,9 @@ module taiga_full_simulation ();
                    m_axi.rvalid <= 0;
                 end
             end
-            
+
             if(m_axi.rvalid &&  m_axi.rready) begin
-                m_axi.rvalid <= 0;   
+                m_axi.rvalid <= 0;
             end
 
         end
@@ -242,7 +242,7 @@ module taiga_full_simulation ();
     //write address
     logic[3:0] write_counter;
     logic begin_write_counter;
-       
+
     always_ff @(posedge simulator_clk) begin
         if (!peripheral_resetn) begin
             m_axi.wready <= 0;
@@ -255,7 +255,7 @@ module taiga_full_simulation ();
                 m_axi.awready <= 0;
                 begin_write_counter <= 1;
             end
-            
+
             if(begin_write_counter) begin
                 if(write_counter == 0) begin
                    m_axi.awready <= 1;
@@ -268,7 +268,7 @@ module taiga_full_simulation ();
                    m_axi.wready <= 0;
                 end
             end
-            
+
             if(m_axi.bready == 1 && m_axi.wready) begin
                 m_axi.bvalid <= 1;
                 m_axi.bresp = 0;
@@ -277,22 +277,22 @@ module taiga_full_simulation ();
                 m_axi.bvalid <= 0;
                 m_axi.bresp = 0;
             end
-            
+
             if(m_axi.wready & m_axi.wvalid) begin
                 m_axi.wready <= 0;
             end
         end
     end
-        
+
     assign ddr_axi.araddr = axi_araddr;
     assign ddr_axi.arburst = axi_arburst;
     assign ddr_axi.arcache = axi_arcache;
     assign ddr_axi.arid = axi_arid;
-    assign ddr_axi.arlen = axi_arlen;
+    assign ddr_axi.arlen = {4'b0, axi_arlen[3:0]};
     assign  axi_arready = ddr_axi.arready;
     assign ddr_axi.arsize = axi_arsize;
     assign ddr_axi.arvalid = axi_arvalid;
-    
+
     assign ddr_axi.awaddr = axi_awaddr;
     assign ddr_axi.awburst = axi_awburst;
     assign ddr_axi.awcache = axi_awcache;
@@ -300,19 +300,19 @@ module taiga_full_simulation ();
     assign ddr_axi.awlen = axi_awlen;
     assign axi_awready = ddr_axi.awready;
     assign ddr_axi.awvalid = axi_awvalid;
-    
+
     assign axi_bid = ddr_axi.bid;
     assign ddr_axi.bready = axi_bready;
     assign axi_bresp = ddr_axi.bresp;
     assign axi_bvalid = ddr_axi.bvalid;
-    
+
     assign axi_rdata = ddr_axi.rdata;
     assign axi_rid = ddr_axi.rid;
     assign axi_rlast = ddr_axi.rlast;
     assign ddr_axi.rready = axi_rready;
     assign axi_rresp = ddr_axi.rresp;
     assign axi_rvalid = ddr_axi.rvalid;
-    
+
     assign ddr_axi.wdata = axi_wdata;
     assign ddr_axi.wlast = axi_wlast;
     assign axi_wready = ddr_axi.wready;
@@ -327,8 +327,8 @@ module taiga_full_simulation ();
             $fwrite(output_file, "%c",m_axi.wdata[7:0]);
       end
     end
-    
-    
+
+
     assign sin = 0;
 
 endmodule
