@@ -91,25 +91,40 @@ module taiga_fifo #(parameter DATA_WIDTH = 32, parameter FIFO_DEPTH = 4, paramet
             localparam SRL_DEPTH_W = $clog2(SRL_DEPTH);
 
             logic [SRL_DEPTH_W-1:0] srl_index;
+            logic full;
+            logic full_minus_one;
+            logic more_than_one;
+            logic one_entry;
 
+            //On first write will roll over to [1,00...0]
+            //Upper bit of srl_index indicates
             always_ff @ (posedge clk) begin
-                if (rst)
-                    srl_index <= FIFO_DEPTH-1;
-                else if (fifo.push & ~fifo.pop)
-                    srl_index <= srl_index + 1;
-                else if (~fifo.push & fifo.pop)
-                    srl_index <= srl_index - 1;
+                if (rst) begin
+                    srl_index[SRL_DEPTH_W-1] <= 0;
+                    srl_index[SRL_DEPTH_W-2:0] <= '1;
+                end else
+                    srl_index <= srl_index + fifo.push - fifo.pop;
             end
 
-            assign fifo.data_out = shift_reg[srl_index[SRL_DEPTH_W-2:0]];
+            //Helper expressions
+            assign full = fifo.valid && (srl_index[SRL_DEPTH_W-2:0] == (FIFO_DEPTH-1));
+            assign full_minus_one = fifo.valid && (srl_index[SRL_DEPTH_W-2:0] == (FIFO_DEPTH-2));
+            assign more_than_one = fifo.valid && (srl_index[SRL_DEPTH_W-2:0] != 0);
+            assign one_entry = fifo.valid && (srl_index[SRL_DEPTH_W-2:0] == 0);
 
             assign fifo.valid = srl_index[SRL_DEPTH_W-1];
             assign fifo.empty = ~fifo.valid;
-            assign fifo.full = (srl_index[SRL_DEPTH_W-1:1] == FIFO_DEPTH);
 
-            assign fifo.early_valid = fifo.push | (fifo.valid & ~fifo.pop) | (srl_index[SRL_DEPTH_W-1:1] > 1);
-            assign fifo.early_empty = (srl_index[SRL_DEPTH_W-1:1] == 0) && fifo.pop && ~fifo.push;
-            assign fifo.early_full = fifo.full | (srl_index[SRL_DEPTH_W-1:1] == FIFO_DEPTH-2);
+            always_ff @ (posedge clk) begin
+                if (rst)
+                    fifo.full = 0;
+                else
+                    fifo.full = ~fifo.pop & ((fifo.push & full_minus_one) | full);
+            end
+
+            assign fifo.early_valid = fifo.push | (fifo.valid & ~fifo.pop) | more_than_one;
+            assign fifo.early_empty = one_entry  & fifo.pop & ~fifo.push;
+            assign fifo.early_full = fifo.full | (full_minus_one & fifo.push);
 
             always_ff @ (posedge clk) begin
                 if (fifo.push)
@@ -122,6 +137,9 @@ module taiga_fifo #(parameter DATA_WIDTH = 32, parameter FIFO_DEPTH = 4, paramet
                         shift_reg[i] <= shift_reg[i-1];
                 end
             end
+
+            assign fifo.data_out = shift_reg[srl_index[SRL_DEPTH_W-2:0]];
+
 
         end
     endgenerate

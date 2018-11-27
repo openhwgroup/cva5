@@ -63,7 +63,6 @@ module inuse (
 
     logic [4:0] w_clear;
     logic [4:0] wb_rd_addr_muxed;
-    logic [4:0] decode_rd_addr_muxed;
 
     //////////////////////////////////////////
     //Initialize to all inuse (0,1) for simulation,
@@ -81,7 +80,6 @@ module inuse (
 
     //After reset, clear is held for at least 32 cycles to reset memory block
     assign wb_rd_addr_muxed = clr ? w_clear : wb_rd_addr;
-    assign decode_rd_addr_muxed = clr ? w_clear : decode_rd_addr;
 
     //reset is for simulation purposes only, not needed for actual design
     always_ff @ (posedge clk) begin
@@ -91,14 +89,21 @@ module inuse (
             w_clear <= w_clear + clr;
     end
 
+    logic collision;
+    assign collision = issued && (wb_rd_addr == decode_rd_addr);
+
     always_ff @ (posedge clk) begin
-            bankA[decode_rd_addr_muxed] <= clr | (issued ^ bankA[decode_rd_addr_muxed]);
-            bankA2[decode_rd_addr_muxed] <= clr | (issued ^ bankA2[decode_rd_addr_muxed]);
+        if(issued) begin
+            bankA[decode_rd_addr] <= (1 ^ bankB[decode_rd_addr]);
+            bankA2[decode_rd_addr] <= (1 ^ bankB2[decode_rd_addr]);
+        end
     end
 
     always_ff @ (posedge clk) begin
-            bankB[wb_rd_addr_muxed] <= clr | (completed ^ bankB[wb_rd_addr_muxed]);
-            bankB2[wb_rd_addr_muxed] <= clr | (completed ^ bankB2[wb_rd_addr_muxed]);
+        if (clr | (completed & ~collision)) begin
+            bankB[wb_rd_addr_muxed] <= (0 ^ bankA[wb_rd_addr_muxed]);
+            bankB2[wb_rd_addr_muxed] <= (0 ^ bankA2[wb_rd_addr_muxed]);
+        end
     end
 
     assign rs1_inuse = bankA[rs1_addr] ^ bankB[rs1_addr];

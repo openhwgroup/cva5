@@ -420,6 +420,7 @@ module decode(
         csr_ex.new_request <= issue[CSR_UNIT_EX_ID];
         mul_ex.new_request <= issue[MUL_UNIT_EX_ID];
         div_ex.new_request <= issue[DIV_UNIT_EX_ID];
+        gc_ex.new_request <= issue[GC_UNIT_EX_ID];
     end
 
     assign branch_ex.possible_issue = new_request[BRANCH_UNIT_EX_ID];
@@ -428,5 +429,6 @@ module decode(
     assign csr_ex.possible_issue = new_request[CSR_UNIT_EX_ID];
     assign mul_ex.possible_issue = new_request[MUL_UNIT_EX_ID];
     assign div_ex.possible_issue = new_request[DIV_UNIT_EX_ID];
+    assign gc_ex.possible_issue = new_request[GC_UNIT_EX_ID];
 
 endmodule
