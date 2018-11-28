@@ -23,6 +23,8 @@
 package taiga_types;
     import taiga_config::*;
 
+    parameter INFLIGHT_QUEUE_WIDTH = $clog2(INFLIGHT_QUEUE_DEPTH);
+
     typedef enum bit [6:0] {
         LUI = 7'b0110111,
         AUIPC = 7'b0010111,
@@ -248,7 +250,7 @@ package taiga_types;
         M_EXTERNAL_INTERRUPT = 4'd11
     } interrupt_code_t;
 
-    typedef logic[$clog2(INFLIGHT_QUEUE_DEPTH)-1:0] instruction_id_t;
+    typedef logic[INFLIGHT_QUEUE_WIDTH-1:0] instruction_id_t;
 
 
     typedef struct packed{

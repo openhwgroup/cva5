@@ -21,7 +21,7 @@
  */
 
 package csr_types;
-    import taiga_config::*;
+ //   import taiga_config::*;
 
 
     typedef struct packed {
@@ -90,7 +90,7 @@ package csr_types;
 
 
     typedef struct packed {
-        logic [XLEN-1:12] zeros;
+        logic [32-1:12] zeros;
         logic meip;
         logic zero1;
         logic seip;
@@ -106,7 +106,7 @@ package csr_types;
     } mip_t;
 
     typedef struct packed {
-        logic [XLEN-1:12] zeros;
+        logic [32-1:12] zeros;
         logic meie;
         logic zero1;
         logic seie;

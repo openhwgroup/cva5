@@ -4,7 +4,7 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -19,7 +19,7 @@
  * Author(s):
  *             Eric Matthews <ematthew@sfu.ca>
  */
- 
+
 module lut_ram #(
         parameter WIDTH = 32,
         parameter DEPTH = 32
@@ -39,7 +39,7 @@ module lut_ram #(
     (* ramstyle = "MLAB, no_rw_check" *) logic [WIDTH-1:0] ram [DEPTH-1:0];
 
     initial begin
-        for (integer i=0; i<DEPTH; i=i+1) begin
+        for (int i=0; i<DEPTH; i=i+1) begin
             ram[i] = '0;
         end
     end

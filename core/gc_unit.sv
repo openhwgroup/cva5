@@ -64,7 +64,7 @@ module gc_unit(
     logic [CLEAR_DEPTH-1:0] clear_shift_count;
     logic [TLB_CLEAR_DEPTH-1:0] tlb_clear_shift_count;
     ////////////////////////////////////////////////////
-    enum {ECALL, EBREAK, SRET, MRET, SFENCE, FENCE, FENCEI} operation;
+    enum {OP_ECALL, OP_EBREAK, OP_SRET, OP_MRET, OP_SFENCE, OP_FENCE, OP_FENCEI} operation;
 
     //Instructions
     //All instructions are processed only if in IDLE state, meaning there can be no exceptions caused by instructions already further in the pipeline.
@@ -110,7 +110,9 @@ module gc_unit(
     //     *If in-order mode and inflight queue empty, disable zero cycle write-back (eg. ALU)
     //*Hold fetch during potential fetch exception, when fetch buffer drained, if no other exceptions trigger exception
 
-    enum {RST_STATE, PRE_CLEAR_STATE, CLEAR_STATE, IDLE_STATE, TLB_CLEAR_STATE, LS_EXCEPTION_POSSIBLE, IQ_DRAIN} state, next_state;
+    typedef enum {RST_STATE, PRE_CLEAR_STATE, CLEAR_STATE, IDLE_STATE, TLB_CLEAR_STATE, LS_EXCEPTION_POSSIBLE, IQ_DRAIN} gc_state;
+    gc_state state;
+    gc_state next_state;
 
     //implementation
     ////////////////////////////////////////////////////
@@ -135,9 +137,9 @@ module gc_unit(
     end
 
 
-    assign gc_issue_hold = state inside {PRE_CLEAR_STATE, CLEAR_STATE, TLB_CLEAR_STATE};
-    assign inuse_clear = state inside {CLEAR_STATE};
-    assign inorder = state inside {LS_EXCEPTION_POSSIBLE, IQ_DRAIN};
+    assign gc_issue_hold =  (state inside {PRE_CLEAR_STATE, CLEAR_STATE, TLB_CLEAR_STATE}) ? 1 : 0;
+    assign inuse_clear = (state inside {CLEAR_STATE}) ? 1 : 0;
+    assign inorder = (state inside {LS_EXCEPTION_POSSIBLE, IQ_DRAIN}) ? 1 : 0;
 
     assign gc_issue_flush = 0;
     assign gc_fetch_hold = 0;

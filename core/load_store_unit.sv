@@ -70,7 +70,7 @@ module load_store_unit (
     logic load_complete;
 
     logic [31:0] virtual_address;
-    logic [3:0] be;
+    logic [3:0] be, be_from_op;
 
     logic [31:0] unit_muxed_load_data;
     logic [31:0] aligned_load_data;
@@ -132,7 +132,6 @@ module load_store_unit (
             inflight_count <= inflight_count - 1;
     end
 
-
     genvar i;
     generate
         for(i=0; i < NUM_SUB_UNITS; i++) begin
@@ -158,6 +157,10 @@ module load_store_unit (
 
     assign issue_request = input_fifo.valid && units_ready && (inflight_count < 2) && ~unit_stall;
     assign load_complete = data_valid;
+
+    always_ff @ (posedge clk) begin
+        assert ((issue_request & |sub_unit_address_match) || (!issue_request)) else $error("invalid L/S address");
+    end
 
     generate if (USE_D_SCRATCH_MEM) begin
             assign sub_unit_address_match[BRAM_ID] = tlb.physical_address[31:32-SCRATCH_BIT_CHECK] == SCRATCH_ADDR_L[31:32-SCRATCH_BIT_CHECK];
@@ -225,16 +228,16 @@ module load_store_unit (
      *   SH: upper or lower half of bytes
      *   SB: specific byte
      */
-    always_comb begin
-        for (integer i = 0; i < XLEN/8; i = i+ 1) begin
-            case(stage1.fn3[1:0])
-                LS_B_fn3[1:0] : be[i] = stage1.store && (virtual_address[1:0] == i);
-                LS_H_fn3[1:0] : be[i] = stage1.store && (virtual_address[1] == i[1]);
-                LS_W_fn3[1:0] : be[i] = stage1.store;
-                default : be[i] = 0;
-            endcase
+        always_comb begin
+            for (int i = 0; i < XLEN/8; i = i+ 1) begin
+                case({stage1.store,stage1.fn3[1:0]})
+                    {1'b1, LS_B_fn3[1:0]} : be[i] = (virtual_address[1:0] == i);
+                    {1'b1, LS_H_fn3[1:0]} : be[i] = (virtual_address[1] == i[1]);
+                    {1'b1, LS_W_fn3[1:0]} : be[i] = '1;
+                    default : be[i] = 0;
+                endcase
+            end
         end
-    end
 
     assign stage1_raw_data = (stage1.load_store_forward | dcache_forward_data) ?
         (data_valid ? final_load_data : previous_load) :
@@ -296,26 +299,26 @@ module load_store_unit (
             if(FPGA_VENDOR == "xilinx") //AXI BUS
                 axi_master axi_bus (.clk(clk), .rst(rst), .ls_inputs(d_inputs), .size({1'b0,stage1.fn3[1:0]}), .m_axi(m_axi),.ls(ls_sub[BUS_ID]), .data_out(unit_data_array[BUS_ID])); //Lower two bits of fn3 match AXI specification for request size (byte/halfword/word)
             else begin //Avalon bus
-                avalon_master avalon_bus(.clk(clk), .rst(rst),
-                        .addr(m_avalon.addr),
-                        .avread(m_avalon.read),
-                        .avwrite(m_avalon.write),
-                        .byteenable(m_avalon.byteenable),
-                        .readdata(m_avalon.readdata),
-                        .writedata(m_avalon.writedata),
-                        .waitrequest(m_avalon.waitrequest),
-                        .readdatavalid(m_avalon.readdatavalid),
-                        .writeresponsevalid(m_avalon.writeresponsevalid),
-                        .addr_in(d_inputs.addr),
-                        .data_in(d_inputs.data_in),
-                        .data_out(unit_data_array[BUS_ID]),
-                        .data_valid(ls_sub[BUS_ID].data_valid),
-                        .ready(ls_sub[BUS_ID].ready),
-                        .new_request(ls_sub[BUS_ID].new_request),
-                        .rnw(d_inputs.load),
-                        .be(d_inputs.be),
-                        .data_ack(ls_sub[BUS_ID].ack)
-                    );
+//                avalon_master avalon_bus(.clk(clk), .rst(rst),
+//                        .addr(m_avalon.addr),
+//                        .avread(m_avalon.read),
+//                        .avwrite(m_avalon.write),
+//                        .byteenable(m_avalon.byteenable),
+//                        .readdata(m_avalon.readdata),
+//                        .writedata(m_avalon.writedata),
+//                        .waitrequest(m_avalon.waitrequest),
+//                        .readdatavalid(m_avalon.readdatavalid),
+//                        .writeresponsevalid(m_avalon.writeresponsevalid),
+//                        .addr_in(d_inputs.addr),
+//                        .data_in(d_inputs.data_in),
+//                        .data_out(unit_data_array[BUS_ID]),
+//                        .data_valid(ls_sub[BUS_ID].data_valid),
+//                        .ready(ls_sub[BUS_ID].ready),
+//                        .new_request(ls_sub[BUS_ID].new_request),
+//                        .rnw(d_inputs.load),
+//                        .be(d_inputs.be),
+//                        .data_ack(ls_sub[BUS_ID].ack)
+//                    );
             end
         end
     endgenerate

@@ -79,7 +79,7 @@ module tlb_lut_ram #(
     genvar i;
     generate
         for (i=0; i<WAYS; i=i+1) begin : lut_rams
-            lut_ram #(.WIDTH($bits(tlb_entry_t)), .DEPTH(DEPTH)) ram (.clk(clk),
+            lut_ram #(.WIDTH($bits(tlb_entry_t)), .DEPTH(DEPTH)) ram_block (.clk(clk),
                     .waddr(tlb_write_addr), .ram_write(tlb_write[i]), .new_ram_data(new_entry),
                     .raddr(tlb_read_addr),  .ram_data_out(ram_data[i]));
         end
@@ -113,7 +113,7 @@ module tlb_lut_ram #(
 
 
     always_comb begin
-        for (integer i=0; i<WAYS; i=i+1) begin
+        for (int i=0; i<WAYS; i=i+1) begin
             tag_hit[i] = {ram_data[i].valid, ram_data[i].tag} == {1'b1, virtual_tag};
         end
     end
@@ -137,7 +137,7 @@ module tlb_lut_ram #(
     always_comb begin
         tlb.physical_address[11:0] = tlb.virtual_address[11:0];
         tlb.physical_address[31:12] = tlb.virtual_address[31:12];
-        for (integer i=0; i<WAYS; i=i+1) begin
+        for (int i=0; i<WAYS; i=i+1) begin
             if(tag_hit[i] & tlb_on)  tlb.physical_address[31:12] = ram_data[i].phys_addr;
         end
     end

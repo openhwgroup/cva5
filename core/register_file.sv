@@ -32,8 +32,8 @@ module register_file(
         register_file_decode_interface.unit rf_decode
         );
 
-    (* ramstyle = "MLAB, no_rw_check" *) logic [XLEN-1:0] register [0:31];
-    (* ramstyle = "MLAB, no_rw_check" *) logic  [$clog2(INFLIGHT_QUEUE_DEPTH)-1:0] in_use_by [0:31];
+    (* ramstyle = "MLAB, no_rw_check" *) logic [XLEN-1:0] register [31:0];
+    (* ramstyle = "MLAB, no_rw_check" *) logic  [$clog2(INFLIGHT_QUEUE_DEPTH)-1:0] in_use_by [31:0];
 
     logic rs1_inuse;
     logic rs2_inuse;
@@ -47,7 +47,7 @@ module register_file(
     //////////////////////////////////////////
     //Assign zero to r0 and initialize all registers to zero
     initial begin
-        for (integer i=0; i<32; i++) begin
+        for (int i=0; i<32; i++) begin
             register[i] = 0;
             in_use_by[i] = '0;
         end
@@ -95,7 +95,7 @@ module register_file(
     ////////////////////////////////////////////////////
     //Simulation Only
     // synthesis translate_off
-    logic [0:31][0:31] sim_registers_unamed;
+    logic [31:0][31:0] sim_registers_unamed;
     simulation_named_regfile sim_register;
     always_comb begin
         foreach(register[i])

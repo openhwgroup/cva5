@@ -29,8 +29,8 @@ module branch_table(
         branch_table_interface.branch_table bt
         );
 
-    parameter ADDR_W = $clog2(BRANCH_TABLE_ENTRIES);
-    parameter BTAG_W = 30 - ADDR_W;
+    parameter BADDR_W = $clog2(BRANCH_TABLE_ENTRIES);
+    parameter BTAG_W = 30 - BADDR_W;
 
     typedef struct packed {
         logic valid;
@@ -70,22 +70,22 @@ module branch_table(
     //Tags and prediction
     always_ff @(posedge clk) begin
         if (bt.branch_ex) begin
-            branch_table_tag_ram[bt.ex_pc[ADDR_W+1:2]] <= ex_entry;
+            branch_table_tag_ram[bt.ex_pc[BADDR_W+1:2]] <= ex_entry;
         end
     end
     always_ff @(posedge clk) begin
         if (bt.new_mem_request)
-            if_entry <=  branch_table_tag_ram[bt.next_pc[ADDR_W+1:2]];
+            if_entry <=  branch_table_tag_ram[bt.next_pc[BADDR_W+1:2]];
     end
     //branch address
     always_ff @(posedge clk) begin
         if (bt.branch_ex) begin
-            branch_table_addr_ram[bt.ex_pc[ADDR_W+1:2]] <= ( bt.branch_taken ? bt.jump_pc : bt.njump_pc);
+            branch_table_addr_ram[bt.ex_pc[BADDR_W+1:2]] <= ( bt.branch_taken ? bt.jump_pc : bt.njump_pc);
         end
     end
     always_ff @(posedge clk) begin
         if (bt.new_mem_request)
-            predicted_pc <=  branch_table_addr_ram[bt.next_pc[ADDR_W+1:2]];
+            predicted_pc <=  branch_table_addr_ram[bt.next_pc[BADDR_W+1:2]];
     end
     //Predict next branch to same location/direction as current
     assign ex_entry.valid = 1;

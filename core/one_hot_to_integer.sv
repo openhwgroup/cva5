@@ -35,7 +35,7 @@ module one_hot_to_integer
     always_comb begin
         int_out = 0;
         foreach (one_hot[i])
-            if (one_hot[i]) int_out |= i;
+            if (one_hot[i]) int_out |= i[$clog2(C_WIDTH)-1:0];
     end
     ////////////////////////////////////////////////////
     //Assertions

@@ -36,6 +36,7 @@ module taiga (
         l2_requester_interface.requester l2,
 
         output logic[31:0] dec_pc_debug,
+        output logic dec_advance_debug,
         output logic[31:0] if2_pc_debug,
 
         input logic timer_interrupt,
@@ -130,7 +131,7 @@ module taiga (
 
     assign if2_pc_debug = if2_pc;
     assign dec_pc_debug = dec_pc;
-
+    assign dec_advance_debug = dec_advance;
     assign instruction_issued = dec_advance;
 
 
@@ -199,8 +200,8 @@ module taiga (
     ////////////////////////////////////////////////////
     //Assertions
     //Ensure that reset is held for at least 32 cycles to clear shift regs
-    always_ff @ (posedge clk) begin
-        assert property(@(posedge clk) $rose (rst) |=> rst[*32]) else $error("Reset not held for long enough!");
-    end
+   // always_ff @ (posedge clk) begin
+   //     assert property(@(posedge clk) $rose (rst) |=> rst[*32]) else $error("Reset not held for long enough!");
+   // end
 
 endmodule

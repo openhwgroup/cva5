@@ -30,10 +30,10 @@ module id_generator (
         id_generator_interface.generator id_gen
         );
 
-    logic [0:INFLIGHT_QUEUE_DEPTH-1] inuse;
-    logic [0:INFLIGHT_QUEUE_DEPTH-1] new_inuse;
-    logic [0:INFLIGHT_QUEUE_DEPTH-1] clear_inuse;
-    logic [0:INFLIGHT_QUEUE_DEPTH-1] set_inuse;
+    logic [INFLIGHT_QUEUE_DEPTH-1:0] inuse;
+    logic [INFLIGHT_QUEUE_DEPTH-1:0] new_inuse;
+    logic [INFLIGHT_QUEUE_DEPTH-1:0] clear_inuse;
+    logic [INFLIGHT_QUEUE_DEPTH-1:0] set_inuse;
     //implementation
     ////////////////////////////////////////////////////
 
@@ -60,7 +60,7 @@ module id_generator (
         id_gen.issue_id = id_gen.complete_id;
         for (int i=0; i <INFLIGHT_QUEUE_DEPTH; i=i+1) begin
             if(~inuse[i])
-                id_gen.issue_id = i;
+                id_gen.issue_id = i[INFLIGHT_QUEUE_WIDTH-1:0];
         end
     end
 
