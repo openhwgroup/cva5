@@ -213,41 +213,43 @@ package taiga_types;
         SV32 = 5'd8
     } vm_t;
 
-    typedef enum bit [3:0] {
-        INST_ADDR_MISSALIGNED = 4'd0,
-        INST_ACCESS_FAULT = 4'd1,
-        ILLEGAL_INST = 4'd2,
-        BREAK = 4'd3,
-        LOAD_ADDR_MISSALIGNED = 4'd4,
-        LOAD_FAULT = 4'd5,
-        STORE_AMO_ADDR_MISSALIGNED = 4'd6,
-        STORE_AMO_FAULT = 4'd7,
-        ECALL_U = 4'd8,
-        ECALL_S = 4'd9,
+    parameter ASIDLEN = 9;//pid
+
+    typedef enum bit [4:0] {
+        INST_ADDR_MISSALIGNED = 5'd0,
+        INST_ACCESS_FAULT = 5'd1,
+        ILLEGAL_INST = 5'd2,
+        BREAK = 5'd3,
+        LOAD_ADDR_MISSALIGNED = 5'd4,
+        LOAD_FAULT = 5'd5,
+        STORE_AMO_ADDR_MISSALIGNED = 5'd6,
+        STORE_AMO_FAULT = 5'd7,
+        ECALL_U = 5'd8,
+        ECALL_S = 5'd9,
         //reserved
-        ECALL_M = 4'd11,
-        INST_PAGE_FAULT = 4'd12,
-        LOAD_PAGE_FAULT = 4'd13,
+        ECALL_M = 5'd11,
+        INST_PAGE_FAULT = 5'd12,
+        LOAD_PAGE_FAULT = 5'd13,
         //reserved
-        STORE_OR_AMO_PAGE_FAULT = 4'd15
+        STORE_OR_AMO_PAGE_FAULT = 5'd15
         //reserved
     } exception_code_t;
-    parameter ECODE_W = 4;
+    parameter ECODE_W = 5;
 
 
-    typedef enum bit [3:0] {
-        U_SOFTWARE_INTERRUPT = 4'd0,
-        S_SOFTWARE_INTERRUPT = 4'd1,
+    typedef enum bit [4:0] {
+        U_SOFTWARE_INTERRUPT = 5'd0,
+        S_SOFTWARE_INTERRUPT = 5'd1,
         //RESERVED
-        M_SOFTWARE_INTERRUPT = 4'd3,
-        U_TIMER_INTERRUPT = 4'd4,
-        S_TIMER_INTERRUPT = 4'd5,
+        M_SOFTWARE_INTERRUPT = 5'd3,
+        U_TIMER_INTERRUPT = 5'd4,
+        S_TIMER_INTERRUPT = 5'd5,
         //RESERVED
-        M_TIMER_INTERRUPT = 4'd7,
-        U_EXTERNAL_INTERRUPT = 4'd8,
-        S_EXTERNAL_INTERRUPT = 4'd9,
+        M_TIMER_INTERRUPT = 5'd7,
+        U_EXTERNAL_INTERRUPT = 5'd8,
+        S_EXTERNAL_INTERRUPT = 5'd9,
         //RESERVED
-        M_EXTERNAL_INTERRUPT = 4'd11
+        M_EXTERNAL_INTERRUPT = 5'd11
     } interrupt_code_t;
 
     typedef logic[INFLIGHT_QUEUE_WIDTH-1:0] instruction_id_t;

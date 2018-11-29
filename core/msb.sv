@@ -4,7 +4,7 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -19,7 +19,7 @@
  * Author(s):
  *             Eric Matthews <ematthew@sfu.ca>
  */
- 
+
 module msb
         (
         input logic [31:0] msb_input,
@@ -27,63 +27,49 @@ module msb
         );
 
     logic [2:0] sub_msb [3:0];
-    logic index16thBit;
-    logic index8thBit;
+    //Finds MSB for 4x 8-bit segments in parallel
+    //Is smaller and faster than checking the full width sequentially (i.e. from 0 to 31)
+
+    logic [1:0] sub_sub_msb [3:0];
+
+    //    always_comb begin
+    //        msb = 0;
+    //        for (int i=1; i<31; i=i+1) begin
+    //            if (msb_input[i]) msb = i;
+    //        end
+    //    end
 
     always_comb begin
-        msb[4] = |msb_input[31:16];
-        msb[3] = (|msb_input[31:24]) | (|msb_input[15:8] & ~|msb_input[23:16]);
+        for (int i=0; i<4; i=i+1) begin
 
-        casex (msb_input[31:25])
-            7'b1xxxxxx: sub_msb[3] = 7;
-            7'b01xxxxx: sub_msb[3] = 6;
-            7'b001xxxx: sub_msb[3] = 5;
-            7'b0001xxx: sub_msb[3] = 4;
-            7'b00001xx: sub_msb[3] = 3;
-            7'b000001x: sub_msb[3] = 2;
-            7'b0000001: sub_msb[3] = 1;
-            default: sub_msb[3] = 0;
-        endcase
+            //upper bit is set only if any of the upper 4-bits are set
+            sub_msb[i][2] = |msb_input[4+i*8+:4];
+            sub_msb[i][1] = (|msb_input[4+i*8+:4]) | (~(|msb_input[6+i*8+:2]) & (|msb_input[2+i*8+:2]));
 
-        casex (msb_input[23:17])
-            7'b1xxxxxx: sub_msb[2] = 7;
-            7'b01xxxxx: sub_msb[2] = 6;
-            7'b001xxxx: sub_msb[2] = 5;
-            7'b0001xxx: sub_msb[2] = 4;
-            7'b00001xx: sub_msb[2] = 3;
-            7'b000001x: sub_msb[2] = 2;
-            7'b0000001: sub_msb[2] = 1;
-            default: sub_msb[2] = 0;
-        endcase
+            casez (msb_input[5+i*8+:3])
+                3'b1?? : sub_sub_msb[i][0] = 1;
+                3'b01? : sub_sub_msb[i][0] = 0;
+                3'b001 : sub_sub_msb[i][0] = 1;
+                default : sub_sub_msb[i][0] = 0;
+            endcase
 
-        casex (msb_input[15: 9])
-            7'b1xxxxxx: sub_msb[1] = 7;
-            7'b01xxxxx: sub_msb[1] = 6;
-            7'b001xxxx: sub_msb[1] = 5;
-            7'b0001xxx: sub_msb[1] = 4;
-            7'b00001xx: sub_msb[1] = 3;
-            7'b000001x: sub_msb[1] = 2;
-            7'b0000001: sub_msb[1] = 1;
-            default: sub_msb[1] = 0;
-        endcase
-        
-        casex (msb_input[ 7: 1])
-            7'b1xxxxxx: sub_msb[0] = 7;
-            7'b01xxxxx: sub_msb[0] = 6;
-            7'b001xxxx: sub_msb[0] = 5;
-            7'b0001xxx: sub_msb[0] = 4;
-            7'b00001xx: sub_msb[0] = 3;
-            7'b000001x: sub_msb[0] = 2;
-            7'b0000001: sub_msb[0] = 1;
-            default: sub_msb[0] = 0;
-        endcase
+            casez (msb_input[1+i*8+:3])
+                3'b1?? : sub_sub_msb[i][1] = 1;
+                3'b01? : sub_sub_msb[i][1] = 0;
+                3'b001 : sub_sub_msb[i][1] = 1;
+                default : sub_sub_msb[i][1] = 0;
+            endcase
 
-        case (msb[4:3])
-            0: msb[2:0] = sub_msb[0];
-            1: msb[2:0] = sub_msb[1];
-            2: msb[2:0] = sub_msb[2];
-            3: msb[2:0] = sub_msb[3];
-        endcase
-    end 
-    
+            sub_msb[i][0] = sub_msb[i][2] ? sub_sub_msb[i][0] : sub_sub_msb[i][1];
+        end
+
+        msb[4] = (|msb_input[31:26]) | (|msb_input[25:20]) | (|msb_input[19:16]);//upper 16 bits
+        msb[3] = (|msb_input[31:26]) | (|msb_input[25:24]) |
+            ((~|msb_input[23:16]) & (|msb_input[15:8]));
+
+        msb[2:0] = sub_msb[msb[4:3]];
+
+    end
+
 endmodule
+

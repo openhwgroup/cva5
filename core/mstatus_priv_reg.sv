@@ -80,7 +80,7 @@ module mstatus_priv_reg (
                 mstatus_exception.sie = 0;
                 mstatus_exception.spp = privilege_level[0]; //one if from supervisor-mode, zero if from user-mode
             end
-            MACHINE_PRIV: begin
+            default: begin
                 mstatus_exception.mpie = (privilege_level == MACHINE_PRIV) ? mstatus.mie : ((privilege_level == SUPERVISOR_PRIV) ? mstatus.sie : mstatus.uie);
                 mstatus_exception.mie = 0;
                 mstatus_exception.mpp = privilege_level; //machine,supervisor or user

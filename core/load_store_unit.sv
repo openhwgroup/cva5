@@ -231,7 +231,7 @@ module load_store_unit (
         always_comb begin
             for (int i = 0; i < XLEN/8; i = i+ 1) begin
                 case({stage1.store,stage1.fn3[1:0]})
-                    {1'b1, LS_B_fn3[1:0]} : be[i] = (virtual_address[1:0] == i);
+                    {1'b1, LS_B_fn3[1:0]} : be[i] = (virtual_address[1:0] == i[1:0]);
                     {1'b1, LS_H_fn3[1:0]} : be[i] = (virtual_address[1] == i[1]);
                     {1'b1, LS_W_fn3[1:0]} : be[i] = '1;
                     default : be[i] = 0;

@@ -21,7 +21,8 @@
  */
 
 package csr_types;
- //   import taiga_config::*;
+    import taiga_config::*;
+    import taiga_types::*;
 
 
     typedef struct packed {
@@ -121,9 +122,10 @@ package csr_types;
         logic usie;
     } mie_t;
 
+
     struct packed {
         logic mode;
-        logic [8:0] asid;
+        logic [ASIDLEN-1:0] asid;
         logic [21:0] ppn;
     } satp;
 

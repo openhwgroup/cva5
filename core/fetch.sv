@@ -81,12 +81,13 @@ module fetch(
 
     logic update_pc;
 
-    logic[6:0] opcode;
-    logic[4:0] opcode_trimmed;
+    logic [31:0] final_instruction;
+    logic [6:0] opcode;
+    logic [4:0] opcode_trimmed;
     logic [4:0] rs1_addr;
     logic [4:0] rs2_addr;
     logic [4:0] rd_addr;
-    logic[2:0] fn3;
+    logic [2:0] fn3;
 
     logic csr_imm_op;
     logic sys_op;
@@ -215,30 +216,31 @@ module fetch(
 
     //bitwise AND all subunit outputs with valid signal then or all outputs together
     always_comb begin
-        ib.data_in.instruction = 0;
+        final_instruction = 0;
         foreach (unit_data_array[i]) begin
             anded_unit_data_array[i] = unit_data_array[i] & {$bits(unit_data_array[i]){unit_data_valid[i]}};
-            ib.data_in.instruction |= anded_unit_data_array[i];
+            final_instruction |= anded_unit_data_array[i];
         end
     end
 
+    assign ib.data_in.instruction = final_instruction;
     assign ib.data_in.pc = stage2_phys_address;
 
     ///////////////////////////////////
     //Early decode
     ///////////////////////////////////
-    assign fn3 =ib.data_in.instruction[14:12];
-    assign opcode = ib.data_in.instruction[6:0];
+    assign fn3 = final_instruction[14:12];
+    assign opcode = final_instruction[6:0];
     assign opcode_trimmed = opcode[6:2];
 
-    assign rs1_addr = ib.data_in.instruction[19:15];
-    assign rs2_addr = ib.data_in.instruction[24:20];
-    assign rd_addr  = ib.data_in.instruction[11:7];
+    assign rs1_addr = final_instruction[19:15];
+    assign rs2_addr = final_instruction[24:20];
+    assign rd_addr  = final_instruction[11:7];
 
     assign csr_imm_op = (opcode_trimmed == SYSTEM_T) && fn3[2];
     assign sys_op =  (opcode_trimmed == SYSTEM_T) && (fn3 == 0);
 
-    assign jal_jalr_x0 = (opcode_trimmed inside {JAL_T, JALR_T}) && ib.data_in.rd_zero;
+    assign jal_jalr_x0 = (opcode_trimmed inside {JAL_T, JALR_T}) && (rd_addr == 0);
 
     //RAS support ///////////////////
     assign rs1_link = (rs1_addr inside {1,5});

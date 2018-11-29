@@ -30,14 +30,13 @@ package taiga_config;
     parameter CPU_ID = 0;//32 bit value
 
     parameter bit[31:0] RESET_VEC = 32'h80000000;
-    parameter ASIDLEN = 7;//pid
     parameter PAGE_ADDR_W = 12;
 
     parameter TIMER_W = 33; //32 days @ 100MHz
 
     parameter USE_MUL = 1;
     parameter USE_DIV = 1;
-    parameter USE_VARIABLE_LATENCY_DIV = 1;
+    parameter USE_VARIABLE_LATENCY_DIV = 0;
 
     parameter USE_AMO = 0;
 
@@ -92,11 +91,11 @@ package taiga_config;
     parameter C_M_AXI_ADDR_WIDTH = 32;
     parameter C_M_AXI_DATA_WIDTH = 32;
 
-    parameter USE_MMU = 1;
+    parameter USE_MMU = 0;
 
     //Caches
     //Size in bytes: (DCACHE_LINES * DCACHE_WAYS * DCACHE_LINE_W * 4)
-    parameter USE_DCACHE = 1;
+    parameter USE_DCACHE = 0;
     parameter DCACHE_LINES = 512;
     parameter DCACHE_WAYS = 2;
     parameter DCACHE_LINE_ADDR_W = $clog2(DCACHE_LINES);
@@ -112,7 +111,7 @@ package taiga_config;
 
     //Size in bytes: (ICACHE_LINES * ICACHE_WAYS * ICACHE_LINE_W * 4)
     //For optimal BRAM packing lines should not be less than 512
-    parameter USE_ICACHE = 1;
+    parameter USE_ICACHE = 0;
     parameter ICACHE_LINES = 512;
     parameter ICACHE_WAYS = 2;
     parameter ICACHE_LINE_ADDR_W = $clog2(ICACHE_LINES);

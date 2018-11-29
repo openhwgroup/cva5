@@ -42,7 +42,7 @@ module csr_unit (
 
         //TLBs
         output logic tlb_on,
-        output logic [6:0] asid,
+        output logic [ASIDLEN-1:0] asid,
 
         //MMUs
         mmu_interface.csr immu,

@@ -185,9 +185,9 @@ module decode(
 
     assign mult_div_op = (opcode_trim == ARITH_T) && ib.data_out.instruction[25];
 
-    assign new_request[BRANCH_UNIT_EX_ID] = opcode_trim inside {BRANCH_T, JAL_T, JALR_T};
+    assign new_request[BRANCH_UNIT_EX_ID] = opcode_trim inside {BRANCH_T, JAL_T, JALR_T} ? 1 : 0;
     assign new_request[ALU_UNIT_EX_ID] =  ((opcode_trim == ARITH_T)  && ~ib.data_out.instruction[25]) || opcode_trim inside {ARITH_IMM_T, AUIPC_T, LUI_T};
-    assign new_request[LS_UNIT_EX_ID] = opcode_trim inside {LOAD_T, STORE_T, AMO_T};
+    assign new_request[LS_UNIT_EX_ID] = opcode_trim inside {LOAD_T, STORE_T, AMO_T} ? 1 : 0;
     assign new_request[CSR_UNIT_EX_ID] = (opcode_trim == SYSTEM_T) && (fn3 != 0);
     assign new_request[GC_UNIT_EX_ID] = ((opcode_trim == SYSTEM_T) && (fn3 == 0)) || (opcode_trim == FENCE_T);
 
@@ -307,16 +307,21 @@ module decode(
     //----------------------------------------------------------------------------------
     //Load Store unit inputs
     //----------------------------------------------------------------------------------
+    logic amo_op;
+    logic [4:0] amo_type;
+    assign amo_op =  USE_AMO ? (opcode_trim == AMO_T) : 0;
+    assign amo_type = USE_AMO ? ib.data_out.instruction[31:27] : 0;
+
     assign ls_ex.new_request_dec = issue[LS_UNIT_EX_ID];
 
     assign ls_inputs.offset = opcode[5] ? {ib.data_out.instruction[31:25], ib.data_out.instruction[11:7]} : ib.data_out.instruction[31:20];
     assign ls_inputs.virtual_address = rf_decode.rs1_data;// + 32'(signed'(ls_inputs.offset));
     assign ls_inputs.rs2 = rf_decode.rs2_data;
     assign ls_inputs.pc = ib.data_out.pc;
-    assign ls_inputs.fn3 = ls_inputs.is_amo ? LS_W_fn3 : fn3;
-    assign ls_inputs.amo = USE_AMO ? ib.data_out.instruction[31:27] : 0;
-    assign ls_inputs.is_amo = USE_AMO ? (opcode_trim == AMO_T) : 0;
-    assign ls_inputs.load = (opcode_trim inside {LOAD_T, AMO_T}) && (ls_inputs.amo != AMO_SC); //LR and AMO_ops perform a read operation as well
+    assign ls_inputs.fn3 = amo_op ? LS_W_fn3 : fn3;
+    assign ls_inputs.amo = amo_type;
+    assign ls_inputs.is_amo = amo_op;
+    assign ls_inputs.load = (opcode_trim inside {LOAD_T, AMO_T}) && (amo_type != AMO_SC); //LR and AMO_ops perform a read operation as well
     assign ls_inputs.store = (opcode_trim == STORE_T);
     assign ls_inputs.load_store_forward = (opcode_trim == STORE_T) && rf_decode.rs2_conflict;
     assign ls_inputs.id = id_gen.issue_id;
@@ -418,17 +423,26 @@ module decode(
         alu_ex.new_request <= issue[ALU_UNIT_EX_ID];
         ls_ex.new_request <= issue[LS_UNIT_EX_ID];
         csr_ex.new_request <= issue[CSR_UNIT_EX_ID];
-        mul_ex.new_request <= issue[MUL_UNIT_EX_ID];
-        div_ex.new_request <= issue[DIV_UNIT_EX_ID];
         gc_ex.new_request <= issue[GC_UNIT_EX_ID];
     end
+
+    generate if (USE_MUL)
+            always_ff @(posedge clk) begin
+                mul_ex.new_request <= issue[MUL_UNIT_EX_ID];
+            end
+        assign mul_ex.possible_issue = new_request[MUL_UNIT_EX_ID];
+    endgenerate
+    generate if (USE_DIV)
+            always_ff @(posedge clk) begin
+                div_ex.new_request <= issue[DIV_UNIT_EX_ID];
+            end
+        assign div_ex.possible_issue = new_request[DIV_UNIT_EX_ID];
+    endgenerate
 
     assign branch_ex.possible_issue = new_request[BRANCH_UNIT_EX_ID];
     assign alu_ex.possible_issue = new_request[ALU_UNIT_EX_ID];
     assign ls_ex.possible_issue = new_request[LS_UNIT_EX_ID];
     assign csr_ex.possible_issue = new_request[CSR_UNIT_EX_ID];
-    assign mul_ex.possible_issue = new_request[MUL_UNIT_EX_ID];
-    assign div_ex.possible_issue = new_request[DIV_UNIT_EX_ID];
     assign gc_ex.possible_issue = new_request[GC_UNIT_EX_ID];
 
 endmodule
