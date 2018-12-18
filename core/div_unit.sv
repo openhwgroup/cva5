@@ -64,11 +64,12 @@ module div_unit(
     fifo_interface #(.DATA_WIDTH($bits(div_inputs_t))) input_fifo();
     fifo_interface #(.DATA_WIDTH(XLEN)) wb_fifo();
 
+
     /*********************************
      *  Input FIFO
      *********************************/
     taiga_fifo #(.DATA_WIDTH($bits(div_inputs_t)), .FIFO_DEPTH(DIV_INPUT_BUFFER_DEPTH), .FIFO_TYPE(NON_MUXED_INPUT_FIFO)
-            ) div_input_fifo (.fifo(input_fifo), .*);
+        ) div_input_fifo (.fifo(input_fifo), .*);
 
     assign input_fifo.data_in = div_inputs;
     assign input_fifo.push = div_ex.new_request_dec;
@@ -109,10 +110,18 @@ module div_unit(
     assign complementerA = (dividend_signed ? ~stage1.rs1 : stage1.rs1) + dividend_signed;
     assign complementerB = (divisor_signed ? ~stage1.rs2 : stage1.rs2) + divisor_signed;
 
-    assign result_input = stage1.op[1] ? remainder : quotient;
-    assign negateResult = (stage1.op[1] ? remainder_signed : quotient_signed);
-    assign div_result_sign_corrected = (negateResult ? ~result_input : result_input) + negateResult;
-    assign wb_div_result = stage1.div_zero ? (stage1.op[1] ? stage1.rs1 : '1) : div_result_sign_corrected;
+
+    assign negateResult = ~stage1.div_zero & (stage1.op[1] ? remainder_signed : quotient_signed);
+
+    always_comb begin
+        case ({stage1.div_zero, stage1.op[1]})
+            2'b00 : result_input = quotient;
+            2'b01 : result_input = remainder;
+            2'b10 : result_input = '1;
+            2'b11 : result_input = stage1.rs1;
+        endcase
+        wb_div_result = (negateResult ? ~result_input : result_input) + negateResult;
+    end
     //*************
 
     //Synthesis time algorithm choice for divider

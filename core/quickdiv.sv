@@ -41,6 +41,7 @@ module quickdiv
     logic running;
     logic terminate;
 
+    logic [C_WIDTH-1:0] A_r;
     logic [C_WIDTH:0] A1;
     logic [C_WIDTH-1:0] A2;
 
@@ -54,80 +55,76 @@ module quickdiv
     logic [C_WIDTH-1:0] B2;
     logic [C_WIDTH-1:0] B_r;
 
-    localparam MSB_W = $clog2(C_WIDTH);
-    logic [MSB_W-1:0] R_MSB;
-    logic [MSB_W-1:0] B_MSB;
-    logic [MSB_W-1:0] B_MSB_r;
+    localparam CLZ_W = $clog2(C_WIDTH);
+    logic [CLZ_W-1:0] R_CLZ;
+    logic [CLZ_W-1:0] B_CLZ;
+    logic [CLZ_W-1:0] B_CLZ_r;
+    logic [CLZ_W-1:0] CLZ_delta;
 
     logic firstCycle;
-    logic [C_WIDTH*2-1:0] shiftedB; 
-    logic [C_WIDTH*2-1:0] shiftedQ;
-    logic [C_WIDTH*2-1:0] tempB;
-    logic [C_WIDTH*2-1:0] tempQ;
+    logic [C_WIDTH-1:0] shiftedB;
+    //////////////////////////////////////////
 
-    msb msb_r (.msb_input(R), .msb(R_MSB));
-    msb msb_b (.msb_input(B), .msb(B_MSB));
+    clz clz_r (.clz_input(R), .clz(R_CLZ));
+    clz clz_b (.clz_input(B), .clz(B_CLZ));
 
-    assign new_Q_bit = Q | (A1[C_WIDTH] ?  Q_bit2 : Q_bit1);
-    //assign Q_bit1 = 2**MSB_delta_r;
-    assign tempQ = shiftedQ << R_MSB;
-    assign Q_bit1 = tempQ[63:32];
+    always_ff @ (posedge clk) begin
+        firstCycle <= start;
+        B_CLZ_r <= B_CLZ;
+        A_r <= A;
+        B_r <= B;
+        shiftedB <= B << B_CLZ_r;
+    end
+
+    assign CLZ_delta = B_CLZ_r - R_CLZ;
+
+    always_comb begin
+        Q_bit1 = 0;
+        Q_bit1[CLZ_delta] = 1;
+    end
     assign Q_bit2 = {1'b0, Q_bit1[C_WIDTH-1:1]};
+    assign new_Q_bit = Q | (A1[C_WIDTH] ?  Q_bit2 : Q_bit1);
 
-    assign new_R = A1[C_WIDTH] ? A2 : A1[C_WIDTH-1:0];
-    //assign B1 = (B_r << MSB_delta_r);
-    assign tempB = shiftedB << R_MSB; 
-    assign B1 = tempB[63:32];
+    assign B1 = shiftedB >> R_CLZ;
     assign A1 = R - B1;
-    assign B2 = {1'b0,B1[C_WIDTH-1:1]};
+    assign B2 = {1'b0, B1[C_WIDTH-1:1]};
     assign A2 = R - B2;
 
-    always_ff @ (posedge clk) begin
-        if (firstCycle) begin
-            shiftedB <= {B, {C_WIDTH{1'b0}}} >> B_MSB_r;
-            shiftedQ <= {32'h00000001, {C_WIDTH{1'b0}}} >> B_MSB_r;
-        end
-    end
+    assign new_R = firstCycle ? A_r : (A1[C_WIDTH] ? A2[C_WIDTH-1:0] : A1[C_WIDTH-1:0]);
 
     always_ff @ (posedge clk) begin
-        if (rst) begin
+        if (rst)
             running <= 0;
-            complete <= 0;
-            firstCycle <= 1;
-        end
-        else begin
-            if (start) begin
-                running <= 1;
-                complete <= 0;
-                firstCycle <= 1;
-                B_MSB_r <= B_MSB;
-            end
-            else if (firstCycle) begin
-                firstCycle <= 0;                
-            end 
-            else if (running & terminate) begin
-                running <= 0;
-                complete <= 1;
-            end
-            else if (ack) begin
-                running <= 0;
-                complete <= 0;
-            end
-        end
+        else if (firstCycle)
+            running <= 1;
+        else if (terminate)
+            running <= 0;
     end
 
-    assign terminate =  (R < B_r);
+    always_ff @ (posedge clk) begin
+        if (rst)
+            complete <= 0;
+        else if (ack)
+            complete <= 0;
+        else if (running & terminate)
+            complete <= 1;
+    end
+
+    assign terminate = ({firstCycle, R} < {1'b0, B_r});
 
     always_ff @ (posedge clk) begin
-        if (start) begin
+        if (firstCycle)
             Q <= 0;
-            R <= A;
-            B_r <= B;
-        end
-        else  if (~terminate & ~firstCycle) begin
+        else  if (~terminate)
             Q <= new_Q_bit;
+    end
+
+    initial begin
+        R = 0;
+    end
+    always @ (posedge clk) begin
+        if (~terminate)
             R <= new_R;
-        end
     end
 
 endmodule
