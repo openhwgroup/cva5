@@ -35,9 +35,10 @@ module taiga (
 
         l2_requester_interface.requester l2,
 
-        output logic[31:0] dec_pc_debug,
+        output logic [31:0] dec_pc_debug,
         output logic dec_advance_debug,
-        output logic[31:0] if2_pc_debug,
+        output logic [31:0] dec_instruction,
+        output logic [31:0] if2_pc_debug,
 
         input logic timer_interrupt,
         input logic interrupt
@@ -116,7 +117,7 @@ module taiga (
 
     //Decode Unit and Fetch Unit
     logic [31:0] if2_pc;
-    logic [31:0] instruction;
+    logic [31:0] dec_instruction;
     logic dec_advance;
     logic flush;
     logic illegal_instruction;

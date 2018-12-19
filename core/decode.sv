@@ -61,6 +61,7 @@ module decode(
 
         output logic dec_advance,
         output logic [31:0] dec_pc,
+        output logic [31:0] dec_instruction,
         output logic illegal_instruction
 
         );
@@ -124,6 +125,7 @@ module decode(
 
 
     assign dec_pc =  ib.data_out.pc;
+    assign dec_instruction = ib.data_out.instruction;
 
     assign csr_imm_op = (opcode_trim == SYSTEM_T) && fn3[2];
     assign sys_op =  (opcode_trim == SYSTEM_T) && (fn3 == 0);

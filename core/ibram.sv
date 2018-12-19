@@ -42,10 +42,8 @@ module ibram(
     always_ff @ (posedge clk) begin
         if (rst)
             fetch_sub.data_valid <= 0;
-        else if (fetch_sub.new_request)
-            fetch_sub.data_valid <= 1;
         else
-            fetch_sub.data_valid <= 0;
+            fetch_sub.data_valid <= fetch_sub.new_request;
     end
 
 endmodule

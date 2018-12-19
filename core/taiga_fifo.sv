@@ -116,10 +116,7 @@ module taiga_fifo #(parameter DATA_WIDTH = 32, parameter FIFO_DEPTH = 4, paramet
             assign fifo.empty = ~fifo.valid;
 
             always_ff @ (posedge clk) begin
-                if (rst)
-                    fifo.full = 0;
-                else
-                    fifo.full = ~fifo.pop & ((fifo.push & full_minus_one) | full);
+                fifo.full = ~fifo.pop & ((fifo.push & full_minus_one) | full);
             end
 
             assign fifo.early_valid = fifo.push | (fifo.valid & ~fifo.pop) | more_than_one;

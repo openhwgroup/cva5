@@ -45,10 +45,8 @@ module dbram(
     always_ff @ (posedge clk) begin
         if (rst)
             ls.data_valid <= 0;
-        else if (ls.new_request & ls_inputs.load)
-            ls.data_valid <= 1;
         else
-            ls.data_valid <= 0;
+            ls.data_valid <= ls.new_request & ls_inputs.load;
     end
 
 
