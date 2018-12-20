@@ -23,13 +23,16 @@
 import taiga_config::*;
 import taiga_types::*;
 
-module div_unit(
+module div_unit
+    #(
+        parameter DIV_TYPE = "radix-2_earlyTerminate"
+    )(
         input logic clk,
         input logic rst,
         func_unit_ex_interface.unit div_ex,
         input div_inputs_t div_inputs,
         unit_writeback_interface.unit div_wb
-        );
+    );
 
     logic computation_complete;
     logic div_done;
@@ -127,9 +130,9 @@ module div_unit(
     //Synthesis time algorithm choice for divider
     generate
         if(USE_VARIABLE_LATENCY_DIV)
-            quickdiv #(XLEN) div (.*, .start(start), .A(complementerA), .B(complementerB), .Q(quotient), .R(remainder), .complete(computation_complete), .ack(ack));
+            quickdiv #(XLEN, DIV_TYPE) div (.*, .start(start), .A(complementerA), .B(complementerB), .Q(quotient), .R(remainder), .complete(computation_complete), .ack(ack));
         else
-            normdiv #(XLEN) div (.*, .start(start), .A(complementerA), .B(complementerB), .Q(quotient), .R(remainder), .complete(computation_complete), .ack(ack));
+            normdiv #(XLEN, DIV_TYPE) div (.*, .start(start), .A(complementerA), .B(complementerB), .Q(quotient), .R(remainder), .complete(computation_complete), .ack(ack));
     endgenerate
 
     /*********************************

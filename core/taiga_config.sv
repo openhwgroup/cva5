@@ -35,8 +35,8 @@ package taiga_config;
     parameter TIMER_W = 33; //32 days @ 100MHz
 
     parameter USE_MUL = 1;
-    parameter USE_DIV = 1;
-    parameter USE_VARIABLE_LATENCY_DIV = 1;
+    parameter USE_DIV = 0;
+    parameter USE_VARIABLE_LATENCY_DIV = 0;
 
     parameter USE_AMO = 0;
 

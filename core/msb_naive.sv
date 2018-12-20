@@ -18,33 +18,21 @@
  *
  * Author(s):
  *             Eric Matthews <ematthew@sfu.ca>
- *             Alec Lu <fla30@sfu.ca>
+               Alec Lu <alec_lu@sfu.ca>
  */
 
- module quickdiv
-        #(
-        parameter C_WIDTH = 32,
-        parameter DIV_TYPE = "quick_clz"
-        )
-        (
-        input logic clk,
-        input logic rst,
-        input logic start,
-        input logic ack,
-        input logic [C_WIDTH-1:0] A,
-        input logic [C_WIDTH-1:0] B,
-        output logic [C_WIDTH-1:0] Q,
-        output logic [C_WIDTH-1:0] R,
-        output logic complete
-        );
 
-    generate
-        if (DIV_TYPE == "quick_clz")
-            div_quick_clz #(XLEN) div (.*);
-        else if (DIV_TYPE == "quick_naive")
-            div_quick_naive #(XLEN) div (.*);
-        else
-            div_quick_clz #(XLEN) div (.*);
-    endgenerate
-
+module msb_naive
+    (
+        input logic [31:0] msb_input,
+        output logic [4:0] msb
+    );
+        
+    always_comb begin
+        msb = '0;
+        for (int i=0; i<32; i++) begin
+            msb = msb_input[i] ? i : msb;
+        end 
+    end
+     
 endmodule
