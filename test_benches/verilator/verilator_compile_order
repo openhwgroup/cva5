@@ -49,10 +49,18 @@
 ../../core/csr_unit.sv  
 
 
+
+../../core/div_radix2.sv
+../../core/div_radix2_ET.sv
+../../core/div_radix4.sv
+../../core/div_radix4_ET.sv
+../../core/div_radix16.sv
 ../../core/normdiv.sv  
-../../core/msb.sv  
-../../core/clz.sv  
-../../core/div_shifter.sv
+../../core/msb.sv
+../../core/msb_naive.sv
+../../core/clz.sv
+../../core/div_quick_clz.sv
+../../core/div_quick_naive.sv
 ../../core/quickdiv.sv  
 ../../core/div_unit.sv  
 
