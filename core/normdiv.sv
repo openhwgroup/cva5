@@ -43,6 +43,8 @@
             div_radix2 #(XLEN) div (.*);
         else if (DIV_TYPE == "radix-2_earlyTerminate")
             div_radix2_ET #(XLEN) div (.*);
+        else if (DIV_TYPE == "radix-2_earlyTerminate_full")
+            div_radix2_ET_full #(XLEN) div (.*);
         else if (DIV_TYPE == "radix-4")
             div_radix4 #(XLEN) div (.*);
         else if (DIV_TYPE == "radix-4_earlyTerminate")
