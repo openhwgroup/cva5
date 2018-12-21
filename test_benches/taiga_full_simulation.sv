@@ -27,7 +27,7 @@ import taiga_config::*;
 import taiga_types::*;
 import l2_config_and_types::*;
 
-`define  MEMORY_FILE  "/home/ematthew/Research/RISCV/software/riscv-tools/riscv-tests/benchmarks/dhrystone.riscv.sim_init" //change this to appropriate location
+`define  MEMORY_FILE "/home/ematthew/Research/RISCV/software/riscv-tools/riscv-tests/benchmarks/dhrystone.riscv.sim_init" //change this to appropriate location "/home/ematthew/Downloads/dhrystone.riscv.sim_init"
 `define  UART_LOG  "/home/ematthew/uart.log" //change this to appropriate location
 
 module taiga_full_simulation ();
@@ -123,8 +123,14 @@ module taiga_full_simulation ();
 
     logic[31:0] dec_pc_debug;
     logic[31:0] if2_pc_debug;
+    logic dec_advance_debug;
+
+    logic[31:0] dec_instruction2;
+    logic[31:0] dec_instruction;
+
 
     integer output_file;
+    integer output_file2;
 
     assign l2[1].request = 0;
     assign l2[1].request_push = 0;
@@ -136,6 +142,7 @@ module taiga_full_simulation ();
 
 
     //RAM Block
+    assign instruction_bram.data_in = '0;
     always_ff @(posedge processor_clk) begin
       if (instruction_bram.en) begin
         instruction_bram.data_out <= simulation_mem.readw(instruction_bram.addr);
@@ -182,12 +189,33 @@ module taiga_full_simulation ();
             $error ("couldn't open log file");
             $finish;
         end
+
+        output_file2 = $fopen("/home/ematthew/trace", "w");
+        if (output_file2 == 0) begin
+            $error ("couldn't open log file");
+            $finish;
+        end
+
         do_reset();
 
-        #1200000;
-        $fclose(output_file);
-        $finish;
+        //#1200000;
+        //$fclose(output_file);
+        //$fclose(output_file2);
+
+        //$finish;
     end
+
+    assign dec_instruction2 = simulation_mem.readw(dec_pc_debug[31:2]);
+
+    always_ff @(posedge simulator_clk) begin
+        //addi r0 r0 1
+        if (dec_instruction2 == 32'h00100013) begin
+            $fclose(output_file);
+            $fclose(output_file2);
+            $finish;
+        end
+    end
+
 
     task do_reset;
     begin
@@ -330,5 +358,18 @@ module taiga_full_simulation ();
 
 
     assign sin = 0;
+
+
+
+    ////////////////////////////////////////////////////
+
+    always_ff @(posedge clk) begin
+       if (dec_advance_debug) begin
+            $fwrite(output_file2, simulation_mem.readopcode(instruction_bram.addr));
+            $fwrite(output_file2, "\n");
+       end
+    end
+
+
 
 endmodule
