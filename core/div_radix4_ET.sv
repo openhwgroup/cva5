@@ -61,7 +61,7 @@ module div_radix4_ET
     always_ff @ (posedge clk) begin
         shift_count <= {shift_count[14:0], start & ~terminate_early};
     end
-    
+
     assign terminate_early = B > A;
 
     always_ff @ (posedge clk) begin
@@ -73,7 +73,7 @@ module div_radix4_ET
             else begin
                 PR <= {{(C_WIDTH-1){1'b0}}, A[C_WIDTH-1:C_WIDTH-2]};
                 Q <= {A[C_WIDTH-3:0], 2'b00};
-            end 
+            end
             B_1 <= {2'b0, B};           //1xB
             B_2 <= {1'b0, B, 1'b0};     //2xB
             B_3 <= {1'b0, B, 1'b0} + B; //3xB
@@ -99,7 +99,7 @@ module div_radix4_ET
                 default begin
                     PR <= 'x;
                     Q <= 'x;
-                end 
+                end
             endcase
         end
     end
@@ -115,7 +115,7 @@ module div_radix4_ET
                     terminate <= 1;
                 end else begin
                     terminate <= 0;
-                end                
+                end
             if (shift_count[15])
                 terminate <= 1;
         end
@@ -125,10 +125,10 @@ module div_radix4_ET
         if (rst)
             complete <= 0;
         else begin
-            if (~start & (shift_count[15] | terminate_early) & ~complete)            
-                complete <= 1;
-            else if (ack)
+            if (ack)
                 complete <= 0;
+            else if ((~start & (shift_count[15])) | (start & terminate_early))
+                complete <= 1;
         end
     end
 

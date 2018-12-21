@@ -20,7 +20,7 @@
  *             Eric Matthews <ematthew@sfu.ca>
                Alec Lu <alec_lu@sfu.ca>
  */
- 
+
 
 module div_radix2_ET
     #(
@@ -39,26 +39,26 @@ module div_radix2_ET
 
     logic terminate;
     logic terminate_early;
-    
+
     logic [C_WIDTH:0] new_PR;
     logic [C_WIDTH:0] PR;
-    
+
     logic [C_WIDTH-1:0] shift_count;
-    
-    logic [C_WIDTH-1:0] B_r;   
+
+    logic [C_WIDTH-1:0] B_r;
     logic negative_sub_rst;
-    
+
     //implementation
     ////////////////////////////////////////////////////
     assign new_PR = PR - {1'b0, B_r};
     assign negative_sub_rst = new_PR[C_WIDTH];
-    
+
     always_ff @ (posedge clk) begin
         shift_count <= {shift_count[30:0], start & ~terminate_early};
     end
-    
+
     assign terminate_early = B > A;
-    
+
     always_ff @ (posedge clk) begin
         if (start) begin
             if (terminate_early) begin
@@ -67,16 +67,16 @@ module div_radix2_ET
             end else begin
                 PR <= {{(C_WIDTH-2){1'b0}}, A[C_WIDTH-1]};
                 Q <= {A[C_WIDTH-2:0], 1'b0};
-            end 
+            end
             B_r <= B;
         end else if (~terminate) begin
-            PR <= negative_sub_rst ? {PR[C_WIDTH-1:0], Q[C_WIDTH-1]} : {new_PR[C_WIDTH-1:0], Q[C_WIDTH-1]}; 
+            PR <= negative_sub_rst ? {PR[C_WIDTH-1:0], Q[C_WIDTH-1]} : {new_PR[C_WIDTH-1:0], Q[C_WIDTH-1]};
             Q <= {Q[C_WIDTH-2:0], ~negative_sub_rst};
         end
     end
 
     assign R = PR[C_WIDTH:1];
-    
+
     always_ff @ (posedge clk) begin
         if (rst)
             terminate <= 0;
@@ -87,20 +87,20 @@ module div_radix2_ET
                 end else begin
                     terminate <= 0;
                 end
-            end  
+            end
             if (shift_count[31])
                 terminate <= 1;
         end
     end
-    
+
     always_ff @ (posedge clk) begin
         if (rst)
             complete <= 0;
         else begin
-            if (~start & (shift_count[31] | terminate_early) & ~complete)
-                complete <= 1;
-            else if (ack)
+            if (ack)
                 complete <= 0;
+            else if ((~start & (shift_count[31])) | (start & terminate_early))
+                complete <= 1;
         end
     end
 
