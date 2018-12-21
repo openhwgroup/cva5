@@ -35,8 +35,19 @@ package taiga_config;
     parameter TIMER_W = 33; //32 days @ 100MHz
 
     parameter USE_MUL = 1;
-    parameter USE_DIV = 0;
-    parameter USE_VARIABLE_LATENCY_DIV = 0;
+    parameter USE_DIV = 1;
+
+    typedef enum {
+        RADIX_2,
+        RADIX_2_EARLY_TERMINATE,
+        RADIX_2_EARLY_TERMINATE_FULL,
+        RADIX_4,
+        RADIX_4_EARLY_TERMINATE,
+        RADIX_16,
+        QUICK_NAIVE,
+        QUICK_CLZ
+    } div_type;
+    parameter div_type DIV_ALGORITHM = QUICK_CLZ;
 
     parameter USE_AMO = 0;
 

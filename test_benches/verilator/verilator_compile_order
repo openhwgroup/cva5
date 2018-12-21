@@ -50,18 +50,18 @@
 
 
 
-../../core/div_radix2.sv
-../../core/div_radix2_ET.sv
-../../core/div_radix4.sv
-../../core/div_radix4_ET.sv
-../../core/div_radix16.sv
-../../core/normdiv.sv  
+../../core/div_algorithms/div_radix2.sv
+../../core/div_algorithms/div_radix2_ET.sv
+../../core/div_algorithms/div_radix2_ET_full.sv
+../../core/div_algorithms/div_radix4.sv
+../../core/div_algorithms/div_radix4_ET.sv
+../../core/div_algorithms/div_radix16.sv
 ../../core/msb.sv
 ../../core/msb_naive.sv
 ../../core/clz.sv
-../../core/div_quick_clz.sv
-../../core/div_quick_naive.sv
-../../core/quickdiv.sv  
+../../core/div_algorithms/div_quick_clz.sv
+../../core/div_algorithms/div_quick_naive.sv
+../../core/div_algorithms/div_algorithm.sv  
 ../../core/div_unit.sv  
 
 ../../core/lut_ram.sv  

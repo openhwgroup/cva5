@@ -1,5 +1,5 @@
 /*
- * Copyright © 2017 Eric Matthews,  Lesley Shannon
+ * Copyright © 2017, 2018 Eric Matthews,  Lesley Shannon
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,15 +24,13 @@ import taiga_config::*;
 import taiga_types::*;
 
 module div_unit
-    #(
-        parameter DIV_TYPE = "radix-2_earlyTerminate"
-    )(
+        (
         input logic clk,
         input logic rst,
         func_unit_ex_interface.unit div_ex,
         input div_inputs_t div_inputs,
         unit_writeback_interface.unit div_wb
-    );
+        );
 
     logic computation_complete;
     logic div_done;
@@ -127,13 +125,7 @@ module div_unit
     end
     //*************
 
-    //Synthesis time algorithm choice for divider
-    generate
-        if(USE_VARIABLE_LATENCY_DIV)
-            quickdiv #(XLEN, DIV_TYPE) div (.*, .start(start), .A(complementerA), .B(complementerB), .Q(quotient), .R(remainder), .complete(computation_complete), .ack(ack));
-        else
-            normdiv #(XLEN, DIV_TYPE) div (.*, .start(start), .A(complementerA), .B(complementerB), .Q(quotient), .R(remainder), .complete(computation_complete), .ack(ack));
-    endgenerate
+    div_algorithm #(XLEN) div (.*, .start(start), .A(complementerA), .B(complementerB), .Q(quotient), .R(remainder), .complete(computation_complete), .ack(ack));
 
     /*********************************
      *  Output registering/handshaking
