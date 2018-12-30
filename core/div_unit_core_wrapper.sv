@@ -4,8 +4,8 @@ import taiga_types::*;
 module div_unit_core_wrapper 
     #(
         parameter C_WIDTH = 32,
-        parameter USE_QUICK_DIV = 0,
-        parameter DIV_TYPE = "radix-2"
+        parameter USE_QUICK_DIV = 1,
+        parameter DIV_TYPE = "quick_clz"
     )(
         input logic clk,
         input logic rst,

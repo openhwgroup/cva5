@@ -40,11 +40,11 @@
 
     generate
         if (DIV_TYPE == "quick_clz")
-            div_quick_clz #(XLEN) div (.*);
+            div_quick_clz #(C_WIDTH) div (.*);
         else if (DIV_TYPE == "quick_naive")
-            div_quick_naive #(XLEN) div (.*);
+            div_quick_naive #(C_WIDTH) div (.*);
         else
-            div_quick_clz #(XLEN) div (.*);
+            div_quick_clz #(C_WIDTH) div (.*);
     endgenerate
 
 endmodule

@@ -24,13 +24,13 @@ import taiga_config::*;
 import taiga_types::*;
 
 module div_unit
-        (
+    (
         input logic clk,
         input logic rst,
         func_unit_ex_interface.unit div_ex,
         input div_inputs_t div_inputs,
         unit_writeback_interface.unit div_wb
-        );
+    );
 
     logic computation_complete;
     logic div_done;

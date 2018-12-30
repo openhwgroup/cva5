@@ -40,19 +40,21 @@
 
     generate
         if (DIV_TYPE == "radix-2")
-            div_radix2 #(XLEN) div (.*);
+            div_radix2 #(C_WIDTH) div (.*);
         else if (DIV_TYPE == "radix-2_earlyTerminate")
-            div_radix2_ET #(XLEN) div (.*);
+            div_radix2_ET #(C_WIDTH) div (.*);
         else if (DIV_TYPE == "radix-2_earlyTerminate_full")
-            div_radix2_ET_full #(XLEN) div (.*);
+            div_radix2_ET_full #(C_WIDTH) div (.*);
         else if (DIV_TYPE == "radix-4")
-            div_radix4 #(XLEN) div (.*);
+            div_radix4 #(C_WIDTH) div (.*);
         else if (DIV_TYPE == "radix-4_earlyTerminate")
-            div_radix4_ET #(XLEN) div (.*);
+            div_radix4_ET #(C_WIDTH) div (.*);
+        else if (DIV_TYPE == "radix-8")
+            div_radix8 #(C_WIDTH) div (.*);
         else if (DIV_TYPE == "radix-16")
-            div_radix16 #(XLEN) div (.*);
+            div_radix16 #(C_WIDTH) div (.*);
         else
-            div_radix2 #(XLEN) div (.*);
+            div_radix2 #(C_WIDTH) div (.*);
     endgenerate
 
 endmodule

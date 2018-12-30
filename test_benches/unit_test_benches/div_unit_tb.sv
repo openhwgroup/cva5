@@ -202,7 +202,7 @@ module div_unit_tb ();
         reset();
         
         //Randomized Test (operation + latency)
-        for (int i=0; i < 1000; i = i+1) begin
+        for (int i=0; i < 5000; i = i+1) begin
             test_gen();
         end 
 
