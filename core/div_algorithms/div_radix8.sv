@@ -19,7 +19,7 @@
  * Author(s):
  *             Eric Matthews <ematthew@sfu.ca>
  */
- 
+
 
 module div_radix8
     #(
@@ -35,14 +35,14 @@ module div_radix8
         output logic [C_WIDTH-1:0] R,
         output logic complete
     );
-    
+
     logic terminate;
     logic [10:0] shift_count;
-    
+
     logic [C_WIDTH+2:0] PR;
     logic [C_WIDTH:0] Q_33;
     logic [6:0] new_PR_sign;
-    
+
     logic [C_WIDTH+3:0] new_PR_1;
     logic [C_WIDTH+3:0] new_PR_2;
     logic [C_WIDTH+3:0] new_PR_3;
@@ -50,7 +50,7 @@ module div_radix8
     logic [C_WIDTH+3:0] new_PR_5;
     logic [C_WIDTH+3:0] new_PR_6;
     logic [C_WIDTH+3:0] new_PR_7;
-    
+
     //implementation
     ////////////////////////////////////////////////////
     assign new_PR_1 = {1'b0, PR} - B;
@@ -60,15 +60,15 @@ module div_radix8
     assign new_PR_5 = {1'b0, PR} - {B, 2'b0} - B;
     assign new_PR_6 = {1'b0, PR} - {B, 2'b0} - {B, 1'b0};
     assign new_PR_7 = {1'b0, PR} - {B, 2'b0} - {B, 1'b0} - B;
-    assign new_PR_sign = {new_PR_7[C_WIDTH+3], new_PR_6[C_WIDTH+3], new_PR_5[C_WIDTH+3], 
-                          new_PR_4[C_WIDTH+3], new_PR_3[C_WIDTH+3], new_PR_2[C_WIDTH+3], 
+    assign new_PR_sign = {new_PR_7[C_WIDTH+3], new_PR_6[C_WIDTH+3], new_PR_5[C_WIDTH+3],
+                          new_PR_4[C_WIDTH+3], new_PR_3[C_WIDTH+3], new_PR_2[C_WIDTH+3],
                           new_PR_1[C_WIDTH+3]};
-    
+
     //Shift reg for
     always_ff @ (posedge clk) begin
         shift_count <= {shift_count[9:0], start};
     end
-    
+
     always_ff @ (posedge clk) begin
         if (start) begin
             PR <= {{(C_WIDTH){1'b0}}, 1'b0, A[C_WIDTH-1:C_WIDTH-2]};
@@ -79,46 +79,46 @@ module div_radix8
                 7'b1111111 : begin
                     PR <= {PR[C_WIDTH-1:0], Q_33[C_WIDTH:C_WIDTH-2]};
                     Q_33 <= {Q_33[C_WIDTH-3:0], 3'b000};
-                end 
+                end
                 7'b1111110 : begin
                     PR <= {new_PR_1[C_WIDTH-1:0], Q_33[C_WIDTH:C_WIDTH-2]};
                     Q_33 <= {Q_33[C_WIDTH-3:0], 3'b001};
-                end 
+                end
                 7'b1111100 : begin
                     PR <= {new_PR_2[C_WIDTH-1:0], Q_33[C_WIDTH:C_WIDTH-2]};
                     Q_33 <= {Q_33[C_WIDTH-3:0], 3'b010};
-                end 
+                end
                 7'b1111000 : begin
                     PR <= {new_PR_3[C_WIDTH-1:0], Q_33[C_WIDTH:C_WIDTH-2]};
                     Q_33 <= {Q_33[C_WIDTH-3:0], 3'b011};
-                end 
+                end
                 7'b1110000 : begin
                     PR <= {new_PR_4[C_WIDTH-1:0], Q_33[C_WIDTH:C_WIDTH-2]};
                     Q_33 <= {Q_33[C_WIDTH-3:0], 3'b100};
-                end 
+                end
                 7'b1100000 : begin
                     PR <= {new_PR_5[C_WIDTH-1:0], Q_33[C_WIDTH:C_WIDTH-2]};
                     Q_33 <= {Q_33[C_WIDTH-3:0], 3'b101};
-                end 
+                end
                 7'b1000000 : begin
                     PR <= {new_PR_6[C_WIDTH-1:0], Q_33[C_WIDTH:C_WIDTH-2]};
                     Q_33 <= {Q_33[C_WIDTH-3:0], 3'b110};
-                end 
+                end
                 7'b0000000 : begin
-                    PR <= {new_PR_7[C_WIDTH-1:0], Q_33[C_WIDTH-1:C_WIDTH-3]};
+                    PR <= {new_PR_7[C_WIDTH-1:0], Q_33[C_WIDTH:C_WIDTH-2]};
                     Q_33 <= {Q_33[C_WIDTH-3:0], 3'b111};
-                end 
+                end
                 default begin
                     PR <= 'x;
-                    Q_33 <= 'x;                
-                end 
+                    Q_33 <= 'x;
+                end
             endcase
         end
     end
-    
+
     assign R = PR[C_WIDTH+2:3];
     assign Q = Q_33[C_WIDTH-1:0];
-    
+
     always_ff @ (posedge clk) begin
         if (rst)
             terminate <= 0;
@@ -129,12 +129,12 @@ module div_radix8
                 terminate <= 1;
         end
     end
-    
+
     always_ff @ (posedge clk) begin
         if (rst)
             complete <= 0;
         else begin
-            if (shift_count[10])            
+            if (shift_count[10])
                 complete <= 1;
             else if (ack)
                 complete <= 0;
