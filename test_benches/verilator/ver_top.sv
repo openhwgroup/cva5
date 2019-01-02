@@ -157,7 +157,7 @@ module ver_top # (
 
 
 
-    parameter SCRATCH_MEM_KB = 64;
+    parameter SCRATCH_MEM_KB = 128;
     parameter MEM_LINES = (SCRATCH_MEM_KB*1024)/4;
 
     logic [31:0] if2_pc_debug;

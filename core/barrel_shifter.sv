@@ -28,7 +28,8 @@ module barrel_shifter (
         input logic[4:0] shift_amount,
         input logic arith,
         input logic lshift,
-        output logic[XLEN-1:0] shifted_result
+        output logic[XLEN-1:0] shifted_resultr,
+        output logic[XLEN-1:0] shifted_resultl
         );
 
     logic[XLEN-1:0] shiftx8, shiftx2, shiftx1, shiftx1_l;
@@ -53,17 +54,21 @@ module barrel_shifter (
         endcase
     end
 
-    assign shiftx1_l = {arith,shiftx2[31:1]};
+    //assign shiftx1_l = {arith,shiftx2[31:1]};
     always_comb begin
-        case ({lshift, shift_amount[0]})
+        //case ({lshift, shift_amount[0]})
+        case (shift_amount[0])
             0: shiftx1 = shiftx2[31:0];
-            1: shiftx1 = shiftx1_l;
-            2: foreach (shiftx1[i]) shiftx1[i] = shiftx2[31-i];
-            3: foreach (shiftx1[i]) shiftx1[i] = shiftx1_l[31-i];
+            1: shiftx1 = {arith,shiftx2[31:1]};
+            //2: foreach (shiftx1[i]) shiftx1[i] = shiftx2[31-i];
+           // 3: foreach (shiftx1[i]) shiftx1[i] = shiftx1_l[31-i];
         endcase
     end
 
-   assign shifted_result = shiftx1;
+   assign shifted_resultr = shiftx1;
+   always_comb begin
+       foreach (shiftx1[i]) shifted_resultl[i] = shiftx1[31-i];
+   end
 
     //assign shifted_result =  lshift ? signed'({arith,shifter_input} <<< shift_amount) : signed'({arith,shifter_input} >>> shift_amount);
 

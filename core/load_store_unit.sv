@@ -240,7 +240,7 @@ module load_store_unit (
         end
 
     assign stage1_raw_data = (stage1.load_store_forward | dcache_forward_data) ?
-        (data_valid ? final_load_data : previous_load) :
+        (load_attributes.valid ? final_load_data : previous_load) :
         stage1.rs2;
 
     //AMO identification for dcache
@@ -276,7 +276,7 @@ module load_store_unit (
     /*********************************
      *  Load attributes FIFO
      *********************************/
-    taiga_fifo #(.DATA_WIDTH($bits(load_attributes_t)), .FIFO_DEPTH(ATTRIBUTES_DEPTH), .FIFO_TYPE(NON_MUXED_INPUT_FIFO)
+    taiga_fifo #(.DATA_WIDTH($bits(load_attributes_t)), .FIFO_DEPTH(ATTRIBUTES_DEPTH), .FIFO_TYPE(LUTRAM_FIFO)
         ) attributes_fifo (.fifo(load_attributes), .*);
     assign load_attributes_in.fn3 = stage1.fn3;
     assign load_attributes_in.byte_addr = virtual_address[1:0];

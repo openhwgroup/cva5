@@ -54,7 +54,7 @@ module instruction_buffer
     taiga_fifo #(
             .DATA_WIDTH($bits(instruction_buffer_packet)),
             .FIFO_DEPTH(FETCH_BUFFER_DEPTH),
-            .FIFO_TYPE(NON_MUXED_INPUT_FIFO)
+            .FIFO_TYPE(LUTRAM_FIFO)
         ) ib_fifo_block (.fifo(ib_fifo), .rst(buffer_reset), .*);
 
     ////////////////////////////////////////////////////

@@ -146,6 +146,7 @@ interface inflight_queue_interface;
     
     logic wb_accepting_input;
     logic[INFLIGHT_QUEUE_DEPTH-1:0] pop;
+    logic [$clog2(INFLIGHT_QUEUE_DEPTH)-1:0] id;
 
     logic [INFLIGHT_QUEUE_DEPTH-1:0] valid;
     inflight_queue_packet[INFLIGHT_QUEUE_DEPTH-1:0] data_out;

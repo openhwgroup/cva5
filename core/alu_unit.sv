@@ -32,7 +32,9 @@ module alu_unit(
         );
 
     logic[XLEN:0] add_sub_result;
-    logic[XLEN-1:0] shifter_result;
+    logic add_sub_carry_in;
+    logic[XLEN-1:0] rshift_result;
+    logic[XLEN-1:0] lshift_result;
 
     logic done;
     logic[XLEN:0] adder_in1;
@@ -54,18 +56,19 @@ module alu_unit(
             ALU_LOGIC_XOR : adder_in2 = 0;
             ALU_LOGIC_OR : adder_in2 = 0;
             ALU_LOGIC_AND : adder_in2 = 0;
-            ALU_LOGIC_ADD : adder_in2 = alu_inputs.subtract ? ~alu_inputs.in2 : alu_inputs.in2;
+            ALU_LOGIC_ADD : adder_in2 = alu_inputs.in2 ^ {33{alu_inputs.subtract}};
         endcase
     end
 
-    assign add_sub_result = adder_in1 + adder_in2 + alu_inputs.subtract;
+    assign {add_sub_result, add_sub_carry_in} = {adder_in1, alu_inputs.subtract} + {adder_in2, alu_inputs.subtract};
 
     barrel_shifter shifter (
             .shifter_input(alu_inputs.shifter_in),
             .shift_amount(alu_inputs.in2[4:0]),
             .arith(alu_inputs.arith),
             .lshift(alu_inputs.lshift),
-            .shifted_result(shifter_result)
+            .shifted_resultr(rshift_result),
+            .shifted_resultl(lshift_result)
         );
 
     //Result mux
@@ -73,7 +76,8 @@ module alu_unit(
         case (alu_inputs.op)
             ALU_ADD_SUB : alu_wb.rd = add_sub_result[XLEN-1:0];
             ALU_SLT : alu_wb.rd = {31'b0, add_sub_result[XLEN]};
-            default: alu_wb.rd = shifter_result;
+            ALU_RSHIFT : alu_wb.rd = rshift_result;
+            ALU_LSHIFT : alu_wb.rd = lshift_result;
         endcase
     end
 
@@ -82,13 +86,12 @@ module alu_unit(
     assign alu_ex.ready =  ~done | (done & alu_wb.accepted);
 
     always_ff @(posedge clk) begin
-        if (rst) begin
+        if (rst)
             done <= 0;
-        end else if (alu_ex.new_request_dec) begin
+        else if (alu_ex.new_request_dec)
             done <= 1;
-        end else if (alu_wb.accepted) begin
+        else if (alu_wb.accepted)
             done <= 0;
-        end
     end
 
     assign alu_wb.done_next_cycle = 1;//in queue, already done

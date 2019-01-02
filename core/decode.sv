@@ -271,11 +271,11 @@ module decode(
         case (fn3)
             SLT_fn3 : alu_op = ALU_SLT;
             SLTU_fn3 : alu_op = ALU_SLT;
-            SLL_fn3 : alu_op = ALU_SHIFT;
+            SLL_fn3 : alu_op = ALU_LSHIFT;
             XOR_fn3 : alu_op = ALU_ADD_SUB;
             OR_fn3 : alu_op = ALU_ADD_SUB;
             AND_fn3 : alu_op = ALU_ADD_SUB;
-            SRA_fn3 : alu_op = ALU_SHIFT;
+            SRA_fn3 : alu_op = ALU_RSHIFT;
             ADD_SUB_fn3 : alu_op = ALU_ADD_SUB;
         endcase
     end

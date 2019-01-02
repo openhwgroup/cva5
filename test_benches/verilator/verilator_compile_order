@@ -59,6 +59,7 @@
 ../../core/msb.sv
 ../../core/msb_naive.sv
 ../../core/clz.sv
+../../core/div_algorithms/div_quick_clz_mk2.sv
 ../../core/div_algorithms/div_quick_clz.sv
 ../../core/div_algorithms/div_quick_naive.sv
 ../../core/div_algorithms/div_algorithm.sv  

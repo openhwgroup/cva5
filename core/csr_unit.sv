@@ -358,17 +358,17 @@ module csr_unit (
             MIMPID : selected_csr = mimpid;
             MHARTID : selected_csr = mhartid;
                 //Machine trap setup
-            MSTATUS : selected_csr = mstatus;
-            MEDELEG : selected_csr = medeleg;
-            MIDELEG : selected_csr = mideleg;
-            MIE : selected_csr = mie_reg;
-            MTVEC : selected_csr = mtvec;
+            //MSTATUS : selected_csr = mstatus;
+            //MEDELEG : selected_csr = medeleg;
+            //MIDELEG : selected_csr = mideleg;
+            //MIE : selected_csr = mie_reg;
+            //MTVEC : selected_csr = mtvec;
                 //Machine trap handling
-            MSCRATCH : selected_csr = scratch_out;
-            MEPC : selected_csr = scratch_out;
-            MCAUSE : selected_csr = scratch_out;
-            MTVAL : selected_csr = scratch_out;
-            MIP : selected_csr = mip;
+            //MSCRATCH : selected_csr = scratch_out;
+            //MEPC : selected_csr = scratch_out;
+            //MCAUSE : selected_csr = scratch_out;
+            //MTVAL : selected_csr = scratch_out;
+            //MIP : selected_csr = mip;
                 //Machine Timers and Counters
             MCYCLE : selected_csr = mcycle[XLEN-1:0];
             MINSTRET : selected_csr = minst_ret[XLEN-1:0];
@@ -376,19 +376,19 @@ module csr_unit (
             MINSTRETH : selected_csr = minst_ret[TIMER_W-1:XLEN];
 
                 //Supervisor Trap Setup
-            SSTATUS : selected_csr = (mstatus & mstatus_smask);
+            //SSTATUS : selected_csr = (mstatus & mstatus_smask);
             //SEDELEG : selected_csr = 0; //No user-level interrupts/exception handling
             //SIDELEG : selected_csr = 0;
-            SIE : selected_csr = (mie_reg & sie_mask);
-            STVEC : selected_csr = stvec;
+            //SIE : selected_csr = (mie_reg & sie_mask);
+            //STVEC : selected_csr = stvec;
                 //Supervisor trap handling
-            SSCRATCH : selected_csr = scratch_out;
-            SEPC : selected_csr = scratch_out;
-            SCAUSE : selected_csr = scratch_out;
-            STVAL : selected_csr = scratch_out;
-            SIP : selected_csr = (mip & sip_mask);
+            //SSCRATCH : selected_csr = scratch_out;
+            //SEPC : selected_csr = scratch_out;
+            //SCAUSE : selected_csr = scratch_out;
+            //STVAL : selected_csr = scratch_out;
+            //SIP : selected_csr = (mip & sip_mask);
                 //Supervisor Protection and Translation
-            SATP : selected_csr = satp;
+            //SATP : selected_csr = satp;
                 //User status
                 //Floating point
                 //User Counter Timers

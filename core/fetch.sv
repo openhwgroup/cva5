@@ -158,7 +158,16 @@ module fetch(
             inflight_count <= inflight_count - 1;
     end
 
-    assign space_in_inst_buffer = inflight_count < FETCH_BUFFER_DEPTH;
+    always_ff @(posedge clk) begin
+        if (rst | fetch_flush)
+            space_in_inst_buffer <= 1;
+        else if (new_mem_request  & ~ib.pop)
+            space_in_inst_buffer <= inflight_count < (FETCH_BUFFER_DEPTH-1);
+        else if (~new_mem_request &  ib.pop)
+            space_in_inst_buffer <= 1;
+    end
+
+//assign space_in_inst_buffer = inflight_count < FETCH_BUFFER_DEPTH;
     assign new_mem_request = tlb.complete & (~fetch_flush) & space_in_inst_buffer & units_ready;
 
     //Memory interfaces

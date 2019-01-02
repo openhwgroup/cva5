@@ -1,5 +1,5 @@
 /*
- * Copyright © 2017 Eric Matthews,  Lesley Shannon
+ * Copyright © 2017, 2018 Eric Matthews,  Lesley Shannon
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,7 +39,7 @@ module write_back(
     logic [NUM_WB_UNITS-1:0] done_on_first_cycle;
     logic [NUM_WB_UNITS-1:0] done_next_cycle;
 
-    logic selected_unit_done_next_cycle;
+    logic queue_selected_unit_done_next_cycle, selected_unit_done_next_cycle;
     logic entry_found;
 
     logic [NUM_WB_UNITS-1:0] accepted;
@@ -47,11 +47,15 @@ module write_back(
 
     logic [XLEN-1:0] rd [NUM_WB_UNITS-1:0];
 
-    logic [4:0] rd_addr, rd_addr_r;
-    logic rd_addr_not_zero;
-    logic [WB_UNITS_WIDTH-1:0] unit_id, unit_id_r;
-    instruction_id_t issue_id, issue_id_r;
-    int iq_index;
+    logic [4:0] queue_rd_addr, rd_addr, rd_addr_r;
+    logic queue_rd_addr_not_zero, rd_addr_not_zero;
+    logic [WB_UNITS_WIDTH-1:0] queue_unit_id, unit_id, unit_id_r;
+    instruction_id_t queue_issue_id, issue_id, issue_id_r;
+    logic[$clog2(INFLIGHT_QUEUE_DEPTH)-1:0] iq_index;
+    logic[$clog2(INFLIGHT_QUEUE_DEPTH)-1:0] iq_index_oldest;
+    logic[$clog2(INFLIGHT_QUEUE_DEPTH)-1:0] iq_index_oldest_done;
+
+    logic [INFLIGHT_QUEUE_DEPTH-1:0] done_array;
 
     //Re-assigning interface inputs to array types so that they can be dynamically indexed
     genvar i;
@@ -69,41 +73,50 @@ module write_back(
     //it is already complete thus their done signals are registered to remove the combinational path through
     //issue logic.
     always_comb begin
-        entry_found = 0;
-        selected_unit_done_next_cycle = 0;
-        iq.pop = 0;
-        iq.wb_accepting_input = 0;
+        iq_index_oldest = 0;
+        iq_index_oldest_done = 0;
 
-        for (iq_index=INFLIGHT_QUEUE_DEPTH-1; iq_index>=0; iq_index--) begin
-            unit_id =  iq.data_out[iq_index].unit_id;
+        for (int i=0; i<INFLIGHT_QUEUE_DEPTH; i++) begin
+            done_array[i] = iq.valid[i] & done_next_cycle[iq.data_out[i].unit_id];
 
-            if (iq.valid[iq_index]) begin
-                selected_unit_done_next_cycle = done_next_cycle[unit_id];
-                iq.pop[iq_index] = selected_unit_done_next_cycle;
+            if (iq.valid[i])
+                iq_index_oldest = i;
 
-                if (inorder | (~inorder & selected_unit_done_next_cycle)) begin
-                    entry_found = 1;
-                    break;
-                end
-            end
+            if (done_array[i])
+                iq_index_oldest_done = i;
         end
 
-        issue_id = iq.data_out[iq_index].id;
-        rd_addr = iq.data_out[iq_index].rd_addr;
-        rd_addr_not_zero = iq.data_out[iq_index].rd_addr_nzero;
+        entry_found = inorder ? |iq.valid : |done_array;
+        iq_index = inorder ? iq_index_oldest : iq_index_oldest_done;
+        queue_selected_unit_done_next_cycle = inorder ? done_array[iq_index_oldest] : |done_array;
 
+        iq.pop = 0;
+        iq.pop[iq_index] = queue_selected_unit_done_next_cycle;
+
+        queue_unit_id = iq.data_out[iq_index].unit_id;
+        queue_issue_id = iq.data_out[iq_index].id;
+        queue_rd_addr = iq.data_out[iq_index].rd_addr;
+        queue_rd_addr_not_zero = iq.data_out[iq_index].rd_addr_nzero;
+    end
+
+    always_comb begin
         //No valid completing instructions in queue, check for new issues.
-        if (~entry_found) begin
+        selected_unit_done_next_cycle = queue_selected_unit_done_next_cycle |
+            (iq.new_issue & done_on_first_cycle[iq.data_in.unit_id]);
+
+        iq.wb_accepting_input = ~entry_found & iq.new_issue & done_on_first_cycle[iq.data_in.unit_id];
+
+        if (entry_found) begin
+            unit_id = queue_unit_id;
+            issue_id = queue_issue_id;
+            rd_addr = queue_rd_addr;
+            rd_addr_not_zero = queue_rd_addr_not_zero;
+        end
+        else begin
             unit_id = iq.data_in.unit_id;
             issue_id = iq.data_in.id;
             rd_addr = iq.data_in.rd_addr;
             rd_addr_not_zero = iq.data_in.rd_addr_nzero;
-
-            //Pop and unit done only if valid issue
-            if (iq.new_issue) begin
-                selected_unit_done_next_cycle = done_on_first_cycle[unit_id];
-                iq.wb_accepting_input = selected_unit_done_next_cycle;
-            end
         end
     end
 
@@ -120,7 +133,7 @@ module write_back(
     assign rf_wb.rd_addr = rd_addr_r;
     assign rf_wb.id = issue_id_r;
     always_ff @(posedge clk) begin
-            rf_wb.valid_write <= selected_unit_done_next_cycle & rd_addr_not_zero & ~gc_supress_writeback;
+        rf_wb.valid_write <= selected_unit_done_next_cycle & rd_addr_not_zero & ~gc_supress_writeback;
     end
 
     assign rf_wb.rd_data = rd[unit_id_r];

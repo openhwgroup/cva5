@@ -80,8 +80,8 @@ package taiga_types;
     typedef enum bit [1:0] {
         ALU_ADD_SUB = 2'b00,
         ALU_SLT = 2'b01,
-        ALU_SHIFT =2'b10
-        //unused 11
+        ALU_RSHIFT =2'b10,
+        ALU_LSHIFT =2'b11
     } alu_op_t;
 
     typedef enum bit [2:0] {

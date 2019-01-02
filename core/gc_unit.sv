@@ -138,8 +138,8 @@ module gc_unit(
 
     always_ff @ (posedge clk) begin
         gc_issue_hold <=  (next_state inside {PRE_CLEAR_STATE, CLEAR_STATE, TLB_CLEAR_STATE}) ? 1 : 0;
-        inuse_clear <= (next_state inside {CLEAR_STATE}) ? 1 : 0;
-        inorder <= (next_state inside {LS_EXCEPTION_POSSIBLE, IQ_DRAIN}) ? 1 : 0;
+        inuse_clear <= (next_state == CLEAR_STATE);
+        inorder <= 0;//(next_state inside {LS_EXCEPTION_POSSIBLE, IQ_DRAIN}) ? 1 : 0;
     end
 
     assign gc_issue_flush = 0;

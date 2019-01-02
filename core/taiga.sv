@@ -117,7 +117,6 @@ module taiga (
 
     //Decode Unit and Fetch Unit
     logic [31:0] if2_pc;
-    logic [31:0] dec_instruction;
     logic dec_advance;
     logic flush;
     logic illegal_instruction;
