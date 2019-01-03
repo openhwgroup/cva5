@@ -41,10 +41,9 @@ module div_quick_clz_mk2
     logic terminate;
 
     logic [C_WIDTH-1:0] A_r;
-    logic [C_WIDTH:0] A0;
+    logic [C_WIDTH+1:0] A0;
     logic [C_WIDTH:0] A1;
     logic [C_WIDTH-1:0] A2;
-    logic [C_WIDTH:0] BB;
 
     logic [C_WIDTH-1:0] new_R;
     logic [C_WIDTH-1:0] new_Q_bit;
@@ -92,7 +91,7 @@ module div_quick_clz_mk2
     always_comb begin
         if (A1[C_WIDTH])
             new_Q_bit = Q_bit2;
-        else if (BB > {1'b0,R})
+        else if (A0[C_WIDTH+1:C_WIDTH] != 0)
             new_Q_bit = Q_bit1;
         else
             new_Q_bit = (Q_bit1 | Q_bit2);
@@ -105,15 +104,14 @@ module div_quick_clz_mk2
     assign B2 = {1'b0, B1[C_WIDTH-1:1]};
     assign A2 = R - B2;
 
-    assign BB = B1 + B2;
-    assign A0 = R - BB;
+    assign A0 = {2'b0, R} - ({2'b0, B1} + {2'b0, B2});
 
     always_comb begin
         if (firstCycle)
             new_R = A_r;
         else if (A1[C_WIDTH])
             new_R = A2[C_WIDTH-1:0];
-        else if (BB > {1'b0,R})
+        else if (A0[C_WIDTH+1:C_WIDTH] != 0)
             new_R = A1[C_WIDTH-1:0];
         else
             new_R = A0[C_WIDTH-1:0];
