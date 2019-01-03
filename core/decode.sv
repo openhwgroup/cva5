@@ -317,7 +317,7 @@ module decode(
     assign ls_ex.new_request_dec = issue[LS_UNIT_EX_ID];
 
     assign ls_inputs.offset = opcode[5] ? {ib.data_out.instruction[31:25], ib.data_out.instruction[11:7]} : ib.data_out.instruction[31:20];
-    assign ls_inputs.virtual_address = rf_decode.rs1_data;// + 32'(signed'(ls_inputs.offset));
+    assign ls_inputs.virtual_address = rf_decode.rs1_data + 32'(signed'(ls_inputs.offset));
     assign ls_inputs.rs2 = rf_decode.rs2_data;
     assign ls_inputs.pc = ib.data_out.pc;
     assign ls_inputs.fn3 = amo_op ? LS_W_fn3 : fn3;

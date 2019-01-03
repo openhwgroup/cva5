@@ -197,7 +197,7 @@ module load_store_unit (
     /*********************************
      * TLB interface
      *********************************/
-    assign virtual_address = stage1.virtual_address + 32'(signed'(stage1.offset));
+    assign virtual_address = stage1.virtual_address;// + 32'(signed'(stage1.offset));
 
     assign tlb.virtual_address = virtual_address;
     assign tlb.new_request = input_fifo.valid;
