@@ -41,7 +41,9 @@ module taiga (
         output logic [31:0] if2_pc_debug,
 
         input logic timer_interrupt,
-        input logic interrupt
+        input logic interrupt,
+
+        output logic placer_rseed
         );
 
     l1_arbiter_request_interface l1_request[L1_CONNECTIONS-1:0]();
@@ -133,6 +135,10 @@ module taiga (
     assign dec_pc_debug = dec_pc;
     assign dec_advance_debug = dec_advance;
     assign instruction_issued = dec_advance;
+
+    placer_randomizer # (8'hFF) rseed_generator (.*, .result(placer_rseed),
+            .samples({if2_pc[23], ib.data_in.instruction[9], rf_decode.rs1_data[1], rf_decode.rs2_conflict, iq.valid[1], ls_ex.new_request, unit_wb[DIV_UNIT_WB_ID].rd[7], unit_wb[ALU_UNIT_WB_ID].rd[28]})
+            );
 
 
     /*************************************
