@@ -54,6 +54,7 @@
 ../../core/div_algorithms/div_radix2_ET.sv
 ../../core/div_algorithms/div_radix2_ET_full.sv
 ../../core/div_algorithms/div_radix4.sv
+../../core/div_algorithms/div_radix8.sv
 ../../core/div_algorithms/div_radix4_ET.sv
 ../../core/div_algorithms/div_radix16.sv
 ../../core/msb.sv

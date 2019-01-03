@@ -41,7 +41,7 @@ int main(int argc, char **argv) {
 			cout << tb->uart_byte;
 		}
 
-		if (tb->dec_instruction == 0x00100013U) {
+		if (tb->dec_instruction_r == 0x00100013U) {
 			break;
 		}
 		//tracer->dump(vluint64_t(cycle_cout));

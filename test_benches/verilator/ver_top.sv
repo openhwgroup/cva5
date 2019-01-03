@@ -32,52 +32,52 @@ module ver_top # (
         input logic clk,
         input logic rst,
 
-//        //AXI bus
-//        output logic [31:0]bus_axi_araddr,
-//        output logic [1:0]bus_axi_arburst,
-//        output logic [3:0]bus_axi_arcache,
-//        output logic [5:0]bus_axi_arid,
-//        output logic [7:0]bus_axi_arlen,
-//        output logic [0:0]bus_axi_arlock,
-//        output logic [2:0]bus_axi_arprot,
-//        output logic [3:0]bus_axi_arqos,
-//        input logic bus_axi_arready,
-//        output logic [3:0]bus_axi_arregion,
-//        output logic [2:0]bus_axi_arsize,
-//        output logic bus_axi_arvalid,
-//        output logic [31:0]bus_axi_awaddr,
-//        output logic [1:0]bus_axi_awburst,
-//        output logic [3:0]bus_axi_awcache,
-//        output logic [5:0]bus_axi_awid,
-//        output logic [7:0]bus_axi_awlen,
-//        output logic [0:0]bus_axi_awlock,
-//        output logic [2:0]bus_axi_awprot,
-//        output logic [3:0]bus_axi_awqos,
-//        input logic bus_axi_awready,
-//        output logic [3:0]bus_axi_awregion,
-//        output logic [2:0]bus_axi_awsize,
-//        output logic bus_axi_awvalid,
-//        output logic [5:0]bus_axi_bid,
-//        output logic bus_axi_bready,
-//        input logic [1:0]bus_axi_bresp,
-//        input logic bus_axi_bvalid,
-//        input logic [31:0]bus_axi_rdata,
-//        output logic [5:0]bus_axi_rid,
-//        output logic bus_axi_rlast,
-//        output logic bus_axi_rready,
-//        input logic [1:0]bus_axi_rresp,
-//        input logic bus_axi_rvalid,
-//        output logic [31:0]bus_axi_wdata,
-//        output logic bus_axi_wlast,
-//        input logic bus_axi_wready,
-//        output logic [3:0]bus_axi_wstrb,
-//        output logic bus_axi_wvalid,
-//        output logic [5:0]bus_axi_wid,
+        //        //AXI bus
+        //        output logic [31:0]bus_axi_araddr,
+        //        output logic [1:0]bus_axi_arburst,
+        //        output logic [3:0]bus_axi_arcache,
+        //        output logic [5:0]bus_axi_arid,
+        //        output logic [7:0]bus_axi_arlen,
+        //        output logic [0:0]bus_axi_arlock,
+        //        output logic [2:0]bus_axi_arprot,
+        //        output logic [3:0]bus_axi_arqos,
+        //        input logic bus_axi_arready,
+        //        output logic [3:0]bus_axi_arregion,
+        //        output logic [2:0]bus_axi_arsize,
+        //        output logic bus_axi_arvalid,
+        //        output logic [31:0]bus_axi_awaddr,
+        //        output logic [1:0]bus_axi_awburst,
+        //        output logic [3:0]bus_axi_awcache,
+        //        output logic [5:0]bus_axi_awid,
+        //        output logic [7:0]bus_axi_awlen,
+        //        output logic [0:0]bus_axi_awlock,
+        //        output logic [2:0]bus_axi_awprot,
+        //        output logic [3:0]bus_axi_awqos,
+        //        input logic bus_axi_awready,
+        //        output logic [3:0]bus_axi_awregion,
+        //        output logic [2:0]bus_axi_awsize,
+        //        output logic bus_axi_awvalid,
+        //        output logic [5:0]bus_axi_bid,
+        //        output logic bus_axi_bready,
+        //        input logic [1:0]bus_axi_bresp,
+        //        input logic bus_axi_bvalid,
+        //        input logic [31:0]bus_axi_rdata,
+        //        output logic [5:0]bus_axi_rid,
+        //        output logic bus_axi_rlast,
+        //        output logic bus_axi_rready,
+        //        input logic [1:0]bus_axi_rresp,
+        //        input logic bus_axi_rvalid,
+        //        output logic [31:0]bus_axi_wdata,
+        //        output logic bus_axi_wlast,
+        //        input logic bus_axi_wready,
+        //        output logic [3:0]bus_axi_wstrb,
+        //        output logic bus_axi_wvalid,
+        //        output logic [5:0]bus_axi_wid,
 
         output logic write_uart,
         output logic [7:0] uart_byte,
-        output logic [31:0] dec_instruction,
-        output logic [31:0] dec_pc_debug,
+        output logic [31:0] dec_instruction_r,
+        output logic [31:0] dec_pc_debug_r,
 
         //L2
         //l2 request
@@ -155,7 +155,8 @@ module ver_top # (
     logic axi_wvalid;
     logic [5:0]axi_wid;
 
-
+    logic [31:0] dec_instruction;
+    logic [31:0] dec_pc_debug;
 
     parameter SCRATCH_MEM_KB = 128;
     parameter MEM_LINES = (SCRATCH_MEM_KB*1024)/4;
@@ -173,34 +174,34 @@ module ver_top # (
     l2_memory_interface mem();
 
 
-//    assign m_axi.arready = bus_axi_arready;
-//    assign bus_axi_arvalid = m_axi.arvalid;
-//    assign bus_axi_araddr = m_axi.araddr;
-//
-//
-//    //read data
-//    assign bus_axi_rready = m_axi.rready;
-//    assign m_axi.rvalid = bus_axi_rvalid;
-//    assign m_axi.rdata = bus_axi_rdata;
-//    assign m_axi.rresp = bus_axi_rresp;
-//
-//    //Write channel
-//    //write address
-//    assign m_axi.awready = bus_axi_awready;
-//    assign bus_axi_awaddr = m_axi.awaddr;
-//    assign bus_axi_awvalid = m_axi.awvalid;
-//
-//
-//    //write data
-//    assign m_axi.wready = bus_axi_wready;
-//    assign bus_axi_wvalid = m_axi. wvalid;
-//    assign bus_axi_wdata = m_axi.wdata;
-//    assign bus_axi_wstrb = m_axi.wstrb;
-//
-//    //write response
-//    assign bus_axi_bready = m_axi.bready;
-//    assign m_axi.bvalid = bus_axi_bvalid;
-//    assign m_axi.bresp = bus_axi_bresp;
+    //    assign m_axi.arready = bus_axi_arready;
+    //    assign bus_axi_arvalid = m_axi.arvalid;
+    //    assign bus_axi_araddr = m_axi.araddr;
+    //
+    //
+    //    //read data
+    //    assign bus_axi_rready = m_axi.rready;
+    //    assign m_axi.rvalid = bus_axi_rvalid;
+    //    assign m_axi.rdata = bus_axi_rdata;
+    //    assign m_axi.rresp = bus_axi_rresp;
+    //
+    //    //Write channel
+    //    //write address
+    //    assign m_axi.awready = bus_axi_awready;
+    //    assign bus_axi_awaddr = m_axi.awaddr;
+    //    assign bus_axi_awvalid = m_axi.awvalid;
+    //
+    //
+    //    //write data
+    //    assign m_axi.wready = bus_axi_wready;
+    //    assign bus_axi_wvalid = m_axi. wvalid;
+    //    assign bus_axi_wdata = m_axi.wdata;
+    //    assign bus_axi_wstrb = m_axi.wstrb;
+    //
+    //    //write response
+    //    assign bus_axi_bready = m_axi.bready;
+    //    assign m_axi.bvalid = bus_axi_bvalid;
+    //    assign m_axi.bresp = bus_axi_bresp;
 
 
 
@@ -226,7 +227,10 @@ module ver_top # (
 
     taiga cpu(.*, .l2(l2[0]));
 
-
+    always_ff @(posedge clk) begin
+        dec_instruction_r <= dec_instruction;
+        dec_pc_debug_r <= dec_pc_debug;
+    end
 
     //read channel
     logic[3:0] read_counter;
