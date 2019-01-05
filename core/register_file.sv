@@ -78,8 +78,8 @@ module register_file(
     assign in_use_match = ({1'b1, in_use_by_id} == {rf_wb.valid_write, rf_wb.id});
 
 
-    assign rs1_feedforward = ({2'b11, in_use_by_id, rf_decode.rs1_addr} == {rf_decode.uses_rs1, rf_wb.valid_write, rf_wb.wb_id, rf_wb.rd_addr});
-    assign rs2_feedforward = ({2'b11, in_use_by_id, rf_decode.rs2_addr} == {rf_decode.uses_rs2, rf_wb.valid_write,rf_wb.wb_id, rf_wb.rd_addr});
+    assign rs1_feedforward = ({2'b11, in_use_by_id, rf_decode.rs1_addr} == {rf_decode.uses_rs1, rf_wb.valid_write, rf_wb.id, rf_wb.rd_addr});
+    assign rs2_feedforward = ({2'b11, in_use_by_id, rf_decode.rs2_addr} == {rf_decode.uses_rs2, rf_wb.valid_write, rf_wb.id, rf_wb.rd_addr});
 
     assign rf_decode.rs1_data = rs1_feedforward ? rf_wb.rd_data : register[rf_decode.rs1_addr];
     assign rf_decode.rs2_data = rs2_feedforward ? rf_wb.rd_data : register[rf_decode.rs2_addr];
