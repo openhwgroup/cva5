@@ -31,12 +31,14 @@ module mul_unit(
         unit_writeback_interface.unit mul_wb
         );
 
-    logic signed [65:0] result;
-    logic [1:0] mulh;
+    logic signed [65:0] result [1:0];
+    logic [2:0] mulh;
     logic stage1_advance;
     logic stage2_advance;
-    logic [1:0] advance;
-    logic [1:0] valid;
+    logic stage3_advance;
+
+    logic [2:0] advance;
+    logic [2:0] valid;
 
     logic rs1_signed, rs2_signed;
     logic signed [32:0] rs1_ext, rs2_ext;
@@ -45,7 +47,8 @@ module mul_unit(
     //implementation
     ////////////////////////////////////////////////////
     assign stage1_advance = stage2_advance | (~valid[0]);
-    assign stage2_advance = mul_wb.accepted | (~valid[1]);
+    assign stage2_advance = stage3_advance | (~valid[1]);
+    assign stage3_advance = mul_wb.accepted | (~valid[2]);
 
     always_ff @ (posedge clk) begin
         if (rst)
@@ -59,6 +62,13 @@ module mul_unit(
             valid[1] <= 0;
         else if (stage2_advance)
             valid[1] <= valid[0];
+    end
+
+    always_ff @ (posedge clk) begin
+        if (rst)
+            valid[2] <= 0;
+        else if (stage3_advance)
+            valid[2] <= valid[1];
     end
 
     assign rs1_signed = mul_inputs.op[1:0] inside {MULH_fn3[1:0], MULHSU_fn3[1:0]};//MUL doesn't matter
@@ -75,8 +85,12 @@ module mul_unit(
             mulh[0] <= (mul_inputs.op[1:0] != MUL_fn3[1:0]);
         end
         if (stage2_advance) begin
-            result <= rs1_r * rs2_r;
+            result[0] <= rs1_r * rs2_r;
             mulh[1] <= mulh[0];
+        end
+        if (stage3_advance) begin
+            result[1] <= result[0];
+            mulh[2] <= mulh[1];
         end
     end
 
@@ -84,9 +98,9 @@ module mul_unit(
     ////////////////////////////////////////////////////
     assign mul_ex.ready = mul_wb.accepted | ~(&valid);//If any stage is not valid we can accept a new request
 
-    assign mul_wb.rd = mulh[1] ? result[63:32] : result[31:0];
+    assign mul_wb.rd = mulh[2] ? result[1][63:32] : result[1][31:0];
 
-    assign mul_wb.done_next_cycle = 1;//if in queue, will be done on next cycle
+    assign mul_wb.done_next_cycle = valid[1] | (valid[2] & ~mul_wb.accepted);//if in queue, will be done on next cycle
     assign mul_wb.done_on_first_cycle = 0;//registered output, done after one cycle
     ////////////////////////////////////////////////////
 
