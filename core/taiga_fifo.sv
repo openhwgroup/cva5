@@ -38,8 +38,9 @@ module taiga_fifo #(parameter DATA_WIDTH = 32, parameter FIFO_DEPTH = 4, paramet
     logic[DATA_WIDTH-1:0] shift_reg[FIFO_DEPTH-1:0];
     logic[DATA_WIDTH-1:0] shift_reg_new[FIFO_DEPTH-1:0];
 
-    logic[$clog2(FIFO_DEPTH)-1:0] write_index;
-    logic[$clog2(FIFO_DEPTH)-1:0] read_index;
+    localparam LOG2_FIFO_DEPTH = $clog2(FIFO_DEPTH);
+    logic[LOG2_FIFO_DEPTH-1:0] write_index;
+    logic[LOG2_FIFO_DEPTH-1:0] read_index;
     logic two_plus;
 
     genvar i;
@@ -67,8 +68,8 @@ module taiga_fifo #(parameter DATA_WIDTH = 32, parameter FIFO_DEPTH = 4, paramet
                     write_index <= '0;
                 end
                 else begin
-                    read_index <= read_index + fifo.pop;
-                    write_index <= write_index + fifo.push;
+                    read_index <= read_index + {{(LOG2_FIFO_DEPTH-1){1'b0}}, fifo.pop};
+                    write_index <= write_index + {{(LOG2_FIFO_DEPTH-1){1'b0}}, fifo.push};
                 end
             end
             assign fifo.data_out = lut_ram[read_index];
@@ -103,7 +104,7 @@ module taiga_fifo #(parameter DATA_WIDTH = 32, parameter FIFO_DEPTH = 4, paramet
                     srl_index[SRL_DEPTH_W-1] <= 0;
                     srl_index[SRL_DEPTH_W-2:0] <= '1;
                 end else
-                    srl_index <= srl_index + fifo.push - fifo.pop;
+                    srl_index <= srl_index + {{(LOG2_FIFO_DEPTH-1){1'b0}}, fifo.push} - {{(LOG2_FIFO_DEPTH-1){1'b0}}, fifo.pop};
             end
 
             //Helper expressions
