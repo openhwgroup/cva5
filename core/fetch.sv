@@ -68,6 +68,7 @@ module fetch(
     logic [31:0] if_pc;
 
     logic space_in_inst_buffer;
+    logic mem_ready;
     logic new_mem_request;
 
     logic fetch_flush;
@@ -109,7 +110,7 @@ module fetch(
     assign fetch_flush = (bt.flush | exception);
     assign flush = fetch_flush;
 
-    assign update_pc = new_mem_request | fetch_flush;
+    assign update_pc = mem_ready | fetch_flush;
 
     //Fetch PC
     always_ff @(posedge clk) begin
@@ -152,23 +153,24 @@ module fetch(
     always_ff @(posedge clk) begin
         if (rst | fetch_flush)
             inflight_count <= 0;
-        else if (new_mem_request  & ~ib.pop)
+        else if (mem_ready  & ~ib.pop)
             inflight_count <= inflight_count + 1;
-        else if (~new_mem_request &  ib.pop)
+        else if (~mem_ready &  ib.pop)
             inflight_count <= inflight_count - 1;
     end
 
     always_ff @(posedge clk) begin
         if (rst | fetch_flush)
             space_in_inst_buffer <= 1;
-        else if (new_mem_request  & ~ib.pop)
+        else if (mem_ready  & ~ib.pop)
             space_in_inst_buffer <= inflight_count < (FETCH_BUFFER_DEPTH-1);
-        else if (~new_mem_request &  ib.pop)
+        else if (~mem_ready &  ib.pop)
             space_in_inst_buffer <= 1;
     end
 
 //assign space_in_inst_buffer = inflight_count < FETCH_BUFFER_DEPTH;
-    assign new_mem_request = tlb.complete & (~fetch_flush) & space_in_inst_buffer & units_ready;
+    assign mem_ready = tlb.complete & space_in_inst_buffer & units_ready;
+    assign new_mem_request = mem_ready & (~fetch_flush);
 
     //Memory interfaces
     generate if (USE_I_SCRATCH_MEM) begin
@@ -189,11 +191,11 @@ module fetch(
             assign unit_data_array[ICACHE_ID] = fetch_sub[ICACHE_ID].data_out;
 
             always_ff @(posedge clk) begin
-                if(rst)
+                if(rst | fetch_flush)
                     stage2_valid <= 0;
-                else if (new_mem_request)
+                else if (mem_ready)
                     stage2_valid <= 1;
-                else if (new_issue | fetch_flush)
+                else if (new_issue)
                     stage2_valid <= 0;
             end
 
