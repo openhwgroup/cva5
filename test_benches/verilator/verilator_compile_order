@@ -83,6 +83,7 @@
 ../../core/decode.sv  
 
 ../../core/inuse.sv 
+../../core/forwarding_compare.sv 
 ../../core/register_file.sv  
 
 ../../core/id_generator.sv  
@@ -90,6 +91,6 @@
 
 ../../core/write_back.sv  
 
-
+../../core/placer_randomizer.sv
 ../../core/taiga.sv  
 ver_top.sv  
