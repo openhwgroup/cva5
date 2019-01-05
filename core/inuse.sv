@@ -30,7 +30,7 @@ import taiga_types::*;
 
 /* Constraints
  *   + Issue has precedence over completed.  Addresses may/will overlap.
-*/
+ */
 
 /*Implementation:
  * If the addresses overlap, then issue has precedence over completed.  After a reset, all memory bits are zero.
@@ -39,7 +39,7 @@ import taiga_types::*;
  * in pairs so after an instruction completes the two memories will have the same value (0 or 1).
  * If a new issue to the same address as a completing instruction occurs the memories will continue to have different values,
  * satisfing the requirement that issue has precedence over completion.
-*/
+ */
 
 module inuse (
         input logic clk,
@@ -58,8 +58,6 @@ module inuse (
     //Memory organized as 2 sets of dual-ported memories
     logic bankA [31:0];
     logic bankB [31:0];
-    logic bankA2 [31:0];
-    logic bankB2 [31:0];
 
     logic [4:0] w_clear;
     logic [4:0] wb_rd_addr_muxed;
@@ -72,8 +70,6 @@ module inuse (
         foreach(bankA[i]) begin
             bankA[i] = 0;
             bankB[i] = 1;
-            bankA2[i] = 0;
-            bankB2[i] = 1;
         end
     end
     // synthesis translate_on
@@ -81,33 +77,29 @@ module inuse (
     //After reset, clear is held for at least 32 cycles to reset memory block
     assign wb_rd_addr_muxed = clr ? w_clear : wb_rd_addr;
 
+
     //reset is for simulation purposes only, not needed for actual design
     always_ff @ (posedge clk) begin
         if (rst)
             w_clear <= 0;
         else
-            w_clear <= w_clear + clr;
+            w_clear <= w_clear + {4'b0, clr};
     end
 
-    logic collision;
-    assign collision = issued && (wb_rd_addr == decode_rd_addr);
+    logic wb_collision = completed & (decode_rd_addr == wb_rd_addr);
 
     always_ff @ (posedge clk) begin
-        if(issued) begin
-            bankA[decode_rd_addr] <= (1 ^ bankB[decode_rd_addr]);
-            bankA2[decode_rd_addr] <= (1 ^ bankB2[decode_rd_addr]);
-        end
+        if (issued)
+            bankA[decode_rd_addr] <= wb_collision ? ~bankA[wb_rd_addr_muxed] : ~bankB[decode_rd_addr];
     end
 
     always_ff @ (posedge clk) begin
-        if (clr | (completed & ~collision)) begin
-            bankB[wb_rd_addr_muxed] <= (0 ^ bankA[wb_rd_addr_muxed]);
-            bankB2[wb_rd_addr_muxed] <= (0 ^ bankA2[wb_rd_addr_muxed]);
-        end
+        if (completed | clr)
+            bankB[wb_rd_addr_muxed] <= bankA[wb_rd_addr_muxed];
     end
 
     assign rs1_inuse = bankA[rs1_addr] ^ bankB[rs1_addr];
-    assign rs2_inuse = bankB2[rs2_addr] ^ bankA2[rs2_addr];
+    assign rs2_inuse = bankA[rs2_addr] ^ bankB[rs2_addr];
 
     ////////////////////////////////////////////////////
     //Assertions
@@ -119,7 +111,7 @@ module inuse (
     logic sim_inuse [31:0];
     always_comb begin
         foreach (sim_inuse[i])
-            sim_inuse[i] = bankA[i] ^ bankB[i];
+            sim_inuse[i] = bankA[i] ~^ bankB[i];
     end
     // synthesis translate_on
 

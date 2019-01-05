@@ -27,6 +27,8 @@ import l2_config_and_types::*;
 interface branch_table_interface;
     logic[31:0] if_pc;
     logic[31:0] dec_pc;
+    logic dec_pc_valid;
+    
     logic[31:0] ex_pc;
     logic [31:0] jump_pc;
     logic [31:0] njump_pc;
@@ -43,9 +45,10 @@ interface branch_table_interface;
     logic use_prediction;
     logic use_ras;
     logic flush;
-    modport branch_table (input if_pc, dec_pc, ex_pc, next_pc, njump_pc, jump_pc, branch_taken, branch_ex, is_return_ex, new_mem_request, output predicted_pc, use_prediction, use_ras, flush);
+
+    modport branch_table (input if_pc, dec_pc, dec_pc_valid, ex_pc, next_pc, njump_pc, jump_pc, branch_taken, branch_ex, is_return_ex, new_mem_request, output predicted_pc, use_prediction, use_ras, flush);
     modport fetch (input predicted_pc, use_prediction, branch_taken, flush, njump_pc, jump_pc, use_ras, output if_pc, next_pc, new_mem_request);
-    modport decode (output dec_pc);
+    modport decode (output dec_pc, dec_pc_valid);
     modport branch_unit (output branch_taken, branch_ex, is_return_ex, ex_pc, njump_pc, jump_pc);
 
 endinterface
@@ -117,13 +120,15 @@ interface register_file_decode_interface;
     logic[4:0] rs2_addr; //if not used required to be zero
     logic[XLEN-1:0] rs2_data;
     instruction_id_t id;
+    logic uses_rs1;
+    logic uses_rs2;
     logic rs1_conflict;
     logic rs2_conflict;
     logic rd_conflict;
     logic instruction_issued;
 
-    modport decode (output future_rd_addr, rs1_addr, rs2_addr, instruction_issued, id, input rs1_conflict, rs2_conflict, rd_conflict, rs1_data, rs2_data);
-    modport unit (input future_rd_addr, rs1_addr, rs2_addr, instruction_issued, id, output rs1_conflict, rs2_conflict, rd_conflict, rs1_data, rs2_data);
+    modport decode (output future_rd_addr, rs1_addr, rs2_addr, instruction_issued, id, uses_rs1, uses_rs2, input rs1_conflict, rs2_conflict, rd_conflict, rs1_data, rs2_data);
+    modport unit (input future_rd_addr, rs1_addr, rs2_addr, instruction_issued, id, uses_rs1, uses_rs2, output rs1_conflict, rs2_conflict, rd_conflict, rs1_data, rs2_data);
 endinterface
 
 

@@ -64,7 +64,7 @@ module register_file(
             .rs1_addr(rf_decode.rs1_addr),.rs2_addr(rf_decode.rs2_addr), .decode_rd_addr(rf_decode.future_rd_addr),
             .wb_rd_addr(rf_wb.rd_addr),
             .issued(rf_decode.instruction_issued),
-            .completed(rf_wb.valid_write & in_use_match),
+            .completed(in_use_match),
             .rs1_inuse(rs1_inuse),
             .rs2_inuse(rs2_inuse)
             );
@@ -75,16 +75,33 @@ module register_file(
     end
 
     assign in_use_by_id = in_use_by[rf_wb.rd_addr];
-    assign in_use_match = (in_use_by_id == rf_wb.id);
+    assign in_use_match = ({1'b1, in_use_by_id} == {rf_wb.valid_write, rf_wb.id});
 
-    assign rs1_feedforward = (rf_decode.rs1_addr == rf_wb.rd_addr) && rf_wb.valid_write && in_use_match;
-    assign rs2_feedforward = (rf_decode.rs2_addr == rf_wb.rd_addr) && rf_wb.valid_write && in_use_match;
+
+    forwarding_compare rs1_f (
+           .in_use_by_id(in_use_by_id),
+           .wb_id(rf_wb.id),
+           .valid_write(rf_wb.valid_write),
+           .wb_rd_addr(rf_wb.rd_addr),
+           .dec_addr(rf_decode.rs1_addr),
+           .uses_rs(rf_decode.uses_rs1),
+           .match(rs1_feedforward)
+            );
+    forwarding_compare rs2_f (
+            .in_use_by_id(in_use_by_id),
+            .wb_id(rf_wb.id),
+            .valid_write(rf_wb.valid_write),
+            .wb_rd_addr(rf_wb.rd_addr),
+            .dec_addr(rf_decode.rs2_addr),
+            .uses_rs(rf_decode.uses_rs2),
+            .match(rs2_feedforward)
+            );
 
     assign rf_decode.rs1_data = rs1_feedforward ? rf_wb.rd_data : register[rf_decode.rs1_addr];
     assign rf_decode.rs2_data = rs2_feedforward ? rf_wb.rd_data : register[rf_decode.rs2_addr];
 
-    assign rf_decode.rs1_conflict = rs1_inuse  & ~rs1_feedforward;
-    assign rf_decode.rs2_conflict = rs2_inuse  & ~rs2_feedforward;
+    assign rf_decode.rs1_conflict = rs1_inuse & ~rs1_feedforward;
+    assign rf_decode.rs2_conflict = rs2_inuse & ~rs2_feedforward;
 
     ////////////////////////////////////////////////////
     //Assertions

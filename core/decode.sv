@@ -145,6 +145,9 @@ module decode(
     assign rf_decode.future_rd_addr  =  future_rd_addr;
     assign rf_decode.instruction_issued = advance & uses_rd & ~ib.data_out.rd_zero;
     assign rf_decode.id = id_gen.issue_id;
+    assign rf_decode.uses_rs1 = uses_rs1;
+    assign rf_decode.uses_rs2 = uses_rs2;
+
     //Issue logic
 
     always_comb begin
@@ -171,19 +174,13 @@ module decode(
     assign id_gen.advance = advance & uses_rd;
 
     assign bt.dec_pc = ib.data_out.pc;
+    assign bt.dec_pc_valid = ib.valid;
 
     assign issue_valid =  ib.valid & id_gen.id_avaliable & ~flush & ~gc_issue_hold & ~gc_issue_flush;
-
-
-    assign operands_ready =  ~(
-            (uses_rs1 & rf_decode.rs1_conflict) |
-            (uses_rs2 & rf_decode.rs2_conflict));
+    assign operands_ready =  ~rf_decode.rs1_conflict & ~rf_decode.rs2_conflict;
 
     assign load_store_forward = ((opcode_trim == STORE_T) && last_ls_request_was_load && (rs2_addr == load_rd));
-
-    assign load_store_operands_ready =  ~(
-            (uses_rs1 & rf_decode.rs1_conflict) |
-            (uses_rs2 & rf_decode.rs2_conflict & ~load_store_forward));
+    assign load_store_operands_ready =  ~rf_decode.rs1_conflict & ~(rf_decode.rs2_conflict & ~load_store_forward);
 
     assign mult_div_op = (opcode_trim == ARITH_T) && ib.data_out.instruction[25];
 
@@ -393,6 +390,10 @@ module decode(
     //If a subsequent div request uses the same inputs then
     //don't rerun div operation
     generate if (USE_DIV) begin
+            logic div_rd_overwrites_rs1_or_rs2;
+            logic rd_overwrites_previously_saved_rs1_or_rs2;
+            logic current_op_resuses_rs1_rs2;
+
             always_ff @(posedge clk) begin
                 if (issue[DIV_UNIT_EX_ID]) begin
                     prev_div_rs1_addr <= rs1_addr;
@@ -400,13 +401,17 @@ module decode(
                 end
             end
 
+            assign div_rd_overwrites_rs1_or_rs2 = (future_rd_addr == rs1_addr || future_rd_addr == rs2_addr);
+            assign rd_overwrites_previously_saved_rs1_or_rs2 = (future_rd_addr == prev_div_rs1_addr || future_rd_addr == prev_div_rs2_addr);
+            assign current_op_resuses_rs1_rs2 = (prev_div_rs1_addr == rs1_addr) && (prev_div_rs2_addr == rs2_addr);
+
             always_ff @(posedge clk) begin
                 if (rst)
                     prev_div_result_valid <= 0;
                 else if (advance) begin
-                    if(new_request[DIV_UNIT_EX_ID] && !(future_rd_addr == rs1_addr ||  future_rd_addr == rs2_addr))
+                    if(new_request[DIV_UNIT_EX_ID] & ~div_rd_overwrites_rs1_or_rs2)
                         prev_div_result_valid <=1;
-                    else if (uses_rd && (future_rd_addr == prev_div_rs1_addr || future_rd_addr == prev_div_rs2_addr))
+                    else if (uses_rd & rd_overwrites_previously_saved_rs1_or_rs2)
                         prev_div_result_valid <=0;
                 end
             end
@@ -415,7 +420,7 @@ module decode(
             assign div_inputs.rs1 = rf_decode.rs1_data;
             assign div_inputs.rs2 = rf_decode.rs2_data;
             assign div_inputs.op = fn3[1:0];
-            assign div_inputs.reuse_result = prev_div_result_valid && (prev_div_rs1_addr == rs1_addr) && (prev_div_rs2_addr == rs2_addr);
+            assign div_inputs.reuse_result = prev_div_result_valid & current_op_resuses_rs1_rs2;
             assign div_inputs.div_zero = (rf_decode.rs2_data == 0);
         end
     endgenerate
