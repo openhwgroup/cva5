@@ -228,20 +228,17 @@ module load_store_unit (
      *   SH: upper or lower half of bytes
      *   SB: specific byte
      */
-        always_comb begin
-            for (int i = 0; i < XLEN/8; i = i+ 1) begin
-                case({stage1.store,stage1.fn3[1:0]})
-                    {1'b1, LS_B_fn3[1:0]} : be[i] = (virtual_address[1:0] == i[1:0]);
-                    {1'b1, LS_H_fn3[1:0]} : be[i] = (virtual_address[1] == i[1]);
-                    {1'b1, LS_W_fn3[1:0]} : be[i] = '1;
-                    default : be[i] = 0;
-                endcase
-            end
+    always_comb begin
+        for (int i = 0; i < XLEN/8; i = i+ 1) begin
+            case({stage1.store,stage1.fn3[1:0]})
+                {1'b1, LS_B_fn3[1:0]} : be[i] = (virtual_address[1:0] == i[1:0]);
+                {1'b1, LS_H_fn3[1:0]} : be[i] = (virtual_address[1] == i[1]);
+                {1'b1, LS_W_fn3[1:0]} : be[i] = '1;
+                default : be[i] = 0;
+            endcase
         end
+    end
 
-    assign stage1_raw_data = (stage1.load_store_forward | dcache_forward_data) ?
-        (load_attributes.valid ? final_load_data : previous_load) :
-        stage1.rs2;
 
     //AMO identification for dcache
     generate
@@ -265,11 +262,23 @@ module load_store_unit (
     assign d_inputs.be = be;
     assign d_inputs.fn3 = stage1.fn3;
 
+    logic forward_data;
+    assign forward_data = stage1.load_store_forward | dcache_forward_data;
+    assign stage1_raw_data =  forward_data ? (load_attributes.valid ? final_load_data : previous_load) : stage1.rs2;
+
+    //Input: ABCD
+    //Assuming aligned requests,
+    //Possible selections: (A/C/D, B/D, C/D, D)
+    logic [1:0] data_in_mux;
     always_comb begin
-        case(dcache_forward_data ? dcache_stage2_fn3[1:0] : stage1.fn3[1:0]) //<--011, 110, 111, 100, 101 unused
-            LS_B_fn3[1:0] : d_inputs.data_in = {4{stage1_raw_data[7:0]}};
-            LS_H_fn3[1:0] : d_inputs.data_in = {2{stage1_raw_data[15:0]}};
-            default : d_inputs.data_in = stage1_raw_data;//LS_W_fn3
+        data_in_mux = dcache_forward_data ? dcache_stage2_fn3[1:0] : virtual_address[1:0];
+        d_inputs.data_in[7:0] = stage1_raw_data[7:0];
+        d_inputs.data_in[15:8] = (data_in_mux == 2'b01) ? stage1_raw_data[7:0] : stage1_raw_data[15:8];
+        d_inputs.data_in[23:16] = (data_in_mux == 2'b10) ? stage1_raw_data[7:0] : stage1_raw_data[23:16];
+        case(data_in_mux)
+            2'b10 : d_inputs.data_in[31:24] = stage1_raw_data[15:8];
+            2'b11 : d_inputs.data_in[31:24] = stage1_raw_data[7:0];
+            default : d_inputs.data_in[31:24] = stage1_raw_data[31:24];
         endcase
     end
 
@@ -299,26 +308,26 @@ module load_store_unit (
             if(FPGA_VENDOR == "xilinx") //AXI BUS
                 axi_master axi_bus (.clk(clk), .rst(rst), .ls_inputs(d_inputs), .size({1'b0,stage1.fn3[1:0]}), .m_axi(m_axi),.ls(ls_sub[BUS_ID]), .data_out(unit_data_array[BUS_ID])); //Lower two bits of fn3 match AXI specification for request size (byte/halfword/word)
             else begin //Avalon bus
-//                avalon_master avalon_bus(.clk(clk), .rst(rst),
-//                        .addr(m_avalon.addr),
-//                        .avread(m_avalon.read),
-//                        .avwrite(m_avalon.write),
-//                        .byteenable(m_avalon.byteenable),
-//                        .readdata(m_avalon.readdata),
-//                        .writedata(m_avalon.writedata),
-//                        .waitrequest(m_avalon.waitrequest),
-//                        .readdatavalid(m_avalon.readdatavalid),
-//                        .writeresponsevalid(m_avalon.writeresponsevalid),
-//                        .addr_in(d_inputs.addr),
-//                        .data_in(d_inputs.data_in),
-//                        .data_out(unit_data_array[BUS_ID]),
-//                        .data_valid(ls_sub[BUS_ID].data_valid),
-//                        .ready(ls_sub[BUS_ID].ready),
-//                        .new_request(ls_sub[BUS_ID].new_request),
-//                        .rnw(d_inputs.load),
-//                        .be(d_inputs.be),
-//                        .data_ack(ls_sub[BUS_ID].ack)
-//                    );
+                //                avalon_master avalon_bus(.clk(clk), .rst(rst),
+                //                        .addr(m_avalon.addr),
+                //                        .avread(m_avalon.read),
+                //                        .avwrite(m_avalon.write),
+                //                        .byteenable(m_avalon.byteenable),
+                //                        .readdata(m_avalon.readdata),
+                //                        .writedata(m_avalon.writedata),
+                //                        .waitrequest(m_avalon.waitrequest),
+                //                        .readdatavalid(m_avalon.readdatavalid),
+                //                        .writeresponsevalid(m_avalon.writeresponsevalid),
+                //                        .addr_in(d_inputs.addr),
+                //                        .data_in(d_inputs.data_in),
+                //                        .data_out(unit_data_array[BUS_ID]),
+                //                        .data_valid(ls_sub[BUS_ID].data_valid),
+                //                        .ready(ls_sub[BUS_ID].ready),
+                //                        .new_request(ls_sub[BUS_ID].new_request),
+                //                        .rnw(d_inputs.load),
+                //                        .be(d_inputs.be),
+                //                        .data_ack(ls_sub[BUS_ID].ack)
+                //                    );
             end
         end
     endgenerate
@@ -340,13 +349,9 @@ module load_store_unit (
     //Byte/halfword select: assumes aligned operations
     always_comb begin
         aligned_load_data[31:16] = unit_muxed_load_data[31:16];
-        aligned_load_data[15:8] = stage2_attr.byte_addr[1] ? unit_muxed_load_data[31:24] : unit_muxed_load_data[15:8];
-        case(stage2_attr.byte_addr)
-            0 : aligned_load_data[7:0] = unit_muxed_load_data[7:0];
-            1 : aligned_load_data[7:0] = unit_muxed_load_data[15:8];
-            2 : aligned_load_data[7:0] = unit_muxed_load_data[23:16];
-            3 : aligned_load_data[7:0] = unit_muxed_load_data[31:24];
-        endcase
+        aligned_load_data[15:0] = stage2_attr.byte_addr[1] ? unit_muxed_load_data[31:16] : unit_muxed_load_data[15:0];
+        //select halfword first then byte
+        aligned_load_data[7:0] = stage2_attr.byte_addr[0] ? aligned_load_data[15:8] : aligned_load_data[7:0];
     end
 
     //Sign extending
