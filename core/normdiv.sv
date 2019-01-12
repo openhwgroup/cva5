@@ -51,6 +51,8 @@
             div_radix4_ET #(C_WIDTH) div (.*);
         else if (DIV_TYPE == "radix-8")
             div_radix8 #(C_WIDTH) div (.*);
+        else if (DIV_TYPE == "radix-8_earlyTerminate")
+            div_radix8_ET #(C_WIDTH) div (.*);
         else if (DIV_TYPE == "radix-16")
             div_radix16 #(C_WIDTH) div (.*);
         else

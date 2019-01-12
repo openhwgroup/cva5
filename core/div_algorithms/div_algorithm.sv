@@ -48,6 +48,7 @@ module div_algorithm
             RADIX_4 : div_radix4 #(XLEN) div (.*);
             RADIX_4_EARLY_TERMINATE : div_radix4_ET #(XLEN) div (.*);
             RADIX_8 : div_radix8 #(XLEN) div (.*);
+            RADIX_8_EARLY_TERMINATE : div_radix8_ET #(XLEN) div (.*);
             RADIX_16 : div_radix16 #(XLEN) div (.*);
             QUICK_NAIVE : div_quick_naive #(XLEN) div (.*);
             QUICK_CLZ : div_quick_clz #(XLEN) div (.*);
