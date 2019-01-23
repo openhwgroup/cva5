@@ -36,7 +36,8 @@ module div_quick_naive
         input logic [C_WIDTH-1:0] B,
         output logic [C_WIDTH-1:0] Q,
         output logic [C_WIDTH-1:0] R,
-        output logic complete
+        output logic complete,
+        output logic B_is_zero
         );
 
     logic running;
@@ -62,12 +63,12 @@ module div_quick_naive
     logic [MSB_W-1:0] MSB_delta;
 
     msb_naive msb_r (.msb_input(R), .msb(R_MSB));
-    msb_naive msb_b (.msb_input(B_r), .msb(B_MSB));
+    msb_naive msb_b (.msb_input(B), .msb(B_MSB));
     // msb msb_r (.msb_input(R), .msb(R_MSB));
     // msb msb_b (.msb_input(B_r), .msb(B_MSB));
 
-    assign MSB_delta = R_MSB - B_MSB;
-    
+    assign MSB_delta = R_MSB - B_MSB_r;
+
     assign Q_bit1 = 2**MSB_delta;
     assign Q_bit2 = {1'b0, Q_bit1[C_WIDTH-1:1]};
     assign new_Q_bit = Q | (A1[C_WIDTH] ?  Q_bit2 : Q_bit1);
@@ -76,38 +77,38 @@ module div_quick_naive
     assign A1 = R - B1;
     assign B2 = {1'b0,B1[C_WIDTH-1:1]};
     assign A2 = R - B2;
-    
+
     assign new_R = A1[C_WIDTH] ? A2 : A1[C_WIDTH-1:0];
+
+    assign B_is_zero = (B_MSB == 0 && ~B[0]);
 
 
     always_ff @ (posedge clk) begin
-        if (rst) begin
+        if (rst)
             running <= 0;
+        else if (start & ~B_is_zero)
+            running <= 1;
+        else if (terminate)
+            running <= 0;
+    end
+
+    always_ff @ (posedge clk) begin
+        if (rst)
             complete <= 0;
-        end
-        else begin
-            if (start) begin
-                running <= 1;
-                complete <= 0;
-            end
-            else if (running & terminate) begin
-                running <= 0;
-                complete <= 1;
-            end
-            else if (ack) begin
-                running <= 0;
-                complete <= 0;
-            end
-        end
+        else if (ack)
+            complete <= 0;
+        else if ((running & terminate) | (start & B_is_zero))
+            complete <= 1;
     end
 
     assign terminate =  (R < B_r);
 
     always_ff @ (posedge clk) begin
+        B_r <= B;
+        B_MSB_r <= B_MSB;
         if (start) begin
-            Q <= 0;
+            Q <= B_is_zero ? '1 : 0;
             R <= A;
-            B_r <= B;
         end
         else  if (~terminate) begin
             Q <= new_Q_bit;

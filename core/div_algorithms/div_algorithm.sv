@@ -20,7 +20,7 @@
  *             Eric Matthews <ematthew@sfu.ca>
                 Alec Lu <alec_lu@sfu.ca>
  */
- 
+
 import taiga_config::*;
 import taiga_types::*;
 
@@ -37,7 +37,8 @@ module div_algorithm
         input logic [C_WIDTH-1:0] B,
         output logic [C_WIDTH-1:0] Q,
         output logic [C_WIDTH-1:0] R,
-        output logic complete
+        output logic complete,
+        output logic B_is_zero
         );
 
     generate

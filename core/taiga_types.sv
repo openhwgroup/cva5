@@ -347,7 +347,6 @@ package taiga_types;
         logic [XLEN-1:0] rs2;
         logic [1:0] op;
         logic reuse_result;
-        logic div_zero;
     } div_inputs_t;
 
     typedef struct packed{

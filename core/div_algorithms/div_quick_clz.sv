@@ -34,7 +34,8 @@ module div_quick_clz
         input logic [C_WIDTH-1:0] B,
         output logic [C_WIDTH-1:0] Q,
         output logic [C_WIDTH-1:0] R,
-        output logic complete
+        output logic complete,
+        output logic B_is_zero
     );
 
     logic running;
@@ -89,12 +90,14 @@ module div_quick_clz
     assign B2 = {1'b0, B1[C_WIDTH-1:1]};
     assign A2 = R - B2;
 
-    assign new_R = firstCycle ? A_r : (A1[C_WIDTH] ? A2[C_WIDTH-1:0] : A1[C_WIDTH-1:0]);
+    assign new_R = A1[C_WIDTH] ? A2[C_WIDTH-1:0] : A1[C_WIDTH-1:0];
+
+    assign B_is_zero = (B_CLZ_r == 5'b11111 && ~B_r[0]);
 
     always_ff @ (posedge clk) begin
         if (rst)
             running <= 0;
-        else if (firstCycle)
+        else if (firstCycle & ~B_is_zero)
             running <= 1;
         else if (terminate)
             running <= 0;
@@ -105,7 +108,7 @@ module div_quick_clz
             complete <= 0;
         else if (ack)
             complete <= 0;
-        else if (running & terminate)
+        else if ((running & terminate) | (firstCycle & B_is_zero))
             complete <= 1;
     end
 
@@ -113,7 +116,7 @@ module div_quick_clz
 
     always_ff @ (posedge clk) begin
         if (firstCycle)
-            Q <= 0;
+            Q <= B_is_zero ? '1 : '0;
         else  if (~terminate)
             Q <= new_Q_bit;
     end
@@ -122,7 +125,9 @@ module div_quick_clz
         R = 0;
     end
     always @ (posedge clk) begin
-        if (~terminate)
+        if (firstCycle)
+            R <= A_r;
+        else if (~terminate)
             R <= new_R;
     end
 

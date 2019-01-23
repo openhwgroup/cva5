@@ -34,14 +34,15 @@ module div_quick_clz_mk2
         input logic [C_WIDTH-1:0] B,
         output logic [C_WIDTH-1:0] Q,
         output logic [C_WIDTH-1:0] R,
-        output logic complete
+        output logic complete,
+        output logic B_is_zero
     );
 
     logic running;
     logic terminate;
 
     logic [C_WIDTH-1:0] A_r;
-    logic [C_WIDTH+1:0] A0;
+    logic [C_WIDTH:0] A0;
     logic [C_WIDTH:0] A1;
     logic [C_WIDTH-1:0] A2;
 
@@ -74,7 +75,7 @@ module div_quick_clz_mk2
         B_CLZ_r <= B_CLZ;
         A_r <= A;
         B_r <= B;
-        shiftedB <= B << B_CLZ_r;
+        shiftedB <= B_r << B_CLZ_r;
     end
 
     assign CLZ_delta = B_CLZ_r - R_CLZ;
@@ -84,19 +85,14 @@ module div_quick_clz_mk2
         Q_bit1[CLZ_delta] = 1;
     end
     assign Q_bit2 = {1'b0, Q_bit1[C_WIDTH-1:1]};
-//    assign new_Q_bit = Q | (
-//            A1[C_WIDTH] ?  Q_bit2 :
-//            (A0[C_WIDTH] ? Q_bit1 : (Q_bit1 | Q_bit2)));
 
     always_comb begin
         if (A1[C_WIDTH])
             new_Q_bit = Q_bit2;
-        else if (A0[C_WIDTH+1:C_WIDTH] != 0)
+        else if (A0[C_WIDTH] || CLZ_delta == 0)
             new_Q_bit = Q_bit1;
         else
             new_Q_bit = (Q_bit1 | Q_bit2);
-
-        new_Q_bit |= Q;
     end
 
     assign B1 = shiftedB >> R_CLZ;
@@ -104,28 +100,23 @@ module div_quick_clz_mk2
     assign B2 = {1'b0, B1[C_WIDTH-1:1]};
     assign A2 = R - B2;
 
-    assign A0 = {2'b0, R} - ({2'b0, B1} + {2'b0, B2});
+    assign A0 = R - (B1 + B2);
 
     always_comb begin
-        if (firstCycle)
-            new_R = A_r;
-        else if (A1[C_WIDTH])
+        if (A1[C_WIDTH])
             new_R = A2[C_WIDTH-1:0];
-        else if (A0[C_WIDTH+1:C_WIDTH] != 0)
+        else if (A0[C_WIDTH] || CLZ_delta == 0)
             new_R = A1[C_WIDTH-1:0];
         else
             new_R = A0[C_WIDTH-1:0];
     end
 
-//    assign new_R = firstCycle ? A_r : (
-//            A1[C_WIDTH] ? A2[C_WIDTH-1:0] :
-//            (R < (A1 - B2) ? A1[C_WIDTH-1:0] :  A0[C_WIDTH-1:0])
-//        );
+    assign B_is_zero = (B_CLZ_r == 5'b11111 && ~B_r[0]);
 
     always_ff @ (posedge clk) begin
         if (rst)
             running <= 0;
-        else if (firstCycle)
+        else if (firstCycle & ~B_is_zero)
             running <= 1;
         else if (terminate)
             running <= 0;
@@ -136,7 +127,7 @@ module div_quick_clz_mk2
             complete <= 0;
         else if (ack)
             complete <= 0;
-        else if (running & terminate)
+        else if ((running & terminate) | (firstCycle & B_is_zero))
             complete <= 1;
     end
 
@@ -144,16 +135,18 @@ module div_quick_clz_mk2
 
     always_ff @ (posedge clk) begin
         if (firstCycle)
-            Q <= 0;
+            Q <= B_is_zero ? '1 : '0;
         else  if (~terminate)
-            Q <= new_Q_bit;
+            Q <= Q | new_Q_bit;
     end
 
     initial begin
         R = 0;
     end
     always @ (posedge clk) begin
-        if (~terminate)
+        if (firstCycle)
+            R <= A_r;
+        else if (~terminate)
             R <= new_R;
     end
 

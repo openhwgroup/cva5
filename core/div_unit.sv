@@ -56,6 +56,7 @@ module div_unit
 
     logic [31:0] result_input;
     logic negateResult;
+    logic divisor_zero;
 
     logic [31:0] div_result_sign_corrected;
     logic [31:0] wb_div_result;
@@ -83,7 +84,7 @@ module div_unit
     assign ack = computation_complete & output_ready;
 
     //Abort prevents divider circuit from starting in the case that we are done in one cycle
-    assign abort = stage1.reuse_result | stage1.div_zero;
+    assign abort = stage1.reuse_result;
 
     assign start = input_fifo.valid & (~in_progress) & ~abort;
     assign div_done = (computation_complete | (input_fifo.valid & abort)) & output_ready;
@@ -111,21 +112,14 @@ module div_unit
     assign complementerA = (dividend_signed ? ~stage1.rs1 : stage1.rs1) + dividend_signed;
     assign complementerB = (divisor_signed ? ~stage1.rs2 : stage1.rs2) + divisor_signed;
 
-
-    assign negateResult = ~stage1.div_zero & (stage1.op[1] ? remainder_signed : quotient_signed);
-
     always_comb begin
-        case ({stage1.div_zero, stage1.op[1]})
-            2'b00 : result_input = quotient;
-            2'b01 : result_input = remainder;
-            2'b10 : result_input = '1;
-            2'b11 : result_input = stage1.rs1;
-        endcase
+        negateResult = stage1.op[1] ? remainder_signed : (~divisor_zero & quotient_signed);
+        result_input = stage1.op[1] ? remainder : quotient;
         wb_div_result = (negateResult ? ~result_input : result_input) + negateResult;
     end
     //*************
 
-    div_algorithm #(XLEN) div (.*, .start(start), .A(complementerA), .B(complementerB), .Q(quotient), .R(remainder), .complete(computation_complete), .ack(ack));
+    div_algorithm #(XLEN) div (.*, .start(start), .A(complementerA), .B(complementerB), .Q(quotient), .R(remainder), .complete(computation_complete), .ack(ack), .B_is_zero(divisor_zero));
 
     /*********************************
      *  Output registering/handshaking
