@@ -23,7 +23,7 @@
 import taiga_config::*;
 import taiga_types::*;
 
-module one_hot_occupancy #(parameter DEPTH = 2)
+module one_hot_occupancy #(parameter DEPTH = 4)
         (
         input logic clk,
         input logic rst,
@@ -42,12 +42,18 @@ module one_hot_occupancy #(parameter DEPTH = 2)
 
     //Occupancy Tracking
     always_ff @ (posedge clk) begin
-        if (rst)
-            valid_chain <= 1;
-        else if (push & ~pop)
-            valid_chain <= {valid_chain[DEPTH-1:0], 1'b0};
-        else if (pop & ~push)
-            valid_chain <= {1'b0, valid_chain[DEPTH:1]};
+        if (rst) begin
+            valid_chain[0] <= 1;
+            valid_chain[DEPTH:1] <= 0;
+        end
+        else begin
+            case({push,pop})
+                0 : valid_chain <= valid_chain;
+                1 : valid_chain <= {1'b0, valid_chain[DEPTH:1]};
+                2 : valid_chain <= {valid_chain[DEPTH-1:0], 1'b0};
+                3 : valid_chain <= valid_chain;
+            endcase
+        end
     end
 
     assign empty = valid_chain[0];
@@ -69,7 +75,4 @@ module one_hot_occupancy #(parameter DEPTH = 2)
         assert (!(~rst & valid_chain[0] & pop)) else $error("underflow");
     end
 
-
 endmodule
-
-

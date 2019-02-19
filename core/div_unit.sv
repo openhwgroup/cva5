@@ -138,7 +138,7 @@ module div_unit
             done <= 0;
     end
 
-    assign div_wb.done_next_cycle = div_done | (done & ~div_wb.accepted);
-    assign div_wb.done_on_first_cycle = 0;
+    assign div_wb.done_next_cycle = div_done;
+    assign div_wb.instruction_id = stage1.instruction_id;
 
 endmodule

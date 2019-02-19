@@ -94,8 +94,8 @@ module alu_unit(
             done <= 0;
     end
 
-    assign alu_wb.done_next_cycle = 1;//in queue, already done
-    assign alu_wb.done_on_first_cycle = 1;//not in queue, always done next cycle
+    assign alu_wb.done_next_cycle = alu_ex.possible_issue;
+    assign alu_wb.instruction_id = alu_ex.instruction_id;
     ////////////////////////////////////////////////////
 
 endmodule

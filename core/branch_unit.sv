@@ -131,7 +131,7 @@ module branch_unit(
     assign new_jal_jalr_dec_with_rd = branch_ex.new_request_dec & branch_inputs.uses_rd;
 
     always_ff @(posedge clk) begin
-        if (new_jal_jalr_dec_with_rd) begin
+        if (branch_ex.possible_issue & branch_inputs.uses_rd) begin
             rd_ex <= pc_plus_4;
         end
     end
@@ -164,16 +164,15 @@ module branch_unit(
     always_ff @(posedge clk) begin
         if (rst) begin
             done <= 0;
-        end else if (new_jal_jalr_dec_with_rd) begin
+        end else if (branch_ex.new_request_dec & branch_inputs.uses_rd) begin
             done <= 1;
         end else if (branch_wb.accepted) begin
             done <= 0;
         end
     end
 
-    assign branch_wb.done_next_cycle = 1;//in queue, already done
-    assign branch_wb.done_on_first_cycle = 1;//not in queue, always done next cycle
-
+    assign branch_wb.done_next_cycle = branch_ex.possible_issue & branch_inputs.uses_rd;
+    assign branch_wb.instruction_id = branch_ex.instruction_id;
     /*********************************************/
 
     //---------- Simulation counters

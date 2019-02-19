@@ -100,8 +100,14 @@ module mul_unit(
 
     assign mul_wb.rd = mulh[2] ? result[1][63:32] : result[1][31:0];
 
-    assign mul_wb.done_next_cycle = valid[1] | (valid[2] & ~mul_wb.accepted);//if in queue, will be done on next cycle
-    assign mul_wb.done_on_first_cycle = 0;//registered output, done after one cycle
+
+    //Write_back
+    instruction_id_t instruction_id_r;
+    always_ff @(posedge clk) begin
+        mul_wb.done_next_cycle <= mul_ex.new_request;
+        instruction_id_r <= mul_ex.instruction_id;
+        mul_wb.instruction_id <= instruction_id_r;
+    end
     ////////////////////////////////////////////////////
 
 endmodule

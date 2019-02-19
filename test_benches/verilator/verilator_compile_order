@@ -86,9 +86,7 @@
 ../../core/forwarding_compare.sv 
 ../../core/register_file.sv  
 
-../../core/id_generator.sv  
-../../core/inflight_queue.sv  
-
+../../core/id_stack.sv  
 ../../core/write_back.sv  
 
 ../../core/placer_randomizer.sv

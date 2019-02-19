@@ -71,11 +71,9 @@ module taiga (
     func_unit_ex_interface mul_ex();
     func_unit_ex_interface div_ex();
 
-
     instruction_buffer_interface ib();
-    inflight_queue_interface iq();
-    id_generator_interface id_gen();
 
+    tracking_interface ti();
     unit_writeback_interface unit_wb [NUM_WB_UNITS-1:0]();
     register_file_writeback_interface rf_wb();
 
@@ -136,8 +134,9 @@ module taiga (
     assign dec_advance_debug = dec_advance;
     assign instruction_issued = dec_advance;
 
-    placer_randomizer # (8'hFF) rseed_generator (.*, .result(placer_rseed),
-            .samples({if2_pc[23], ib.data_in.instruction[9], rf_decode.rs1_data[1], rf_decode.rs2_conflict, iq.valid[1], ls_ex.new_request, unit_wb[DIV_UNIT_WB_ID].rd[7], unit_wb[ALU_UNIT_WB_ID].rd[28]})
+    placer_randomizer # (8'h2B)
+        rseed_generator (.*, .result(placer_rseed),
+            .samples({if2_pc[23], ib.data_in.instruction[9], rf_decode.rs1_data[1], rf_decode.rs2_conflict, ti.issue_id[1], ls_ex.new_request, unit_wb[DIV_UNIT_WB_ID].rd[7], unit_wb[ALU_UNIT_WB_ID].rd[28]})
             );
 
 
@@ -166,13 +165,10 @@ module taiga (
     instruction_buffer inst_buffer(.*);
 
     /*************************************
-     * Decode/Issue/Control
+     * Decode/Issue
      *************************************/
     decode decode_block (.*);
     register_file register_file_block (.*);
-    id_generator id_gen_block (.*);
-    inflight_queue inst_queue(.*);
-
     /*************************************
      * Units
      *************************************/
@@ -200,7 +196,7 @@ module taiga (
     endgenerate
 
     /*************************************
-     * Writeback Mux
+     * Writeback Mux and Instruction Tracking
      *************************************/
     write_back write_back_mux (.*);
 

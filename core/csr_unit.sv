@@ -187,7 +187,7 @@ module csr_unit (
     mstatus_priv_reg mstatus_and_privilege_regs (.*, .exception(gc_exception.valid),
             .interrupt_delegated(mideleg[gc_exception.code]), .exception_delegated(medeleg[gc_exception.code]),
             .write_msr_m(mwrite_decoder[MSTATUS[5:0]]),.write_msr_s(swrite_decoder[SSTATUS[5:0]])
-            );
+        );
 
     //medeleg
     logic [31:0] medeleg_mask;
@@ -338,11 +338,9 @@ module csr_unit (
     always_ff @(posedge clk) begin
         if (rst) begin
             mcycle <= 0;
-            mtime <= 0;
             minst_ret <= 0;
         end else begin
             mcycle <= mcycle + 1;
-            mtime <= mtime + 1;
             minst_ret <= minst_ret + inst_ret_inc;
         end
     end
@@ -358,17 +356,17 @@ module csr_unit (
             MIMPID : selected_csr = mimpid;
             MHARTID : selected_csr = mhartid;
                 //Machine trap setup
-            //MSTATUS : selected_csr = mstatus;
-            //MEDELEG : selected_csr = medeleg;
-            //MIDELEG : selected_csr = mideleg;
-            //MIE : selected_csr = mie_reg;
-            //MTVEC : selected_csr = mtvec;
+                //MSTATUS : selected_csr = mstatus;
+                //MEDELEG : selected_csr = medeleg;
+                //MIDELEG : selected_csr = mideleg;
+                //MIE : selected_csr = mie_reg;
+                //MTVEC : selected_csr = mtvec;
                 //Machine trap handling
-            //MSCRATCH : selected_csr = scratch_out;
-            //MEPC : selected_csr = scratch_out;
-            //MCAUSE : selected_csr = scratch_out;
-            //MTVAL : selected_csr = scratch_out;
-            //MIP : selected_csr = mip;
+                //MSCRATCH : selected_csr = scratch_out;
+                //MEPC : selected_csr = scratch_out;
+                //MCAUSE : selected_csr = scratch_out;
+                //MTVAL : selected_csr = scratch_out;
+                //MIP : selected_csr = mip;
                 //Machine Timers and Counters
             MCYCLE : selected_csr = mcycle[XLEN-1:0];
             MINSTRET : selected_csr = minst_ret[XLEN-1:0];
@@ -376,27 +374,27 @@ module csr_unit (
             MINSTRETH : selected_csr = minst_ret[TIMER_W-1:XLEN];
 
                 //Supervisor Trap Setup
-            //SSTATUS : selected_csr = (mstatus & mstatus_smask);
-            //SEDELEG : selected_csr = 0; //No user-level interrupts/exception handling
-            //SIDELEG : selected_csr = 0;
-            //SIE : selected_csr = (mie_reg & sie_mask);
-            //STVEC : selected_csr = stvec;
+                //SSTATUS : selected_csr = (mstatus & mstatus_smask);
+                //SEDELEG : selected_csr = 0; //No user-level interrupts/exception handling
+                //SIDELEG : selected_csr = 0;
+                //SIE : selected_csr = (mie_reg & sie_mask);
+                //STVEC : selected_csr = stvec;
                 //Supervisor trap handling
-            //SSCRATCH : selected_csr = scratch_out;
-            //SEPC : selected_csr = scratch_out;
-            //SCAUSE : selected_csr = scratch_out;
-            //STVAL : selected_csr = scratch_out;
-            //SIP : selected_csr = (mip & sip_mask);
+                //SSCRATCH : selected_csr = scratch_out;
+                //SEPC : selected_csr = scratch_out;
+                //SCAUSE : selected_csr = scratch_out;
+                //STVAL : selected_csr = scratch_out;
+                //SIP : selected_csr = (mip & sip_mask);
                 //Supervisor Protection and Translation
-            //SATP : selected_csr = satp;
+                //SATP : selected_csr = satp;
                 //User status
                 //Floating point
                 //User Counter Timers
             CYCLE : selected_csr = mcycle[XLEN-1:0];
-            TIME : selected_csr = mtime[XLEN-1:0];
+            TIME : selected_csr = mcycle[XLEN-1:0];
             INSTRET : selected_csr = minst_ret[XLEN-1:0];
             CYCLEH : selected_csr = mcycle[TIMER_W-1:XLEN];
-            TIMEH : selected_csr = mtime[TIMER_W-1:XLEN];
+            TIMEH : selected_csr = mcycle[TIMER_W-1:XLEN];
             INSTRETH : selected_csr = minst_ret[TIMER_W-1:XLEN];
 
             default : begin selected_csr = 0; invalid_addr = 1; end
@@ -420,8 +418,12 @@ module csr_unit (
         end
     end
 
-    assign csr_wb.done_next_cycle = 1;//if in queue, will be done on next cycle, no-pipelining
-    assign csr_wb.done_on_first_cycle = 0;//registered output, done after one cycle
+
+    //Write_back
+    assign csr_wb.done_next_cycle = csr_ex.new_request;
+    always_ff @(posedge clk) begin
+        csr_wb.instruction_id <= csr_ex.instruction_id;
+    end
 
     always_ff @(posedge clk) begin
         if (rst) begin

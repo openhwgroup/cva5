@@ -62,6 +62,7 @@ module inuse (
     logic [4:0] w_clear;
     logic [4:0] wb_rd_addr_muxed;
 
+    logic wb_collision;
     //////////////////////////////////////////
     //Initialize to all inuse (0,1) for simulation,
     //will be cleared by GC after reset in hardware
@@ -86,7 +87,7 @@ module inuse (
             w_clear <= w_clear + {4'b0, clr};
     end
 
-    logic wb_collision = completed & (decode_rd_addr == wb_rd_addr);
+    assign wb_collision = completed && (decode_rd_addr == wb_rd_addr);
 
     always_ff @ (posedge clk) begin
         if (issued)

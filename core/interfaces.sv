@@ -58,9 +58,10 @@ interface func_unit_ex_interface;
     logic possible_issue;
     logic new_request;
     logic ready;
+    instruction_id_t instruction_id;
 
-    modport decode (input ready, output possible_issue, new_request_dec, new_request);
-    modport unit (output ready, input possible_issue, new_request_dec, new_request);
+    modport decode (input ready, output possible_issue, new_request_dec, new_request, instruction_id);
+    modport unit (output ready, input possible_issue, new_request_dec, new_request, instruction_id);
 endinterface
 
 interface ras_interface;
@@ -77,11 +78,11 @@ endinterface
 
 interface unit_writeback_interface;
     logic done_next_cycle;
-    logic done_on_first_cycle;
+    instruction_id_t instruction_id;
     logic accepted;
     logic [XLEN-1:0] rd;
-    modport writeback (input done_next_cycle, done_on_first_cycle, rd, output accepted);
-    modport unit (output done_next_cycle, done_on_first_cycle, rd, input accepted);
+    modport writeback (input done_next_cycle, instruction_id, rd, output accepted);
+    modport unit (output done_next_cycle, instruction_id, rd, input accepted);
 endinterface
 
 //********************************
@@ -124,11 +125,10 @@ interface register_file_decode_interface;
     logic uses_rs2;
     logic rs1_conflict;
     logic rs2_conflict;
-    logic rd_conflict;
     logic instruction_issued;
 
-    modport decode (output future_rd_addr, rs1_addr, rs2_addr, instruction_issued, id, uses_rs1, uses_rs2, input rs1_conflict, rs2_conflict, rd_conflict, rs1_data, rs2_data);
-    modport unit (input future_rd_addr, rs1_addr, rs2_addr, instruction_issued, id, uses_rs1, uses_rs2, output rs1_conflict, rs2_conflict, rd_conflict, rs1_data, rs2_data);
+    modport decode (output future_rd_addr, rs1_addr, rs2_addr, instruction_issued, id, uses_rs1, uses_rs2, input rs1_conflict, rs2_conflict, rs1_data, rs2_data);
+    modport unit (input future_rd_addr, rs1_addr, rs2_addr, instruction_issued, id, uses_rs1, uses_rs2, output rs1_conflict, rs2_conflict, rs1_data, rs2_data);
 endinterface
 
 
@@ -139,43 +139,31 @@ interface register_file_writeback_interface;
     logic[XLEN-1:0] rd_data;
     instruction_id_t id;
 
-    modport writeback (output rd_addr, valid_write, rd_data, id);
-    modport unit (input rd_addr, valid_write, rd_data, id);
-
-endinterface
-
-
-interface inflight_queue_interface;   
-    logic new_issue;
-    inflight_queue_packet data_in;
+    logic[XLEN-1:0] rs1_data_in;
+    logic[XLEN-1:0] rs2_data_in;
+    logic forward_rs1;
+    logic forward_rs2;
     
-    logic wb_accepting_input;
-    logic[INFLIGHT_QUEUE_DEPTH-1:0] pop;
-    logic [$clog2(INFLIGHT_QUEUE_DEPTH)-1:0] id;
+    logic[XLEN-1:0] rs1_data_out;
+    logic[XLEN-1:0] rs2_data_out;
 
-    logic [INFLIGHT_QUEUE_DEPTH-1:0] valid;
-    inflight_queue_packet[INFLIGHT_QUEUE_DEPTH-1:0] data_out;
-
-    modport queue (input new_issue, data_in, wb_accepting_input, pop, output valid, data_out);
-    modport decode (output new_issue, data_in);
-    modport wb (input new_issue, data_in, valid, data_out, output wb_accepting_input, pop);
+    modport writeback (output rd_addr, valid_write, rd_data, id, rs1_data_out, rs2_data_out, input rs1_data_in, rs2_data_in, forward_rs1, forward_rs2);
+    modport unit (input rd_addr, valid_write, rd_data, id, rs1_data_out, rs2_data_out, output rs1_data_in, rs2_data_in, forward_rs1, forward_rs2);
 
 endinterface
 
 
-interface id_generator_interface;
-    logic complete;
-    instruction_id_t complete_id;
-
-    logic advance;
+interface tracking_interface;
     instruction_id_t issue_id;
-    logic id_avaliable;
+    logic id_available;
+    
+    inflight_instruction_packet inflight_packet;
+    logic issued;
 
-    modport generator (input complete, complete_id, advance, output issue_id, id_avaliable);
-    modport decode (input issue_id, id_avaliable, output advance);
-    modport wb (output complete, complete_id);
-
+    modport decode (input issue_id, id_available, output inflight_packet, issued);
+    modport wb (output issue_id, id_available, input inflight_packet, issued);
 endinterface
+
 
 interface instruction_buffer_interface;
     logic push;

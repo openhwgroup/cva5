@@ -105,7 +105,9 @@ module ver_top # (
         input logic [31:0] rd_data,
         input logic [L2_SUB_ID_W-1:0] rd_sub_id,
         input logic rd_data_valid,
-        output logic rd_data_ack
+        output logic rd_data_ack,
+
+        output logic placer_rseed
         );
 
     logic [3:0] WRITE_COUNTER_MAX;
@@ -158,7 +160,7 @@ module ver_top # (
     logic [31:0] dec_instruction;
     logic [31:0] dec_pc_debug;
 
-    parameter SCRATCH_MEM_KB = 16;
+    parameter SCRATCH_MEM_KB = 128;
     parameter MEM_LINES = (SCRATCH_MEM_KB*1024)/4;
 
     logic [31:0] if2_pc_debug;
@@ -227,10 +229,10 @@ module ver_top # (
 
     taiga cpu(.*, .l2(l2[0]));
 
-   // always_ff @(posedge clk) begin
-     //   dec_instruction_r <= dec_instruction;
-    //    dec_pc_debug_r <= dec_pc_debug;
-    //end
+    always_ff @(posedge clk) begin
+       dec_instruction_r <= dec_instruction;
+        dec_pc_debug_r <= dec_pc_debug;
+    end
 
     //read channel
     logic[3:0] read_counter;

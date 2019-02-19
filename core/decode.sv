@@ -31,11 +31,8 @@ module decode(
 
         branch_table_interface.decode bt,
         instruction_buffer_interface.decode ib,
-
-        id_generator_interface.decode id_gen,
-
+        tracking_interface.decode ti,
         register_file_decode_interface.decode rf_decode,
-        inflight_queue_interface.decode iq,
 
         output alu_inputs_t alu_inputs,
         output load_store_inputs_t ls_inputs,
@@ -144,11 +141,11 @@ module decode(
     assign rf_decode.rs2_addr  =  rs2_addr;
     assign rf_decode.future_rd_addr  =  future_rd_addr;
     assign rf_decode.instruction_issued = advance & uses_rd & ~ib.data_out.rd_zero;
-    assign rf_decode.id = id_gen.issue_id;
+    assign rf_decode.id = ti.issue_id;
     assign rf_decode.uses_rs1 = uses_rs1;
     assign rf_decode.uses_rs2 = uses_rs2;
+    //////////////////////////
 
-    //Issue logic
 
     always_comb begin
         illegal_instruction = !(opcode inside {LUI, AUIPC, JAL, JALR, BRANCH, LOAD, STORE, ARITH, ARITH_IMM, FENCE, AMO, SYSTEM});
@@ -164,19 +161,17 @@ module decode(
         end
     end
 
-    one_hot_to_integer #(NUM_WB_UNITS) iq_id (.*, .one_hot(new_request[NUM_EX_UNITS-2:0]), .int_out(iq.data_in.unit_id));
-    assign iq.data_in.id = id_gen.issue_id;
-    assign iq.data_in.rd_addr = future_rd_addr;
-    assign iq.data_in.rd_addr_nzero = ~ib.data_out.rd_zero;
-
-    assign iq.new_issue = advance & uses_rd;
-
-    assign id_gen.advance = advance & uses_rd;
+    //TrackingInterface
+    assign ti.inflight_packet.unit_id = new_request[NUM_EX_UNITS-2:0];
+    assign ti.inflight_packet.rd_addr = future_rd_addr;
+    assign ti.inflight_packet.rd_addr_nzero = ~ib.data_out.rd_zero;
+    assign ti.issued = advance & uses_rd;
+    //////////////////////////
 
     assign bt.dec_pc = ib.data_out.pc;
     assign bt.dec_pc_valid = ib.valid;
 
-    assign issue_valid =  ib.valid & id_gen.id_avaliable & ~flush & ~gc_issue_hold & ~gc_issue_flush;
+    assign issue_valid =  ib.valid & ti.id_available & ~gc_issue_hold & ~gc_issue_flush;
     assign operands_ready =  ~rf_decode.rs1_conflict & ~rf_decode.rs2_conflict;
 
     assign load_store_forward = ((opcode_trim == STORE_T) && last_ls_request_was_load && (rs2_addr == load_rd));
@@ -209,19 +204,19 @@ module decode(
             assign issue_ready[DIV_UNIT_EX_ID] = new_request[DIV_UNIT_EX_ID] & div_ex.ready;
     endgenerate
 
-    assign issue[BRANCH_UNIT_EX_ID] = issue_valid & operands_ready & issue_ready[BRANCH_UNIT_EX_ID];
-    assign issue[ALU_UNIT_EX_ID] = issue_valid & operands_ready & issue_ready[ALU_UNIT_EX_ID];
-    assign issue[LS_UNIT_EX_ID] = issue_valid & load_store_operands_ready & issue_ready[LS_UNIT_EX_ID];
-    assign issue[CSR_UNIT_EX_ID] = issue_valid & operands_ready &  issue_ready[CSR_UNIT_EX_ID];
-    assign issue[GC_UNIT_EX_ID] = issue_valid & operands_ready &  issue_ready[GC_UNIT_EX_ID];
+    assign issue[BRANCH_UNIT_EX_ID] = ~flush & issue_valid & operands_ready & issue_ready[BRANCH_UNIT_EX_ID];
+    assign issue[ALU_UNIT_EX_ID] = ~flush & issue_valid & operands_ready & issue_ready[ALU_UNIT_EX_ID];
+    assign issue[LS_UNIT_EX_ID] = ~flush & issue_valid & load_store_operands_ready & issue_ready[LS_UNIT_EX_ID];
+    assign issue[CSR_UNIT_EX_ID] = ~flush & issue_valid & operands_ready &  issue_ready[CSR_UNIT_EX_ID];
+    assign issue[GC_UNIT_EX_ID] = ~flush & issue_valid & operands_ready &  issue_ready[GC_UNIT_EX_ID];
     generate if (USE_MUL)
-            assign issue[MUL_UNIT_EX_ID] = issue_valid & operands_ready & issue_ready[MUL_UNIT_EX_ID];
+            assign issue[MUL_UNIT_EX_ID] = ~flush & issue_valid & operands_ready & issue_ready[MUL_UNIT_EX_ID];
     endgenerate
     generate if (USE_DIV)
-            assign issue[DIV_UNIT_EX_ID] = issue_valid & operands_ready & issue_ready[DIV_UNIT_EX_ID];
+            assign issue[DIV_UNIT_EX_ID] = ~flush & issue_valid & operands_ready & issue_ready[DIV_UNIT_EX_ID];
     endgenerate
 
-    assign advance =  (|issue_ready) & issue_valid & load_store_operands_ready;
+    assign advance =  ~flush & (|issue_ready) & issue_valid & load_store_operands_ready;
 
     assign ib.pop = advance;
     assign dec_advance = advance;
@@ -290,7 +285,7 @@ module decode(
     assign alu_sub = opcode[2] ? 0 : ((fn3 inside {SLTU_fn3, SLT_fn3}) || ((fn3 == ADD_SUB_fn3) && ib.data_out.instruction[30]) && opcode[5]);
 
     always_ff @(posedge clk) begin
-        if (issue[ALU_UNIT_EX_ID]) begin
+        if (issue_ready[ALU_UNIT_EX_ID]) begin
             alu_inputs.in1 <= {(alu_rs1_data[XLEN-1] & ~fn3[0]), alu_rs1_data};//(fn3[0]  is SLTU_fn3);
             alu_inputs.in2 <= {(alu_rs2_data[XLEN-1] & ~fn3[0]), alu_rs2_data};
             alu_inputs.shifter_in <= fn3[2] ? rf_decode.rs1_data : left_shift_in;
@@ -323,7 +318,7 @@ module decode(
     assign ls_inputs.load = (opcode_trim inside {LOAD_T, AMO_T}) && (amo_type != AMO_SC); //LR and AMO_ops perform a read operation as well
     assign ls_inputs.store = (opcode_trim == STORE_T);
     assign ls_inputs.load_store_forward = (opcode_trim == STORE_T) && rf_decode.rs2_conflict;
-    assign ls_inputs.id = id_gen.issue_id;
+    assign ls_inputs.instruction_id = ti.issue_id;
 
     always_ff @(posedge clk) begin
         if (issue[LS_UNIT_EX_ID])
@@ -366,7 +361,7 @@ module decode(
     //----------------------------------------------------------------------------------
     assign csr_ex.new_request_dec = issue[CSR_UNIT_EX_ID];
     always_ff @(posedge clk) begin
-        if (issue[CSR_UNIT_EX_ID]) begin
+        if (issue_ready[CSR_UNIT_EX_ID]) begin
             csr_inputs.rs1 <= csr_imm_op ? {27'b0, rs1_addr} : rf_decode.rs1_data; //immediate mode or rs1_addr reg
             csr_inputs.csr_addr <= ib.data_out.instruction[31:20];
             csr_inputs.csr_op <= fn3[1:0];
@@ -421,6 +416,7 @@ module decode(
             assign div_inputs.rs2 = rf_decode.rs2_data;
             assign div_inputs.op = fn3[1:0];
             assign div_inputs.reuse_result = prev_div_result_valid & current_op_resuses_rs1_rs2;
+            assign div_inputs.instruction_id = ti.issue_id;
         end
     endgenerate
     //----------------------------------------------------------------------------------
@@ -432,16 +428,24 @@ module decode(
         gc_ex.new_request <= issue[GC_UNIT_EX_ID];
     end
 
+    assign branch_ex.instruction_id = ti.issue_id;
+    assign alu_ex.instruction_id = ti.issue_id;
+    //Load Store unit stores ID in input FIFO
+    assign csr_ex.instruction_id = ti.issue_id;
+    assign gc_ex.instruction_id = ti.issue_id;
+
     generate if (USE_MUL)
             always_ff @(posedge clk) begin
                 mul_ex.new_request <= issue[MUL_UNIT_EX_ID];
             end
+        assign mul_ex.instruction_id = ti.issue_id;
         assign mul_ex.possible_issue = new_request[MUL_UNIT_EX_ID];
     endgenerate
     generate if (USE_DIV)
             always_ff @(posedge clk) begin
                 div_ex.new_request <= issue[DIV_UNIT_EX_ID];
             end
+        //DIV unit stores ID in input FIFO
         assign div_ex.possible_issue = new_request[DIV_UNIT_EX_ID];
     endgenerate
 

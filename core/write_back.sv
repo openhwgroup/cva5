@@ -1,5 +1,5 @@
 /*
- * Copyright © 2017, 2018 Eric Matthews,  Lesley Shannon
+ * Copyright © 2017, 2018, 2019 Eric Matthews,  Lesley Shannon
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,123 +31,175 @@ module write_back(
         input logic gc_supress_writeback,
         unit_writeback_interface.writeback unit_wb[NUM_WB_UNITS-1:0],
         register_file_writeback_interface.writeback rf_wb,
-        inflight_queue_interface.wb iq,
-        id_generator_interface.wb id_gen,
+        tracking_interface.wb ti,
         output logic instruction_complete
         );
+    //////////////////////////////////////
 
-    logic [NUM_WB_UNITS-1:0] done_on_first_cycle;
-    logic [NUM_WB_UNITS-1:0] done_next_cycle;
+    //Inflight packets
+    inflight_instruction_packet packet_table [MAX_INFLIGHT_COUNT-1:0];
 
-    logic queue_selected_unit_done_next_cycle, selected_unit_done_next_cycle;
-    logic entry_found;
-
+    //aliases for write-back-interface signals
+    logic [NUM_WB_UNITS-1:0] unit_done_next_cycle;
+    instruction_id_t unit_instruction_id [NUM_WB_UNITS-1:0];
+    logic [XLEN-1:0] unit_rd [NUM_WB_UNITS-1:0];
     logic [NUM_WB_UNITS-1:0] accepted;
-    logic [NUM_WB_UNITS-1:0] new_accepted;
+    /////
 
-    logic [XLEN-1:0] rd [NUM_WB_UNITS-1:0];
+    instruction_id_t issue_id, retired_id, retired_id_r;
+    inflight_instruction_packet retired_instruction_packet;
 
-    logic [4:0] queue_rd_addr, rd_addr, rd_addr_r;
-    logic queue_rd_addr_not_zero, rd_addr_not_zero;
-    logic [WB_UNITS_WIDTH-1:0] queue_unit_id, unit_id, unit_id_r;
-    instruction_id_t queue_issue_id, issue_id, issue_id_r;
-    logic[$clog2(INFLIGHT_QUEUE_DEPTH)-1:0] iq_index;
-    logic[$clog2(INFLIGHT_QUEUE_DEPTH)-1:0] iq_index_oldest;
-    logic[$clog2(INFLIGHT_QUEUE_DEPTH)-1:0] iq_index_oldest_done;
+    instruction_id_t id_ordering [MAX_INFLIGHT_COUNT-1:0];
 
-    logic [INFLIGHT_QUEUE_DEPTH-1:0] done_array;
+    logic [MAX_INFLIGHT_COUNT-1:0] id_done;
+    logic [MAX_INFLIGHT_COUNT-1:0] id_done_next;
+    logic [MAX_INFLIGHT_COUNT-1:0] id_done_r;
+
+    logic [MAX_INFLIGHT_COUNT-1:0] shift_bits;
+
+    logic retired, retired_r;
+    logic first_cycle_completion_abort;
+    //////////////////////////////////////////
 
     //Re-assigning interface inputs to array types so that they can be dynamically indexed
     genvar i;
     generate
         for (i=0; i< NUM_WB_UNITS; i++) begin : interface_to_array_g
-            assign done_next_cycle[i] = unit_wb[i].done_next_cycle;
-            assign done_on_first_cycle[i] = unit_wb[i].done_on_first_cycle;
-            assign rd[i] = unit_wb[i].rd;
+            assign unit_done_next_cycle[i] = unit_wb[i].done_next_cycle;
+            assign unit_instruction_id[i] = unit_wb[i].instruction_id;
+            assign unit_rd[i] = unit_wb[i].rd;
             assign unit_wb[i].accepted = accepted[i];
         end
     endgenerate
 
-    //Unit output selection.  Oldest unit with instruction complete if in out-of-order mode, otherwise oldest unit
-    //Done signals are same as early_done for all but ALU and Branch units.  If an ALU or BRANCH op is in the queue
-    //it is already complete thus their done signals are registered to remove the combinational path through
-    //issue logic.
-    always_comb begin
-        iq_index_oldest = 0;
-        iq_index_oldest_done = 0;
+    //ID stack.  id_ordering[0] is the next ID to be issued.  Entries filled from
+    //MAX_INFLIGHT_COUNT-1 downwards.
+    id_stack #(.STACK_DEPTH(MAX_INFLIGHT_COUNT)) instruction_ordering_stack (
+            .clk(clk),
+            .rst(rst),
+            .issued(ti.issued),
+            .retired(retired),
+            .shift_bits(shift_bits),
+            .retired_id(retired_id),
+            .ordering(id_ordering),
+            .id_available(ti.id_available),
+            .next_id(issue_id)
+        );
 
-        for (int i=0; i<INFLIGHT_QUEUE_DEPTH; i++) begin
-            done_array[i] = iq.valid[i] & done_next_cycle[iq.data_out[i].unit_id];
+    assign ti.issue_id = issue_id;
 
-            if (iq.valid[i])
-                iq_index_oldest = i;
-
-            if (done_array[i])
-                iq_index_oldest_done = i;
-        end
-
-        entry_found = inorder ? |iq.valid : |done_array;
-        iq_index = inorder ? iq_index_oldest : iq_index_oldest_done;
-        queue_selected_unit_done_next_cycle = inorder ? done_array[iq_index_oldest] : |done_array;
-
-        iq.pop = 0;
-        iq.pop[iq_index] = queue_selected_unit_done_next_cycle;
-
-        queue_unit_id = iq.data_out[iq_index].unit_id;
-        queue_issue_id = iq.data_out[iq_index].id;
-        queue_rd_addr = iq.data_out[iq_index].rd_addr;
-        queue_rd_addr_not_zero = iq.data_out[iq_index].rd_addr_nzero;
-    end
-
-    always_comb begin
-        //No valid completing instructions in queue, check for new issues.
-        selected_unit_done_next_cycle = queue_selected_unit_done_next_cycle |
-            (iq.new_issue & done_on_first_cycle[iq.data_in.unit_id]);
-
-        iq.wb_accepting_input = ~entry_found & iq.new_issue & done_on_first_cycle[iq.data_in.unit_id];
-
-        if (entry_found) begin
-            unit_id = queue_unit_id;
-            issue_id = queue_issue_id;
-            rd_addr = queue_rd_addr;
-            rd_addr_not_zero = queue_rd_addr_not_zero;
-        end
-        else begin
-            unit_id = iq.data_in.unit_id;
-            issue_id = iq.data_in.id;
-            rd_addr = iq.data_in.rd_addr;
-            rd_addr_not_zero = iq.data_in.rd_addr_nzero;
+    //Inflight Instruction ID table
+    //Stores unit id (in one-hot encoding), rd_addr and whether rd_addr is zero
+    initial begin
+        foreach (packet_table[i]) begin
+            packet_table[i] = '0;
         end
     end
 
-    always_ff @(posedge clk) begin
-        instruction_complete <= selected_unit_done_next_cycle & ~gc_supress_writeback;
+    always_ff @ (posedge clk) begin
+        if (ti.issued)
+            packet_table[issue_id] <= ti.inflight_packet;
+    end
+    //////////////////////
+
+
+    //Or together all unit done signals for the same ID.
+    always_comb begin
+        id_done_next = 0;
+        for (int i=0; i<MAX_INFLIGHT_COUNT; i++) begin
+            for (int j=0; j<NUM_WB_UNITS; j++) begin
+                id_done_next[i] |= (unit_instruction_id[j] == i && unit_done_next_cycle[j])  && ~(ti.id_available && issue_id == i && ~ti.issued);
+            end
+        end
     end
 
-    always_ff @(posedge clk) begin
-        unit_id_r <= unit_id;
-        issue_id_r <= issue_id;
-        rd_addr_r <= rd_addr;
+    //If not servicing a unit on the next cycle, save its done status
+    always_ff @ (posedge clk) begin
+        for (int i=0; i<MAX_INFLIGHT_COUNT; i++) begin
+            if (rst || (retired && retired_id == i))
+                id_done_r[i] = 0;
+            else if (id_done_next[i])
+                id_done_r[i] = 1;
+        end
     end
 
-    assign rf_wb.rd_addr = rd_addr_r;
-    assign rf_wb.id = issue_id_r;
-    always_ff @(posedge clk) begin
-        rf_wb.valid_write <= selected_unit_done_next_cycle & rd_addr_not_zero & ~gc_supress_writeback;
+    //ID done is a combination of newly completed and already completed instructions
+    always_comb begin
+        for (int i=0; i<MAX_INFLIGHT_COUNT; i++) begin
+            id_done[i] = id_done_r[i] | id_done_next[i];
+        end
     end
 
-    assign rf_wb.rd_data = rd[unit_id_r];
+    //Single cycle units, such as the branch unit and alu unit issue speculative done signals
+    //that do not consider whether the instruction is actually issued (but do insure that there
+    //is a valid ID available).  If this occurs, issue_id will be set as done,
+    //but no instruction is issued.  In which case we prevent the retired signal from being set.
+    logic [MAX_INFLIGHT_COUNT-1:0] id_done_m_first;
+    always_comb begin
+        id_done_m_first = '1;
+        id_done_m_first[issue_id] = 0;
+    end
+
+    //assign first_cycle_completion_abort = (id_done_next[issue_id] & ~ti.issued & ~|(id_done_m_first & id_done));
+    assign retired = (inorder ? id_done[MAX_INFLIGHT_COUNT-1] : |id_done);
+    always_ff @(posedge clk) begin
+        retired_r <= retired;
+        retired_id_r <= retired_id;
+    end
+
+    //Stack ordered from newest to oldest issued instruction
+    //Find oldest done.
+    logic [MAX_INFLIGHT_COUNT-1:0] id_done_ordered;
+    always_comb begin
+        foreach (id_done[i]) begin
+            id_done_ordered[i] = id_done[id_ordering[i]];
+        end
+
+        //Lowest entry always shifted, each older entry shifts all below
+        shift_bits = 0;
+        shift_bits[0] = 1;
+        for (int i=1; i<MAX_INFLIGHT_COUNT; i++) begin
+            if (id_done_ordered[i])
+                shift_bits |= (2**(i+1)-1);
+        end
+
+        retired_id = id_ordering[1];
+        for (int i=2; i<MAX_INFLIGHT_COUNT; i++) begin
+            if (id_done_ordered[i]) begin
+                retired_id = id_ordering[i];
+            end
+        end
+        if (~|id_done_ordered[MAX_INFLIGHT_COUNT-1:1])
+            retired_id = issue_id;
+
+
+
+    end
+
+    //Read table for unit ID (acks, and rd_addr for register file)
+    assign retired_instruction_packet = packet_table[retired_id_r];
+    assign accepted = retired_instruction_packet.unit_id & {NUM_WB_UNITS{retired_r}};
+
+    assign instruction_complete = retired_r;
+
+    //Register file interaction
+    assign rf_wb.rd_addr = retired_instruction_packet.rd_addr;
+    assign rf_wb.id = retired_id_r;
+    assign rf_wb.valid_write = retired_r & retired_instruction_packet.rd_addr_nzero & ~gc_supress_writeback;
 
     always_comb begin
-        new_accepted = 0;
-        new_accepted[unit_id] = selected_unit_done_next_cycle;
+        rf_wb.rd_data = 0;
+        for (int i=0; i< NUM_WB_UNITS; i++) begin
+            rf_wb.rd_data |= unit_rd[i] & {32{retired_instruction_packet.unit_id[i]}};
+        end
     end
 
-    always_ff @(posedge clk) begin
-        accepted <= new_accepted;
-    end
+    assign rf_wb.rs1_data_out = ({32{rf_wb.forward_rs1}}  & rf_wb.rd_data) | rf_wb.rs1_data_in;
+    assign rf_wb.rs2_data_out = ({32{rf_wb.forward_rs2}}  & rf_wb.rd_data) | rf_wb.rs2_data_in;
 
-    //ID generator signals
-    assign id_gen.complete = instruction_complete;
-    assign id_gen.complete_id = issue_id_r;
+    ////////////////////////////////////////////////////
+    //Assertions
+    //check if multiple done signals for the same ID
+
+
 endmodule

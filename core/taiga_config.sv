@@ -44,12 +44,13 @@ package taiga_config;
         RADIX_4,
         RADIX_4_EARLY_TERMINATE,
         RADIX_8,
+        RADIX_8_EARLY_TERMINATE,
         RADIX_16,
         QUICK_NAIVE,
         QUICK_CLZ,
         QUICK_CLZ_MK2
     } div_type;
-    parameter div_type DIV_ALGORITHM = QUICK_CLZ_MK2;
+    parameter div_type DIV_ALGORITHM = QUICK_CLZ;
 
     parameter USE_AMO = 0;
 
@@ -59,7 +60,7 @@ package taiga_config;
 
     parameter LS_UNIT_EX_ID = 0;//non-constant done signals
     parameter DIV_UNIT_EX_ID = USE_DIV;//non-constant done signals
-    parameter MUL_UNIT_EX_ID = DIV_UNIT_EX_ID + USE_MUL;//constant done signal
+    parameter MUL_UNIT_EX_ID = DIV_UNIT_EX_ID + USE_MUL;//non-constant done signals
     parameter CSR_UNIT_EX_ID = MUL_UNIT_EX_ID + 1;//constant done signals
     parameter ALU_UNIT_EX_ID = CSR_UNIT_EX_ID + 1;//constant done signals
     parameter BRANCH_UNIT_EX_ID = ALU_UNIT_EX_ID + 1;//constant done signals
@@ -73,12 +74,12 @@ package taiga_config;
 
     parameter LS_UNIT_WB_ID = 0;//non-constant done signals
     parameter DIV_UNIT_WB_ID = USE_DIV;//non-constant done signals
-    parameter MUL_UNIT_WB_ID = DIV_UNIT_WB_ID + USE_MUL;//constant done signals
+    parameter MUL_UNIT_WB_ID = DIV_UNIT_WB_ID + USE_MUL;//non-constant done signals
     parameter CSR_UNIT_WB_ID = MUL_UNIT_WB_ID + 1;//constant done signals
     parameter ALU_UNIT_WB_ID = CSR_UNIT_WB_ID + 1;//constant done signals
     parameter BRANCH_UNIT_WB_ID = ALU_UNIT_WB_ID + 1;//constant done signals
 
-    parameter INFLIGHT_QUEUE_DEPTH = 4;
+    parameter MAX_INFLIGHT_COUNT = 4;
     parameter FETCH_BUFFER_DEPTH = 4;
 
     parameter LS_INPUT_BUFFER_DEPTH = 4;
@@ -139,10 +140,10 @@ package taiga_config;
     parameter ITLB_WAYS = 2;
     parameter ITLB_DEPTH = 32;
 
-    parameter L1_CONNECTIONS = USE_ICACHE + USE_DCACHE + USE_MMU*2;
+    parameter L1_CONNECTIONS = 4;//USE_ICACHE + USE_DCACHE + USE_MMU*2;
     parameter L1_DCACHE_ID = 0;
-    parameter L1_DMMU_ID = USE_MMU;
-    parameter L1_ICACHE_ID = USE_MMU + USE_DCACHE;
-    parameter L1_IMMU_ID = USE_MMU + USE_DCACHE + USE_ICACHE;
+    parameter L1_DMMU_ID = 1;//USE_MMU;
+    parameter L1_ICACHE_ID = 2;//USE_MMU + USE_DCACHE;
+    parameter L1_IMMU_ID = 3;//USE_MMU + USE_DCACHE + USE_ICACHE;
 
 endpackage

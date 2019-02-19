@@ -33,7 +33,7 @@ module register_file(
         );
 
     (* ramstyle = "MLAB, no_rw_check" *) logic [XLEN-1:0] register [31:0];
-    (* ramstyle = "MLAB, no_rw_check" *) logic  [$clog2(INFLIGHT_QUEUE_DEPTH)-1:0] in_use_by [31:0];
+    (* ramstyle = "MLAB, no_rw_check" *) instruction_id_t in_use_by [31:0];
 
     logic rs1_inuse;
     logic rs2_inuse;
@@ -42,7 +42,7 @@ module register_file(
     logic rs2_feedforward;
 
     logic in_use_match;
-    logic [$clog2(INFLIGHT_QUEUE_DEPTH)-1:0] in_use_by_id;
+    instruction_id_t in_use_by_id;
 
     //////////////////////////////////////////
     //Assign zero to r0 and initialize all registers to zero
@@ -81,8 +81,13 @@ module register_file(
     assign rs1_feedforward = ({2'b11, in_use_by_id, rf_decode.rs1_addr} == {rf_decode.uses_rs1, rf_wb.valid_write, rf_wb.id, rf_wb.rd_addr});
     assign rs2_feedforward = ({2'b11, in_use_by_id, rf_decode.rs2_addr} == {rf_decode.uses_rs2, rf_wb.valid_write, rf_wb.id, rf_wb.rd_addr});
 
-    assign rf_decode.rs1_data = rs1_feedforward ? rf_wb.rd_data : register[rf_decode.rs1_addr];
-    assign rf_decode.rs2_data = rs2_feedforward ? rf_wb.rd_data : register[rf_decode.rs2_addr];
+    assign rf_wb.forward_rs1 = rs1_feedforward;
+    assign rf_wb.forward_rs2 = rs2_feedforward;
+    assign rf_wb.rs1_data_in = {32{~rs1_feedforward}} & register[rf_decode.rs1_addr];
+    assign rf_wb.rs2_data_in = {32{~rs2_feedforward}} & register[rf_decode.rs2_addr];
+
+    assign rf_decode.rs1_data = rf_wb.rs1_data_out;//rs1_feedforward ? rf_wb.rd_data : register[rf_decode.rs1_addr];
+    assign rf_decode.rs2_data = rf_wb.rs2_data_out;//rs2_feedforward ? rf_wb.rd_data : register[rf_decode.rs2_addr];
 
     assign rf_decode.rs1_conflict = rs1_inuse & ~rs1_feedforward;
     assign rf_decode.rs2_conflict = rs2_inuse & ~rs2_feedforward;

@@ -109,6 +109,7 @@ module load_store_unit (
     typedef struct packed{
         logic [2:0] fn3;
         logic [1:0] byte_addr;
+        instruction_id_t instruction_id;
     } load_attributes_t;
     load_attributes_t  load_attributes_in, stage2_attr;
     load_store_inputs_t  stage1;
@@ -289,6 +290,8 @@ module load_store_unit (
         ) attributes_fifo (.fifo(load_attributes), .*);
     assign load_attributes_in.fn3 = stage1.fn3;
     assign load_attributes_in.byte_addr = virtual_address[1:0];
+    assign load_attributes_in.instruction_id = stage1.instruction_id;
+
     assign load_attributes.data_in = load_attributes_in;
 
     assign load_attributes.push = issue_request & stage1.load;
@@ -373,16 +376,22 @@ module load_store_unit (
     /*********************************
      *  Output FIFO
      *********************************/
-    logic[2:0] valid_chain;
+    localparam LS_OUTPUT_FIFO_DEPTH = 2;
+    logic[LS_OUTPUT_FIFO_DEPTH:0] valid_chain;
 
-    //Occupancy Tracking
     always_ff @ (posedge clk) begin
-        if (rst)
-            valid_chain <= 1;
-        else if (load_complete & ~ls_wb.accepted)
-            valid_chain <= {valid_chain[2-1:0], 1'b0};
-        else if (ls_wb.accepted & ~load_complete)
-            valid_chain <= {1'b0, valid_chain[2:1]};
+        if (rst) begin
+            valid_chain[0] <= 1;
+            valid_chain[LS_OUTPUT_FIFO_DEPTH:1] <= 0;
+        end
+        else begin
+            case({load_complete,ls_wb.accepted})
+                0 : valid_chain <= valid_chain;
+                1 : valid_chain <= {1'b0, valid_chain[LS_OUTPUT_FIFO_DEPTH:1]};
+                2 : valid_chain <= {valid_chain[LS_OUTPUT_FIFO_DEPTH-1:0], 1'b0};
+                3 : valid_chain <= valid_chain;
+            endcase
+        end
     end
 
     always_ff @ (posedge clk) begin
@@ -393,8 +402,9 @@ module load_store_unit (
     end
 
     assign ls_wb.rd = valid_chain[2] ? previous_load_r : previous_load;
-    assign ls_wb.done_next_cycle = load_complete | valid_chain[2] | (valid_chain[1] & ~ls_wb.accepted);
-    assign ls_wb.done_on_first_cycle = 0;
+
+    assign ls_wb.done_next_cycle = load_complete;
+    assign ls_wb.instruction_id = stage2_attr.instruction_id;
     /*********************************************/
 
 endmodule

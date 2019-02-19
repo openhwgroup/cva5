@@ -97,6 +97,7 @@ module taiga_full_simulation ();
 
     logic clk;
     logic rst;
+    logic placer_rseed;
 
 
     //*****************************
