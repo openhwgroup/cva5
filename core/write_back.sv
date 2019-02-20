@@ -104,6 +104,12 @@ module write_back(
 
 
     //Or together all unit done signals for the same ID.
+    //Inclusion of ti.issue results in id_done_r being the longest path.
+    //TODO: possible fix, remove ti.issue from here.  Consequence: on next cycle,
+    //a single cycle unit (ALU/BRANCH) will be marked falsely as done, however,
+    //the oldest instruction will still have been selected (if any are done).  As such,
+    //this can be mitigated by clearing the done_r on the next cycle / masking for
+    //the next cycle comparison purposes.
     always_comb begin
         id_done_next = 0;
         for (int i=0; i<MAX_INFLIGHT_COUNT; i++) begin
