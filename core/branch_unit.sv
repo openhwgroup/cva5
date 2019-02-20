@@ -47,13 +47,11 @@ module branch_unit(
 
     logic signed [32:0] rs1_sext;
     logic signed [32:0] rs2_sext;
+    logic signed [30:0] sub_toss;
 
     logic result;
-    logic equal;
-    logic lessthan;
+    logic result_ex;
 
-    logic equal_ex;
-    logic lessthan_ex;
     logic [2:0] fn3_ex;
     logic [31:0] rd_ex;
     logic jump_ex;
@@ -69,26 +67,17 @@ module branch_unit(
 
     //implementation
     ////////////////////////////////////////////////////
-    assign equal = (branch_inputs.rs1 == branch_inputs.rs2);
-    assign rs1_sext = signed'({branch_inputs.rs1[XLEN-1] & branch_inputs.use_signed, branch_inputs.rs1});
-    assign rs2_sext = signed'({branch_inputs.rs2[XLEN-1] & branch_inputs.use_signed, branch_inputs.rs2});
 
-    assign lessthan = rs1_sext < rs2_sext;
 
-    always_comb begin
-        case (fn3_ex) // <-- 010, 011 unused
-            BEQ_fn3 : result = equal_ex;
-            BNE_fn3 : result = ~equal_ex;
-            3'b010 : result = equal_ex;
-            3'b011 : result = ~equal_ex;
-            BLT_fn3 : result = lessthan_ex;
-            BGE_fn3 : result = ~lessthan_ex;
-            BLTU_fn3 : result = lessthan_ex;
-            BGEU_fn3 : result = ~lessthan_ex;
-        endcase
-    end
+    branch_comparator bc (
+            .use_signed(branch_inputs.use_signed),
+            .less_than(branch_inputs.fn3[2]),
+            .a(branch_inputs.rs1),
+            .b(branch_inputs.rs2),
+            .result(result)
+            );
 
-    assign  bt.branch_taken = (~jump_ex & result) | jump_ex;
+    assign  bt.branch_taken = (~jump_ex & (result_ex ^ fn3_ex[0])) | jump_ex;
 
 
     assign jal_imm = {branch_inputs.instruction[31], branch_inputs.instruction[19:12], branch_inputs.instruction[20], branch_inputs.instruction[30:21]};
@@ -118,8 +107,7 @@ module branch_unit(
 
     always_ff @(posedge clk) begin
         fn3_ex <= branch_inputs.fn3;
-        equal_ex <= equal;
-        lessthan_ex <= lessthan;
+        result_ex <= result;
         bt.ex_pc <= branch_inputs.dec_pc;
         jump_ex <= (branch_inputs.jal | branch_inputs.jalr);
         bt.jump_pc[31:1] <= jump_pc_dec[31:1];

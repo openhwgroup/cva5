@@ -8,6 +8,7 @@
 
 ../../core/interfaces.sv  
 ../../core/gc_unit.sv  
+../../core/branch_comparator.sv
 ../../core/branch_unit.sv  
 
 ../../core/barrel_shifter.sv  
