@@ -1,6 +1,6 @@
 #include <stdlib.h>
 #include <iostream>
-#include "./obj_dir/Vver_top.h"
+#include "Vver_top.h"
 #include "verilated.h"
 #include "verilated_vcd_c.h"
 

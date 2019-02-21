@@ -2,7 +2,7 @@
 #include <iostream>
 #include <random>
 
-#include "./obj_dir/Vid_stack.h"
+#include "Vid_stack.h"
 #include "verilated.h"
 #include "verilated_vcd_c.h"
 
