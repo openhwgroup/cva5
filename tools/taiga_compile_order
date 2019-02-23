@@ -84,7 +84,6 @@
 ../core/decode.sv  
 
 ../core/inuse.sv 
-../core/forwarding_compare.sv 
 ../core/register_file.sv  
 
 ../core/id_stack.sv  
