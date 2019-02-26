@@ -161,6 +161,12 @@ module branch_unit(
 
     assign branch_wb.done_next_cycle = branch_ex.possible_issue & branch_inputs.uses_rd;
     assign branch_wb.instruction_id = branch_ex.instruction_id;
+    ////////////////////////////////////////////////////
+    //Assertions
+    always_ff @ (posedge clk) begin
+        assert (~branch_wb.accepted | (branch_wb.accepted & done)) else $error("Spurious ack for Branch Unit");
+    end
+
     /*********************************************/
 
     //---------- Simulation counters

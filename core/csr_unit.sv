@@ -435,5 +435,10 @@ module csr_unit (
         end
     end
 
+    ////////////////////////////////////////////////////
+    //Assertions
+    always_ff @ (posedge clk) begin
+        assert (~csr_wb.accepted | (csr_wb.accepted & done)) else $error("Spurious ack for CSR Unit");
+    end
 
 endmodule

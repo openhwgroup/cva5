@@ -109,5 +109,8 @@ module mul_unit(
         mul_wb.instruction_id <= instruction_id_r;
     end
     ////////////////////////////////////////////////////
-
+    //Assertions
+    always_ff @ (posedge clk) begin
+        assert (~mul_wb.accepted | (mul_wb.accepted & valid[2])) else $error("Spurious ack for Mul Unit");
+    end
 endmodule

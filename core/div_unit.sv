@@ -140,5 +140,9 @@ module div_unit
 
     assign div_wb.done_next_cycle = div_done;
     assign div_wb.instruction_id = stage1.instruction_id;
-
+    ////////////////////////////////////////////////////
+    //Assertions
+    always_ff @ (posedge clk) begin
+        assert (~div_wb.accepted | (div_wb.accepted & done)) else $error("Spurious ack for Div Unit");
+    end
 endmodule

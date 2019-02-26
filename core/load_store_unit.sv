@@ -405,6 +405,9 @@ module load_store_unit (
 
     assign ls_wb.done_next_cycle = load_complete;
     assign ls_wb.instruction_id = stage2_attr.instruction_id;
-    /*********************************************/
-
+    ////////////////////////////////////////////////////
+    //Assertions
+    always_ff @ (posedge clk) begin
+        assert (~ls_wb.accepted | (ls_wb.accepted & ~valid_chain[0])) else $error("Spurious ack for LS Unit");
+    end
 endmodule

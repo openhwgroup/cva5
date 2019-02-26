@@ -97,5 +97,9 @@ module alu_unit(
     assign alu_wb.done_next_cycle = alu_ex.possible_issue;
     assign alu_wb.instruction_id = alu_ex.instruction_id;
     ////////////////////////////////////////////////////
+    //Assertions
+    always_ff @ (posedge clk) begin
+        assert (~alu_wb.accepted | (alu_wb.accepted & done)) else $error("Spurious ack for ALU");
+    end
 
 endmodule
