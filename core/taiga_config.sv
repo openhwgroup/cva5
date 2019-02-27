@@ -22,21 +22,34 @@
 
 package taiga_config;
 
+    ////////////////////////////////////////////////////
+    //Vendor Selection
     parameter FPGA_VENDOR = "xilinx"; //xilinx or intel
 
-    parameter XLEN = 32;
-    parameter ADDR_W = 32;
+
+    ////////////////////////////////////////////////////
+    //Privileged ISA Options
+
+    //Enable Machine level privilege spec
+    parameter ENABLE_M_MODE = 1;
+    //Enable Supervisor level privilege spec
+    parameter ENABLE_S_MODE = 1;
 
     parameter CPU_ID = 0;//32 bit value
-
     parameter bit[31:0] RESET_VEC = 32'h80000000;
-    parameter PAGE_ADDR_W = 12;
 
-    parameter TIMER_W = 33; //32 days @ 100MHz
+    //CSR counter width (33-64 bits): 48-bits --> 32 days @ 100MHz
+    parameter COUNTER_W = 48;
 
+
+    ////////////////////////////////////////////////////
+    //ISA Options
+
+    //Multiply and Divide Inclusion
     parameter USE_MUL = 1;
     parameter USE_DIV = 1;
 
+    //Division algorithm selection
     typedef enum {
         RADIX_2,
         RADIX_2_EARLY_TERMINATE,
@@ -52,42 +65,28 @@ package taiga_config;
     } div_type;
     parameter div_type DIV_ALGORITHM = QUICK_CLZ;
 
+    //Enable Atomic extension (cache operations only)
     parameter USE_AMO = 0;
 
-    //EX and WB ids must match if unit has a writeback interface
-    parameter NUM_EX_UNITS = 5 + USE_MUL + USE_DIV;
-    parameter EX_UNITS_WIDTH = $clog2(NUM_EX_UNITS);
 
-    parameter LS_UNIT_EX_ID = 0;//non-constant done signals
-    parameter DIV_UNIT_EX_ID = USE_DIV;//non-constant done signals
-    parameter MUL_UNIT_EX_ID = DIV_UNIT_EX_ID + USE_MUL;//non-constant done signals
-    parameter CSR_UNIT_EX_ID = MUL_UNIT_EX_ID + 1;//constant done signals
-    parameter ALU_UNIT_EX_ID = CSR_UNIT_EX_ID + 1;//constant done signals
-    parameter BRANCH_UNIT_EX_ID = ALU_UNIT_EX_ID + 1;//constant done signals
-    parameter GC_UNIT_EX_ID = BRANCH_UNIT_EX_ID + 1;//constant done signals
+    ////////////////////////////////////////////////////
+    //Memory Sources
+    //Must select at least one source for instruction and data interfaces
 
-
-    parameter NUM_WB_UNITS = 4 + USE_MUL + USE_DIV;
-    parameter WB_UNITS_WIDTH = $clog2(NUM_WB_UNITS);
-
-    typedef logic[WB_UNITS_WIDTH-1:0] unit_ids;
-
-    parameter LS_UNIT_WB_ID = 0;//non-constant done signals
-    parameter DIV_UNIT_WB_ID = USE_DIV;//non-constant done signals
-    parameter MUL_UNIT_WB_ID = DIV_UNIT_WB_ID + USE_MUL;//non-constant done signals
-    parameter CSR_UNIT_WB_ID = MUL_UNIT_WB_ID + 1;//constant done signals
-    parameter ALU_UNIT_WB_ID = CSR_UNIT_WB_ID + 1;//constant done signals
-    parameter BRANCH_UNIT_WB_ID = ALU_UNIT_WB_ID + 1;//constant done signals
-
-    parameter MAX_INFLIGHT_COUNT = 4;
-    parameter FETCH_BUFFER_DEPTH = 4;
-
-    parameter LS_INPUT_BUFFER_DEPTH = 4;
-    parameter DIV_INPUT_BUFFER_DEPTH = 2;
-
-    //Address space
+    //Local memory
     parameter USE_I_SCRATCH_MEM = 1;
     parameter USE_D_SCRATCH_MEM = 1;
+
+    //Peripheral bus
+    parameter USE_BUS = 1;
+
+    //Caches
+    parameter USE_DCACHE = 1;
+    parameter USE_ICACHE = 1;
+
+
+    ////////////////////////////////////////////////////
+    //Address space
     parameter SCRATCH_ADDR_L = 32'h80000000;
     parameter SCRATCH_ADDR_H = 32'h8000FFFF;
     parameter SCRATCH_BIT_CHECK = 4;
@@ -100,50 +99,88 @@ package taiga_config;
     parameter BUS_ADDR_H = 32'h6FFFFFFF;
     parameter BUS_BIT_CHECK = 4;
 
-    //Bus
-    parameter USE_BUS = 1;
+
+    ////////////////////////////////////////////////////
+    //Bus Options
     parameter C_M_AXI_ADDR_WIDTH = 32;
     parameter C_M_AXI_DATA_WIDTH = 32;
 
-    parameter USE_MMU = 1;
 
-    //Caches
-    //Size in bytes: (DCACHE_LINES * DCACHE_WAYS * DCACHE_LINE_W * 4)
-    parameter USE_DCACHE = 1;
-    parameter DCACHE_LINES = 512;
-    parameter DCACHE_WAYS = 2;
-    parameter DCACHE_LINE_ADDR_W = $clog2(DCACHE_LINES);
-    parameter DCACHE_LINE_W = 4; //In words
-    parameter DCACHE_SUB_LINE_ADDR_W = $clog2(DCACHE_LINE_W);
-    parameter DCACHE_TAG_W = ADDR_W - DCACHE_LINE_ADDR_W - DCACHE_SUB_LINE_ADDR_W - 2;
-
-    parameter USE_DTAG_INVALIDATIONS = 0;
-
-    parameter DTLB_WAYS = 2;
-    parameter DTLB_DEPTH = 32;
-
-
+    ////////////////////////////////////////////////////
+    //Instruction Cache Options
     //Size in bytes: (ICACHE_LINES * ICACHE_WAYS * ICACHE_LINE_W * 4)
-    //For optimal BRAM packing lines should not be less than 512
-    parameter USE_ICACHE = 1;
+    //For optimal BRAM packing, lines should not be less than 512
     parameter ICACHE_LINES = 512;
     parameter ICACHE_WAYS = 2;
     parameter ICACHE_LINE_ADDR_W = $clog2(ICACHE_LINES);
     parameter ICACHE_LINE_W = 4; //In words
     parameter ICACHE_SUB_LINE_ADDR_W = $clog2(ICACHE_LINE_W);
-    parameter ICACHE_TAG_W = ADDR_W - ICACHE_LINE_ADDR_W - ICACHE_SUB_LINE_ADDR_W - 2;
+    parameter ICACHE_TAG_W = 32 - ICACHE_LINE_ADDR_W - ICACHE_SUB_LINE_ADDR_W - 2;
 
+
+    ////////////////////////////////////////////////////
+    //Data Cache Options
+    //Size in bytes: (DCACHE_LINES * DCACHE_WAYS * DCACHE_LINE_W * 4)
+    //For optimal BRAM packing, lines should not be less than 512
+    parameter DCACHE_LINES = 512;
+    parameter DCACHE_WAYS = 2;
+    parameter DCACHE_LINE_ADDR_W = $clog2(DCACHE_LINES);
+    parameter DCACHE_LINE_W = 4; //In words
+    parameter DCACHE_SUB_LINE_ADDR_W = $clog2(DCACHE_LINE_W);
+    parameter DCACHE_TAG_W = 32 - DCACHE_LINE_ADDR_W - DCACHE_SUB_LINE_ADDR_W - 2;
+
+    parameter USE_DTAG_INVALIDATIONS = 0;
+
+
+    ////////////////////////////////////////////////////
+    //Instruction TLB Options
+    parameter ITLB_WAYS = 2;
+    parameter ITLB_DEPTH = 32;
+
+
+    ////////////////////////////////////////////////////
+    //Data TLB Options
+    parameter DTLB_WAYS = 2;
+    parameter DTLB_DEPTH = 32;
+    ///////////////////////////////////////////////////
+
+
+    ////////////////////////////////////////////////////
+    //Branch Predictor Options
     parameter USE_BRANCH_PREDICTOR = 1;
     parameter BRANCH_TABLE_ENTRIES = 512;
     parameter RAS_DEPTH = 8;
 
-    parameter ITLB_WAYS = 2;
-    parameter ITLB_DEPTH = 32;
 
-    parameter L1_CONNECTIONS = 4;//USE_ICACHE + USE_DCACHE + USE_MMU*2;
+    ////////////////////////////////////////////////////
+    //FIFO/Buffer Depths
+    parameter MAX_INFLIGHT_COUNT = 4;
+    parameter FETCH_BUFFER_DEPTH = 4;
+
+    parameter LS_INPUT_BUFFER_DEPTH = 4;
+    parameter DIV_INPUT_BUFFER_DEPTH = 2;
+
+
+    ////////////////////////////////////////////////////
+    //L1 Arbiter IDs
+    parameter L1_CONNECTIONS = 4;//USE_ICACHE + USE_DCACHE + ENABLE_S_MODE*2;
     parameter L1_DCACHE_ID = 0;
-    parameter L1_DMMU_ID = 1;//USE_MMU;
-    parameter L1_ICACHE_ID = 2;//USE_MMU + USE_DCACHE;
-    parameter L1_IMMU_ID = 3;//USE_MMU + USE_DCACHE + USE_ICACHE;
+    parameter L1_DMMU_ID = 1;//ENABLE_S_MODE;
+    parameter L1_ICACHE_ID = 2;//ENABLE_S_MODE + USE_DCACHE;
+    parameter L1_IMMU_ID = 3;//ENABLE_S_MODE + USE_DCACHE + USE_ICACHE;
+
+
+    ////////////////////////////////////////////////////
+    //Write-Back Unit IDs
+    parameter NUM_WB_UNITS = 4 + USE_MUL + USE_DIV;
+    parameter WB_UNITS_WIDTH = $clog2(NUM_WB_UNITS);
+
+    parameter LS_UNIT_WB_ID = 0;
+    parameter DIV_UNIT_WB_ID = USE_DIV;
+    parameter MUL_UNIT_WB_ID = DIV_UNIT_WB_ID + USE_MUL;
+    parameter GC_UNIT_WB_ID = MUL_UNIT_WB_ID + 1;
+    parameter ALU_UNIT_WB_ID = GC_UNIT_WB_ID + 1;//single cycle path
+    parameter BRANCH_UNIT_WB_ID = ALU_UNIT_WB_ID + 1;//single cycle path
+    ////////////////////////////////////////////////////
 
 endpackage

@@ -60,35 +60,31 @@ module taiga (
     branch_inputs_t branch_inputs;
     mul_inputs_t mul_inputs;
     div_inputs_t div_inputs;
-    csr_inputs_t csr_inputs;
     gc_inputs_t gc_inputs;
 
     func_unit_ex_interface branch_ex();
     func_unit_ex_interface alu_ex();
     func_unit_ex_interface ls_ex();
-    func_unit_ex_interface csr_ex();
     func_unit_ex_interface gc_ex();
     func_unit_ex_interface mul_ex();
     func_unit_ex_interface div_ex();
 
     instruction_buffer_interface ib();
 
+    exception_interface  ls_exception();
+
     tracking_interface ti();
     unit_writeback_interface unit_wb [NUM_WB_UNITS-1:0]();
     register_file_writeback_interface rf_wb();
 
-    exception_interface csr_exception();
-    exception_interface  ls_exception();
-    csr_exception_interface gc_exception();
+    mmu_interface immu();
+    mmu_interface dmmu();
 
     tlb_interface itlb();
     tlb_interface dtlb();
     logic tlb_on;
     logic [ASIDLEN-1:0] asid;
     logic return_from_exception;
-
-    mmu_interface immu();
-    mmu_interface dmmu();
 
     //Global Control
     logic load_store_FIFO_emptying;
@@ -103,11 +99,6 @@ module taiga (
     logic inflight_queue_empty;
     logic load_store_issue;
 
-    logic mret;
-    logic sret;
-    logic ecall;
-    logic ebreak;
-
 
     //Branch Unit and Fetch Unit
     logic branch_taken;
@@ -117,7 +108,7 @@ module taiga (
 
     //Decode Unit and Fetch Unit
     logic [31:0] if2_pc;
-    logic dec_advance;
+    logic dec_instruction_issued;
     logic flush;
     logic illegal_instruction;
 
@@ -131,8 +122,8 @@ module taiga (
 
     assign if2_pc_debug = if2_pc;
     assign dec_pc_debug = dec_pc;
-    assign dec_advance_debug = dec_advance;
-    assign instruction_issued = dec_advance;
+    assign dec_advance_debug = dec_instruction_issued;
+    assign instruction_issued = dec_instruction_issued;
 
     placer_randomizer # (8'h2B)
         rseed_generator (.*, .result(placer_rseed),
@@ -143,7 +134,7 @@ module taiga (
     /*************************************
      * Memory Interface
      *************************************/
-    generate if (USE_MMU || USE_ICACHE || USE_DCACHE)
+    generate if (ENABLE_S_MODE || USE_ICACHE || USE_DCACHE)
             l1_arbiter arb(.*);
     endgenerate
 
@@ -153,7 +144,7 @@ module taiga (
     fetch fetch_block (.*, .icache_on('1), .tlb(itlb), .l1_request(l1_request[L1_ICACHE_ID]), .l1_response(l1_response[L1_ICACHE_ID]), .exception(1'b0));
     branch_table bt_block (.*);
     ras ras_block(.*);
-    generate if (USE_MMU) begin
+    generate if (ENABLE_S_MODE) begin
             tlb_lut_ram #(ITLB_WAYS, ITLB_DEPTH) i_tlb (.*, .tlb(itlb), .mmu(immu));
             mmu i_mmu (.*,  .mmu(immu) , .l1_request(l1_request[L1_IMMU_ID]), .l1_response(l1_response[L1_IMMU_ID]), .mmu_exception());
         end
@@ -176,7 +167,7 @@ module taiga (
     branch_unit branch_unit_block (.*, .branch_wb(unit_wb[BRANCH_UNIT_WB_ID]));
     alu_unit alu_unit_block (.*, .alu_wb(unit_wb[ALU_UNIT_WB_ID]));
     load_store_unit load_store_unit_block (.*, .dcache_on(1'b1), .clear_reservation(1'b0), .tlb(dtlb), .ls_wb(unit_wb[LS_UNIT_WB_ID]), .l1_request(l1_request[L1_DCACHE_ID]), .l1_response(l1_response[L1_DCACHE_ID]));
-    generate if (USE_MMU) begin
+    generate if (ENABLE_S_MODE) begin
             tlb_lut_ram #(DTLB_WAYS, DTLB_DEPTH) d_tlb (.*, .tlb(dtlb), .mmu(dmmu));
             mmu d_mmu (.*, .mmu(dmmu), .l1_request(l1_request[L1_DMMU_ID]), .l1_response(l1_response[L1_DMMU_ID]), .mmu_exception());
         end
@@ -185,8 +176,7 @@ module taiga (
             assign dtlb.physical_address = dtlb.virtual_address;
         end
     endgenerate
-    csr_unit csr_unit_block (.*, .csr_wb(unit_wb[CSR_UNIT_WB_ID]));
-    gc_unit gc_unit_block (.*);
+    gc_unit gc_unit_block (.*, .gc_wb(unit_wb[GC_UNIT_WB_ID]));
 
     generate if (USE_MUL)
             mul_unit mul_unit_block (.*, .mul_wb(unit_wb[MUL_UNIT_WB_ID]));

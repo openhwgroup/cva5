@@ -234,7 +234,7 @@ module taiga_wrapper (
     //design_2 infra(.*);
 
     generate
-        if (USE_MMU || USE_ICACHE || USE_DCACHE) begin
+        if (ENABLE_S_MODE || USE_ICACHE || USE_DCACHE) begin
             l2_arbiter l2_arb (.*, .request(l2));
             axi_to_arb l2_to_mem (.*, .l2(mem));
         end

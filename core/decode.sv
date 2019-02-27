@@ -37,7 +37,6 @@ module decode(
         output alu_inputs_t alu_inputs,
         output load_store_inputs_t ls_inputs,
         output branch_inputs_t branch_inputs,
-        output csr_inputs_t csr_inputs,
         output gc_inputs_t gc_inputs,
         output mul_inputs_t mul_inputs,
         output  div_inputs_t div_inputs,
@@ -45,7 +44,6 @@ module decode(
         func_unit_ex_interface.decode alu_ex,
         func_unit_ex_interface.decode ls_ex,
         func_unit_ex_interface.decode branch_ex,
-        func_unit_ex_interface.decode csr_ex,
         func_unit_ex_interface.decode gc_ex,
         func_unit_ex_interface.decode mul_ex,
         func_unit_ex_interface.decode div_ex,
@@ -56,7 +54,7 @@ module decode(
         output instruction_issued_no_rd,
         input logic instruction_complete,
 
-        output logic dec_advance,
+        output logic dec_instruction_issued,
         output logic [31:0] dec_pc,
         output logic [31:0] dec_instruction,
         output logic illegal_instruction
@@ -67,16 +65,10 @@ module decode(
     logic [6:0] opcode;
     logic [4:0] opcode_trim;
 
-    logic [4:0] shamt;
-
-    assign fn3 = ib.data_out.instruction[14:12];
-    assign opcode = ib.data_out.instruction[6:0];
-    assign opcode_trim = opcode[6:2];
-    assign shamt = ib.data_out.instruction[24:20];
-
     logic uses_rs1;
     logic uses_rs2;
     logic uses_rd;
+    logic rd_zero;
 
     logic [4:0] rs1_addr;
     logic [4:0] rs2_addr;
@@ -89,143 +81,134 @@ module decode(
     logic load_store_operands_ready;
     logic operands_ready;
 
-    logic csr_imm_op;
-    logic sys_op;
-
     logic mult_div_op;
 
-    logic [NUM_EX_UNITS-1:0] new_request;
-    logic [NUM_EX_UNITS-1:0] issue_ready;
-    logic [NUM_EX_UNITS-1:0] issue;
+    logic [NUM_WB_UNITS-1:0] new_request;
+    logic [NUM_WB_UNITS-1:0] issue_ready;
+    logic [NUM_WB_UNITS-1:0] issue;
 
-    logic advance;
+    logic instruction_issued;
+    logic instruction_issued_with_rd;
+    //logic instruction_issued_no_rd; <-- already an output
 
-    logic [XLEN-1:0] alu_rs1_data;
-    logic [XLEN-1:0] alu_rs2_data;
-    logic alu_sub;
-
-    logic [1:0] alu_op;
-    logic [1:0] alu_logic_op;
-
-    logic [31:0] ls_offset;
-    logic [31:0] virtual_address;
-
-    logic [4:0] load_rd;
-    logic last_ls_request_was_load;
-    logic load_store_forward;
-
-    logic [4:0] prev_div_rs1_addr;
-    logic [4:0] prev_div_rs2_addr;
-    logic prev_div_result_valid;
-    //-----------------------------------------------------------------------------
+    ////////////////////////////////////////////////////
+    //Implementation
 
 
+    ////////////////////////////////////////////////////
+    //Instruction Buffer / Instruction aliases
+    assign ib.pop = instruction_issued;
 
-    assign dec_pc =  ib.data_out.pc;
+    assign opcode = ib.data_out.instruction[6:0];
+    assign opcode_trim = opcode[6:2];
+    assign fn3 = ib.data_out.instruction[14:12];
+
+    assign dec_pc = ib.data_out.pc;
     assign dec_instruction = ib.data_out.instruction;
-
-    assign csr_imm_op = (opcode_trim == SYSTEM_T) && fn3[2];
-    assign sys_op =  (opcode_trim == SYSTEM_T) && (fn3 == 0);
 
     assign uses_rs1 = ib.data_out.uses_rs1;
     assign uses_rs2 = ib.data_out.uses_rs2;
     assign uses_rd = ib.data_out.uses_rd;
+    assign rd_zero = ib.data_out.rd_zero;
 
     assign rs1_addr = ib.data_out.instruction[19:15];
     assign rs2_addr = ib.data_out.instruction[24:20];
     assign future_rd_addr = ib.data_out.instruction[11:7];
-    assign nop = (opcode_trim inside {LUI_T, AUIPC_T, ARITH_T, ARITH_IMM_T} && ib.data_out.rd_zero);
+    assign nop = (opcode_trim inside {LUI_T, AUIPC_T, ARITH_T, ARITH_IMM_T} && rd_zero);
 
+    ////////////////////////////////////////////////////
     //Register File interface inputs
     assign rf_decode.rs1_addr  =  rs1_addr;
     assign rf_decode.rs2_addr  =  rs2_addr;
     assign rf_decode.future_rd_addr  =  future_rd_addr;
-    assign rf_decode.instruction_issued = advance & uses_rd & ~ib.data_out.rd_zero;
+    assign rf_decode.instruction_issued = instruction_issued_with_rd & ~rd_zero;
     assign rf_decode.id = ti.issue_id;
     assign rf_decode.uses_rs1 = uses_rs1;
     assign rf_decode.uses_rs2 = uses_rs2;
-    //////////////////////////
 
 
-    always_comb begin
-        illegal_instruction = !(opcode inside {LUI, AUIPC, JAL, JALR, BRANCH, LOAD, STORE, ARITH, ARITH_IMM, FENCE, AMO, SYSTEM});
-        if (opcode == ARITH) begin
-            if (!USE_MUL && !USE_DIV)
-                illegal_instruction = ib.data_out.instruction[25];
-            else if (!USE_MUL && USE_DIV)
-                illegal_instruction = ib.data_out.instruction[25] & ~fn3[2];
-            else if (!USE_MUL && !USE_DIV)
-                illegal_instruction = ib.data_out.instruction[25] & fn3[2];
-            else
-                illegal_instruction = 0;
-        end
-    end
-
-    //TrackingInterface
-    assign ti.inflight_packet.unit_id = new_request[NUM_EX_UNITS-2:0];
+    ////////////////////////////////////////////////////
+    //Tracking Interface
+    assign ti.inflight_packet.unit_id = new_request;
     assign ti.inflight_packet.rd_addr = future_rd_addr;
-    assign ti.inflight_packet.rd_addr_nzero = ~ib.data_out.rd_zero;
-    assign ti.issued = advance & uses_rd;
-    //////////////////////////
+    assign ti.inflight_packet.rd_addr_nzero = ~rd_zero;
+    assign ti.issued = instruction_issued_with_rd;
 
+
+    ////////////////////////////////////////////////////
+    //Branch Table Interface
     assign bt.dec_pc = ib.data_out.pc;
     assign bt.dec_pc_valid = ib.valid;
 
+
+    ////////////////////////////////////////////////////
+    //Unit Determination
+    assign mult_div_op = ib.data_out.instruction[25];
+
+    assign new_request[BRANCH_UNIT_WB_ID] = opcode_trim inside {BRANCH_T, JAL_T, JALR_T} ? 1 : 0;
+    assign new_request[ALU_UNIT_WB_ID] =  ((opcode_trim == ARITH_T)  && ~mult_div_op) || opcode_trim inside {ARITH_IMM_T, AUIPC_T, LUI_T};
+    assign new_request[LS_UNIT_WB_ID] = opcode_trim inside {LOAD_T, STORE_T, AMO_T} ? 1 : 0;
+    assign new_request[GC_UNIT_WB_ID] = (opcode_trim == SYSTEM_T) || (opcode_trim == FENCE_T);
+
+    generate if (USE_MUL)
+            assign new_request[MUL_UNIT_WB_ID] = (opcode_trim == ARITH_T) && mult_div_op && ~fn3[2];
+    endgenerate
+
+    generate if (USE_DIV)
+            assign new_request[DIV_UNIT_WB_ID] = (opcode_trim == ARITH_T) && mult_div_op && fn3[2];
+    endgenerate
+
+
+    ////////////////////////////////////////////////////
+    //Unit ready
+    assign issue_ready[BRANCH_UNIT_WB_ID] = new_request[BRANCH_UNIT_WB_ID] & (branch_ex.ready | ~uses_rd);
+    assign issue_ready[ALU_UNIT_WB_ID] = new_request[ALU_UNIT_WB_ID] & alu_ex.ready;
+    assign issue_ready[LS_UNIT_WB_ID] = new_request[LS_UNIT_WB_ID] & ls_ex.ready;
+    assign issue_ready[GC_UNIT_WB_ID] = new_request[GC_UNIT_WB_ID] & gc_ex.ready;
+    generate if (USE_MUL)
+            assign issue_ready[MUL_UNIT_WB_ID] = new_request[MUL_UNIT_WB_ID] & mul_ex.ready;
+    endgenerate
+    generate if (USE_DIV)
+            assign issue_ready[DIV_UNIT_WB_ID] = new_request[DIV_UNIT_WB_ID] & div_ex.ready;
+    endgenerate
+
+
+    ////////////////////////////////////////////////////
+    //Issue Determination
     assign issue_valid =  ib.valid & ti.id_available & ~gc_issue_hold & ~gc_issue_flush;
+
     assign operands_ready =  ~rf_decode.rs1_conflict & ~rf_decode.rs2_conflict;
 
     assign load_store_forward = ((opcode_trim == STORE_T) && last_ls_request_was_load && (rs2_addr == load_rd));
     assign load_store_operands_ready =  ~rf_decode.rs1_conflict & ~(rf_decode.rs2_conflict & ~load_store_forward);
 
-    assign mult_div_op = (opcode_trim == ARITH_T) && ib.data_out.instruction[25];
-
-    assign new_request[BRANCH_UNIT_EX_ID] = opcode_trim inside {BRANCH_T, JAL_T, JALR_T} ? 1 : 0;
-    assign new_request[ALU_UNIT_EX_ID] =  ((opcode_trim == ARITH_T)  && ~ib.data_out.instruction[25]) || opcode_trim inside {ARITH_IMM_T, AUIPC_T, LUI_T};
-    assign new_request[LS_UNIT_EX_ID] = opcode_trim inside {LOAD_T, STORE_T, AMO_T} ? 1 : 0;
-    assign new_request[CSR_UNIT_EX_ID] = (opcode_trim == SYSTEM_T) && (fn3 != 0);
-    assign new_request[GC_UNIT_EX_ID] = ((opcode_trim == SYSTEM_T) && (fn3 == 0)) || (opcode_trim == FENCE_T);
-
+    assign issue[BRANCH_UNIT_WB_ID] = ~flush & issue_valid & operands_ready & issue_ready[BRANCH_UNIT_WB_ID];
+    assign issue[ALU_UNIT_WB_ID] = ~flush & issue_valid & operands_ready & issue_ready[ALU_UNIT_WB_ID];
+    assign issue[LS_UNIT_WB_ID] = ~flush & issue_valid & load_store_operands_ready & issue_ready[LS_UNIT_WB_ID];
+    assign issue[GC_UNIT_WB_ID] = ~flush & issue_valid & operands_ready &  issue_ready[GC_UNIT_WB_ID];
     generate if (USE_MUL)
-            assign new_request[MUL_UNIT_EX_ID] = mult_div_op & ~fn3[2];
+            assign issue[MUL_UNIT_WB_ID] = ~flush & issue_valid & operands_ready & issue_ready[MUL_UNIT_WB_ID];
     endgenerate
     generate if (USE_DIV)
-            assign new_request[DIV_UNIT_EX_ID] = mult_div_op & fn3[2];
+            assign issue[DIV_UNIT_WB_ID] = ~flush & issue_valid & operands_ready & issue_ready[DIV_UNIT_WB_ID];
     endgenerate
 
-    assign issue_ready[BRANCH_UNIT_EX_ID] = new_request[BRANCH_UNIT_EX_ID] & (branch_ex.ready | ~uses_rd);//| ~uses_rd
-    assign issue_ready[ALU_UNIT_EX_ID] = new_request[ALU_UNIT_EX_ID] & alu_ex.ready;
-    assign issue_ready[LS_UNIT_EX_ID] = new_request[LS_UNIT_EX_ID] & ls_ex.ready;
-    assign issue_ready[CSR_UNIT_EX_ID] = new_request[CSR_UNIT_EX_ID] & csr_ex.ready;
-    assign issue_ready[GC_UNIT_EX_ID] = new_request[GC_UNIT_EX_ID] & gc_ex.ready;
-    generate if (USE_MUL)
-            assign issue_ready[MUL_UNIT_EX_ID] = new_request[MUL_UNIT_EX_ID] & mul_ex.ready;
-    endgenerate
-    generate if (USE_DIV)
-            assign issue_ready[DIV_UNIT_EX_ID] = new_request[DIV_UNIT_EX_ID] & div_ex.ready;
-    endgenerate
+    assign instruction_issued =  ~flush & (|issue_ready) & issue_valid & load_store_operands_ready;
+    assign instruction_issued_no_rd = instruction_issued & ~uses_rd;
+    assign instruction_issued_with_rd = instruction_issued & uses_rd;
 
-    assign issue[BRANCH_UNIT_EX_ID] = ~flush & issue_valid & operands_ready & issue_ready[BRANCH_UNIT_EX_ID];
-    assign issue[ALU_UNIT_EX_ID] = ~flush & issue_valid & operands_ready & issue_ready[ALU_UNIT_EX_ID];
-    assign issue[LS_UNIT_EX_ID] = ~flush & issue_valid & load_store_operands_ready & issue_ready[LS_UNIT_EX_ID];
-    assign issue[CSR_UNIT_EX_ID] = ~flush & issue_valid & operands_ready &  issue_ready[CSR_UNIT_EX_ID];
-    assign issue[GC_UNIT_EX_ID] = ~flush & issue_valid & operands_ready &  issue_ready[GC_UNIT_EX_ID];
-    generate if (USE_MUL)
-            assign issue[MUL_UNIT_EX_ID] = ~flush & issue_valid & operands_ready & issue_ready[MUL_UNIT_EX_ID];
-    endgenerate
-    generate if (USE_DIV)
-            assign issue[DIV_UNIT_EX_ID] = ~flush & issue_valid & operands_ready & issue_ready[DIV_UNIT_EX_ID];
-    endgenerate
-
-    assign advance =  ~flush & (|issue_ready) & issue_valid & load_store_operands_ready;
-
-    assign ib.pop = advance;
-    assign dec_advance = advance;
-    assign instruction_issued_no_rd = advance & ~uses_rd;
-
-    //----------------------------------------------------------------------------------
+    //Decode outputs
+    assign dec_instruction_issued = instruction_issued;
+    ////////////////////////////////////////////////////
     //ALU unit inputs
-    //----------------------------------------------------------------------------------
-    assign alu_ex.new_request_dec = issue[ALU_UNIT_EX_ID];
+    logic [XLEN-1:0] alu_rs1_data;
+    logic [XLEN-1:0] alu_rs2_data;
+    logic [XLEN-1:0] left_shift_in;
+
+    logic alu_sub;
+
+    logic [1:0] alu_op;
+    logic [1:0] alu_logic_op;
 
     always_comb begin
         if (opcode[2] & opcode[5]) //LUI
@@ -244,7 +227,6 @@ module decode(
         else// ARITH instructions
             alu_rs2_data = rf_decode.rs2_data;
     end
-
 
     always_comb begin
         case (fn3)
@@ -272,12 +254,9 @@ module decode(
         endcase
     end
 
-    logic [XLEN-1:0] left_shift_in;
-    //assign left_shift_in =  {<<{rf_decode.rs1_data}}; //Bit reverse not supported by Altera
     always_comb begin
-        for (int i=0; i < XLEN; i=i+1) begin
+        foreach (left_shift_in[i])
             left_shift_in[i] = rf_decode.rs1_data[XLEN-i-1];
-        end
     end
 
     //Add cases: LUI, AUIPC, ADD[I], all logic ops
@@ -285,7 +264,7 @@ module decode(
     assign alu_sub = opcode[2] ? 0 : ((fn3 inside {SLTU_fn3, SLT_fn3}) || ((fn3 == ADD_SUB_fn3) && ib.data_out.instruction[30]) && opcode[5]);
 
     always_ff @(posedge clk) begin
-        if (issue_ready[ALU_UNIT_EX_ID]) begin
+        if (issue_ready[ALU_UNIT_WB_ID]) begin
             alu_inputs.in1 <= {(alu_rs1_data[XLEN-1] & ~fn3[0]), alu_rs1_data};//(fn3[0]  is SLTU_fn3);
             alu_inputs.in2 <= {(alu_rs2_data[XLEN-1] & ~fn3[0]), alu_rs2_data};
             alu_inputs.shifter_in <= fn3[2] ? rf_decode.rs1_data : left_shift_in;
@@ -296,17 +275,21 @@ module decode(
             alu_inputs.op <= opcode[2] ? ALU_ADD_SUB : alu_op;//put LUI and AUIPC through adder path
         end
     end
-    //----------------------------------------------------------------------------------
 
-    //----------------------------------------------------------------------------------
+
+    ////////////////////////////////////////////////////
     //Load Store unit inputs
-    //----------------------------------------------------------------------------------
+    logic [31:0] ls_offset;
+    logic [31:0] virtual_address;
+
+    logic [4:0] load_rd;
+    logic last_ls_request_was_load;
+    logic load_store_forward;
     logic amo_op;
     logic [4:0] amo_type;
+
     assign amo_op =  USE_AMO ? (opcode_trim == AMO_T) : 0;
     assign amo_type = USE_AMO ? ib.data_out.instruction[31:27] : 0;
-
-    assign ls_ex.new_request_dec = issue[LS_UNIT_EX_ID];
 
     assign ls_inputs.offset = opcode[5] ? {ib.data_out.instruction[31:25], ib.data_out.instruction[11:7]} : ib.data_out.instruction[31:20];
     assign ls_inputs.virtual_address = rf_decode.rs1_data + 32'(signed'(ls_inputs.offset));
@@ -320,28 +303,26 @@ module decode(
     assign ls_inputs.load_store_forward = (opcode_trim == STORE_T) && rf_decode.rs2_conflict;
     assign ls_inputs.instruction_id = ti.issue_id;
 
+    //TODO: switch from rd_addr usage to instruction ID/in_use_by
     always_ff @(posedge clk) begin
-        if (issue[LS_UNIT_EX_ID])
+        if (issue[LS_UNIT_WB_ID])
             load_rd <= future_rd_addr;
     end
 
     always_ff @(posedge clk) begin
         if (rst)
             last_ls_request_was_load <= 0;
-        else if (advance) begin
-            if (new_request[LS_UNIT_EX_ID] & ls_inputs.load)
+        else if (instruction_issued) begin
+            if (new_request[LS_UNIT_WB_ID] & ls_inputs.load)
                 last_ls_request_was_load <= 1;
             else if (uses_rd && (load_rd == future_rd_addr))
                 last_ls_request_was_load <=0;
         end
     end
 
-    //----------------------------------------------------------------------------------
 
-    //----------------------------------------------------------------------------------
+    ////////////////////////////////////////////////////
     //Branch unit inputs
-    //----------------------------------------------------------------------------------
-    assign branch_ex.new_request_dec = issue[BRANCH_UNIT_EX_ID];
     assign branch_inputs.rs1 = rf_decode.rs1_data;
     assign branch_inputs.rs2 = rf_decode.rs2_data;
     assign branch_inputs.fn3 = fn3;
@@ -353,44 +334,46 @@ module decode(
     assign branch_inputs.is_call = ib.data_out.is_call;
     assign branch_inputs.is_return = ib.data_out.is_return;
     assign branch_inputs.instruction = ib.data_out.instruction;
-    //----------------------------------------------------------------------------------
 
 
-    //----------------------------------------------------------------------------------
-    //CSR unit inputs
-    //----------------------------------------------------------------------------------
-    assign csr_ex.new_request_dec = issue[CSR_UNIT_EX_ID];
+    ////////////////////////////////////////////////////
+    //Global Control unit inputs
     always_ff @(posedge clk) begin
-        if (issue_ready[CSR_UNIT_EX_ID]) begin
-            csr_inputs.rs1 <= csr_imm_op ? {27'b0, rs1_addr} : rf_decode.rs1_data; //immediate mode or rs1_addr reg
-            csr_inputs.csr_addr <= ib.data_out.instruction[31:20];
-            csr_inputs.csr_op <= fn3[1:0];
-            csr_inputs.rs1_is_zero <= (rs1_addr == 0);
-            csr_inputs.rd_is_zero <= ib.data_out.rd_zero;
+        if (issue_ready[GC_UNIT_WB_ID]) begin
+            gc_inputs.pc <= ib.data_out.pc;
+            gc_inputs.instruction <=ib.data_out.instruction;
+            gc_inputs.rs1 <= rf_decode.rs1_data;
+            gc_inputs.rs2 <= rf_decode.rs2_data;
+            gc_inputs.rd_is_zero <= rd_zero;
         end
     end
-    //----------------------------------------------------------------------------------
 
 
-    //----------------------------------------------------------------------------------
-    //Mul Div unit inputs
-    //----------------------------------------------------------------------------------
+    ////////////////////////////////////////////////////
+    //Mul unit inputs
     generate if (USE_MUL) begin
-            assign mul_ex.new_request_dec = issue[MUL_UNIT_EX_ID];
             assign mul_inputs.rs1 = rf_decode.rs1_data;
             assign mul_inputs.rs2 = rf_decode.rs2_data;
             assign mul_inputs.op = fn3[1:0];
         end
     endgenerate
-    //If a subsequent div request uses the same inputs then
-    //don't rerun div operation
+
+
+    ////////////////////////////////////////////////////
+    //Div unit inputs
     generate if (USE_DIV) begin
+            logic [4:0] prev_div_rs1_addr;
+            logic [4:0] prev_div_rs2_addr;
+            logic prev_div_result_valid;
+
+            //If a subsequent div request uses the same inputs then
+            //don't rerun div operation
             logic div_rd_overwrites_rs1_or_rs2;
             logic rd_overwrites_previously_saved_rs1_or_rs2;
             logic current_op_resuses_rs1_rs2;
 
             always_ff @(posedge clk) begin
-                if (issue[DIV_UNIT_EX_ID]) begin
+                if (issue[DIV_UNIT_WB_ID]) begin
                     prev_div_rs1_addr <= rs1_addr;
                     prev_div_rs2_addr <= rs2_addr;
                 end
@@ -403,15 +386,14 @@ module decode(
             always_ff @(posedge clk) begin
                 if (rst)
                     prev_div_result_valid <= 0;
-                else if (advance) begin
-                    if(new_request[DIV_UNIT_EX_ID] & ~div_rd_overwrites_rs1_or_rs2)
+                else if (instruction_issued) begin
+                    if(new_request[DIV_UNIT_WB_ID] & ~div_rd_overwrites_rs1_or_rs2)
                         prev_div_result_valid <=1;
                     else if (uses_rd & rd_overwrites_previously_saved_rs1_or_rs2)
                         prev_div_result_valid <=0;
                 end
             end
 
-            assign div_ex.new_request_dec = issue[DIV_UNIT_EX_ID];
             assign div_inputs.rs1 = rf_decode.rs1_data;
             assign div_inputs.rs2 = rf_decode.rs2_data;
             assign div_inputs.op = fn3[1:0];
@@ -419,40 +401,65 @@ module decode(
             assign div_inputs.instruction_id = ti.issue_id;
         end
     endgenerate
-    //----------------------------------------------------------------------------------
+
+
+    ////////////////////////////////////////////////////
+    //Unit EX signals
+    assign alu_ex.new_request_dec = issue[ALU_UNIT_WB_ID];
+    assign ls_ex.new_request_dec = issue[LS_UNIT_WB_ID];
+    assign branch_ex.new_request_dec = issue[BRANCH_UNIT_WB_ID];
+    assign gc_ex.new_request_dec = issue[GC_UNIT_WB_ID];
+
     always_ff @(posedge clk) begin
-        branch_ex.new_request <= issue[BRANCH_UNIT_EX_ID];
-        alu_ex.new_request <= issue[ALU_UNIT_EX_ID];
-        ls_ex.new_request <= issue[LS_UNIT_EX_ID];
-        csr_ex.new_request <= issue[CSR_UNIT_EX_ID];
-        gc_ex.new_request <= issue[GC_UNIT_EX_ID];
+        alu_ex.new_request <= issue[ALU_UNIT_WB_ID];
+        ls_ex.new_request <= issue[LS_UNIT_WB_ID];
+        branch_ex.new_request <= issue[BRANCH_UNIT_WB_ID];
+        gc_ex.new_request <= issue[GC_UNIT_WB_ID];
     end
 
     assign branch_ex.instruction_id = ti.issue_id;
     assign alu_ex.instruction_id = ti.issue_id;
     //Load Store unit stores ID in input FIFO
-    assign csr_ex.instruction_id = ti.issue_id;
     assign gc_ex.instruction_id = ti.issue_id;
 
     generate if (USE_MUL)
             always_ff @(posedge clk) begin
-                mul_ex.new_request <= issue[MUL_UNIT_EX_ID];
+                mul_ex.new_request <= issue[MUL_UNIT_WB_ID];
             end
+        assign mul_ex.new_request_dec = issue[MUL_UNIT_WB_ID];
         assign mul_ex.instruction_id = ti.issue_id;
-        assign mul_ex.possible_issue = new_request[MUL_UNIT_EX_ID];
+        assign mul_ex.possible_issue = new_request[MUL_UNIT_WB_ID];
     endgenerate
     generate if (USE_DIV)
             always_ff @(posedge clk) begin
-                div_ex.new_request <= issue[DIV_UNIT_EX_ID];
+                div_ex.new_request <= issue[DIV_UNIT_WB_ID];
             end
         //DIV unit stores ID in input FIFO
-        assign div_ex.possible_issue = new_request[DIV_UNIT_EX_ID];
+        assign div_ex.new_request_dec = issue[DIV_UNIT_WB_ID];
+        assign div_ex.possible_issue = new_request[DIV_UNIT_WB_ID];
     endgenerate
 
-    assign branch_ex.possible_issue = new_request[BRANCH_UNIT_EX_ID];
-    assign alu_ex.possible_issue = new_request[ALU_UNIT_EX_ID];
-    assign ls_ex.possible_issue = new_request[LS_UNIT_EX_ID];
-    assign csr_ex.possible_issue = new_request[CSR_UNIT_EX_ID];
-    assign gc_ex.possible_issue = new_request[GC_UNIT_EX_ID];
+    assign branch_ex.possible_issue = new_request[BRANCH_UNIT_WB_ID];
+    assign alu_ex.possible_issue = new_request[ALU_UNIT_WB_ID];
+    assign ls_ex.possible_issue = new_request[LS_UNIT_WB_ID];
+    assign gc_ex.possible_issue = new_request[GC_UNIT_WB_ID];
+
+
+    ////////////////////////////////////////////////////
+    //Illegal Opcode check
+    always_comb begin
+        illegal_instruction = !(opcode inside {LUI, AUIPC, JAL, JALR, BRANCH, LOAD, STORE, ARITH, ARITH_IMM, FENCE, AMO, SYSTEM});
+        if (opcode == ARITH) begin
+            if (!USE_MUL && !USE_DIV)
+                illegal_instruction = ib.data_out.instruction[25];
+            else if (!USE_MUL && USE_DIV)
+                illegal_instruction = ib.data_out.instruction[25] & ~fn3[2];
+            else if (!USE_MUL && !USE_DIV)
+                illegal_instruction = ib.data_out.instruction[25] & fn3[2];
+            else
+                illegal_instruction = 0;
+        end
+    end
+
 
 endmodule

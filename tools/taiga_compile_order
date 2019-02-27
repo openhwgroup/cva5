@@ -7,7 +7,12 @@
 ../local_memory/local_mem.sv
 
 ../core/interfaces.sv  
+
+../core/csr_types.sv  
+../core/mstatus_priv_reg.sv 
+../core/csr_regs.sv  
 ../core/gc_unit.sv  
+
 ../core/branch_comparator.sv
 ../core/branch_unit.sv  
 
@@ -45,9 +50,7 @@
 
 
 
-../core/csr_types.sv  
-../core/mstatus_priv_reg.sv 
-../core/csr_unit.sv  
+
 
 
 

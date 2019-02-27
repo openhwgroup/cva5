@@ -77,7 +77,6 @@ module register_file(
     assign in_use_by_id = in_use_by[rf_wb.rd_addr];
     assign in_use_match = ({1'b1, in_use_by_id} == {rf_wb.valid_write, rf_wb.id});
 
-
     assign rs1_feedforward = ({2'b11, in_use_by_id, rf_decode.rs1_addr} == {rf_decode.uses_rs1, rf_wb.valid_write, rf_wb.id, rf_wb.rd_addr});
     assign rs2_feedforward = ({2'b11, in_use_by_id, rf_decode.rs2_addr} == {rf_decode.uses_rs2, rf_wb.valid_write, rf_wb.id, rf_wb.rd_addr});
 
@@ -94,6 +93,10 @@ module register_file(
 
     ////////////////////////////////////////////////////
     //Assertions
+    always_ff @ (posedge clk) begin
+        assert (!(rf_decode.instruction_issued && rf_decode.future_rd_addr == 0)) else $error("Write to inuse for register x0 occured!");
+    end
+
     always_ff @ (posedge clk) begin
         assert (!(rf_wb.valid_write && rf_wb.rd_addr == 0)) else $error("Register file write to zero register occured!");
     end

@@ -23,6 +23,9 @@
 package taiga_types;
     import taiga_config::*;
 
+    parameter XLEN = 32;
+    parameter PAGE_ADDR_W = 12;
+
     typedef enum bit [6:0] {
         LUI = 7'b0110111,
         AUIPC = 7'b0010111,
@@ -356,13 +359,20 @@ package taiga_types;
     } csr_inputs_t;
 
     typedef struct packed{
-        logic [31:0] dec_pc;
         logic [31:0] pc;
+        logic [31:0] instruction;
         logic [XLEN-1:0] rs1;
         logic [XLEN-1:0] rs2;
-        logic [6:0] funct7;
-        logic [11:0] funct12;
+        logic rd_is_zero;
     } gc_inputs_t;
+
+    typedef struct packed{
+        logic valid;
+        exception_code_t code;
+        logic [31:0] pc;
+        logic [31:0] addr;
+        instruction_id_t id;
+    } exception_packet_t;
 
     typedef struct packed{
         logic [31:2] addr;

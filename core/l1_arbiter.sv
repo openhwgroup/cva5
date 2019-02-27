@@ -129,7 +129,7 @@ module l1_arbiter
         end
     endgenerate
 
-    generate if (USE_MMU) begin
+    generate if (ENABLE_S_MODE) begin
             always_comb begin
                 l2_requests[L1_DMMU_ID].addr = l1_request[L1_DMMU_ID].addr[31:2];
                 l2_requests[L1_DMMU_ID].rnw = l1_request[L1_DMMU_ID].rnw;

@@ -24,19 +24,20 @@ import taiga_config::*;
 import taiga_types::*;
 import csr_types::*;
 
-module csr_unit (
+module csr_regs (
         input logic clk,
         input logic rst,
-        func_unit_ex_interface.unit csr_ex,
-        unit_writeback_interface.unit csr_wb, //        writeback_unit_interface_dummy.unit csr_wb, //        writeback_unit_interface_dummy.unit csr_wb,
+
+        //GC unit
+        input csr_inputs_t csr_inputs,
+        input new_request,
+        input exception_packet_t gc_exception,
+        output exception_packet_t csr_exception,
 
         //Decode
-        input csr_inputs_t csr_inputs,
         input logic instruction_issued_no_rd,
 
         //exception_control
-        exception_interface.unit csr_exception,
-        csr_exception_interface.csr gc_exception,
         input logic mret,
         input logic sret,
 
@@ -51,11 +52,12 @@ module csr_unit (
         //WB
         input logic instruction_complete,
 
-        input logic return_from_exception,
 
         //External
         input logic interrupt,
-        input logic timer_interrupt
+        input logic timer_interrupt,
+
+        output logic [XLEN-1:0] selected_csr
 
         );
 
@@ -102,13 +104,12 @@ module csr_unit (
     logic[XLEN-1:0] sstatus;
     logic[XLEN-1:0] stvec;
 
-    logic[TIMER_W-1:0] mcycle;
-    logic[TIMER_W-1:0] mtime;
-    logic[TIMER_W-1:0] minst_ret;
+    logic[COUNTER_W-1:0] mcycle;
+    logic[COUNTER_W-1:0] mtime;
+    logic[COUNTER_W-1:0] minst_ret;
     logic [1:0] inst_ret_inc;
 
     //write_logic
-    logic user_write;
     logic supervisor_write;
     logic machine_write;
 
@@ -116,9 +117,6 @@ module csr_unit (
     csr_addr_t csr_addr;
     logic privilege_exception;
 
-
-
-    logic [31:0] selected_csr;
     logic [31:0] updated_csr;
 
     logic invalid_addr;
@@ -157,14 +155,15 @@ module csr_unit (
     end
 
     //convert addr into packed struct form
-    assign  csr_addr = csr_inputs.csr_addr;
-    assign privilege_exception = csr_ex.new_request  && (csr_addr.privilege > privilege_level);
+    assign csr_addr = csr_inputs.csr_addr;
+    assign privilege_exception = new_request  && (csr_addr.privilege > privilege_level);
 
-    assign user_write = !privilege_exception && (csr_addr.rw_bits != CSR_READ_ONLY && csr_addr.privilege == USER_PRIV);
     assign supervisor_write = !privilege_exception && (csr_addr.rw_bits != CSR_READ_ONLY && csr_addr.privilege == SUPERVISOR_PRIV);
     assign machine_write = !privilege_exception && (csr_addr.rw_bits != CSR_READ_ONLY && csr_addr.privilege == MACHINE_PRIV);
 
-    assign gc_exception.illegal_instruction = invalid_addr | privilege_exception;
+    logic illegal_instruction;
+    assign illegal_instruction = invalid_addr | privilege_exception;
+    assign csr_exception.valid = new_request & illegal_instruction;
 
     assign machine_trap = gc_exception.valid && next_privilege_level == MACHINE_PRIV;
     assign supervisor_trap = gc_exception.valid && next_privilege_level == SUPERVISOR_PRIV;
@@ -370,8 +369,8 @@ module csr_unit (
                 //Machine Timers and Counters
             MCYCLE : selected_csr = mcycle[XLEN-1:0];
             MINSTRET : selected_csr = minst_ret[XLEN-1:0];
-            MCYCLEH : selected_csr = mcycle[TIMER_W-1:XLEN];
-            MINSTRETH : selected_csr = minst_ret[TIMER_W-1:XLEN];
+            MCYCLEH : selected_csr = mcycle[COUNTER_W-1:XLEN];
+            MINSTRETH : selected_csr = minst_ret[COUNTER_W-1:XLEN];
 
                 //Supervisor Trap Setup
                 //SSTATUS : selected_csr = (mstatus & mstatus_smask);
@@ -393,52 +392,14 @@ module csr_unit (
             CYCLE : selected_csr = mcycle[XLEN-1:0];
             TIME : selected_csr = mcycle[XLEN-1:0];
             INSTRET : selected_csr = minst_ret[XLEN-1:0];
-            CYCLEH : selected_csr = mcycle[TIMER_W-1:XLEN];
-            TIMEH : selected_csr = mcycle[TIMER_W-1:XLEN];
-            INSTRETH : selected_csr = minst_ret[TIMER_W-1:XLEN];
+            CYCLEH : selected_csr = mcycle[COUNTER_W-1:XLEN];
+            TIMEH : selected_csr = mcycle[COUNTER_W-1:XLEN];
+            INSTRETH : selected_csr = minst_ret[COUNTER_W-1:XLEN];
 
             default : begin selected_csr = 0; invalid_addr = 1; end
         endcase
     end
 
 
-    always_ff @(posedge clk) begin
-        if (rst) begin
-            csr_ex.ready <= 1;
-        end else if (csr_ex.new_request_dec) begin
-            csr_ex.ready <= 0;
-        end else if (csr_wb.accepted) begin
-            csr_ex.ready <= 1;
-        end
-    end
-
-    always_ff @(posedge clk) begin
-        if (csr_ex.new_request) begin
-            csr_wb.rd <= selected_csr;
-        end
-    end
-
-
-    //Write_back
-    assign csr_wb.done_next_cycle = csr_ex.new_request;
-    always_ff @(posedge clk) begin
-        csr_wb.instruction_id <= csr_ex.instruction_id;
-    end
-
-    always_ff @(posedge clk) begin
-        if (rst) begin
-            done <= 0;
-        end else if (csr_ex.new_request) begin
-            done <= 1;
-        end else if (csr_wb.accepted) begin
-            done <= 0;
-        end
-    end
-
-    ////////////////////////////////////////////////////
-    //Assertions
-    always_ff @ (posedge clk) begin
-        assert (~csr_wb.accepted | (csr_wb.accepted & done)) else $error("Spurious ack for CSR Unit");
-    end
 
 endmodule

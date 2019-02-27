@@ -26,26 +26,34 @@ import taiga_types::*;
 module gc_unit(
         input logic clk,
         input logic rst,
-        input logic interrupt,
 
+        //Decode
         func_unit_ex_interface.unit gc_ex,
         input gc_inputs_t gc_inputs,
+        input logic instruction_issued_no_rd,
 
-        input instruction_id_t oldest_id,
-        input logic inflight_queue_empty,
-
+        //Load Store Unit
         exception_interface.econtrol ls_exception,
         input logic load_store_issue,
         input logic load_store_FIFO_emptying,
 
-        exception_interface.econtrol csr_exception,
-        output logic mret,
-        output logic sret,
-        output logic ecall,
-        output logic ebreak,
+        //TLBs
+        output logic tlb_on,
+        output logic [ASIDLEN-1:0] asid,
 
-        csr_exception_interface.econtrol gc_exception,
+        //MMUs
+        mmu_interface.csr immu,
+        mmu_interface.csr dmmu,
 
+        //WB
+        input logic instruction_complete,
+        unit_writeback_interface.unit gc_wb,
+
+        //External
+        input logic interrupt,
+        input logic timer_interrupt,
+
+        //Output controls
         output logic gc_issue_hold,
         output logic gc_issue_flush,
         output logic gc_fetch_hold,
@@ -59,12 +67,23 @@ module gc_unit(
     //Largest depth for TLBs
     localparam int TLB_CLEAR_DEPTH = (DTLB_DEPTH > ITLB_DEPTH) ? DTLB_DEPTH : ITLB_DEPTH;
     //For general reset clear, greater of TLB depth or inuse memory block (32-bits)
-    localparam int CLEAR_DEPTH = USE_MMU ? TLB_CLEAR_DEPTH : 32;
+    localparam int CLEAR_DEPTH = ENABLE_S_MODE ? TLB_CLEAR_DEPTH : 32;
 
     logic [CLEAR_DEPTH-1:0] clear_shift_count;
     logic [TLB_CLEAR_DEPTH-1:0] tlb_clear_shift_count;
     ////////////////////////////////////////////////////
     enum {OP_ECALL, OP_EBREAK, OP_SRET, OP_MRET, OP_SFENCE, OP_FENCE, OP_FENCEI} operation;
+
+    //CSR
+    logic mret;
+    logic sret;
+    logic [XLEN-1:0] selected_csr;
+    csr_inputs_t csr_inputs;
+    exception_packet_t gc_exception;
+    exception_packet_t csr_exception;
+
+   //Write-back handshaking
+    logic wb_done;
 
     //Instructions
     //All instructions are processed only if in IDLE state, meaning there can be no exceptions caused by instructions already further in the pipeline.
@@ -158,9 +177,65 @@ module gc_unit(
         tlb_clear_shift_count[TLB_CLEAR_DEPTH-1:1] <= tlb_clear_shift_count[TLB_CLEAR_DEPTH-2:0];
     end
 
+    ////////////////////////////////////////////////////
+    //CSR registers
+    logic [2:0] fn3;
+    logic [6:0] opcode;
+    logic [4:0] opcode_trim;
+
+    logic [4:0] rs1_addr;
+    logic [4:0] rs2_addr;
+    logic [4:0] future_rd_addr;
+
+    assign opcode = gc_inputs.instruction[6:0];
+    assign opcode_trim = opcode[6:2];
+    assign fn3 = gc_inputs.instruction[14:12];
+
+    logic is_csr_op;
+    assign is_csr_op = (opcode_trim == SYSTEM_T) && (fn3 != 0);
+
+    assign csr_inputs.rs1 = gc_inputs.rs1;
+    assign csr_inputs.csr_addr = gc_inputs.instruction[31:20];
+    assign csr_inputs.csr_op = fn3[1:0];
+    assign csr_inputs.rs1_is_zero = (rs1_addr == 0);
+    assign csr_inputs.rd_is_zero = gc_inputs.rd_is_zero;
+
+    csr_regs csr_registers (.*, .new_request(is_csr_op & gc_ex.new_request));
 
     ////////////////////////////////////////////////////
-    assign gc_ex.ready = 1;
+    //Decode / Write-back Handshaking
+    always_ff @(posedge clk) begin
+        if (rst) begin
+            gc_ex.ready <= 1;
+        end else if (gc_ex.new_request_dec) begin
+            gc_ex.ready <= 0;
+        end else if (gc_wb.accepted) begin
+            gc_ex.ready <= 1;
+        end
+    end
+
+    always_ff @(posedge clk) begin
+        if (gc_ex.new_request) begin
+            gc_wb.rd <= selected_csr;
+        end
+    end
+
+
+    //Write_back
+    assign gc_wb.done_next_cycle = gc_ex.new_request & is_csr_op;
+    always_ff @(posedge clk) begin
+        gc_wb.instruction_id <= gc_ex.instruction_id;
+    end
+
+    always_ff @(posedge clk) begin
+        if (rst) begin
+            wb_done <= 0;
+        end else if (gc_ex.new_request & is_csr_op) begin
+            wb_done <= 1;
+        end else if (gc_wb.accepted) begin
+            wb_done <= 0;
+        end
+    end
 
 
     ////////////////////////////////////////////////////
@@ -169,6 +244,9 @@ module gc_unit(
         assert ((gc_ex.new_request && state == IDLE_STATE) || !gc_ex.new_request) else $error("Request when not idle.");
     end
 
+    always_ff @ (posedge clk) begin
+        assert (~gc_wb.accepted | (gc_wb.accepted & wb_done)) else $error("Spurious ack for CSR Unit");
+    end
     ////////////////////////////////////////////////////
 
 endmodule

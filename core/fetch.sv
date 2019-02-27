@@ -26,7 +26,6 @@ import taiga_types::*;
 module fetch(
         input logic clk,
         input logic rst,
-        input logic dec_advance,
 
         input logic exception,
 

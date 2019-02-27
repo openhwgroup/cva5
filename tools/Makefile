@@ -10,7 +10,7 @@ TAIGA_LOCAL_MEM_SV=$(wildcard $(TAIGA_DIR)/local_memory/*.sv)
 TAIGA_SRCS = $(shell cat taiga_compile_order)
 
 VERILATOR_LINT_IGNORE= -Wno-UNOPTFLAT -Wno-WIDTH -Wno-WIDTHCONCAT -Wno-LITENDIAN -Wno-SYMRSVDWORD -Wno-CASEINCOMPLETE -Wno-CASEX
-VERILATOR_CFLAGS =  -CFLAGS "-O2"
+VERILATOR_CFLAGS =  -CFLAGS "-g0 -O2"
 
 BENCHMARK_MEM_INIT=/home/ematthew/Research/RISCV/software/taiga-benchmarks/dhrystone.riscv.hw_init
 
