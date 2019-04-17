@@ -33,7 +33,8 @@ module div_radix4
         input logic [C_WIDTH-1:0] B,
         output logic [C_WIDTH-1:0] Q,
         output logic [C_WIDTH-1:0] R,
-        output logic complete
+        output logic complete,
+        output logic B_is_zero
     );
     
     logic terminate;
@@ -62,14 +63,13 @@ module div_radix4
     
     always_ff @ (posedge clk) begin
         if (start) begin
+            PR <= {{(C_WIDTH-1){1'b0}}, A[C_WIDTH-1:C_WIDTH-2]};
+            Q <= {A[C_WIDTH-3:0], 2'b00};
+
             B_1 <= {2'b0, B};           //1xB
             B_2 <= {1'b0, B, 1'b0};     //2xB
             B_3 <= {1'b0, B, 1'b0} + B; //3xB
-    
-            PR <= {{(C_WIDTH-1){1'b0}}, A[C_WIDTH-1:C_WIDTH-2]};
-            Q <= {A[C_WIDTH-3:0], 2'b00};
-        end
-        else if (~terminate) begin
+        end else if (~terminate) begin
             casex (new_PR_sign)
                 3'b111 : begin
                     PR <= {PR[C_WIDTH-1:0], Q[C_WIDTH-1:C_WIDTH-2]};
@@ -96,7 +96,14 @@ module div_radix4
     end
     
     assign R = PR[C_WIDTH+1:2];
-    
+
+    always_ff @ (posedge clk) begin
+        if (start)
+            B_is_zero <= ~B[0];
+        else  if (~terminate)
+            B_is_zero <= B_is_zero & ~(|new_PR_sign);
+    end
+
     always_ff @ (posedge clk) begin
         if (rst)
             terminate <= 0;

@@ -34,7 +34,8 @@ module div_radix16
         input logic [C_WIDTH-1:0] B,
         output logic [C_WIDTH-1:0] Q,
         output logic [C_WIDTH-1:0] R,
-        output logic complete
+        output logic complete,
+        output logic B_is_zero
     );
 
    logic terminate;
@@ -55,8 +56,13 @@ module div_radix16
    logic [C_WIDTH+3:0] B_12;
    logic [C_WIDTH+3:0] B_14;        
 
-   //implementation
-   ////////////////////////////////////////////////////
+
+   //Shift reg for
+   always_ff @ (posedge clk) begin
+       shift_count[0] <= start;
+       shift_count[31:1] <= shift_count[30:0];
+   end
+   
    assign new_PR_8  = {1'b0, PR} - {1'b0, {1'b0, B, 3'b000}};
    assign new_PR[0]  = new_PR_8[C_WIDTH+4] ? {1'b0, PR} - {1'b0, {4'b0000, B}}                      : {1'b0, PR} - {1'b0, {1'b0, B, 3'b000}} - {4'b0000, B};
    assign new_PR[1]  = new_PR_8[C_WIDTH+4] ? {1'b0, PR} - {1'b0, {3'b000, B, 1'b0}}                 : {1'b0, PR} - {1'b0, B_10};
@@ -69,12 +75,6 @@ module div_radix16
    assign new_PR_sign = {new_PR[6][C_WIDTH+4], new_PR[5][C_WIDTH+4], new_PR[4][C_WIDTH+4],
                          new_PR[3][C_WIDTH+4], new_PR[2][C_WIDTH+4], new_PR[1][C_WIDTH+4],
                          new_PR[0][C_WIDTH+4]};
-
-   //Shift reg for
-   always_ff @ (posedge clk) begin
-       shift_count[0] <= start;
-       shift_count[31:1] <= shift_count[30:0];
-   end
    
    always_comb begin
         PR_lower = ({PR[C_WIDTH-1:0], Q[C_WIDTH-1:C_WIDTH-4]} & {(C_WIDTH+4){(new_PR_sign[0])}});
@@ -125,6 +125,13 @@ module div_radix16
    end
 
    assign R = PR[C_WIDTH+3:4];
+
+    always_ff @ (posedge clk) begin
+        if (start)
+            B_is_zero <= ~B[0];
+        else  if (~terminate)
+            B_is_zero <= B_is_zero & ~(|new_PR_sign);
+    end
 
    always_ff @ (posedge clk) begin
        if (rst)

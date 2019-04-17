@@ -102,7 +102,10 @@ module div_unit_tb ();
         end 
     end
     
-    assign wb_done = div_wb.done_next_cycle & (wb_done_acc >= response_latency);
+    //With Latency
+    //assign wb_done = div_wb.done_next_cycle & (wb_done_acc >= response_latency);
+    //Without Latency
+    assign wb_done = div_wb.done_next_cycle;
 
     always_ff @(posedge clk) begin
         if (rst)
@@ -119,11 +122,10 @@ module div_unit_tb ();
             test_number <= test_number + 1;
             temp_result = result_queue.pop_front();
             assert (div_wb.rd == temp_result.expected_result)
-                else $error("Incorrect result on test number %d. (%h, should be: %h)\n\t Input: rs1: %d, rs2: %d, op: %b, div_zero: %b, reuse_result: %b", 
+                else $error("Incorrect result on test number %d. (%h, should be: %h)\n\t Input: rs1: %d, rs2: %d, op: %b, reuse_result: %b", 
                     test_number, div_wb.rd, temp_result.expected_result,
                     temp_result.module_input.rs1, temp_result.module_input.rs2, 
-                    temp_result.module_input.op, temp_result.module_input.div_zero,
-                    temp_result.module_input.reuse_result);
+                    temp_result.module_input.op, temp_result.module_input.reuse_result);
         end
     end
 
@@ -133,7 +135,6 @@ module div_unit_tb ();
         div_inputs.rs1 = a;
         div_inputs.rs2 = b;
         div_inputs.op = op;
-        div_inputs.div_zero = (div_inputs.rs2 == 0);
         div_inputs.reuse_result = reuse;
         result_queue.push_back({div_inputs, result});
         latency_queue.push_back(latency);
@@ -196,7 +197,6 @@ module div_unit_tb ();
         div_inputs.op = 0;
         div_inputs.reuse_result = 0;
         div_ex.new_request_dec = 0;
-        div_inputs.div_zero = 0;
         div_wb.accepted = 0;
 
         reset();
@@ -278,6 +278,21 @@ module div_unit_tb ();
         #200;
         if (result_queue.size() == 0) begin
             // $display("queue size: %d", result_queue.size());
+            
+            case(DIV_ALGORITHM)
+                RADIX_2 : $display("RADIX_2"); 
+                RADIX_2_EARLY_TERMINATE : $display("RADIX_2_EARLY_TERMINATE"); 
+                RADIX_2_EARLY_TERMINATE_FULL : $display("RADIX_2_EARLY_TERMINATE_FULL");
+                RADIX_4 : $display("RADIX_4");
+                RADIX_4_EARLY_TERMINATE : $display("RADIX_4_EARLY_TERMINATE");
+                RADIX_8 : $display("RADIX_8");
+                RADIX_8_EARLY_TERMINATE : $display("RADIX_8_EARLY_TERMINATE");
+                RADIX_16 : $display("RADIX_16");
+                QUICK_NAIVE : $display("QUICK_NAIVE");
+                QUICK_CLZ : $display("QUICK_CLZ");
+                QUICK_CLZ_MK2 : $display("QUICK_CLZ_MK2");
+                default : $error("invalid div selection");
+            endcase
             $display("Div Unit Test -------------------- Passed");
         end
         $finish;

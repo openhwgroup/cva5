@@ -33,7 +33,8 @@ module div_radix8
         input logic [C_WIDTH-1:0] B,
         output logic [C_WIDTH-1:0] Q,
         output logic [C_WIDTH-1:0] R,
-        output logic complete
+        output logic complete,
+        output logic B_is_zero
     );
 
     logic terminate;
@@ -50,16 +51,30 @@ module div_radix8
     logic [C_WIDTH+3:0] new_PR_5;
     logic [C_WIDTH+3:0] new_PR_6;
     logic [C_WIDTH+3:0] new_PR_7;
+    logic [C_WIDTH+2:0] B_1;
+    logic [C_WIDTH+2:0] B_2;
+    logic [C_WIDTH+2:0] B_3;    
+    logic [C_WIDTH+2:0] B_4;
+    logic [C_WIDTH+2:0] B_5;
+    logic [C_WIDTH+2:0] B_6;
+    logic [C_WIDTH+2:0] B_7;
 
     //implementation
     ////////////////////////////////////////////////////
-    assign new_PR_1 = {1'b0, PR} - B;
-    assign new_PR_2 = {1'b0, PR} - {B, 1'b0};
-    assign new_PR_3 = {1'b0, PR} - {B, 1'b0} - B;
-    assign new_PR_4 = {1'b0, PR} - {B, 2'b0};
-    assign new_PR_5 = {1'b0, PR} - {B, 2'b0} - B;
-    assign new_PR_6 = {1'b0, PR} - {B, 2'b0} - {B, 1'b0};
-    assign new_PR_7 = {1'b0, PR} - {B, 2'b0} - {B, 1'b0} - B;
+//    assign new_PR_1 = {1'b0, PR} - B;
+//    assign new_PR_2 = {1'b0, PR} - {B, 1'b0};
+//    assign new_PR_3 = {1'b0, PR} - {B, 1'b0} - B;
+//    assign new_PR_4 = {1'b0, PR} - {B, 2'b0};
+//    assign new_PR_5 = {1'b0, PR} - {B, 2'b0} - B;
+//    assign new_PR_6 = {1'b0, PR} - {B, 2'b0} - {B, 1'b0};
+//    assign new_PR_7 = {1'b0, PR} - {B, 2'b0} - {B, 1'b0} - B;
+    assign new_PR_1 = {1'b0, PR} - B_1;
+    assign new_PR_2 = {1'b0, PR} - B_2;
+    assign new_PR_3 = {1'b0, PR} - B_3;
+    assign new_PR_4 = {1'b0, PR} - B_4;
+    assign new_PR_5 = {1'b0, PR} - B_5;
+    assign new_PR_6 = {1'b0, PR} - B_6;
+    assign new_PR_7 = {1'b0, PR} - B_7;
     assign new_PR_sign = {new_PR_7[C_WIDTH+3], new_PR_6[C_WIDTH+3], new_PR_5[C_WIDTH+3],
                           new_PR_4[C_WIDTH+3], new_PR_3[C_WIDTH+3], new_PR_2[C_WIDTH+3],
                           new_PR_1[C_WIDTH+3]};
@@ -73,6 +88,14 @@ module div_radix8
         if (start) begin
             PR <= {{(C_WIDTH){1'b0}}, 1'b0, A[C_WIDTH-1:C_WIDTH-2]};
             Q_33 <= {A[C_WIDTH-3:0], 3'b000};
+            
+            B_1 <= {3'b000, B};
+            B_2 <= {2'b00, B, 1'b0};
+            B_3 <= {2'b00, B, 1'b0} + B;
+            B_4 <= {1'b0, B, 2'b00};
+            B_5 <= {1'b0, B, 2'b00} + B;
+            B_6 <= {1'b0, B, 2'b00} + {2'b00, B, 1'b0};
+            B_7 <= {1'b0, B, 2'b00} + {2'b00, B, 1'b0} + B;
         end
         else if (~terminate) begin
             casex (new_PR_sign)
@@ -118,6 +141,13 @@ module div_radix8
 
     assign R = PR[C_WIDTH+2:3];
     assign Q = Q_33[C_WIDTH-1:0];
+    
+    always_ff @ (posedge clk) begin
+        if (start)
+            B_is_zero <= ~B[0];
+        else  if (~terminate)
+            B_is_zero <= B_is_zero & ~(|new_PR_sign);
+    end    
 
     always_ff @ (posedge clk) begin
         if (rst)

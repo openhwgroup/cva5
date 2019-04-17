@@ -54,8 +54,7 @@ module div_radix2
 
     //Shift reg for
     always_ff @ (posedge clk) begin
-        shift_count[0] <= start;
-        shift_count[31:1] <= shift_count[30:0];
+        shift_count <= {shift_count[30:0], start};
     end
 
     always_ff @ (posedge clk) begin
@@ -65,8 +64,7 @@ module div_radix2
             B_r <= B;
         end
         else if (~terminate) begin
-            PR <= negative_sub_rst ? {PR[C_WIDTH-1:0], Q[C_WIDTH-1]} :
-                {new_PR[C_WIDTH-1:0], Q[C_WIDTH-1]};
+            PR <= negative_sub_rst ? {PR[C_WIDTH-1:0], Q[C_WIDTH-1]} : {new_PR[C_WIDTH-1:0], Q[C_WIDTH-1]};
             Q <= {Q[C_WIDTH-2:0], ~negative_sub_rst};
         end
     end

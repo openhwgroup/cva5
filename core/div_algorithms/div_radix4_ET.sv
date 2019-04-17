@@ -34,7 +34,8 @@ module div_radix4_ET
             input logic [C_WIDTH-1:0] B,
             output logic [C_WIDTH-1:0] Q,
             output logic [C_WIDTH-1:0] R,
-            output logic complete
+            output logic complete,
+            output logic B_is_zero
         );
 
     logic terminate;
@@ -105,6 +106,13 @@ module div_radix4_ET
     end
 
     assign R = PR[C_WIDTH+1:2];
+
+    always_ff @ (posedge clk) begin
+        if (start)
+            B_is_zero <= ~B[0];
+        else  if (~terminate)
+            B_is_zero <= B_is_zero & ~(|new_PR_sign);
+    end
 
     always_ff @ (posedge clk) begin
         if (rst)
