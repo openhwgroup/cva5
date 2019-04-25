@@ -9,7 +9,7 @@ using namespace std;
 int main(int argc, char **argv) {
 	// Initialize Verilators variables
 	Verilated::commandArgs(argc, argv);
-    Verilated::traceEverOn(true);
+    //Verilated::traceEverOn(true);
 
 	//VerilatedVcdC	*tracer;
 	//tracer = new VerilatedVcdC;
@@ -22,6 +22,7 @@ int main(int argc, char **argv) {
 	cout << "******************************\n";
 	int reset_count = 0;
 	long int cycle_cout = 0;
+	int stall_count = 0;
 	tb->rst = 1;
 	// Tick the clock until we are done
 	while(!Verilated::gotFinish()) {
@@ -44,6 +45,18 @@ int main(int argc, char **argv) {
 		if (tb->dec_instruction_r == 0x00100013U) {
 			break;
 		}
+		
+		if (tb->dec_advance_debug == 0) {
+			stall_count++;
+		} else {
+			stall_count = 0;
+		}
+		
+		if (stall_count > 200) {
+			cout << "Stall detected\n";
+			break;
+		}
+		
 		//tracer->dump(vluint64_t(cycle_cout));
 		cycle_cout++;
 	}

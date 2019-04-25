@@ -33,6 +33,7 @@ module csr_regs (
         input new_request,
         input exception_packet_t gc_exception,
         output exception_packet_t csr_exception,
+        output logic [1:0] current_privilege,
 
         //Decode
         input logic instruction_issued_no_rd,
@@ -57,8 +58,10 @@ module csr_regs (
         input logic interrupt,
         input logic timer_interrupt,
 
-        output logic [XLEN-1:0] selected_csr
-
+        output logic [XLEN-1:0] selected_csr,
+        output logic [31:0] trap_pc,
+        output logic [31:0] csr_mepc,
+        output logic [31:0] csr_sepc
         );
 
     misa_t misa;
@@ -84,11 +87,12 @@ module csr_regs (
     logic[XLEN-1:0] mideleg;
     mip_t mip, mip_mask;
     mie_t mie_reg, mie_mask;
+
     logic[XLEN-1:0] mepc;
 
     logic[XLEN-1:0] mtimecmp;
 
-    logic[XLEN-1:0] mcause;
+    mcause_t mcause;
     logic[XLEN-1:0] mtval;
 
     mip_t sip_mask;
@@ -103,6 +107,8 @@ module csr_regs (
 
     logic[XLEN-1:0] sstatus;
     logic[XLEN-1:0] stvec;
+
+    satp_t satp;
 
     logic[COUNTER_W-1:0] mcycle;
     logic[COUNTER_W-1:0] mtime;
@@ -156,39 +162,140 @@ module csr_regs (
 
     //convert addr into packed struct form
     assign csr_addr = csr_inputs.csr_addr;
-    assign privilege_exception = new_request  && (csr_addr.privilege > privilege_level);
+    assign privilege_exception = new_request && (csr_addr.privilege > privilege_level);
 
-    assign supervisor_write = !privilege_exception && (csr_addr.rw_bits != CSR_READ_ONLY && csr_addr.privilege == SUPERVISOR_PRIV);
-    assign machine_write = !privilege_exception && (csr_addr.rw_bits != CSR_READ_ONLY && csr_addr.privilege == MACHINE_PRIV);
+    assign supervisor_write = new_request && !privilege_exception && (csr_addr.rw_bits != CSR_READ_ONLY && csr_addr.privilege == SUPERVISOR_PRIVILEGE);
+    assign machine_write = new_request && !privilege_exception && (csr_addr.rw_bits != CSR_READ_ONLY && csr_addr.privilege == MACHINE_PRIVILEGE);
 
     logic illegal_instruction;
     assign illegal_instruction = invalid_addr | privilege_exception;
     assign csr_exception.valid = new_request & illegal_instruction;
 
-    assign machine_trap = gc_exception.valid && next_privilege_level == MACHINE_PRIV;
-    assign supervisor_trap = gc_exception.valid && next_privilege_level == SUPERVISOR_PRIV;
+    assign machine_trap = gc_exception.valid && next_privilege_level == MACHINE_PRIVILEGE;
+    assign supervisor_trap = gc_exception.valid && next_privilege_level == SUPERVISOR_PRIVILEGE;
 
     always_comb begin
         case (csr_inputs.csr_op)
-            //  CSR_RW : updated_csr = csr_inputs.rs1;
+            CSR_RW : updated_csr = csr_inputs.rs1;
             CSR_RS : updated_csr = selected_csr | csr_inputs.rs1;
             CSR_RC : updated_csr = selected_csr & ~csr_inputs.rs1;
-            default : updated_csr = csr_inputs.rs1;//selected_csr;
+            default : updated_csr = csr_inputs.rs1;
         endcase
     end
 
     //Machine ISA register
     assign misa = '{default:0, base:1, A:1, S:1, M:1, I:1};
-    //assign misa = '{default:0, base:1, A:0, S:1, M:1, I:1};
-    //assign misa = '{default:0, base:1, A:0, S:1, M:0, I:1};
 
-    //mstatus and privilege
-    mstatus_priv_reg mstatus_and_privilege_regs (.*, .exception(gc_exception.valid),
-            .interrupt_delegated(mideleg[gc_exception.code]), .exception_delegated(medeleg[gc_exception.code]),
-            .write_msr_m(mwrite_decoder[MSTATUS[5:0]]),.write_msr_s(swrite_decoder[SSTATUS[5:0]])
-        );
 
-    //medeleg
+
+
+
+
+
+
+
+
+    //MSTATUS
+    ////////////////////////////////////////////////////
+    logic [1:0] trap_return_privilege_level, exception_privilege_level, interrupt_privilege_level;
+    mstatus_t mstatus_exception, mstatus_return, mstatus_rst, mstatus_new;
+    mstatus_t mstatus_mmask, mstatus_mask;
+    logic exception_delegated;
+    logic interrupt_delegated;
+
+    assign exception_delegated = medeleg[gc_exception.code];
+    assign interrupt_delegated = mideleg[gc_exception.code];
+
+    assign trap_return_privilege_level = mret ? mstatus.mpp : {1'b0,mstatus.spp};
+    assign exception_privilege_level = exception_delegated ? SUPERVISOR_PRIVILEGE : MACHINE_PRIVILEGE;
+    assign interrupt_privilege_level = interrupt_delegated ? SUPERVISOR_PRIVILEGE : MACHINE_PRIVILEGE;
+
+    always_comb begin
+        unique if(mret | sret)
+            next_privilege_level = trap_return_privilege_level;
+        else if (interrupt)
+            next_privilege_level = interrupt_privilege_level;
+        else if (gc_exception.valid)
+            next_privilege_level = exception_privilege_level;
+        else
+            next_privilege_level = privilege_level;
+    end
+
+    //Current privilege level
+    always_ff @(posedge clk) begin
+        if (rst)
+            privilege_level <= MACHINE_PRIVILEGE;
+        else
+            privilege_level <= next_privilege_level;
+    end
+    assign current_privilege = privilege_level;
+
+    always_comb begin
+        mstatus_exception = mstatus;
+        case (next_privilege_level)
+            SUPERVISOR_PRIVILEGE: begin
+                mstatus_exception.spie = (privilege_level == SUPERVISOR_PRIVILEGE) ? mstatus.sie : mstatus.uie;
+                mstatus_exception.sie = 0;
+                mstatus_exception.spp = privilege_level[0]; //one if from supervisor-mode, zero if from user-mode
+            end
+            default: begin
+                mstatus_exception.mpie = (privilege_level == MACHINE_PRIVILEGE) ? mstatus.mie : ((privilege_level == SUPERVISOR_PRIVILEGE) ? mstatus.sie : mstatus.uie);
+                mstatus_exception.mie = 0;
+                mstatus_exception.mpp = privilege_level; //machine,supervisor or user
+            end
+        endcase
+    end
+
+    //return from trap
+    always_comb begin
+        mstatus_return = mstatus;
+        unique if (sret) begin
+            mstatus_return.sie = mstatus_return.spie;
+            mstatus_return.spie = 1;
+            mstatus_return.spp = 0;
+        end else if (mret) begin
+            mstatus_return.mie = mstatus.mpie;
+            mstatus_return.mpie = 1;
+            mstatus_return.mpp = USER_PRIVILEGE;
+        end
+    end
+
+    assign mstatus_mmask = '{default:0, mprv:1, mxr:1, sum:1, mpp:'1, spp:1, mpie:1, spie:1, mie:1, sie:1};
+    assign mstatus_smask  = '{default:0, mxr:1, sum:1, spp:1, spie:1, sie:1};
+    assign mstatus_mask = mwrite_decoder[MSTATUS[5:0]] ? mstatus_mmask : mstatus_smask;
+
+    always_comb begin
+        unique if (mwrite_decoder[MSTATUS[5:0]] | swrite_decoder[SSTATUS[5:0]])
+            mstatus_new = updated_csr & mstatus_mask;
+        else if (interrupt | gc_exception.valid)
+            mstatus_new = mstatus_exception;
+        else if (mret | sret)
+            mstatus_new = mstatus_return;
+        else
+            mstatus_new = mstatus;
+    end
+
+    assign mstatus_rst = '{default:0, mpp:MACHINE_PRIVILEGE};
+    always_ff @(posedge clk) begin
+        if (rst)
+            mstatus <= mstatus_rst;
+        else
+            mstatus <= mstatus_new;
+    end
+
+
+
+
+
+
+
+
+
+
+
+
+    //MEDELEG
+    ////////////////////////////////////////////////////
     logic [31:0] medeleg_mask;
     always_comb begin
         medeleg_mask = 0;
@@ -247,55 +354,72 @@ module csr_regs (
             mie_reg <= (updated_csr & sie_mask);
     end
 
-
-    //mtvec
-    logic [31:0] mtvec_mask = '1;
+    //MEPC
+    //Can be software written, written on exception with
+    //exception causing PC.  Lower two bits tied to zero.
+    ////////////////////////////////////////////////////
     always_ff @(posedge clk) begin
-        if (rst)
-            mtvec <= {RESET_VEC[XLEN-1:2], 2'b00};
-        else if (mwrite_decoder[MTVEC[5:0]])
-            mtvec <= (updated_csr & mtvec_mask);
+        mepc[1:0] <= '0;
+        if (mwrite_decoder[MEPC[5:0]] | gc_exception.valid)
+            mepc[XLEN-1:2] <= gc_exception.valid ? gc_exception.pc[XLEN-1:2] : updated_csr[XLEN-1:2];
+    end
+    assign csr_mepc = mepc;
+
+    //MTVEC
+    //No vectored mode, mode hard-coded to zero
+    ////////////////////////////////////////////////////
+    always_ff @(posedge clk) begin
+        mtvec[1:0] <= '0;
+        if (mwrite_decoder[MTVEC[5:0]])
+            mtvec[XLEN-1:2] <= updated_csr[XLEN-1:2];
+    end
+    assign trap_pc = mtvec;
+
+    //MCAUSE
+    ////////////////////////////////////////////////////
+    logic[XLEN-1:0] mcause_mask;
+    always_ff @(posedge clk) begin
+        mcause.zeroes <= '0;
+        if (mwrite_decoder[MCAUSE[5:0]] | gc_exception.valid) begin
+            mcause.interrupt <= gc_exception.valid ? 1'b0 :updated_csr[XLEN-1];
+            mcause.code <= gc_exception.valid ? gc_exception.code : updated_csr[ECODE_W-1:0];
+        end
     end
 
-    //mepc
-    logic [31:0] mepc_mask;
-    assign mepc_mask = {30'b1, 2'b0};
-    //mcause
-    logic [31:0] mcause_mask;
-    always_comb begin
-        mcause_mask = 0;
-        mcause_mask[31] = 1;
-        mcause_mask[ECODE_W-1:0] = '1;
+    //MTVAL
+    ////////////////////////////////////////////////////
+    always_ff @(posedge clk) begin
+        if (mwrite_decoder[MTVAL[5:0]] | gc_exception.valid)
+            mtval <=  gc_exception.valid ? gc_exception.tval : updated_csr;
     end
-    //scratch regs
-    logic [31:0] scratch_mask;
-    assign scratch_mask = '1;
 
-    logic [31:0] lut_reg_mask;
-    always_comb begin
-        if (csr_addr.sub_addr[2:0] == MEPC[2:0])
-            lut_reg_mask = mepc_mask;
-        else if (csr_addr.sub_addr[2:0] == MCAUSE[2:0])
-            lut_reg_mask = mcause_mask;
-        else
-            lut_reg_mask = '1;
-    end
+    //Scratch regs
+    //For efficient LUT-RAM packing, all scratch regs are stored together
+    ////////////////////////////////////////////////////
+    logic scratch_reg_write;
+    assign scratch_reg_write = mwrite_decoder[MSCRATCH[5:0]] | swrite_decoder[SSCRATCH[5:0]];
 
     always_ff @(posedge clk) begin
-        if (mwrite_decoder[MSCRATCH[5:0]] | mwrite_decoder[MEPC[5:0]] | mwrite_decoder[MCAUSE[5:0]] | mwrite_decoder[MTVAL[5:0]] |
-                swrite_decoder[SSCRATCH[5:0]] | swrite_decoder[SEPC[5:0]] | swrite_decoder[SCAUSE[5:0]] | swrite_decoder[STVAL[5:0]]
-            )
-            scratch_regs[{csr_addr.privilege, csr_addr.sub_addr[2:0]}] <= (updated_csr & lut_reg_mask);
+        if (scratch_reg_write)
+            scratch_regs[{csr_addr.privilege, csr_addr.sub_addr[2:0]}] <= updated_csr;
     end
     assign scratch_out = scratch_regs[{csr_addr.privilege, csr_addr.sub_addr[2:0]}];
 
 
-
+    ////////////////////////////////////////////////////
     //END OF MACHINE REGS
+    ////////////////////////////////////////////////////
 
 
 
+
+
+
+
+
+    ////////////////////////////////////////////////////
     //BEGIN OF SUPERVISOR REGS
+    ////////////////////////////////////////////////////
 
     assign sip_mask =  '{default:0, seip:1, stip:1, ssip:1};
 
@@ -355,17 +479,17 @@ module csr_regs (
             MIMPID : selected_csr = mimpid;
             MHARTID : selected_csr = mhartid;
                 //Machine trap setup
-                //MSTATUS : selected_csr = mstatus;
-                //MEDELEG : selected_csr = medeleg;
-                //MIDELEG : selected_csr = mideleg;
-                //MIE : selected_csr = mie_reg;
-                //MTVEC : selected_csr = mtvec;
+            MSTATUS : selected_csr = mstatus;
+            MEDELEG : selected_csr = medeleg;
+            MIDELEG : selected_csr = mideleg;
+            MIE : selected_csr = mie_reg;
+            MTVEC : selected_csr = mtvec;
                 //Machine trap handling
-                //MSCRATCH : selected_csr = scratch_out;
-                //MEPC : selected_csr = scratch_out;
-                //MCAUSE : selected_csr = scratch_out;
-                //MTVAL : selected_csr = scratch_out;
-                //MIP : selected_csr = mip;
+            MSCRATCH : selected_csr = scratch_out;
+            MEPC : selected_csr = mepc;
+            MCAUSE : selected_csr = mcause;
+            MTVAL : selected_csr = mtval;
+            MIP : selected_csr = mip;
                 //Machine Timers and Counters
             MCYCLE : selected_csr = mcycle[XLEN-1:0];
             MINSTRET : selected_csr = minst_ret[XLEN-1:0];

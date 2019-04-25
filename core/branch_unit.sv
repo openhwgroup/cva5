@@ -77,7 +77,7 @@ module branch_unit(
             .result(result)
             );
 
-    assign  bt.branch_taken = (~jump_ex & (result_ex ^ fn3_ex[0])) | jump_ex;
+    assign  bt.branch_taken = bt.branch_ex & ((~jump_ex & (result_ex ^ fn3_ex[0])) | jump_ex);
 
 
     assign jal_imm = {branch_inputs.instruction[31], branch_inputs.instruction[19:12], branch_inputs.instruction[20], branch_inputs.instruction[30:21]};

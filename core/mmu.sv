@@ -4,7 +4,7 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -19,9 +19,10 @@
  * Author(s):
  *             Eric Matthews <ematthew@sfu.ca>
  */
- 
+
 import taiga_config::*;
 import taiga_types::*;
+import csr_types::*;
 
 module mmu
         (
@@ -89,8 +90,8 @@ module mmu
 
     //Not ((user-mode and non-user page) OR (supervisor-mode and user-page and user protected))
     assign privilege_check = !(
-            ((mmu.privilege == USER_PRIV) && ~pte.u) |
-            ((mmu.privilege == SUPERVISOR_PRIV) && pte.u && mmu.pum)
+            ((mmu.privilege == USER_PRIVILEGE) && ~pte.u) |
+            ((mmu.privilege == SUPERVISOR_PRIVILEGE) && pte.u && mmu.pum)
             );
 
     assign permissions_check = privilege_check & ((mmu.execute & pte.x) | //execute and exec bit set

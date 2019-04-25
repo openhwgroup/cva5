@@ -78,7 +78,7 @@ module ver_top # (
         output logic [7:0] uart_byte,
         output logic [31:0] dec_instruction_r,
         output logic [31:0] dec_pc_debug_r,
-
+		output logic dec_advance_debug,
         //L2
         //l2 request
         output logic [29:0] addr,
@@ -166,7 +166,7 @@ module ver_top # (
     logic [31:0] if2_pc_debug;
     logic interrupt;
     logic timer_interrupt;
-    logic dec_advance_debug;
+
 
     assign interrupt = 0;
 
@@ -230,8 +230,8 @@ module ver_top # (
     taiga cpu(.*, .l2(l2[0]));
 
     always_ff @(posedge clk) begin
-       dec_instruction_r <= dec_instruction;
-       dec_pc_debug_r <= dec_pc_debug;
+        dec_instruction_r <= dec_instruction;
+        dec_pc_debug_r <= dec_pc_debug;
     end
 
     //read channel

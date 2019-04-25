@@ -9,7 +9,6 @@
 ../core/interfaces.sv  
 
 ../core/csr_types.sv  
-../core/mstatus_priv_reg.sv 
 ../core/csr_regs.sv  
 ../core/gc_unit.sv  
 
@@ -94,4 +93,4 @@
 
 ../core/placer_randomizer.sv
 ../core/taiga.sv  
-../test_benches/verilator/ver_top.sv  
+

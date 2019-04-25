@@ -1,5 +1,5 @@
 /*
- * Copyright © 2017 Eric Matthews,  Lesley Shannon
+ * Copyright © 2017, 2019 Eric Matthews,  Lesley Shannon
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,7 +39,7 @@ package taiga_config;
     parameter bit[31:0] RESET_VEC = 32'h80000000;
 
     //CSR counter width (33-64 bits): 48-bits --> 32 days @ 100MHz
-    parameter COUNTER_W = 48;
+    parameter COUNTER_W = 33;
 
 
     ////////////////////////////////////////////////////
@@ -63,7 +63,7 @@ package taiga_config;
         QUICK_CLZ,
         QUICK_CLZ_MK2
     } div_type;
-    parameter div_type DIV_ALGORITHM = RADIX_8;
+    parameter div_type DIV_ALGORITHM = QUICK_CLZ;
 
     //Enable Atomic extension (cache operations only)
     parameter USE_AMO = 0;
@@ -157,7 +157,7 @@ package taiga_config;
     parameter MAX_INFLIGHT_COUNT = 4;
     parameter FETCH_BUFFER_DEPTH = 4;
 
-    parameter LS_INPUT_BUFFER_DEPTH = 4;
+    parameter LS_INPUT_BUFFER_DEPTH = 2;
     parameter DIV_INPUT_BUFFER_DEPTH = 2;
 
 

@@ -27,7 +27,10 @@ module fetch(
         input logic clk,
         input logic rst,
 
+        input logic gc_fetch_flush,
+        input logic gc_fetch_pc_override,
         input logic exception,
+        input logic [31:0] gc_fetch_pc,
 
         branch_table_interface.fetch bt,
         ras_interface.fetch ras,
@@ -40,8 +43,7 @@ module fetch(
 
         instruction_buffer_interface.fetch ib,
 
-        output logic[31:0] if2_pc,
-        output logic flush
+        output logic[31:0] if2_pc
 
         );
 
@@ -70,7 +72,6 @@ module fetch(
     logic mem_ready;
     logic new_mem_request;
 
-    logic fetch_flush;
     logic new_issue;
     logic mem_valid;
 
@@ -106,10 +107,7 @@ module fetch(
     endgenerate
     assign units_ready = &unit_ready;
 
-    assign fetch_flush = (bt.flush | exception);
-    assign flush = fetch_flush;
-
-    assign update_pc = mem_ready | fetch_flush;
+    assign update_pc = mem_ready | gc_fetch_flush;
 
     //Fetch PC
     always_ff @(posedge clk) begin
@@ -120,9 +118,9 @@ module fetch(
     end
 
     always_comb begin
-        if (exception)
-            next_pc = RESET_VEC;
-        else if (bt.flush)
+        if (gc_fetch_pc_override)
+            next_pc = gc_fetch_pc;
+        else if (gc_fetch_flush)
             next_pc = bt.branch_taken ? bt.jump_pc : bt.njump_pc;
         else if (bt.use_prediction)
             next_pc = (bt.use_ras & ras.valid) ? ras.addr : bt.predicted_pc;
@@ -150,7 +148,7 @@ module fetch(
     //////////////////////////////////////////////
 
     always_ff @(posedge clk) begin
-        if (rst | fetch_flush)
+        if (rst | gc_fetch_flush)
             inflight_count <= 0;
         else if (mem_ready  & ~ib.pop)
             inflight_count <= inflight_count + 1;
@@ -159,7 +157,7 @@ module fetch(
     end
 
     always_ff @(posedge clk) begin
-        if (rst | fetch_flush)
+        if (rst | gc_fetch_flush)
             space_in_inst_buffer <= 1;
         else if (mem_ready  & ~ib.pop)
             space_in_inst_buffer <= inflight_count < (FETCH_BUFFER_DEPTH-1);
@@ -169,7 +167,7 @@ module fetch(
 
 //assign space_in_inst_buffer = inflight_count < FETCH_BUFFER_DEPTH;
     assign mem_ready = tlb.complete & space_in_inst_buffer & units_ready;
-    assign new_mem_request = mem_ready & (~fetch_flush);
+    assign new_mem_request = mem_ready & (~gc_fetch_flush);
 
     //Memory interfaces
     generate if (USE_I_SCRATCH_MEM) begin
@@ -190,7 +188,7 @@ module fetch(
             assign unit_data_array[ICACHE_ID] = fetch_sub[ICACHE_ID].data_out;
 
             always_ff @(posedge clk) begin
-                if(rst | fetch_flush)
+                if(rst | gc_fetch_flush)
                     stage2_valid <= 0;
                 else if (mem_ready)
                     stage2_valid <= 1;
@@ -208,7 +206,7 @@ module fetch(
             always_ff @(posedge clk) begin
                 if (rst)
                     delayed_flush <= 0;
-                else if (fetch_flush & stage2_valid & last_sub_unit_id[ICACHE_ID] & ~fetch_sub[ICACHE_ID].data_valid)//& ~fetch_sub[ICACHE_ID].ready
+                else if (gc_fetch_flush & stage2_valid & last_sub_unit_id[ICACHE_ID] & ~fetch_sub[ICACHE_ID].data_valid)//& ~fetch_sub[ICACHE_ID].ready
                     delayed_flush <= 1;
                 else if (fetch_sub[ICACHE_ID].data_valid)
                     delayed_flush <= 0;
@@ -218,10 +216,10 @@ module fetch(
         end
     endgenerate
 
-    assign mem_valid = ~(bt.flush | exception | delayed_flush);
+    assign mem_valid = ~(gc_fetch_flush | delayed_flush);
     assign new_issue =  mem_valid & (|unit_data_valid);
     assign ib.push = new_issue;
-    assign ib.flush = fetch_flush;
+    assign ib.flush = gc_fetch_flush;
 
 
     //bitwise AND all subunit outputs with valid signal then or all outputs together

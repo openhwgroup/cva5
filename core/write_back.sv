@@ -29,10 +29,16 @@ module write_back(
 
         input logic inorder,
         input logic gc_supress_writeback,
+
+        input logic instruction_issued_with_rd,
+        input logic store_committed,
+        input instruction_id_t store_id,
+
         unit_writeback_interface.writeback unit_wb[NUM_WB_UNITS-1:0],
         register_file_writeback_interface.writeback rf_wb,
         tracking_interface.wb ti,
-        output logic instruction_complete
+        output logic instruction_complete,
+        output logic instruction_queue_empty
         );
     //////////////////////////////////////
 
@@ -50,12 +56,14 @@ module write_back(
     inflight_instruction_packet retired_instruction_packet;
 
     instruction_id_t id_ordering [MAX_INFLIGHT_COUNT-1:0];
+    instruction_id_t id_ordering_post_store [MAX_INFLIGHT_COUNT-1:0];
 
     logic [MAX_INFLIGHT_COUNT-1:0] id_done;
     logic [MAX_INFLIGHT_COUNT-1:0] id_done_next;
     logic [MAX_INFLIGHT_COUNT-1:0] id_done_r;
 
     logic [MAX_INFLIGHT_COUNT-1:0] shift_bits;
+    logic [MAX_INFLIGHT_COUNT-1:0] store_shift_bits;
 
     logic retired, retired_r;
     logic first_cycle_completion_abort;
@@ -79,11 +87,16 @@ module write_back(
             .rst(rst),
             .issued(ti.issued),
             .retired(retired),
+            .store_committed(store_committed),
+            .store_id(store_id),
             .shift_bits(shift_bits),
+            .store_shift_bits(store_shift_bits),
             .retired_id(retired_id),
             .ordering(id_ordering),
+            .ordering_post_store(id_ordering_post_store),
             .id_available(ti.id_available),
-            .next_id(issue_id)
+            .next_id(issue_id),
+            .empty(instruction_queue_empty)
         );
 
     assign ti.issue_id = issue_id;
@@ -97,7 +110,7 @@ module write_back(
     end
 
     always_ff @ (posedge clk) begin
-        if (ti.issued)
+        if (instruction_issued_with_rd)
             packet_table[issue_id] <= ti.inflight_packet;
     end
     //////////////////////
@@ -136,17 +149,6 @@ module write_back(
         end
     end
 
-    //Single cycle units, such as the branch unit and alu unit issue speculative done signals
-    //that do not consider whether the instruction is actually issued (but do insure that there
-    //is a valid ID available).  If this occurs, issue_id will be set as done,
-    //but no instruction is issued.  In which case we prevent the retired signal from being set.
-    logic [MAX_INFLIGHT_COUNT-1:0] id_done_m_first;
-    always_comb begin
-        id_done_m_first = '1;
-        id_done_m_first[issue_id] = 0;
-    end
-
-    //assign first_cycle_completion_abort = (id_done_next[issue_id] & ~ti.issued & ~|(id_done_m_first & id_done));
     assign retired = (inorder ? id_done[MAX_INFLIGHT_COUNT-1] : |id_done);
     always_ff @(posedge clk) begin
         retired_r <= retired;
@@ -158,10 +160,17 @@ module write_back(
     logic [MAX_INFLIGHT_COUNT-1:0] id_done_ordered;
     always_comb begin
         foreach (id_done[i]) begin
-            id_done_ordered[i] = id_done[id_ordering[i]];
+            id_done_ordered[i] = id_done[id_ordering_post_store[i]];
         end
 
         //Lowest entry always shifted, each older entry shifts all below
+        store_shift_bits = 0;
+        store_shift_bits[0] = 1;
+        for (int i=1; i<MAX_INFLIGHT_COUNT; i++) begin
+            if (store_committed && id_ordering[i] == store_id)
+                store_shift_bits |= (2**(i+1)-1);
+        end
+
         shift_bits = 0;
         shift_bits[0] = 1;
         for (int i=1; i<MAX_INFLIGHT_COUNT; i++) begin
@@ -169,10 +178,10 @@ module write_back(
                 shift_bits |= (2**(i+1)-1);
         end
 
-        retired_id = id_ordering[1];
-        for (int i=2; i<MAX_INFLIGHT_COUNT; i++) begin
+        retired_id = id_ordering_post_store[0];
+        for (int i=1; i<MAX_INFLIGHT_COUNT; i++) begin
             if (id_done_ordered[i]) begin
-                retired_id = id_ordering[i];
+                retired_id = id_ordering_post_store[i];
             end
         end
         if (~|id_done_ordered[MAX_INFLIGHT_COUNT-1:1])

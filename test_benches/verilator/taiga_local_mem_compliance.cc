@@ -5,28 +5,44 @@
 #include "verilated.h"
 #include "verilated_vcd_c.h"
 
+
 using namespace std;
 int main(int argc, char **argv) {
-	  ofstream logFile;
+	  ofstream logFile, sigFile;
 	  bool logPhase;
+	  bool stallDetected = false;
+	  int stall_cycles = 0;
+	  int stall_pc = 0xFFFFFFFF;
+
 	// Initialize Verilators variables
 	Verilated::commandArgs(argc, argv);
-    Verilated::traceEverOn(true);
+	#ifdef TRACE_ON
+		Verilated::traceEverOn(true);
+	#endif
 
     if (!argv[1]) {
     	cout << "Missing log file name.\n";
     	exit(EXIT_FAILURE);
     }
+    
+    if (!argv[2]) {
+    	cout << "Missing signature file name.\n";
+    	exit(EXIT_FAILURE);
+    }
 
     logFile.open (argv[1]);
-	//VerilatedVcdC	*tracer;
-	//tracer = new VerilatedVcdC;
+    sigFile.open (argv[2]);
 	// Create an instance of our module under test
 	Vtaiga_local_mem_compliance *tb = new Vtaiga_local_mem_compliance;
-	//tb->trace(tracer, 99);
-	//tracer->open("sim_results.vcd");
 
-	cout << "Starting test\n";
+	#ifdef TRACE_ON
+		VerilatedVcdC	*tracer;
+		tracer = new VerilatedVcdC;
+		tb->trace(tracer, 99);
+		tracer->open("sim_results.vcd");
+	#endif
+
+	cout << "\n\nStarting test: " << argv[2] << "\n";
 	cout << "******************************\n";
 	int reset_count = 0;
 	long int cycle_cout = 0;
@@ -48,32 +64,68 @@ int main(int argc, char **argv) {
 		tb->eval();
 
 
-		//Custom nop to change to signature phase
-		if (tb->dec_instruction_r == 0x00200013U) {
-			logPhase = false;
-		}
 
+		//Custom nop to change to signature phase
+		if (tb->dec_instruction_r == 0x00B00013U) {
+			logPhase = false;
+			cout << "******************************\n";
+			cout << "\n\n**********Signature***********\n";
+		}
+		
+		//if (!logPhase) {
+		//	std::cout << std::hex << tb-> dec_pc_debug_r << std::endl;
+		//}
+		
+		
 		if (tb->write_uart) {
-			if (logPhase)
+			if (logPhase) {
+				cout <<  tb->uart_byte;
 				logFile << tb->uart_byte;
-			else
-				cout << tb->uart_byte;
+			} else {
+				cout <<  tb->uart_byte;
+				sigFile << tb->uart_byte;
+			}
 		}
 
 		//Custom nop for termination
-		if (tb->dec_instruction_r == 0x00100013U) {
+		if (tb->dec_instruction_r == 0x00F00013U) {
+			cout << "\n\nError!!!!\n\n";
 			break;
 		}
-		//tracer->dump(vluint64_t(cycle_cout));
+		else if (tb->dec_instruction_r == 0x00A00013U) {
+			break;
+		}
+		#ifdef TRACE_ON
+				tracer->dump(vluint64_t(cycle_cout));
+		#endif
 		cycle_cout++;
+
+		if (tb->dec_instruction_r == stall_pc) {
+			stall_cycles++;
+			if (stall_cycles > 1000) {
+				stall_cycles = 0;
+				cout << "\n\nError!!!!\n";
+				cout << "PC unchanged for at least 1000 cycles!\n\n";
+				break;
+			}
+		} else {
+			stall_pc = tb->dec_instruction_r;
+			stall_cycles = 0;
+		}
+
 	}
-	//tracer->flush();
-	//tracer->close();
-	cout << "******************************\n";
+
+	#ifdef TRACE_ON
+		tracer->flush();
+		tracer->close();
+	#endif
+
+	cout << "\n******************************\n\n";
 	cout << "Test Done\n";
-	cout << "Simulated: " << cycle_cout << " cycles.";
+	cout << "Simulated: " << cycle_cout << " cycles.\n\n\n";
 
 	logFile.close();
+	sigFile.close();
 	delete tb;
 	exit(EXIT_SUCCESS);
 

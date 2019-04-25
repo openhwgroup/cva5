@@ -27,8 +27,6 @@ module decode(
         input logic clk,
         input logic rst,
 
-        input logic flush,
-
         branch_table_interface.decode bt,
         instruction_buffer_interface.decode ib,
         tracking_interface.decode ti,
@@ -49,9 +47,13 @@ module decode(
         func_unit_ex_interface.decode div_ex,
 
         input logic gc_issue_hold,
-        input logic gc_issue_flush,
+        input logic gc_fetch_flush,
 
-        output instruction_issued_no_rd,
+        output logic load_store_issue,
+
+        output logic instruction_issued_no_rd,
+        output logic instruction_issued_with_rd,
+
         input logic instruction_complete,
 
         output logic dec_instruction_issued,
@@ -87,8 +89,10 @@ module decode(
     logic [NUM_WB_UNITS-1:0] issue_ready;
     logic [NUM_WB_UNITS-1:0] issue;
 
+    logic store_issued;
     logic instruction_issued;
-    logic instruction_issued_with_rd;
+
+    instruction_id_t last_id;
     //logic instruction_issued_no_rd; <-- already an output
 
     ////////////////////////////////////////////////////
@@ -132,8 +136,7 @@ module decode(
     assign ti.inflight_packet.unit_id = new_request;
     assign ti.inflight_packet.rd_addr = future_rd_addr;
     assign ti.inflight_packet.rd_addr_nzero = ~rd_zero;
-    assign ti.issued = instruction_issued_with_rd;
-
+    assign ti.issued = instruction_issued_with_rd | store_issued;
 
     ////////////////////////////////////////////////////
     //Branch Table Interface
@@ -175,30 +178,35 @@ module decode(
 
     ////////////////////////////////////////////////////
     //Issue Determination
-    assign issue_valid =  ib.valid & ti.id_available & ~gc_issue_hold & ~gc_issue_flush;
+    logic load_store_forward;
+
+    assign issue_valid =  ib.valid & ti.id_available & ~gc_issue_hold & ~gc_fetch_flush;
 
     assign operands_ready =  ~rf_decode.rs1_conflict & ~rf_decode.rs2_conflict;
 
     assign load_store_forward = ((opcode_trim == STORE_T) && last_ls_request_was_load && (rs2_addr == load_rd));
     assign load_store_operands_ready =  ~rf_decode.rs1_conflict & ~(rf_decode.rs2_conflict & ~load_store_forward);
 
-    assign issue[BRANCH_UNIT_WB_ID] = ~flush & issue_valid & operands_ready & issue_ready[BRANCH_UNIT_WB_ID];
-    assign issue[ALU_UNIT_WB_ID] = ~flush & issue_valid & operands_ready & issue_ready[ALU_UNIT_WB_ID];
-    assign issue[LS_UNIT_WB_ID] = ~flush & issue_valid & load_store_operands_ready & issue_ready[LS_UNIT_WB_ID];
-    assign issue[GC_UNIT_WB_ID] = ~flush & issue_valid & operands_ready &  issue_ready[GC_UNIT_WB_ID];
+    assign issue[BRANCH_UNIT_WB_ID] = issue_valid & operands_ready & issue_ready[BRANCH_UNIT_WB_ID];
+    assign issue[ALU_UNIT_WB_ID] = issue_valid & operands_ready & issue_ready[ALU_UNIT_WB_ID];
+    assign issue[LS_UNIT_WB_ID] = issue_valid & load_store_operands_ready & issue_ready[LS_UNIT_WB_ID];
+    assign issue[GC_UNIT_WB_ID] = issue_valid & operands_ready &  issue_ready[GC_UNIT_WB_ID];
     generate if (USE_MUL)
-            assign issue[MUL_UNIT_WB_ID] = ~flush & issue_valid & operands_ready & issue_ready[MUL_UNIT_WB_ID];
+            assign issue[MUL_UNIT_WB_ID] = issue_valid & operands_ready & issue_ready[MUL_UNIT_WB_ID];
     endgenerate
     generate if (USE_DIV)
-            assign issue[DIV_UNIT_WB_ID] = ~flush & issue_valid & operands_ready & issue_ready[DIV_UNIT_WB_ID];
+            assign issue[DIV_UNIT_WB_ID] = issue_valid & operands_ready & issue_ready[DIV_UNIT_WB_ID];
     endgenerate
 
-    assign instruction_issued =  ~flush & (|issue_ready) & issue_valid & load_store_operands_ready;
+    assign instruction_issued =  (|issue_ready) & issue_valid & load_store_operands_ready;
     assign instruction_issued_no_rd = instruction_issued & ~uses_rd;
     assign instruction_issued_with_rd = instruction_issued & uses_rd;
+    assign store_issued = instruction_issued && (opcode_trim == STORE_T); //TODO: AMO
 
     //Decode outputs
     assign dec_instruction_issued = instruction_issued;
+    assign load_store_issue = issue[LS_UNIT_WB_ID];
+
     ////////////////////////////////////////////////////
     //ALU unit inputs
     logic [XLEN-1:0] alu_rs1_data;
@@ -281,15 +289,16 @@ module decode(
     //Load Store unit inputs
     logic [31:0] ls_offset;
     logic [31:0] virtual_address;
+    logic ls_is_load;
 
     logic [4:0] load_rd;
     logic last_ls_request_was_load;
-    logic load_store_forward;
     logic amo_op;
     logic [4:0] amo_type;
 
     assign amo_op =  USE_AMO ? (opcode_trim == AMO_T) : 0;
     assign amo_type = USE_AMO ? ib.data_out.instruction[31:27] : 0;
+    assign ls_is_load = (opcode_trim inside {LOAD_T, AMO_T}) && (amo_type != AMO_SC); //LR and AMO_ops perform a read operation as well
 
     assign ls_inputs.offset = opcode[5] ? {ib.data_out.instruction[31:25], ib.data_out.instruction[11:7]} : ib.data_out.instruction[31:20];
     assign ls_inputs.virtual_address = rf_decode.rs1_data + 32'(signed'(ls_inputs.offset));
@@ -298,7 +307,7 @@ module decode(
     assign ls_inputs.fn3 = amo_op ? LS_W_fn3 : fn3;
     assign ls_inputs.amo = amo_type;
     assign ls_inputs.is_amo = amo_op;
-    assign ls_inputs.load = (opcode_trim inside {LOAD_T, AMO_T}) && (amo_type != AMO_SC); //LR and AMO_ops perform a read operation as well
+    assign ls_inputs.load = ls_is_load;
     assign ls_inputs.store = (opcode_trim == STORE_T);
     assign ls_inputs.load_store_forward = (opcode_trim == STORE_T) && rf_decode.rs2_conflict;
     assign ls_inputs.instruction_id = ti.issue_id;
@@ -338,14 +347,24 @@ module decode(
 
     ////////////////////////////////////////////////////
     //Global Control unit inputs
+    logic sfence;
+    assign sfence = ib.data_out.instruction[25];
+
     always_ff @(posedge clk) begin
         if (issue_ready[GC_UNIT_WB_ID]) begin
             gc_inputs.pc <= ib.data_out.pc;
-            gc_inputs.instruction <=ib.data_out.instruction;
+            gc_inputs.instruction <= ib.data_out.instruction;
             gc_inputs.rs1 <= rf_decode.rs1_data;
             gc_inputs.rs2 <= rf_decode.rs2_data;
             gc_inputs.rd_is_zero <= rd_zero;
+            gc_inputs.is_fence <= (opcode_trim == FENCE_T) && ~fn3[0];
+            gc_inputs.is_csr <= (opcode_trim == SYSTEM_T) && (fn3 != 0);
         end
+        gc_inputs.flush_required <= issue[GC_UNIT_WB_ID] && (((opcode_trim == SYSTEM_T) && (fn3 == 0)) || ((opcode_trim == FENCE_T) && fn3[0]));
+        gc_inputs.is_ecall <= issue[GC_UNIT_WB_ID] && (opcode_trim == SYSTEM_T) && (fn3 == 0) && ib.data_out.instruction[21:20] == 0;
+        gc_inputs.is_ebreak <= issue[GC_UNIT_WB_ID] && (opcode_trim == SYSTEM_T) && (fn3 == 0) && ib.data_out.instruction[21:20] == 2'b01;
+        gc_inputs.is_ret <= issue[GC_UNIT_WB_ID] && (opcode_trim == SYSTEM_T) && (fn3 == 0) && ib.data_out.instruction[21:20] == 2'b10;
+        gc_inputs.is_i_fence <= issue[GC_UNIT_WB_ID] && (opcode_trim == FENCE_T) && fn3[0];
     end
 
 

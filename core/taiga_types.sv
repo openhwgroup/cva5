@@ -25,6 +25,9 @@ package taiga_types;
 
     parameter XLEN = 32;
     parameter PAGE_ADDR_W = 12;
+    parameter ECODE_W = 5;
+
+    typedef logic[$clog2(MAX_INFLIGHT_COUNT)-1:0] instruction_id_t;
 
     typedef enum bit [6:0] {
         LUI = 7'b0110111,
@@ -199,16 +202,6 @@ package taiga_types;
         CSR_RC = 2'b11
     } csr_op_t;
 
-    const bit[1:0] CSR_READ_ONLY = 2'b11;
-
-    typedef enum logic [1:0] {
-        USER_PRIV = 2'b00,
-        SUPERVISOR_PRIV = 2'b01,
-        //reserved
-        MACHINE_PRIV = 2'b11
-    } privilege_t;
-
-
     typedef enum bit [4:0] {
         BARE = 5'd0,
         SV32 = 5'd8
@@ -216,7 +209,7 @@ package taiga_types;
 
     parameter ASIDLEN = 9;//pid
 
-    typedef enum bit [4:0] {
+    typedef enum bit [ECODE_W-1:0] {
         INST_ADDR_MISSALIGNED = 5'd0,
         INST_ACCESS_FAULT = 5'd1,
         ILLEGAL_INST = 5'd2,
@@ -235,10 +228,9 @@ package taiga_types;
         STORE_OR_AMO_PAGE_FAULT = 5'd15
         //reserved
     } exception_code_t;
-    parameter ECODE_W = 5;
 
 
-    typedef enum bit [4:0] {
+    typedef enum bit [ECODE_W-1:0] {
         U_SOFTWARE_INTERRUPT = 5'd0,
         S_SOFTWARE_INTERRUPT = 5'd1,
         //RESERVED
@@ -253,8 +245,13 @@ package taiga_types;
         M_EXTERNAL_INTERRUPT = 5'd11
     } interrupt_code_t;
 
-    typedef logic[$clog2(MAX_INFLIGHT_COUNT)-1:0] instruction_id_t;
-
+    typedef struct packed{
+        logic valid;
+        exception_code_t code;
+        logic [31:0] pc;
+        logic [31:0] tval;
+        instruction_id_t id;
+    } exception_packet_t;
 
     typedef struct packed{
         logic [NUM_WB_UNITS-1:0] unit_id;
@@ -364,15 +361,14 @@ package taiga_types;
         logic [XLEN-1:0] rs1;
         logic [XLEN-1:0] rs2;
         logic rd_is_zero;
+        logic is_csr;
+        logic is_fence;
+        logic is_i_fence;
+        logic is_ecall;
+        logic is_ebreak;
+        logic is_ret;
+        logic flush_required;
     } gc_inputs_t;
-
-    typedef struct packed{
-        logic valid;
-        exception_code_t code;
-        logic [31:0] pc;
-        logic [31:0] addr;
-        instruction_id_t id;
-    } exception_packet_t;
 
     typedef struct packed{
         logic [31:2] addr;

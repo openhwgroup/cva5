@@ -33,6 +33,8 @@ module load_store_unit (
         input logic clear_reservation,
         tlb_interface.mem tlb,
 
+        input logic gc_flush_LS_input,
+
         l1_arbiter_request_interface.requester l1_request,
         l1_arbiter_return_interface.requester l1_response,
         input sc_complete,
@@ -43,8 +45,11 @@ module load_store_unit (
 
         local_memory_interface.master data_bram,
 
+        output logic store_committed,
+        output instruction_id_t store_id,
+
         output logic load_store_FIFO_emptying,
-        exception_interface.unit  ls_exception,
+        output exception_packet_t ls_exception,
 
         unit_writeback_interface.unit ls_wb
         );
@@ -95,6 +100,7 @@ module load_store_unit (
 
     logic [1:0] inflight_count;
     logic unit_stall;
+
 
     //AMO support
     //LR -- invalidates line if tag hit
@@ -153,10 +159,21 @@ module load_store_unit (
             last_unit <= sub_unit_address_match;
     end
 
+    always_ff @ (posedge clk) begin
+        if (rst)
+            store_committed <= 0;
+        else
+            store_committed <= stage1.store & issue_request;
+    end
+
+    always_ff @ (posedge clk) begin
+            store_id <= stage1.instruction_id;
+    end
+
     //When switching units, ensure no outstanding loads so that there can be no timing collisions with results
     assign unit_stall = (current_unit != last_unit) && ~load_attributes.empty;
 
-    assign issue_request = input_fifo.valid && units_ready && (inflight_count < 2) && ~unit_stall;
+    assign issue_request = input_fifo.valid && units_ready && (inflight_count < 2) && ~unit_stall && ~unaligned_addr;
     assign load_complete = data_valid;
 
     always_ff @ (posedge clk) begin
@@ -187,7 +204,7 @@ module load_store_unit (
      *  Input FIFO
      *********************************/
     taiga_fifo #(.DATA_WIDTH($bits(load_store_inputs_t)), .FIFO_DEPTH(LS_INPUT_BUFFER_DEPTH), .FIFO_TYPE(NON_MUXED_INPUT_FIFO)
-        ) ls_input_fifo (.fifo(input_fifo), .*);
+        ) ls_input_fifo (.fifo(input_fifo), .rst(rst | gc_flush_LS_input), .*);
 
     assign input_fifo.data_in = ls_inputs;
     assign input_fifo.push = ls_ex.new_request_dec;
@@ -216,6 +233,12 @@ module load_store_unit (
             default : unaligned_addr = 0;
         endcase
     end
+    assign ls_exception.valid = unaligned_addr & input_fifo.valid;
+    assign ls_exception.code = stage1.load ? LOAD_ADDR_MISSALIGNED : STORE_AMO_ADDR_MISSALIGNED;
+    assign ls_exception.pc = stage1.pc;
+    assign ls_exception.tval = stage1.virtual_address;
+    assign ls_exception.id = stage1.instruction_id;
+
     /*********************************************/
 
 

@@ -24,10 +24,20 @@ package csr_types;
     import taiga_config::*;
     import taiga_types::*;
 
+    const bit[1:0] CSR_READ_ONLY = 2'b11;
+
+    typedef enum bit [1:0] {
+        USER_PRIVILEGE = 2'b00,
+        SUPERVISOR_PRIVILEGE = 2'b01,
+        //reserved
+        MACHINE_PRIVILEGE = 2'b11
+    } privilege_t;
+
 
     typedef struct packed {
-        logic [3:0] rw_bits;
+        logic [1:0] rw_bits;
         logic [1:0] privilege;
+        logic [1:0] subtype;
         logic [5:0] sub_addr;
     } csr_addr_t;
 
@@ -122,12 +132,18 @@ package csr_types;
         logic usie;
     } mie_t;
 
+    typedef struct packed {
+        logic interrupt;
+        logic [XLEN-1-1-ECODE_W:0] zeroes;
+        logic [ECODE_W-1:0] code;
+    } mcause_t;
 
-    struct packed {
+
+    typedef struct packed {
         logic mode;
         logic [ASIDLEN-1:0] asid;
         logic [21:0] ppn;
-    } satp;
+    } satp_t;
 
 
 endpackage

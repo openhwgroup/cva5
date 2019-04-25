@@ -1,4 +1,4 @@
-.PHONY: lint verilator_stack_test verilator_taiga_test
+.PHONY: lint verilator_stack_test verilator_taiga_test verilator_taiga_compliance
 
 TAIGA_DIR=..
 VERILATOR_DIR=$(TAIGA_DIR)/test_benches/verilator
@@ -29,7 +29,17 @@ verilator_stack_test:
 verilator_taiga_test:
 	mkdir -p $@
 	cp $(VERILATOR_DIR)/taiga_full_sim.cc $@/
-	verilator -cc -Wno-WIDTH --trace --exe --Mdir $@ $(VERILATOR_LINT_IGNORE) $(VERILATOR_CFLAGS) $(TAIGA_SRCS) --top-module ver_top  taiga_full_sim.cc \
+	verilator -cc -Wno-WIDTH --trace --exe --Mdir $@ $(VERILATOR_LINT_IGNORE) $(VERILATOR_CFLAGS) $(TAIGA_SRCS) ../test_benches/verilator/ver_top.sv --top-module ver_top  taiga_full_sim.cc \
 	-GMEMORY_FILE=\"$(BENCHMARK_MEM_INIT)\"
 	$(MAKE) -C  $@ -f Vver_top.mk
 	./$@/Vver_top
+	
+verilator_taiga_compliance: $(VERILATOR_DIR)/taiga_local_mem_compliance.cc $(TAIGA_SRCS)
+	mkdir -p $@
+	cp $(VERILATOR_DIR)/taiga_local_mem_compliance.cc $@/
+	verilator -cc -Wno-WIDTH --exe --Mdir $@ $(VERILATOR_LINT_IGNORE) $(VERILATOR_CFLAGS) $(TAIGA_SRCS) ../test_benches/verilator/taiga_local_mem_compliance.sv --top-module taiga_local_mem_compliance  taiga_local_mem_compliance.cc \
+	-GMEMORY_FILE=\"$(COMPLIANCE_BENCHAMRK)\"
+	$(MAKE) -C  $@ -f Vtaiga_local_mem_compliance.mk
+	./$@/Vtaiga_local_mem_compliance $(LOG_FILE_NAME) $(SIG_FILE_NAME)
+	
+	
