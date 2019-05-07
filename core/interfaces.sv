@@ -276,6 +276,24 @@ interface avalon_interface;
 
 endinterface
 
+interface wishbone_interface;
+    logic [31:0] addr;
+    logic we;
+    logic [3:0] sel;
+    logic [31:0] readdata;
+    logic [31:0] writedata;
+    logic stb;
+    logic cyc;
+    logic ack;
+
+    modport master (input readdata, ack,
+            output addr, we, sel, writedata, stb, cyc);
+    modport slave (output readdata, ack,
+            input addr, we, sel, writedata, stb, cyc);
+
+endinterface
+
+
 interface l1_arbiter_request_interface;
     logic [31:0] addr;
     logic [31:0] data ;

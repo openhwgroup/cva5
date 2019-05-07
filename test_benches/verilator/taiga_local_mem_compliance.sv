@@ -74,10 +74,12 @@ module taiga_local_mem_compliance # (
         //        output logic bus_axi_wvalid,
         //        output logic [5:0]bus_axi_wid,
 
+        //Used by verilator
         output logic write_uart,
         output logic [7:0] uart_byte,
         output logic [31:0] dec_instruction_r,
         output logic [31:0] dec_pc_debug_r,
+        output dec_advance_debug,
 
         //L2
         //l2 request
@@ -166,12 +168,13 @@ module taiga_local_mem_compliance # (
     logic [31:0] if2_pc_debug;
     logic interrupt;
     logic timer_interrupt;
-    logic dec_advance_debug;
 
     assign interrupt = 0;
 
     axi_interface m_axi();
     avalon_interface m_avalon();
+    wishbone_interface m_wishbone();
+
     l2_requester_interface l2[L2_NUM_PORTS-1:0]();
     l2_memory_interface mem();
 

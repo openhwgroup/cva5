@@ -19,6 +19,9 @@
 ../core/alu_unit.sv  
 
 ../core/axi_master.sv  
+../core/avalon_master.sv  
+../core/wishbone_master.sv  
+
 ../core/axi_to_arb.sv  
 
 ../core/one_hot_occupancy.sv 

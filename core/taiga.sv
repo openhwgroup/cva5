@@ -32,6 +32,7 @@ module taiga (
 
         axi_interface.master m_axi,
         avalon_interface.master m_avalon,
+        wishbone_interface.master m_wishbone,
 
         l2_requester_interface.requester l2,
 

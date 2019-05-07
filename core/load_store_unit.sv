@@ -42,6 +42,7 @@ module load_store_unit (
 
         axi_interface.master m_axi,
         avalon_interface.master m_avalon,
+        wishbone_interface.master m_wishbone,
 
         local_memory_interface.master data_bram,
 
@@ -331,29 +332,12 @@ module load_store_unit (
     endgenerate
     generate
         if (USE_BUS) begin
-            if(FPGA_VENDOR == "xilinx") //AXI BUS
+            if(BUS_TYPE == AXI_BUS)
                 axi_master axi_bus (.clk(clk), .rst(rst), .ls_inputs(d_inputs), .size({1'b0,stage1.fn3[1:0]}), .m_axi(m_axi),.ls(ls_sub[BUS_ID]), .data_out(unit_data_array[BUS_ID])); //Lower two bits of fn3 match AXI specification for request size (byte/halfword/word)
-            else begin //Avalon bus
-                //                avalon_master avalon_bus(.clk(clk), .rst(rst),
-                //                        .addr(m_avalon.addr),
-                //                        .avread(m_avalon.read),
-                //                        .avwrite(m_avalon.write),
-                //                        .byteenable(m_avalon.byteenable),
-                //                        .readdata(m_avalon.readdata),
-                //                        .writedata(m_avalon.writedata),
-                //                        .waitrequest(m_avalon.waitrequest),
-                //                        .readdatavalid(m_avalon.readdatavalid),
-                //                        .writeresponsevalid(m_avalon.writeresponsevalid),
-                //                        .addr_in(d_inputs.addr),
-                //                        .data_in(d_inputs.data_in),
-                //                        .data_out(unit_data_array[BUS_ID]),
-                //                        .data_valid(ls_sub[BUS_ID].data_valid),
-                //                        .ready(ls_sub[BUS_ID].ready),
-                //                        .new_request(ls_sub[BUS_ID].new_request),
-                //                        .rnw(d_inputs.load),
-                //                        .be(d_inputs.be),
-                //                        .data_ack(ls_sub[BUS_ID].ack)
-                //                    );
+            else if (BUS_TYPE == WISHBONE_BUS)
+                wishbone_master wishbone_bus (.clk(clk), .rst(rst), .ls_inputs(d_inputs), .m_wishbone(m_wishbone),.ls(ls_sub[BUS_ID]), .data_out(unit_data_array[BUS_ID]));
+            else if (BUS_TYPE == AVALON_BUS)  begin
+                avalon_master avalon_bus (.clk(clk), .rst(rst), .ls_inputs(d_inputs), .m_avalon(m_avalon),.ls(ls_sub[BUS_ID]), .data_out(unit_data_array[BUS_ID]));
             end
         end
     endgenerate

@@ -12,7 +12,6 @@ int main(int argc, char **argv) {
 	  bool logPhase;
 	  bool stallDetected = false;
 	  int stall_cycles = 0;
-	  int stall_pc = 0xFFFFFFFF;
 
 	// Initialize Verilators variables
 	Verilated::commandArgs(argc, argv);
@@ -100,16 +99,15 @@ int main(int argc, char **argv) {
 		#endif
 		cycle_cout++;
 
-		if (tb->dec_instruction_r == stall_pc) {
+		if (!tb->dec_advance_debug) {
 			stall_cycles++;
-			if (stall_cycles > 1000) {
+			if (stall_cycles > 2000) {
 				stall_cycles = 0;
 				cout << "\n\nError!!!!\n";
-				cout << "PC unchanged for at least 1000 cycles!\n\n";
+				cout << "PC unchanged for at least 2000 cycles!\n\n";
 				break;
 			}
 		} else {
-			stall_pc = tb->dec_instruction_r;
 			stall_cycles = 0;
 		}
 

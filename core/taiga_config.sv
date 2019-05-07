@@ -78,7 +78,14 @@ package taiga_config;
     parameter USE_D_SCRATCH_MEM = 1;
 
     //Peripheral bus
+    typedef enum {
+        AXI_BUS,
+        AVALON_BUS,
+        WISHBONE_BUS
+    } bus_type_t;
+
     parameter USE_BUS = 1;
+    parameter bus_type_t BUS_TYPE = AXI_BUS;
 
     //Caches
     parameter USE_DCACHE = 1;
