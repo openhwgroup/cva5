@@ -66,6 +66,7 @@ module taiga_wrapper (
 
     axi_interface m_axi();
     avalon_interface m_avalon();
+    wishbone_interface m_wishbone();
     l2_requester_interface l2[L2_NUM_PORTS-1:0]();
     l2_memory_interface mem();
 
@@ -241,8 +242,7 @@ module taiga_wrapper (
     endgenerate
 
     //arm proc(.*);
-    byte_en_BRAM #(MEM_LINES, "/home/fla30/Desktop/dividerComparision/benchmark/taiga-benchmarks/fft.riscv.hw_init", 1) inst_data_ram (
-    //byte_en_BRAM #(MEM_LINES, "/home/ematthew/Research/RISCV/software2/riscv-tools/riscv-tests/benchmarks/fft.riscv.hw_init", 1) inst_data_ram (
+    byte_en_BRAM #(MEM_LINES, "/home/ematthew/Research/RISCV/software2/riscv-tools/riscv-tests/benchmarks/fft.riscv.hw_init", 1) inst_data_ram (
             .clk(clk),
             .addr_a(instruction_bram.addr[$clog2(MEM_LINES)- 1:0]),
             .en_a(instruction_bram.en),
