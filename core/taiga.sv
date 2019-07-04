@@ -1,5 +1,5 @@
 /*
- * Copyright © 2017 Eric Matthews,  Lesley Shannon
+ * Copyright © 2017, 2018, 2019 Eric Matthews,  Lesley Shannon
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,7 +34,7 @@ module taiga (
         avalon_interface.master m_avalon,
         wishbone_interface.master m_wishbone,
 
-        l2_requester_interface.requester l2,
+        l2_requester_interface.master l2,
 
         output logic [31:0] dec_pc_debug,
         output logic dec_advance_debug,

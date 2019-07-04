@@ -75,7 +75,7 @@ module axi_to_arb
 
 
         //arb interface
-        l2_memory_interface.memory l2
+        l2_memory_interface.slave l2
 
         );
 

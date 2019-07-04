@@ -29,8 +29,8 @@ module mmu
         input logic clk,
         input logic rst,
         mmu_interface.mmu mmu,
-        l1_arbiter_request_interface.requester l1_request,
-        l1_arbiter_return_interface.requester l1_response,
+        l1_arbiter_request_interface.master l1_request,
+        l1_arbiter_return_interface.master l1_response,
         output mmu_exception
         );
 

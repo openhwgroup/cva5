@@ -4,7 +4,7 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -19,7 +19,7 @@
  * Author(s):
  *             Eric Matthews <ematthew@sfu.ca>
  */
- 
+
 import l2_config_and_types::*;
 import taiga_types::*;
 
@@ -27,8 +27,8 @@ module l2_arbiter (
         input logic clk,
         input logic rst,
 
-        l2_requester_interface.arbiter request [L2_NUM_PORTS-1:0],
-        l2_memory_interface.arbiter mem
+        l2_requester_interface.slave request [L2_NUM_PORTS-1:0],
+        l2_memory_interface.slave mem
         );
 
     l2_arbitration_interface arb();

@@ -1,10 +1,10 @@
 /*
- * Copyright © 2017 Eric Matthews,  Lesley Shannon
+ * Copyright © 2017, 2019 Eric Matthews,  Lesley Shannon
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -19,7 +19,7 @@
  * Author(s):
  *             Eric Matthews <ematthew@sfu.ca>
  */
- 
+
 import l2_config_and_types::*;
 
 interface l2_requester_interface;
@@ -43,13 +43,13 @@ interface l2_requester_interface;
     logic rd_data_valid;
     logic rd_data_ack;
 
-    modport requester (output request, request_push, input request_full,
+    modport master (output request, request_push, input request_full,
             input inv_addr, inv_valid, output  inv_ack,
             input con_result, con_valid,
             output wr_data, wr_data_push, input data_full,
             input rd_data, rd_sub_id, rd_data_valid, output rd_data_ack);
 
-    modport arbiter (input request, request_push, output request_full,
+    modport slave (input request, request_push, output request_full,
             output inv_addr, inv_valid, input  inv_ack,
             output con_result, con_valid,
             input wr_data, wr_data_push, output data_full,
@@ -72,11 +72,11 @@ interface l2_memory_interface;
     logic  [L2_ID_W-1:0] rd_id;
     logic rd_data_valid;
 
-    modport arbiter (output request, request_valid, abort, input request_pop,
+    modport master (output request, request_valid, abort, input request_pop,
             output wr_data, wr_data_valid, input wr_data_read,
             input rd_data, rd_id, rd_data_valid);
 
-    modport memory (input request, request_valid, abort, output request_pop,
+    modport slave (input request, request_valid, abort, output request_pop,
             input wr_data, wr_data_valid, output wr_data_read,
             output rd_data, rd_id, rd_data_valid);
 endinterface
@@ -102,6 +102,6 @@ interface l2_arbitration_interface;
     logic grantee_valid;
     logic strobe;
 
-    modport arbiter (input requests, strobe, output grantee_i, grantee_v , grantee_valid);
-    modport requester (output requests, strobe, input grantee_i, grantee_v , grantee_valid);
+    modport slave (input requests, strobe, output grantee_i, grantee_v , grantee_valid);
+    modport master (output requests, strobe, input grantee_i, grantee_v , grantee_valid);
 endinterface

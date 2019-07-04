@@ -1,5 +1,5 @@
 /*
- * Copyright © 2017, 2018 Eric Matthews,  Lesley Shannon
+ * Copyright © 2017, 2018, 2019 Eric Matthews,  Lesley Shannon
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,8 +39,8 @@ module fetch(
         tlb_interface.mem tlb,
         local_memory_interface.master instruction_bram,
         input logic icache_on,
-        l1_arbiter_request_interface.requester l1_request,
-        l1_arbiter_return_interface.requester l1_response,
+        l1_arbiter_request_interface.master l1_request,
+        l1_arbiter_return_interface.master l1_response,
 
         instruction_buffer_interface.fetch ib,
 

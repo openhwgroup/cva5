@@ -27,8 +27,8 @@ module icache(
         input logic clk,
         input logic rst,
         input logic icache_on,
-        l1_arbiter_request_interface.requester l1_request,
-        l1_arbiter_return_interface.requester l1_response,
+        l1_arbiter_request_interface.master l1_request,
+        l1_arbiter_return_interface.master l1_response,
 
         fetch_sub_unit_interface.sub_unit fetch_sub
         );

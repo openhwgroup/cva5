@@ -4,7 +4,7 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -19,14 +19,14 @@
  * Author(s):
  *             Eric Matthews <ematthew@sfu.ca>
  */
- 
+
 import l2_config_and_types::*;
 
 module l2_round_robin
         (
         input logic clk,
         input logic rst,
-        l2_arbitration_interface.arbiter arb
+        l2_arbitration_interface.slave arb
         );
 
     logic [$clog2(L2_NUM_PORTS)-1:0] state;

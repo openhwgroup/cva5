@@ -35,8 +35,8 @@ module load_store_unit (
 
         input logic gc_issue_flush,
 
-        l1_arbiter_request_interface.requester l1_request,
-        l1_arbiter_return_interface.requester l1_response,
+        l1_arbiter_request_interface.master l1_request,
+        l1_arbiter_return_interface.master l1_response,
         input sc_complete,
         input sc_success,
 
