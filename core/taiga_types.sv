@@ -29,6 +29,8 @@ package taiga_types;
 
     typedef logic[$clog2(MAX_INFLIGHT_COUNT)-1:0] instruction_id_t;
 
+    typedef logic[1:0] branch_predictor_metadata_t;
+
     typedef enum bit [6:0] {
         LUI = 7'b0110111,
         AUIPC = 7'b0010111,
@@ -268,6 +270,7 @@ package taiga_types;
         logic rd_zero;
         logic is_call;
         logic is_return;
+        branch_predictor_metadata_t branch_metadata;
     } instruction_buffer_packet;
 
 
@@ -280,13 +283,14 @@ package taiga_types;
         logic lshift;
         logic [1:0] logic_op;
         logic [1:0] op;
-    }alu_inputs_t;
+    } alu_inputs_t;
 
-    typedef struct packed{
+    typedef struct packed {
         logic [XLEN-1:0] rs1;
         logic [XLEN-1:0] rs2;
         logic [2:0] fn3;
         logic [31:0] dec_pc;
+        logic dec_pc_valid;
         logic use_signed;
         logic jal;
         logic jalr;
@@ -294,8 +298,19 @@ package taiga_types;
         logic is_call;
         logic is_return;
         logic [31:0] instruction;
+        branch_predictor_metadata_t branch_metadata;
     } branch_inputs_t;
 
+    typedef struct packed {
+        logic[31:0] pc_ex;
+        logic [31:0] jump_pc;
+        logic [31:0] njump_pc;
+        logic branch_taken;
+        logic branch_ex;
+        logic is_return_ex;
+        branch_predictor_metadata_t branch_ex_metadata;
+        logic miss_predict;
+    } branch_results_t;
 
     typedef enum bit [4:0] {
         AMO_LR = 5'b00010,

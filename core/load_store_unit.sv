@@ -33,7 +33,7 @@ module load_store_unit (
         input logic clear_reservation,
         tlb_interface.mem tlb,
 
-        input logic gc_flush_LS_input,
+        input logic gc_issue_flush,
 
         l1_arbiter_request_interface.requester l1_request,
         l1_arbiter_return_interface.requester l1_response,
@@ -51,6 +51,7 @@ module load_store_unit (
 
         output logic load_store_FIFO_emptying,
         output exception_packet_t ls_exception,
+        output logic ls_exception_valid,
 
         unit_writeback_interface.unit ls_wb
         );
@@ -164,7 +165,7 @@ module load_store_unit (
         if (rst)
             store_committed <= 0;
         else
-            store_committed <= stage1.store & issue_request;
+            store_committed <= stage1.store & (issue_request | ls_exception_valid);
     end
 
     always_ff @ (posedge clk) begin
@@ -205,12 +206,12 @@ module load_store_unit (
      *  Input FIFO
      *********************************/
     taiga_fifo #(.DATA_WIDTH($bits(load_store_inputs_t)), .FIFO_DEPTH(LS_INPUT_BUFFER_DEPTH), .FIFO_TYPE(NON_MUXED_INPUT_FIFO)
-        ) ls_input_fifo (.fifo(input_fifo), .rst(rst | gc_flush_LS_input), .*);
+        ) ls_input_fifo (.fifo(input_fifo), .*);
 
     assign input_fifo.data_in = ls_inputs;
     assign input_fifo.push = ls_ex.new_request_dec;
     assign ls_ex.ready = ~input_fifo.full;
-    assign input_fifo.pop = issue_request;
+    assign input_fifo.pop = issue_request | gc_issue_flush;
     assign load_store_FIFO_emptying = input_fifo.early_empty;
     assign stage1 = input_fifo.data_out;
     /*********************************
@@ -234,12 +235,17 @@ module load_store_unit (
             default : unaligned_addr = 0;
         endcase
     end
-    assign ls_exception.valid = unaligned_addr & input_fifo.valid;
-    assign ls_exception.code = stage1.load ? LOAD_ADDR_MISSALIGNED : STORE_AMO_ADDR_MISSALIGNED;
-    assign ls_exception.pc = stage1.pc;
-    assign ls_exception.tval = stage1.virtual_address;
-    assign ls_exception.id = stage1.instruction_id;
 
+//    always_ff @ (posedge clk) begin
+//        if (rst | gc_issue_flush)
+//            ls_exception_valid <= 0;
+//        else if (unaligned_addr & input_fifo.valid)
+//            ls_exception_valid <= 0;
+//    end
+//    assign ls_exception.code = stage1.load ? LOAD_ADDR_MISSALIGNED : STORE_AMO_ADDR_MISSALIGNED;
+//    assign ls_exception.pc = stage1.pc;
+//    assign ls_exception.tval = stage1.virtual_address;
+//    assign ls_exception.id = stage1.instruction_id;
     /*********************************************/
 
 
@@ -410,7 +416,12 @@ module load_store_unit (
 
     assign ls_wb.rd = valid_chain[2] ? previous_load_r : previous_load;
 
-    assign ls_wb.done_next_cycle = load_complete;
+    logic exception_complete;
+    always_ff @ (posedge clk) begin
+        exception_complete <= (input_fifo.valid & ls_exception_valid & stage1.load);
+    end
+
+    assign ls_wb.done_next_cycle = load_complete | exception_complete;
     assign ls_wb.instruction_id = stage2_attr.instruction_id;
     ////////////////////////////////////////////////////
     //Assertions

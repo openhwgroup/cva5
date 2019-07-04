@@ -24,32 +24,28 @@ import taiga_config::*;
 import taiga_types::*;
 import l2_config_and_types::*;
 
-interface branch_table_interface;
-    logic[31:0] if_pc;
-    logic[31:0] dec_pc;
-    logic dec_pc_valid;
-    
-    logic[31:0] ex_pc;
-    logic [31:0] jump_pc;
-    logic [31:0] njump_pc;
-
-    logic[31:0] next_pc;
-
-    logic branch_taken;
-    logic branch_ex;
-    logic is_return_ex;
-
+interface branch_predictor_interface;
+    //Fetch signals
+    logic [31:0] if_pc;
     logic new_mem_request;
-
-    logic[31:0]  predicted_pc;
+    logic [31:0] next_pc;
+    
+    //Branch Predictor 
+    logic [31:0] branch_flush_pc;
+    logic [31:0] predicted_pc;
     logic use_prediction;
     logic use_ras;
+    branch_predictor_metadata_t metadata;
     logic flush;
 
-    modport branch_table (input if_pc, dec_pc, dec_pc_valid, ex_pc, next_pc, njump_pc, jump_pc, branch_taken, branch_ex, is_return_ex, new_mem_request, output predicted_pc, use_prediction, use_ras, flush);
-    modport fetch (input predicted_pc, use_prediction, branch_taken, flush, njump_pc, jump_pc, use_ras, output if_pc, next_pc, new_mem_request);
-    modport decode (output dec_pc, dec_pc_valid);
-    modport branch_unit (output branch_taken, branch_ex, is_return_ex, ex_pc, njump_pc, jump_pc);
+    modport branch_predictor (
+        input if_pc, new_mem_request, next_pc,
+        output branch_flush_pc, predicted_pc, use_prediction, use_ras, metadata, flush
+    );
+    modport fetch (
+        input branch_flush_pc, predicted_pc, use_prediction, use_ras, metadata, flush,
+        output if_pc, new_mem_request, next_pc
+     );
 
 endinterface
 

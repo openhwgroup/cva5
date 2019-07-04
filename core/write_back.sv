@@ -38,7 +38,8 @@ module write_back(
         register_file_writeback_interface.writeback rf_wb,
         tracking_interface.wb ti,
         output logic instruction_complete,
-        output logic instruction_queue_empty
+        output logic instruction_queue_empty,
+        output instruction_id_t oldest_id
         );
     //////////////////////////////////////
 
@@ -149,7 +150,9 @@ module write_back(
         end
     end
 
-    assign retired = (inorder ? id_done[MAX_INFLIGHT_COUNT-1] : |id_done);
+    assign oldest_id = id_ordering[MAX_INFLIGHT_COUNT-1];
+
+    assign retired = (inorder ? id_done_ordered[MAX_INFLIGHT_COUNT-1] : |id_done);
     always_ff @(posedge clk) begin
         retired_r <= retired;
         retired_id_r <= retired_id;
@@ -184,10 +187,12 @@ module write_back(
                 retired_id = id_ordering_post_store[i];
             end
         end
+
+        if (inorder)
+            retired_id = id_ordering_post_store[MAX_INFLIGHT_COUNT-1];
+
         if (~|id_done_ordered[MAX_INFLIGHT_COUNT-1:1])
             retired_id = issue_id;
-
-
 
     end
 

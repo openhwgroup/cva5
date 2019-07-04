@@ -68,6 +68,7 @@
 ../core/clz.sv
 ../core/div_algorithms/div_quick_clz_mk2.sv
 ../core/div_algorithms/div_quick_clz.sv
+../core/div_algorithms/div_test.sv
 ../core/div_algorithms/div_quick_naive.sv
 ../core/div_algorithms/div_algorithm.sv  
 ../core/div_unit.sv  
@@ -83,7 +84,7 @@
 
 ../core/l1_arbiter.sv  
 ../core/ras.sv  
-../core/branch_table.sv  
+../core/branch_predictor.sv  
 ../core/fetch.sv  
 ../core/instruction_buffer.sv  
 ../core/decode.sv  

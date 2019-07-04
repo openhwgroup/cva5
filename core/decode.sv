@@ -27,7 +27,6 @@ module decode(
         input logic clk,
         input logic rst,
 
-        branch_table_interface.decode bt,
         instruction_buffer_interface.decode ib,
         tracking_interface.decode ti,
         register_file_decode_interface.decode rf_decode,
@@ -48,6 +47,7 @@ module decode(
 
         input logic gc_issue_hold,
         input logic gc_fetch_flush,
+        input logic gc_issue_flush,
 
         output logic load_store_issue,
 
@@ -137,12 +137,6 @@ module decode(
     assign ti.inflight_packet.rd_addr = future_rd_addr;
     assign ti.inflight_packet.rd_addr_nzero = ~rd_zero;
     assign ti.issued = instruction_issued_with_rd | store_issued;
-
-    ////////////////////////////////////////////////////
-    //Branch Table Interface
-    assign bt.dec_pc = ib.data_out.pc;
-    assign bt.dec_pc_valid = ib.valid;
-
 
     ////////////////////////////////////////////////////
     //Unit Determination
@@ -294,11 +288,13 @@ module decode(
     logic [4:0] load_rd;
     logic last_ls_request_was_load;
     logic amo_op;
+    logic store_conditional;
     logic [4:0] amo_type;
 
     assign amo_op =  USE_AMO ? (opcode_trim == AMO_T) : 0;
     assign amo_type = USE_AMO ? ib.data_out.instruction[31:27] : 0;
-    assign ls_is_load = (opcode_trim inside {LOAD_T, AMO_T}) && (amo_type != AMO_SC); //LR and AMO_ops perform a read operation as well
+    assign store_conditional = (amo_type == AMO_SC);
+    assign ls_is_load = (opcode_trim inside {LOAD_T, AMO_T}) && !store_conditional; //LR and AMO_ops perform a read operation as well
 
     assign ls_inputs.offset = opcode[5] ? {ib.data_out.instruction[31:25], ib.data_out.instruction[11:7]} : ib.data_out.instruction[31:20];
     assign ls_inputs.virtual_address = rf_decode.rs1_data + 32'(signed'(ls_inputs.offset));
@@ -308,7 +304,7 @@ module decode(
     assign ls_inputs.amo = amo_type;
     assign ls_inputs.is_amo = amo_op;
     assign ls_inputs.load = ls_is_load;
-    assign ls_inputs.store = (opcode_trim == STORE_T);
+    assign ls_inputs.store = (opcode_trim == STORE_T) || store_conditional;
     assign ls_inputs.load_store_forward = (opcode_trim == STORE_T) && rf_decode.rs2_conflict;
     assign ls_inputs.instruction_id = ti.issue_id;
 
@@ -336,6 +332,7 @@ module decode(
     assign branch_inputs.rs2 = rf_decode.rs2_data;
     assign branch_inputs.fn3 = fn3;
     assign branch_inputs.dec_pc = ib.data_out.pc;
+    assign branch_inputs.dec_pc_valid = ib.valid;
     assign branch_inputs.use_signed = !(fn3 inside {BLTU_fn3, BGEU_fn3});
     assign branch_inputs.jal = opcode[3];//(opcode == JAL);
     assign branch_inputs.jalr = ~opcode[3] & opcode[2];//(opcode == JALR);
@@ -343,7 +340,7 @@ module decode(
     assign branch_inputs.is_call = ib.data_out.is_call;
     assign branch_inputs.is_return = ib.data_out.is_return;
     assign branch_inputs.instruction = ib.data_out.instruction;
-
+    assign branch_inputs.branch_metadata = ib.data_out.branch_metadata;
 
     ////////////////////////////////////////////////////
     //Global Control unit inputs

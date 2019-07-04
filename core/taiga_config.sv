@@ -31,9 +31,9 @@ package taiga_config;
     //Privileged ISA Options
 
     //Enable Machine level privilege spec
-    parameter ENABLE_M_MODE = 1;
+    parameter ENABLE_M_MODE = 0;
     //Enable Supervisor level privilege spec
-    parameter ENABLE_S_MODE = 1;
+    parameter ENABLE_S_MODE = 0;
 
     parameter CPU_ID = 0;//32 bit value
     parameter bit[31:0] RESET_VEC = 32'h80000000;
@@ -61,7 +61,8 @@ package taiga_config;
         RADIX_16,
         QUICK_NAIVE,
         QUICK_CLZ,
-        QUICK_CLZ_MK2
+        QUICK_CLZ_MK2,
+        TEST_DIV
     } div_type;
     parameter div_type DIV_ALGORITHM = QUICK_CLZ;
 
@@ -88,8 +89,8 @@ package taiga_config;
     parameter bus_type_t BUS_TYPE = AXI_BUS;
 
     //Caches
-    parameter USE_DCACHE = 1;
-    parameter USE_ICACHE = 1;
+    parameter USE_DCACHE = 0;
+    parameter USE_ICACHE = 0;
 
 
     ////////////////////////////////////////////////////

@@ -28,18 +28,27 @@ module amo_alu(
         output logic[31:0] result
         );
 
+    logic rs1_smaller_than_rs2;
+     logic signed [32:0] rs1_ext;
+     logic signed [32:0] rs2_ext;
+
+     //bit 4 for unsigned
+    assign rs1_ext = {(~amo_alu_inputs.op[4] & amo_alu_inputs.rs1_load[31]), amo_alu_inputs.rs1_load};
+    assign rs2_ext = {(~amo_alu_inputs.op[4] & amo_alu_inputs.rs2[31]), amo_alu_inputs.rs2};
+
+    assign rs1_smaller_than_rs2 = rs1_ext < rs2_ext;
 
     always_comb begin
-        case (amo_alu_inputs.op)// <--unique as not all codes are in use
+        unique case (amo_alu_inputs.op)// <--unique as not all codes are in use
             AMO_SWAP : result = amo_alu_inputs.rs2;
             AMO_ADD : result = amo_alu_inputs.rs1_load + amo_alu_inputs.rs2;
             AMO_XOR : result = amo_alu_inputs.rs1_load ^ amo_alu_inputs.rs2;
             AMO_AND : result = amo_alu_inputs.rs1_load & amo_alu_inputs.rs2;
             AMO_OR : result = amo_alu_inputs.rs1_load | amo_alu_inputs.rs2;
-            AMO_MIN : result = {1'b1, 30'b0};
-            AMO_MAX : result = {1'b0, {30{1'b1}}};
-            AMO_MINU : result = '0;
-            AMO_MAXU : result = '1;
+            AMO_MIN : result = rs1_smaller_than_rs2 ? amo_alu_inputs.rs1_load : amo_alu_inputs.rs2;
+            AMO_MAX : result = rs1_smaller_than_rs2 ? amo_alu_inputs.rs2 : amo_alu_inputs.rs1_load;
+            AMO_MINU : result = rs1_smaller_than_rs2 ? amo_alu_inputs.rs1_load : amo_alu_inputs.rs2;
+            AMO_MAXU : result = rs1_smaller_than_rs2 ? amo_alu_inputs.rs2 : amo_alu_inputs.rs1_load;
         endcase
     end
 

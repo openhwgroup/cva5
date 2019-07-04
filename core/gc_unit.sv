@@ -28,19 +28,20 @@ module gc_unit(
         input logic clk,
         input logic rst,
 
+
         //Decode
         func_unit_ex_interface.unit gc_ex,
         input gc_inputs_t gc_inputs,
         input logic instruction_issued_no_rd,
 
         //Branch miss predict
-        input logic branch_miss_predict,
+        input logic branch_flush,
 
         //Load Store Unit
         input exception_packet_t ls_exception,
+        input logic ls_exception_valid,
         input logic load_store_issue,
         input logic load_store_FIFO_emptying,
-        output logic gc_flush_LS_input,
 
         //TLBs
         output logic tlb_on,
@@ -62,6 +63,7 @@ module gc_unit(
 
         //Output controls
         output logic gc_issue_hold,
+        output logic gc_issue_flush,
         output logic gc_fetch_flush,
         output logic gc_fetch_pc_override,
         output logic gc_supress_writeback,
@@ -128,12 +130,10 @@ module gc_unit(
     //     *If in-order mode and inflight queue empty, disable zero cycle write-back (eg. ALU)
     //*Hold fetch during potential fetch exception, when fetch buffer drained, if no other exceptions trigger exception
 
-    typedef enum {RST_STATE, PRE_CLEAR_STATE, CLEAR_STATE, IDLE_STATE, TLB_CLEAR_STATE, LS_EXCEPTION_POSSIBLE, IQ_DRAIN} gc_state;
+    typedef enum {RST_STATE, PRE_CLEAR_STATE, CLEAR_STATE, IDLE_STATE, TLB_CLEAR_STATE, LS_EXCEPTION_POSSIBLE, IQ_DRAIN, IQ_DISCARD} gc_state;
     gc_state state;
     gc_state next_state;
 
-    //LS
-    instruction_id_t ls_id;
 
     logic i_fence_flush;
 
@@ -189,41 +189,57 @@ module gc_unit(
             LS_EXCEPTION_POSSIBLE :
                 if (load_store_FIFO_emptying)
                     next_state = IDLE_STATE;
-                else if (ls_exception.valid)
-                    next_state = IQ_DRAIN;
-             IQ_DRAIN :
-                 if (ls_id == oldest_id)
-                     next_state = IDLE_STATE;
+                else if (ls_exception_valid) begin
+                    if (ls_exception.id == oldest_id)
+                        next_state = IQ_DISCARD;
+                    else
+                        next_state = IQ_DRAIN;
+                end
+            IQ_DRAIN :
+                if (ls_exception.id == oldest_id)
+                    next_state = IQ_DISCARD;
+            IQ_DISCARD :
+                if (instruction_queue_empty)
+                    next_state = IDLE_STATE;
             default : next_state = RST_STATE;
         endcase
     end
 
+    logic ls_exception_first_cycle;
+    logic ls_exception_second_cycle;
+
+    assign ls_exception_first_cycle =  ls_exception_valid && (state == LS_EXCEPTION_POSSIBLE);
+    always_ff @ (posedge clk) begin
+        ls_exception_second_cycle <= ls_exception_first_cycle;
+    end
+
     assign gc_exception.code =
-        ls_exception.valid ? ls_exception.code :
+        ls_exception_second_cycle ? ls_exception.code :
         gc_inputs.is_ecall ? ecall_code : BREAK;
-    assign gc_exception.pc = ls_exception.valid ? ls_exception.pc : gc_inputs.pc;
-    assign gc_exception.tval = ls_exception.valid ? ls_exception.tval : '0;
-    assign gc_exception.valid = gc_inputs.is_ecall | gc_inputs.is_ebreak | ls_exception.valid;
+    assign gc_exception.pc = ls_exception_second_cycle ? ls_exception.pc : gc_inputs.pc;
+    assign gc_exception.tval = ls_exception_second_cycle ? ls_exception.tval : '0;
+    assign gc_exception.valid = gc_inputs.is_ecall | gc_inputs.is_ebreak | ls_exception_second_cycle;
 
 
-    assign gc_fetch_flush = branch_miss_predict | gc_inputs.flush_required | ls_exception.valid;
-    assign gc_supress_writeback = 0;
+    assign gc_fetch_flush = branch_flush | gc_inputs.flush_required | ls_exception_first_cycle;
 
     always_ff @ (posedge clk) begin
-        gc_issue_hold <= gc_ex.new_request_dec || processing || (next_state inside {PRE_CLEAR_STATE, CLEAR_STATE, TLB_CLEAR_STATE});
+        gc_issue_hold <= gc_ex.new_request_dec || processing || (next_state inside {PRE_CLEAR_STATE, CLEAR_STATE, TLB_CLEAR_STATE, IQ_DRAIN, IQ_DISCARD});
         inuse_clear <= (next_state == CLEAR_STATE);
-        inorder <= 0;//(next_state inside {LS_EXCEPTION_POSSIBLE}) ? 1 : 0;
+        inorder <= 0;//(next_state inside {LS_EXCEPTION_POSSIBLE, IQ_DRAIN}) ? 1 : 0;
     end
 
-    assign gc_flush_LS_input = 0;
     always_ff @ (posedge clk) begin
-        if (ls_exception.valid)
-            ls_id <= ls_exception.id;
+        gc_issue_flush <= (next_state inside {IQ_DISCARD}) ? 1 : 0;
+    end
+
+    always_ff @ (posedge clk) begin
+        gc_supress_writeback <= (next_state inside {PRE_CLEAR_STATE, CLEAR_STATE, TLB_CLEAR_STATE, IQ_DISCARD}) ? 1 : 0;
     end
 
 
     always_ff @ (posedge clk) begin
-        gc_fetch_pc_override <= gc_inputs.flush_required;
+        gc_fetch_pc_override <= gc_inputs.flush_required | ls_exception_first_cycle;
         gc_fetch_pc <=
             gc_inputs.is_i_fence ? gc_inputs.pc + 4 :
             gc_inputs.is_ret ? csr_mepc :
@@ -295,7 +311,6 @@ module gc_unit(
             wb_done <= 0;
         end
     end
-
 
     ////////////////////////////////////////////////////
     //Assertions

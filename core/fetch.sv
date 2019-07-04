@@ -27,12 +27,13 @@ module fetch(
         input logic clk,
         input logic rst,
 
+        input logic branch_flush,
         input logic gc_fetch_flush,
         input logic gc_fetch_pc_override,
         input logic exception,
         input logic [31:0] gc_fetch_pc,
 
-        branch_table_interface.fetch bt,
+        branch_predictor_interface.fetch bp,
         ras_interface.fetch ras,
 
         tlb_interface.mem tlb,
@@ -120,19 +121,19 @@ module fetch(
     always_comb begin
         if (gc_fetch_pc_override)
             next_pc = gc_fetch_pc;
-        else if (gc_fetch_flush)
-            next_pc = bt.branch_taken ? bt.jump_pc : bt.njump_pc;
-        else if (bt.use_prediction)
-            next_pc = (bt.use_ras & ras.valid) ? ras.addr : bt.predicted_pc;
+        else if (branch_flush)
+            next_pc = bp.branch_flush_pc;
+        else if (bp.use_prediction)
+            next_pc = (bp.use_ras & ras.valid) ? ras.addr : bp.predicted_pc;
         else
             next_pc = if_pc + 4;
     end
 
-    assign bt.new_mem_request = update_pc;
-    assign bt.next_pc = next_pc;
+    assign bp.new_mem_request = update_pc;
+    assign bp.next_pc = next_pc;
 
     assign if2_pc  = if_pc;
-    assign bt.if_pc = if_pc;
+    assign bp.if_pc = if_pc;
     /*************************************
      * TLB
      *************************************/
@@ -173,7 +174,7 @@ module fetch(
     generate if (USE_I_SCRATCH_MEM) begin
             ibram i_bram (.*, .fetch_sub(fetch_sub[BRAM_ID]));
             assign sub_unit_address_match[BRAM_ID] = (tlb.physical_address[31:32-SCRATCH_BIT_CHECK] == SCRATCH_ADDR_L[31:32-SCRATCH_BIT_CHECK]);
-            assign fetch_sub[BRAM_ID].new_request = new_mem_request & sub_unit_address_match[BRAM_ID];
+            assign fetch_sub[BRAM_ID].new_request = new_mem_request & (USE_ICACHE ? ~sub_unit_address_match[ICACHE_ID] : 1'b1);
             assign fetch_sub[BRAM_ID].stage1_addr = tlb.physical_address;
             assign fetch_sub[BRAM_ID].stage2_addr = stage2_phys_address;
             assign unit_data_array[BRAM_ID] = fetch_sub[BRAM_ID].data_out;
@@ -265,5 +266,13 @@ module fetch(
 
     assign ib.data_in.is_return = use_ras;
     assign ib.data_in.is_call = (opcode_trimmed inside {JAL_T, JALR_T}) && rd_link;
+
+    logic [1:0] branch_metadata_r;
+    always_ff @(posedge clk) begin
+        if (new_mem_request) begin
+            branch_metadata_r <= bp.metadata;
+        end
+    end
+    assign ib.data_in.branch_metadata = branch_metadata_r;
 
 endmodule

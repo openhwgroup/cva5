@@ -29,8 +29,9 @@ module branch_unit(
 
         func_unit_ex_interface.unit branch_ex,
         input branch_inputs_t branch_inputs,
-        branch_table_interface.branch_unit bt,
+        output branch_results_t br_results,
         ras_interface.branch_unit ras,
+        output branch_flush,
 
         unit_writeback_interface.unit branch_wb
         );
@@ -59,6 +60,22 @@ module branch_unit(
     logic done;
     logic new_jal_jalr_dec_with_rd;
 
+
+    //Branch Predictor
+    logic branch_taken;
+    logic branch_correctly_taken;
+    logic branch_correclty_not_taken;
+    logic miss_predict;
+
+    logic [31:0] pc_ex;
+    logic [31:0] jump_pc;
+    logic [31:0] njump_pc;
+    logic [1:0] branch_metadata;
+
+    //RAS
+    logic is_call;
+    logic is_return;
+
     //Perf monitoring
     logic [31:0] jump_count;
     logic [31:0] call_count;
@@ -68,16 +85,15 @@ module branch_unit(
     //implementation
     ////////////////////////////////////////////////////
 
-
     branch_comparator bc (
             .use_signed(branch_inputs.use_signed),
             .less_than(branch_inputs.fn3[2]),
             .a(branch_inputs.rs1),
             .b(branch_inputs.rs2),
             .result(result)
-            );
+        );
 
-    assign  bt.branch_taken = bt.branch_ex & ((~jump_ex & (result_ex ^ fn3_ex[0])) | jump_ex);
+    assign branch_taken = branch_ex.new_request & ((~jump_ex & (result_ex ^ fn3_ex[0])) | jump_ex);
 
 
     assign jal_imm = {branch_inputs.instruction[31], branch_inputs.instruction[19:12], branch_inputs.instruction[20], branch_inputs.instruction[30:21]};
@@ -103,18 +119,54 @@ module branch_unit(
     assign jump_pc_dec = jump_base + pc_offset;
     assign pc_plus_4 = branch_inputs.dec_pc + 4;
 
-    assign bt.branch_ex = branch_ex.new_request;
 
     always_ff @(posedge clk) begin
         fn3_ex <= branch_inputs.fn3;
         result_ex <= result;
-        bt.ex_pc <= branch_inputs.dec_pc;
         jump_ex <= (branch_inputs.jal | branch_inputs.jalr);
-        bt.jump_pc[31:1] <= jump_pc_dec[31:1];
-        bt.jump_pc[0] <= 0;
-        bt.njump_pc <= pc_plus_4;
     end
 
+
+    //Predictor support
+    ////////////////////////////////////////////////////
+    always_ff @(posedge clk) begin
+        pc_ex <= branch_inputs.dec_pc;
+        jump_pc <= {jump_pc_dec[31:1], 1'b0};
+        njump_pc <= pc_plus_4;
+        branch_metadata <= branch_inputs.branch_metadata;
+    end
+
+    assign br_results.pc_ex = pc_ex;
+    assign br_results.jump_pc = jump_pc;
+    assign br_results.njump_pc = njump_pc;
+    assign br_results.branch_ex_metadata = branch_metadata;
+
+    assign br_results.branch_taken = branch_taken;
+    assign br_results.branch_ex = branch_ex.new_request;
+    assign br_results.is_return_ex = is_return;
+
+    assign branch_correctly_taken = {br_results.branch_taken, branch_inputs.dec_pc[31:1]} == {1'b1, br_results.jump_pc[31:1]};
+    assign branch_correclty_not_taken = {br_results.branch_taken, branch_inputs.dec_pc[31:1]} == {1'b0, br_results.njump_pc[31:1]};
+    assign miss_predict = branch_ex.new_request && ~(branch_correctly_taken || branch_correclty_not_taken);
+
+    assign branch_flush = USE_BRANCH_PREDICTOR ? miss_predict : branch_ex.new_request & branch_taken;
+
+    //RAS support
+    ////////////////////////////////////////////////////
+    generate if (USE_BRANCH_PREDICTOR) begin
+            always_ff @(posedge clk) begin
+                is_call <= branch_ex.new_request_dec & branch_inputs.is_call;
+                is_return <= branch_ex.new_request_dec & branch_inputs.is_return;
+            end
+
+            assign ras.push = is_call;
+            assign ras.pop = is_return;
+            assign ras.new_addr = rd_ex;
+        end
+    endgenerate
+
+    //WB Output
+    ////////////////////////////////////////////////////
     //if the destination reg is zero, the result is not "written back" to the register file.
     assign new_jal_jalr_dec_with_rd = branch_ex.new_request_dec & branch_inputs.uses_rd;
 
@@ -124,28 +176,6 @@ module branch_unit(
         end
     end
 
-    /*********************************
-     *  RAS support
-     *********************************/
-    generate if (USE_BRANCH_PREDICTOR) begin
-            logic is_call;
-            logic is_return;
-
-            always_ff @(posedge clk) begin
-                is_call <= branch_ex.new_request_dec & branch_inputs.is_call;
-                is_return <= branch_ex.new_request_dec & branch_inputs.is_return;
-            end
-
-            assign ras.push = is_call;
-            assign ras.pop = is_return;
-            assign ras.new_addr = rd_ex;
-            assign bt.is_return_ex = is_return;
-        end
-    endgenerate
-
-    /*********************************
-     *  Output
-     *********************************/
     assign branch_ex.ready = ~done | (done & branch_wb.accepted);
     assign branch_wb.rd = rd_ex;
 
@@ -161,8 +191,9 @@ module branch_unit(
 
     assign branch_wb.done_next_cycle = branch_ex.possible_issue & branch_inputs.uses_rd;
     assign branch_wb.instruction_id = branch_ex.instruction_id;
-    ////////////////////////////////////////////////////
+
     //Assertions
+    ////////////////////////////////////////////////////
     always_ff @ (posedge clk) begin
         assert (~branch_wb.accepted | (branch_wb.accepted & done)) else $error("Spurious ack for Branch Unit");
     end

@@ -52,7 +52,10 @@ module taiga (
     logic sc_complete;
     logic sc_success;
 
-    branch_table_interface bt();
+    branch_predictor_interface bp();
+    branch_results_t br_results;
+    logic branch_flush;
+
     ras_interface ras();
 
     register_file_decode_interface rf_decode();
@@ -73,6 +76,7 @@ module taiga (
     instruction_buffer_interface ib();
 
     exception_packet_t  ls_exception;
+    logic ls_exception_valid;
 
     tracking_interface ti();
     unit_writeback_interface unit_wb [NUM_WB_UNITS-1:0]();
@@ -90,6 +94,7 @@ module taiga (
     //Global Control
     logic load_store_FIFO_emptying;
     logic gc_issue_hold;
+    logic gc_issue_flush;
     logic gc_fetch_flush;
     logic gc_fetch_pc_override;
     logic gc_supress_writeback;
@@ -104,13 +109,11 @@ module taiga (
     logic store_committed;
     instruction_id_t store_id;
 
-
     //Branch Unit and Fetch Unit
     logic branch_taken;
     logic [31:0] pc_offset;
     logic[31:0] jalr_rs1;
     logic jalr;
-    logic branch_miss_predict;
 
     //Decode Unit and Fetch Unit
     logic [31:0] if2_pc;
@@ -149,8 +152,7 @@ module taiga (
      * CPU Front end
      *************************************/
     fetch fetch_block (.*, .icache_on('1), .tlb(itlb), .l1_request(l1_request[L1_ICACHE_ID]), .l1_response(l1_response[L1_ICACHE_ID]), .exception(1'b0));
-    branch_table bt_block (.*);
-    assign branch_miss_predict = bt.flush;
+    branch_predictor bp_block (.*);
     ras ras_block(.*);
     generate if (ENABLE_S_MODE) begin
             tlb_lut_ram #(ITLB_WAYS, ITLB_DEPTH) i_tlb (.*, .tlb(itlb), .mmu(immu));
