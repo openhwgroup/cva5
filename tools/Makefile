@@ -1,5 +1,6 @@
-.PHONY: lint verilator_taiga_dhrystone verilator_taiga_benchmarks verilator_taiga_compliance verilator_taiga_coremark
 
+
+MAKEFLAGS += --silent
 MAKEFILE_DIR=$(pwd)
 TAIGA_DIR=..
 
@@ -21,6 +22,11 @@ export AR
 export RANLIB
 ###############################################################
 
+#Compiance parameters
+###############################################################
+COMPLIANCE_DIR=/home/ematthew/Research/RISCV/riscv-compliance/
+COMPLIANCE_TARGET=rv32im
+###############################################################
 
 #Benchmark parameters
 #Assumes binaries are in the BENCHMARK_DIR
@@ -58,26 +64,35 @@ define verilator_local_mem_test
 	time ./$@/Vtaiga_local_mem $2 $3
 endef
 
+.PHONY: lint
 lint: 
 	verilator -cc $(TAIGA_SRCS) \
 	../test_benches/verilator/taiga_local_mem.sv \
 	--top-module taiga_local_mem \
 	--lint-only
 		
+.PHONY: verilator_taiga_dhrystone
 verilator_taiga_dhrystone:
 	$(call verilator_local_mem_test,\"$(BENCHMARK_DIR)dhrystone.riscv.hw_init\", "$@/dhrystone.log", "/dev/null")
 	
+.PHONY: verilator_taiga_benchmarks
 verilator_taiga_benchmarks:
 	$(foreach BENCHMARK,$(BENCHMARKS), \
 		$(call verilator_local_mem_test,\"$(BENCHMARK_DIR)$(BENCHMARK).riscv.hw_init\", $@/$(BENCHMARK).log, "/dev/null") \
 	)
 
 #Called by compliance makefile
-verilator_taiga_compliance:
+.PHONY: verilator_taiga_compliance_unit_test
+verilator_taiga_compliance_unit_test:
 	$(call verilator_local_mem_test,\"$(COMPLIANCE_BENCHAMRK)\", $(LOG_FILE_NAME), $(SIG_FILE_NAME))
-	
+
+.PHONY: verilator_taiga_compliance_tests
+verilator_taiga_compliance_tests:
+	$(MAKE) -C $(COMPLIANCE_DIR) RISCV_TARGET=taiga RISCV_DEVICE=$(COMPLIANCE_TARGET) RISCV_PREFIX=$(RISCV_PREFIX)
+
+.PHONY: verilator_taiga_coremark
 verilator_taiga_coremark:
-	$(MAKE) -C  $(COREMARK_DIR) compile PORT_DIR=taiga-sim ITERATIONS=5000
+	$(MAKE) -C  $(COREMARK_DIR) compile PORT_DIR=taiga-sim ITERATIONS=100
 	cd $(MAKEFILE_DIR);
 	$(ELF_TO_HW_INIT) $(COREMARK_DIR)/coremark.bin coremark.hw_init coremark.sim_init
 	$(call verilator_local_mem_test,\"coremark.hw_init\", "coremark.log", "coremark.sig")
@@ -85,6 +100,6 @@ verilator_taiga_coremark:
 clean:
 	rm -rf ./verilator_taiga_dhrystone
 	rm -rf ./verilator_taiga_benchmarks
-	rm -rf ./verilator_taiga_compliance
+	rm -rf ./verilator_taiga_compliance_unit_test
 	rm -rf ./verilator_taiga_coremark
 	
