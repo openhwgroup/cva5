@@ -5,12 +5,13 @@
 #include "verilated.h"
 #include "verilated_vcd_c.h"
 
+////////////////////////////////////////////////////
+//Trace Interface Counters
 uint64_t operand_stall = 0;
 uint64_t unit_stall = 0;
 uint64_t no_id_stall = 0;
 uint64_t no_instruction_stall = 0;
 uint64_t other_stall = 0;
-
 uint64_t instruction_issued_dec = 0;
 uint64_t branch_misspredict = 0;
 uint64_t return_misspredict = 0;
@@ -19,7 +20,7 @@ uint64_t return_misspredict = 0;
 using namespace std;
 int main(int argc, char **argv) {
 	  ofstream logFile, sigFile;
-	  bool logPhase;
+	  bool logPhase; //Log phase vs signature phase used for compliance tests
 	  bool stallDetected = false;
 	  int stall_cycles = 0;
 
@@ -51,10 +52,11 @@ int main(int argc, char **argv) {
 		tracer->open("sim_results.vcd");
 	#endif
 
-	cout << "\n\nStarting test: " << argv[2] << "\n";
-	cout << "******************************\n";
+	cout << "--------------------------------------------------------------\n";
+	cout << "  Starting Simulation, logging to: " << argv[1] << "\n";
+	cout << "--------------------------------------------------------------\n";
 	int reset_count = 0;
-	long int cycle_cout = 0;
+	uint64_t cycle_cout = 0;
 	tb->rst = 1;
     logPhase = true;
 
@@ -73,23 +75,24 @@ int main(int argc, char **argv) {
 		tb->eval();
 
         if (reset_count > 64) {
-            operand_stall += tb->operand_stall;
-            unit_stall += tb->unit_stall;
-            no_id_stall += tb->no_id_stall;
-            no_instruction_stall += tb->no_instruction_stall;
-            other_stall += tb->other_stall;
+            operand_stall += tb->operand_stall ? 1 : 0;
+            unit_stall += tb->unit_stall ? 1 : 0;
+            no_id_stall += tb->no_id_stall ? 1 : 0;
+            no_instruction_stall += tb->no_instruction_stall ? 1 : 0;
+            other_stall += tb->other_stall ? 1 : 0;
 
-            instruction_issued_dec += tb->instruction_issued_dec;
-            branch_misspredict += tb->branch_misspredict;
-            return_misspredict += tb->return_misspredict;
+            instruction_issued_dec += tb->instruction_issued_dec ? 1 : 0;
+            branch_misspredict += tb->branch_misspredict ? 1 : 0;
+            return_misspredict += tb->return_misspredict ? 1 : 0;
         }
 
 
-		//Custom nop to change to signature phase
+		//Custom nop to change to signature phase for compliance tests
 		if (tb->instruction_data_dec == 0x00B00013U) {
 			logPhase = false;
-			cout << "******************************\n";
-			cout << "\n\n**********Signature***********\n";
+			cout << "\n--------------------------------------------------------------\n";
+			cout << "                   Signature\n";
+			cout << "--------------------------------------------------------------\n";
 		}
 		
 		//if (!logPhase) {
@@ -106,16 +109,16 @@ int main(int argc, char **argv) {
 			}
 		}
 
-		//Custom nop for termination
+		//Custom nop for error termination
 		if (tb->instruction_data_dec == 0x00F00013U) {
 			cout << "\n\nError!!!!\n\n";
 			break;
-		}
+		}//Custom nop for regular termination
 		else if (tb->instruction_data_dec == 0x00A00013U) {
 			break;
 		}
 		#ifdef TRACE_ON
-				tracer->dump(vluint64_t(cycle_cout));
+				tracer->dump(vluint32_t(cycle_cout));
 		#endif
 		cycle_cout++;
 
@@ -138,11 +141,13 @@ int main(int argc, char **argv) {
 		tracer->close();
 	#endif
 
-	cout << "\n******************************\n\n";
-	cout << "Test Done\n";
-	cout << "Simulated: " << cycle_cout << " cycles.\n\n\n";
+	cout << "\n--------------------------------------------------------------\n";
+	cout << "  Simulation Completed:  " << cycle_cout << " cycles.\n";
+	cout << "--------------------------------------------------------------\n";
 
+	cout << "\n\n--------------------------------------------------------------\n";
 	cout << "Taiga trace stats:\n";
+	cout << "--------------------------------------------------------------\n";
 	cout << "operand_stall: " << operand_stall  << "\n";
 	cout << "unit_stall: " << unit_stall  << "\n";
 	cout << "no_id_stall: " << no_id_stall  << "\n";
@@ -151,6 +156,7 @@ int main(int argc, char **argv) {
 	cout << "instruction_issued_dec: " << instruction_issued_dec  << "\n";
 	cout << "branch_misspredict: " << branch_misspredict  << "\n";
 	cout << "return_misspredict: " << return_misspredict  << "\n";
+	cout << "--------------------------------------------------------------\n";
 
 	logFile.close();
 	sigFile.close();

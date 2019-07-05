@@ -343,7 +343,7 @@ module taiga_local_mem # (
     assign instruction_issued_dec = tr.instruction_issued_dec;
     assign instruction_pc_dec = tr.instruction_pc_dec;
     assign instruction_data_dec = tr.instruction_data_dec;
-    assign branch_misspredict = tr.operand_stall;
-    assign return_misspredict = tr.operand_stall;
+    assign branch_misspredict = tr.branch_misspredict;
+    assign return_misspredict = tr.return_misspredict;
 
 endmodule

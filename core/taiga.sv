@@ -200,26 +200,29 @@ module taiga (
     ////////////////////////////////////////////////////
     //Assertions
     //Ensure that reset is held for at least 32 cycles to clear shift regs
-   // always_ff @ (posedge clk) begin
-   //     assert property(@(posedge clk) $rose (rst) |=> rst[*32]) else $error("Reset not held for long enough!");
-   // end
+    // always_ff @ (posedge clk) begin
+    //     assert property(@(posedge clk) $rose (rst) |=> rst[*32]) else $error("Reset not held for long enough!");
+    // end
 
     ////////////////////////////////////////////////////
     //Assertions
 
     ////////////////////////////////////////////////////
     //Trace Interface
-    always_ff @(posedge clk) begin
-        tr.operand_stall <= tr_operand_stall;
-        tr.unit_stall <= tr_unit_stall;
-        tr.no_id_stall <= tr_no_id_stall;
-        tr.no_instruction_stall <= tr_no_instruction_stall;
-        tr.other_stall <= tr_other_stall;
-        tr.instruction_issued_dec <= tr_instruction_issued_dec;
-        tr.instruction_pc_dec <= tr_instruction_pc_dec;
-        tr.instruction_data_dec <= tr_instruction_data_dec;
-        tr.branch_misspredict <= tr_operand_stall;
-        tr.return_misspredict <= tr_operand_stall;
+    generate if (ENABLE_TRACE_INTERFACE) begin
+        always_ff @(posedge clk) begin
+            tr.operand_stall <= tr_operand_stall;
+            tr.unit_stall <= tr_unit_stall;
+            tr.no_id_stall <= tr_no_id_stall;
+            tr.no_instruction_stall <= tr_no_instruction_stall;
+            tr.other_stall <= tr_other_stall;
+            tr.instruction_issued_dec <= tr_instruction_issued_dec;
+            tr.instruction_pc_dec <= tr_instruction_pc_dec;
+            tr.instruction_data_dec <= tr_instruction_data_dec;
+            tr.branch_misspredict <= tr_branch_misspredict;
+            tr.return_misspredict <= tr_return_misspredict;
+        end
     end
+    endgenerate
 
 endmodule

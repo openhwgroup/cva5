@@ -489,7 +489,7 @@ module decode(
     assign tr_operand_stall = (|issue_ready) & issue_valid & ~load_store_operands_ready;
     assign tr_unit_stall = ~(|issue_ready) & issue_valid & load_store_operands_ready;
     assign tr_no_id_stall = (|issue_ready) & (ib.valid & ~ti.id_available & ~gc_issue_hold & ~gc_fetch_flush) & load_store_operands_ready;
-    assign tr_no_instruction_stall = ib.valid;
+    assign tr_no_instruction_stall = ~ib.valid;
     assign tr_other_stall = ~instruction_issued & ~(tr_operand_stall | tr_unit_stall | tr_no_id_stall | tr_no_instruction_stall);
 
     assign tr_instruction_issued_dec = instruction_issued;

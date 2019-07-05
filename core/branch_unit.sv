@@ -33,7 +33,11 @@ module branch_unit(
         ras_interface.branch_unit ras,
         output branch_flush,
 
-        unit_writeback_interface.unit branch_wb
+        unit_writeback_interface.unit branch_wb,
+
+        //Trace signals
+        output logic tr_branch_misspredict,
+        output logic tr_return_misspredict
         );
 
     logic[19:0] jal_imm;
@@ -192,46 +196,19 @@ module branch_unit(
     assign branch_wb.done_next_cycle = branch_ex.possible_issue & branch_inputs.uses_rd;
     assign branch_wb.instruction_id = branch_ex.instruction_id;
 
-    //Assertions
     ////////////////////////////////////////////////////
+    //End of Implementation
+    ////////////////////////////////////////////////////
+
+    ////////////////////////////////////////////////////
+    //Assertions
     always_ff @ (posedge clk) begin
         assert (~branch_wb.accepted | (branch_wb.accepted & done)) else $error("Spurious ack for Branch Unit");
     end
 
-    /*********************************************/
-
-    //---------- Simulation counters
-    //    always_ff @(posedge clk) begin
-    //        if (rst) begin
-    //            jump_count <= 0;
-    //        end else if (branch_ex.new_request & jump_ex & ~is_call & ~is_return) begin
-    //            jump_count <= jump_count+1;
-    //        end
-    //    end
-
-    //    always_ff @(posedge clk) begin
-    //        if (rst) begin
-    //            call_count <= 0;
-    //        end else if (is_call & branch_ex.new_request) begin
-    //            call_count <= call_count+1;
-    //        end
-    //    end
-
-    //    always_ff @(posedge clk) begin
-    //        if (rst) begin
-    //            ret_count <= 0;
-    //        end else if (is_return & branch_ex.new_request) begin
-    //            ret_count <= ret_count+1;
-    //        end
-    //    end
-
-    //    always_ff @(posedge clk) begin
-    //        if (rst) begin
-    //            br_count <= 0;
-    //        end else if (branch_ex.new_request_dec & branch_inputs.branch_compare) begin
-    //            br_count <= br_count+1;
-    //        end
-    //    end
-
+    ////////////////////////////////////////////////////
+    //Trace Interface
+    assign tr_branch_misspredict = ~is_return & miss_predict;
+    assign tr_return_misspredict = is_return & miss_predict;
 
 endmodule
