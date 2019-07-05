@@ -41,6 +41,10 @@ package taiga_config;
     //CSR counter width (33-64 bits): 48-bits --> 32 days @ 100MHz
     parameter COUNTER_W = 33;
 
+    ////////////////////////////////////////////////////
+    //Trace Options
+    parameter ENABLE_TRACE_INTERFACE = 1;
+
 
     ////////////////////////////////////////////////////
     //ISA Options
@@ -61,8 +65,7 @@ package taiga_config;
         RADIX_16,
         QUICK_NAIVE,
         QUICK_CLZ,
-        QUICK_CLZ_MK2,
-        TEST_DIV
+        QUICK_CLZ_MK2
     } div_type;
     parameter div_type DIV_ALGORITHM = QUICK_CLZ;
 

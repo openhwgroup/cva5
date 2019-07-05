@@ -42,10 +42,7 @@ module fetch(
         l1_arbiter_request_interface.master l1_request,
         l1_arbiter_return_interface.master l1_response,
 
-        instruction_buffer_interface.fetch ib,
-
-        output logic[31:0] if2_pc
-
+        instruction_buffer_interface.fetch ib
         );
 
     localparam NUM_SUB_UNITS = USE_I_SCRATCH_MEM + USE_ICACHE;
@@ -132,7 +129,6 @@ module fetch(
     assign bp.new_mem_request = update_pc;
     assign bp.next_pc = next_pc;
 
-    assign if2_pc  = if_pc;
     assign bp.if_pc = if_pc;
     /*************************************
      * TLB

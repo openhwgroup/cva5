@@ -409,6 +409,21 @@ package taiga_types;
         NON_MUXED_OUTPUT_FIFO
     } fifo_type_t;
 
+    typedef struct packed {
+        logic operand_stall;
+        logic unit_stall;
+        logic no_id_stall;
+        logic no_instruction_stall;
+        logic other_stall;
+
+        logic instruction_issued_dec;
+        logic [31:0] instruction_pc_dec;
+        logic [31:0] instruction_data_dec;
+
+        logic branch_misspredict;
+        logic return_misspredict;
+    } trace_outputs_t;
+
     //Assembly register definitions for simulation purposes
     typedef struct packed{
         logic [XLEN-1:0] zero;

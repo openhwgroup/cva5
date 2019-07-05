@@ -1,5 +1,5 @@
 /*
- * Copyright © 2017, 2018 Eric Matthews,  Lesley Shannon
+ * Copyright © 2017, 2018, 2019 Eric Matthews,  Lesley Shannon
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -53,14 +53,18 @@ module decode(
 
         output logic instruction_issued_no_rd,
         output logic instruction_issued_with_rd,
+        output logic illegal_instruction,
 
-        input logic instruction_complete,
+        //Trace signals
+        output logic tr_operand_stall,
+        output logic tr_unit_stall,
+        output logic tr_no_id_stall,
+        output logic tr_no_instruction_stall,
+        output logic tr_other_stall,
 
-        output logic dec_instruction_issued,
-        output logic [31:0] dec_pc,
-        output logic [31:0] dec_instruction,
-        output logic illegal_instruction
-
+        output logic tr_instruction_issued_dec,
+        output logic [31:0] tr_instruction_pc_dec,
+        output logic [31:0] tr_instruction_data_dec
         );
 
     logic [2:0] fn3;
@@ -93,7 +97,6 @@ module decode(
     logic instruction_issued;
 
     instruction_id_t last_id;
-    //logic instruction_issued_no_rd; <-- already an output
 
     ////////////////////////////////////////////////////
     //Implementation
@@ -106,9 +109,6 @@ module decode(
     assign opcode = ib.data_out.instruction[6:0];
     assign opcode_trim = opcode[6:2];
     assign fn3 = ib.data_out.instruction[14:12];
-
-    assign dec_pc = ib.data_out.pc;
-    assign dec_instruction = ib.data_out.instruction;
 
     assign uses_rs1 = ib.data_out.uses_rs1;
     assign uses_rs2 = ib.data_out.uses_rs2;
@@ -174,9 +174,9 @@ module decode(
     //Issue Determination
     logic load_store_forward;
 
-    assign issue_valid =  ib.valid & ti.id_available & ~gc_issue_hold & ~gc_fetch_flush;
+    assign issue_valid = ib.valid & ti.id_available & ~gc_issue_hold & ~gc_fetch_flush;
 
-    assign operands_ready =  ~rf_decode.rs1_conflict & ~rf_decode.rs2_conflict;
+    assign operands_ready = ~rf_decode.rs1_conflict & ~rf_decode.rs2_conflict;
 
     assign load_store_forward = ((opcode_trim == STORE_T) && last_ls_request_was_load && (rs2_addr == load_rd));
     assign load_store_operands_ready =  ~rf_decode.rs1_conflict & ~(rf_decode.rs2_conflict & ~load_store_forward);
@@ -198,7 +198,6 @@ module decode(
     assign store_issued = instruction_issued && (opcode_trim == STORE_T); //TODO: AMO
 
     //Decode outputs
-    assign dec_instruction_issued = instruction_issued;
     assign load_store_issue = issue[LS_UNIT_WB_ID];
 
     ////////////////////////////////////////////////////
@@ -400,8 +399,9 @@ module decode(
             assign current_op_resuses_rs1_rs2 = (prev_div_rs1_addr == rs1_addr) && (prev_div_rs2_addr == rs2_addr);
 
             always_ff @(posedge clk) begin
-                if (rst)
+                if (rst) begin
                     prev_div_result_valid <= 0;
+                end
                 else if (instruction_issued) begin
                     if(new_request[DIV_UNIT_WB_ID] & ~div_rd_overwrites_rs1_or_rs2)
                         prev_div_result_valid <=1;
@@ -476,6 +476,25 @@ module decode(
                 illegal_instruction = 0;
         end
     end
+
+    ////////////////////////////////////////////////////
+    //End of Implementation
+    ////////////////////////////////////////////////////
+
+    ////////////////////////////////////////////////////
+    //Assertions
+
+    ////////////////////////////////////////////////////
+    //Trace Interface
+    assign tr_operand_stall = (|issue_ready) & issue_valid & ~load_store_operands_ready;
+    assign tr_unit_stall = ~(|issue_ready) & issue_valid & load_store_operands_ready;
+    assign tr_no_id_stall = (|issue_ready) & (ib.valid & ~ti.id_available & ~gc_issue_hold & ~gc_fetch_flush) & load_store_operands_ready;
+    assign tr_no_instruction_stall = ib.valid;
+    assign tr_other_stall = ~instruction_issued & ~(tr_operand_stall | tr_unit_stall | tr_no_id_stall | tr_no_instruction_stall);
+
+    assign tr_instruction_issued_dec = instruction_issued;
+    assign tr_instruction_pc_dec = ib.data_out.pc;
+    assign tr_instruction_data_dec = ib.data_out.instruction;
 
 
 endmodule

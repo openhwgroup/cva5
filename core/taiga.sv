@@ -34,17 +34,12 @@ module taiga (
         avalon_interface.master m_avalon,
         wishbone_interface.master m_wishbone,
 
+        output trace_outputs_t tr,
+
         l2_requester_interface.master l2,
 
-        output logic [31:0] dec_pc_debug,
-        output logic dec_advance_debug,
-        output logic [31:0] dec_instruction,
-        output logic [31:0] if2_pc_debug,
-
         input logic timer_interrupt,
-        input logic interrupt,
-
-        output logic placer_rseed
+        input logic interrupt
         );
 
     l1_arbiter_request_interface l1_request[L1_CONNECTIONS-1:0]();
@@ -116,12 +111,8 @@ module taiga (
     logic jalr;
 
     //Decode Unit and Fetch Unit
-    logic [31:0] if2_pc;
     logic dec_instruction_issued;
     logic illegal_instruction;
-
-    logic [31:0] dec_pc;
-    logic [31:0] pc_ex;
 
     logic instruction_queue_empty;
 
@@ -130,27 +121,31 @@ module taiga (
     logic instruction_complete;
     logic instruction_issued;
 
-    assign if2_pc_debug = if2_pc;
-    assign dec_pc_debug = dec_pc;
-    assign dec_advance_debug = dec_instruction_issued;
-    assign instruction_issued = dec_instruction_issued;
+    //Trace Interface Signals
+    logic tr_operand_stall;
+    logic tr_unit_stall;
+    logic tr_no_id_stall;
+    logic tr_no_instruction_stall;
+    logic tr_other_stall;
 
-    placer_randomizer # (8'h2B)
-        rseed_generator (.*, .result(placer_rseed),
-            .samples({if2_pc[23], ib.data_in.instruction[9], rf_decode.rs1_data[1], rf_decode.rs2_conflict, ti.issue_id[1], ls_ex.new_request, unit_wb[DIV_UNIT_WB_ID].rd[7], unit_wb[ALU_UNIT_WB_ID].rd[28]})
-            );
+    logic tr_instruction_issued_dec;
+    logic [31:0] tr_instruction_pc_dec;
+    logic [31:0] tr_instruction_data_dec;
+
+   logic tr_branch_misspredict;
+   logic tr_return_misspredict;
+    ////////////////////////////////////////////////////
+    //Implementation
 
 
-    /*************************************
-     * Memory Interface
-     *************************************/
+    ////////////////////////////////////////////////////
+    // Memory Interface
     generate if (ENABLE_S_MODE || USE_ICACHE || USE_DCACHE)
             l1_arbiter arb(.*);
     endgenerate
 
-    /*************************************
-     * CPU Front end
-     *************************************/
+    ////////////////////////////////////////////////////
+    // Fetch and Pre-Decode
     fetch fetch_block (.*, .icache_on('1), .tlb(itlb), .l1_request(l1_request[L1_ICACHE_ID]), .l1_response(l1_response[L1_ICACHE_ID]), .exception(1'b0));
     branch_predictor bp_block (.*);
     ras ras_block(.*);
@@ -165,15 +160,13 @@ module taiga (
     endgenerate
     instruction_buffer inst_buffer(.*);
 
-    /*************************************
-     * Decode/Issue
-     *************************************/
+    ////////////////////////////////////////////////////
+    //Decode/Issue
     decode decode_block (.*);
     register_file register_file_block (.*);
-    /*************************************
-     * Units
-     *************************************/
 
+    ////////////////////////////////////////////////////
+    //Execution Units
     branch_unit branch_unit_block (.*, .branch_wb(unit_wb[BRANCH_UNIT_WB_ID]));
     alu_unit alu_unit_block (.*, .alu_wb(unit_wb[ALU_UNIT_WB_ID]));
     load_store_unit load_store_unit_block (.*, .dcache_on(1'b1), .clear_reservation(1'b0), .tlb(dtlb), .ls_wb(unit_wb[LS_UNIT_WB_ID]), .l1_request(l1_request[L1_DCACHE_ID]), .l1_response(l1_response[L1_DCACHE_ID]));
@@ -195,10 +188,14 @@ module taiga (
             div_unit div_unit_block (.*, .div_wb(unit_wb[DIV_UNIT_WB_ID]));
     endgenerate
 
-    /*************************************
-     * Writeback Mux and Instruction Tracking
-     *************************************/
+    ////////////////////////////////////////////////////
+    //Writeback Mux and Instruction Tracking
     write_back write_back_mux (.*);
+
+
+    ////////////////////////////////////////////////////
+    //End of Implementation
+    ////////////////////////////////////////////////////
 
     ////////////////////////////////////////////////////
     //Assertions
@@ -206,5 +203,23 @@ module taiga (
    // always_ff @ (posedge clk) begin
    //     assert property(@(posedge clk) $rose (rst) |=> rst[*32]) else $error("Reset not held for long enough!");
    // end
+
+    ////////////////////////////////////////////////////
+    //Assertions
+
+    ////////////////////////////////////////////////////
+    //Trace Interface
+    always_ff @(posedge clk) begin
+        tr.operand_stall <= tr_operand_stall;
+        tr.unit_stall <= tr_unit_stall;
+        tr.no_id_stall <= tr_no_id_stall;
+        tr.no_instruction_stall <= tr_no_instruction_stall;
+        tr.other_stall <= tr_other_stall;
+        tr.instruction_issued_dec <= tr_instruction_issued_dec;
+        tr.instruction_pc_dec <= tr_instruction_pc_dec;
+        tr.instruction_data_dec <= tr_instruction_data_dec;
+        tr.branch_misspredict <= tr_operand_stall;
+        tr.return_misspredict <= tr_operand_stall;
+    end
 
 endmodule

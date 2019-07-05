@@ -5,6 +5,16 @@
 #include "verilated.h"
 #include "verilated_vcd_c.h"
 
+uint64_t operand_stall = 0;
+uint64_t unit_stall = 0;
+uint64_t no_id_stall = 0;
+uint64_t no_instruction_stall = 0;
+uint64_t other_stall = 0;
+
+uint64_t instruction_issued_dec = 0;
+uint64_t branch_misspredict = 0;
+uint64_t return_misspredict = 0;
+
 
 using namespace std;
 int main(int argc, char **argv) {
@@ -62,10 +72,21 @@ int main(int argc, char **argv) {
 		tb->clk = 0;
 		tb->eval();
 
+        if (reset_count > 64) {
+            operand_stall += tb->operand_stall;
+            unit_stall += tb->unit_stall;
+            no_id_stall += tb->no_id_stall;
+            no_instruction_stall += tb->no_instruction_stall;
+            other_stall += tb->other_stall;
+
+            instruction_issued_dec += tb->instruction_issued_dec;
+            branch_misspredict += tb->branch_misspredict;
+            return_misspredict += tb->return_misspredict;
+        }
 
 
 		//Custom nop to change to signature phase
-		if (tb->dec_instruction_r == 0x00B00013U) {
+		if (tb->instruction_data_dec == 0x00B00013U) {
 			logPhase = false;
 			cout << "******************************\n";
 			cout << "\n\n**********Signature***********\n";
@@ -74,8 +95,7 @@ int main(int argc, char **argv) {
 		//if (!logPhase) {
 		//	std::cout << std::hex << tb-> dec_pc_debug_r << std::endl;
 		//}
-		
-		
+
 		if (tb->write_uart) {
 			if (logPhase) {
 				cout <<  tb->uart_byte;
@@ -87,11 +107,11 @@ int main(int argc, char **argv) {
 		}
 
 		//Custom nop for termination
-		if (tb->dec_instruction_r == 0x00F00013U) {
+		if (tb->instruction_data_dec == 0x00F00013U) {
 			cout << "\n\nError!!!!\n\n";
 			break;
 		}
-		else if (tb->dec_instruction_r == 0x00A00013U) {
+		else if (tb->instruction_data_dec == 0x00A00013U) {
 			break;
 		}
 		#ifdef TRACE_ON
@@ -99,7 +119,7 @@ int main(int argc, char **argv) {
 		#endif
 		cycle_cout++;
 
-		if (!tb->dec_advance_debug) {
+		if (!tb->instruction_issued_dec) {
 			stall_cycles++;
 			if (stall_cycles > 2000) {
 				stall_cycles = 0;
@@ -121,6 +141,16 @@ int main(int argc, char **argv) {
 	cout << "\n******************************\n\n";
 	cout << "Test Done\n";
 	cout << "Simulated: " << cycle_cout << " cycles.\n\n\n";
+
+	cout << "Taiga trace stats:\n";
+	cout << "operand_stall: " << operand_stall  << "\n";
+	cout << "unit_stall: " << unit_stall  << "\n";
+	cout << "no_id_stall: " << no_id_stall  << "\n";
+	cout << "no_instruction_stall: " << no_instruction_stall  << "\n";
+	cout << "other_stall: " << other_stall  << "\n";
+	cout << "instruction_issued_dec: " << instruction_issued_dec  << "\n";
+	cout << "branch_misspredict: " << branch_misspredict  << "\n";
+	cout << "return_misspredict: " << return_misspredict  << "\n";
 
 	logFile.close();
 	sigFile.close();

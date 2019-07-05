@@ -77,9 +77,19 @@ module taiga_local_mem # (
         //Used by verilator
         output logic write_uart,
         output logic [7:0] uart_byte,
-        output logic [31:0] dec_instruction_r,
-        output logic [31:0] dec_pc_debug_r,
-        output logic dec_advance_debug,
+        //Trace Interface
+        output logic operand_stall,
+        output logic unit_stall,
+        output logic no_id_stall,
+        output logic no_instruction_stall,
+        output logic other_stall,
+
+        output logic instruction_issued_dec,
+        output logic [31:0] instruction_pc_dec,
+        output logic [31:0] instruction_data_dec,
+
+        output logic branch_misspredict,
+        output logic return_misspredict,
 
         //L2
         //l2 request
@@ -107,9 +117,7 @@ module taiga_local_mem # (
         input logic [31:0] rd_data,
         input logic [L2_SUB_ID_W-1:0] rd_sub_id,
         input logic rd_data_valid,
-        output logic rd_data_ack,
-
-        output logic placer_rseed
+        output logic rd_data_ack
         );
 
     logic [3:0] WRITE_COUNTER_MAX;
@@ -159,13 +167,9 @@ module taiga_local_mem # (
     logic axi_wvalid;
     logic [5:0]axi_wid;
 
-    logic [31:0] dec_instruction;
-    logic [31:0] dec_pc_debug;
-
     parameter SCRATCH_MEM_KB = 128;
     parameter MEM_LINES = (SCRATCH_MEM_KB*1024)/4;
 
-    logic [31:0] if2_pc_debug;
     logic interrupt;
     logic timer_interrupt;
 
@@ -174,6 +178,8 @@ module taiga_local_mem # (
     axi_interface m_axi();
     avalon_interface m_avalon();
     wishbone_interface m_wishbone();
+
+    trace_outputs_t tr;
 
     l2_requester_interface l2[L2_NUM_PORTS-1:0]();
     l2_memory_interface mem();
@@ -231,11 +237,6 @@ module taiga_local_mem # (
 
 
     taiga cpu(.*, .l2(l2[0]));
-
-    always_ff @(posedge clk) begin
-       dec_instruction_r <= dec_instruction;
-       dec_pc_debug_r <= dec_pc_debug;
-    end
 
     //read channel
     logic[3:0] read_counter;
@@ -330,5 +331,19 @@ module taiga_local_mem # (
         write_uart <= (m_axi.wvalid && m_axi.wready && m_axi.awaddr[13:0] == 4096);
         uart_byte <= m_axi.wdata[7:0];
     end
+
+
+    ////////////////////////////////////////////////////
+    //Trace Interface
+    assign operand_stall = tr.operand_stall;
+    assign unit_stall = tr.unit_stall;
+    assign no_id_stall = tr.no_id_stall;
+    assign no_instruction_stall = tr.no_instruction_stall;
+    assign other_stall = tr.other_stall;
+    assign instruction_issued_dec = tr.instruction_issued_dec;
+    assign instruction_pc_dec = tr.instruction_pc_dec;
+    assign instruction_data_dec = tr.instruction_data_dec;
+    assign branch_misspredict = tr.operand_stall;
+    assign return_misspredict = tr.operand_stall;
 
 endmodule
