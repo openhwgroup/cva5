@@ -15,7 +15,7 @@ uint64_t other_stall = 0;
 uint64_t instruction_issued_dec = 0;
 uint64_t branch_misspredict = 0;
 uint64_t return_misspredict = 0;
-
+uint64_t wb_mux_contention = 0;
 
 using namespace std;
 int main(int argc, char **argv) {
@@ -53,7 +53,7 @@ int main(int argc, char **argv) {
 	#endif
 
 	cout << "--------------------------------------------------------------\n";
-	cout << "  Starting Simulation, logging to: " << argv[1] << "\n";
+	cout << "   Starting Simulation, logging to: " << argv[1] << "\n";
 	cout << "--------------------------------------------------------------\n";
 	int reset_count = 0;
 	uint64_t cycle_cout = 0;
@@ -75,15 +75,16 @@ int main(int argc, char **argv) {
 		tb->eval();
 
         if (reset_count > 64) {
-            operand_stall += tb->operand_stall ? 1 : 0;
-            unit_stall += tb->unit_stall ? 1 : 0;
-            no_id_stall += tb->no_id_stall ? 1 : 0;
-            no_instruction_stall += tb->no_instruction_stall ? 1 : 0;
-            other_stall += tb->other_stall ? 1 : 0;
+            operand_stall += tb->operand_stall;
+            unit_stall += tb->unit_stall;
+            no_id_stall += tb->no_id_stall;
+            no_instruction_stall += tb->no_instruction_stall;
+            other_stall += tb->other_stall;
 
-            instruction_issued_dec += tb->instruction_issued_dec ? 1 : 0;
-            branch_misspredict += tb->branch_misspredict ? 1 : 0;
-            return_misspredict += tb->return_misspredict ? 1 : 0;
+            instruction_issued_dec += tb->instruction_issued_dec;
+            branch_misspredict += tb->branch_misspredict;
+            return_misspredict += tb->return_misspredict;
+            wb_mux_contention += tb->wb_mux_contention;
         }
 
 
@@ -142,20 +143,21 @@ int main(int argc, char **argv) {
 	#endif
 
 	cout << "\n--------------------------------------------------------------\n";
-	cout << "  Simulation Completed:  " << cycle_cout << " cycles.\n";
+	cout << "   Simulation Completed:  " << cycle_cout << " cycles.\n";
 	cout << "--------------------------------------------------------------\n";
 
 	cout << "\n\n--------------------------------------------------------------\n";
-	cout << "Taiga trace stats:\n";
+	cout << "   Taiga trace stats:\n";
 	cout << "--------------------------------------------------------------\n";
-	cout << "operand_stall: " << operand_stall  << "\n";
-	cout << "unit_stall: " << unit_stall  << "\n";
-	cout << "no_id_stall: " << no_id_stall  << "\n";
-	cout << "no_instruction_stall: " << no_instruction_stall  << "\n";
-	cout << "other_stall: " << other_stall  << "\n";
-	cout << "instruction_issued_dec: " << instruction_issued_dec  << "\n";
-	cout << "branch_misspredict: " << branch_misspredict  << "\n";
-	cout << "return_misspredict: " << return_misspredict  << "\n";
+	cout << "    operand_stall: " << operand_stall  << "\n";
+	cout << "    unit_stall: " << unit_stall  << "\n";
+	cout << "    no_id_stall: " << no_id_stall  << "\n";
+	cout << "    no_instruction_stall: " << no_instruction_stall  << "\n";
+	cout << "    other_stall: " << other_stall  << "\n";
+	cout << "    instruction_issued_dec: " << instruction_issued_dec  << "\n";
+	cout << "    branch_misspredict: " << branch_misspredict  << "\n";
+	cout << "    return_misspredict: " << return_misspredict  << "\n";
+	cout << "    wb_mux_contention: " << wb_mux_contention  << "\n";
 	cout << "--------------------------------------------------------------\n";
 
 	logFile.close();

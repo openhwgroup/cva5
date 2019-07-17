@@ -75,6 +75,8 @@ module branch_unit(
     logic [31:0] jump_pc;
     logic [31:0] njump_pc;
     logic [1:0] branch_metadata;
+    logic branch_prediction_used;
+    logic [BRANCH_PREDICTOR_WAYS-1:0] bp_update_way;
 
     //RAS
     logic is_call;
@@ -138,6 +140,8 @@ module branch_unit(
         jump_pc <= {jump_pc_dec[31:1], 1'b0};
         njump_pc <= pc_plus_4;
         branch_metadata <= branch_inputs.branch_metadata;
+        branch_prediction_used <= branch_inputs.branch_prediction_used;
+        bp_update_way <= branch_inputs.bp_update_way;
     end
 
     assign br_results.pc_ex = pc_ex;
@@ -148,6 +152,9 @@ module branch_unit(
     assign br_results.branch_taken = branch_taken;
     assign br_results.branch_ex = branch_ex.new_request;
     assign br_results.is_return_ex = is_return;
+    assign br_results.branch_prediction_used = branch_prediction_used;
+    assign br_results.bp_update_way = bp_update_way;
+
 
     assign branch_correctly_taken = {br_results.branch_taken, branch_inputs.dec_pc[31:1]} == {1'b1, br_results.jump_pc[31:1]};
     assign branch_correclty_not_taken = {br_results.branch_taken, branch_inputs.dec_pc[31:1]} == {1'b0, br_results.njump_pc[31:1]};

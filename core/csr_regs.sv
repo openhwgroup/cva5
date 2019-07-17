@@ -183,16 +183,11 @@ module csr_regs (
         endcase
     end
 
+generate if (ENABLE_M_MODE) begin
+
     //Machine ISA register
+    ////////////////////////////////////////////////////
     assign misa = '{default:0, base:1, A:1, S:1, M:1, I:1};
-
-
-
-
-
-
-
-
 
 
     //MSTATUS
@@ -282,16 +277,6 @@ module csr_regs (
         else
             mstatus <= mstatus_new;
     end
-
-
-
-
-
-
-
-
-
-
 
 
     //MEDELEG
@@ -405,6 +390,8 @@ module csr_regs (
     end
     assign scratch_out = scratch_regs[{csr_addr.privilege, csr_addr.sub_addr[2:0]}];
 
+end
+endgenerate
 
     ////////////////////////////////////////////////////
     //END OF MACHINE REGS
@@ -417,9 +404,15 @@ module csr_regs (
 
 
 
+
+
+
+
     ////////////////////////////////////////////////////
     //BEGIN OF SUPERVISOR REGS
     ////////////////////////////////////////////////////
+
+generate if (ENABLE_M_MODE) begin
 
     assign sip_mask =  '{default:0, seip:1, stip:1, ssip:1};
 
@@ -442,8 +435,16 @@ module csr_regs (
             satp <= (updated_csr & satp_mask);
     end
 
-    //Timers and Counters
+end
+endgenerate
 
+    ////////////////////////////////////////////////////
+    //END OF SUPERVISOR REGS
+    ////////////////////////////////////////////////////
+
+
+    ////////////////////////////////////////////////////
+    //Timers and Counters
     //Register increment for instructions completed
     always_ff @(posedge clk) begin
         if (rst) begin
@@ -495,24 +496,24 @@ module csr_regs (
             MINSTRET : selected_csr = minst_ret[XLEN-1:0];
             MCYCLEH : selected_csr = mcycle[COUNTER_W-1:XLEN];
             MINSTRETH : selected_csr = minst_ret[COUNTER_W-1:XLEN];
-//
-//            //Supervisor Trap Setup
-//            SSTATUS : selected_csr = (mstatus & mstatus_smask);
-//            SEDELEG : selected_csr = 0; //No user-level interrupts/exception handling
-//            SIDELEG : selected_csr = 0;
-//            SIE : selected_csr = (mie_reg & sie_mask);
-//            STVEC : selected_csr = stvec;
-//            //Supervisor trap handling
-//            SSCRATCH : selected_csr = scratch_out;
-//            SEPC : selected_csr = scratch_out;
-//            SCAUSE : selected_csr = scratch_out;
-//            STVAL : selected_csr = scratch_out;
-//            SIP : selected_csr = (mip & sip_mask);
-//            //Supervisor Protection and Translation
-//            SATP : selected_csr = satp;
-//            //User status
-//            //Floating point
-//            //User Counter Timers
+
+           //Supervisor Trap Setup
+           SSTATUS : selected_csr = (mstatus & mstatus_smask);
+           SEDELEG : selected_csr = 0; //No user-level interrupts/exception handling
+           SIDELEG : selected_csr = 0;
+           SIE : selected_csr = (mie_reg & sie_mask);
+           STVEC : selected_csr = stvec;
+           //Supervisor trap handling
+           SSCRATCH : selected_csr = scratch_out;
+           SEPC : selected_csr = scratch_out;
+           SCAUSE : selected_csr = scratch_out;
+           STVAL : selected_csr = scratch_out;
+           SIP : selected_csr = (mip & sip_mask);
+           //Supervisor Protection and Translation
+           SATP : selected_csr = satp;
+           //User status
+           //Floating point
+           //User Counter Timers
             CYCLE : selected_csr = mcycle[XLEN-1:0];
             TIME : selected_csr = mcycle[XLEN-1:0];
             INSTRET : selected_csr = minst_ret[XLEN-1:0];
@@ -523,7 +524,5 @@ module csr_regs (
             default : begin selected_csr = 0; invalid_addr = 1; end
         endcase
     end
-
-
 
 endmodule

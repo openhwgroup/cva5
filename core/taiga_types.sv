@@ -271,6 +271,8 @@ package taiga_types;
         logic is_call;
         logic is_return;
         branch_predictor_metadata_t branch_metadata;
+        logic branch_prediction_used;
+        logic [BRANCH_PREDICTOR_WAYS-1:0] bp_update_way;
     } instruction_buffer_packet;
 
 
@@ -299,6 +301,8 @@ package taiga_types;
         logic is_return;
         logic [31:0] instruction;
         branch_predictor_metadata_t branch_metadata;
+        logic branch_prediction_used;
+        logic [BRANCH_PREDICTOR_WAYS-1:0] bp_update_way;
     } branch_inputs_t;
 
     typedef struct packed {
@@ -309,7 +313,8 @@ package taiga_types;
         logic branch_ex;
         logic is_return_ex;
         branch_predictor_metadata_t branch_ex_metadata;
-        logic miss_predict;
+        logic branch_prediction_used;
+        logic [BRANCH_PREDICTOR_WAYS-1:0] bp_update_way;
     } branch_results_t;
 
     typedef enum bit [4:0] {
@@ -410,6 +415,7 @@ package taiga_types;
     } fifo_type_t;
 
     typedef struct packed {
+        //Decode
         logic operand_stall;
         logic unit_stall;
         logic no_id_stall;
@@ -420,8 +426,12 @@ package taiga_types;
         logic [31:0] instruction_pc_dec;
         logic [31:0] instruction_data_dec;
 
+        //Branch Unit
         logic branch_misspredict;
         logic return_misspredict;
+
+        //Writeback
+        logic wb_mux_contention;
     } trace_outputs_t;
 
     //Assembly register definitions for simulation purposes

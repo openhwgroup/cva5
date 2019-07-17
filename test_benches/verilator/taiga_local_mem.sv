@@ -90,6 +90,7 @@ module taiga_local_mem # (
 
         output logic branch_misspredict,
         output logic return_misspredict,
+        output logic wb_mux_contention,
 
         //L2
         //l2 request
@@ -345,5 +346,6 @@ module taiga_local_mem # (
     assign instruction_data_dec = tr.instruction_data_dec;
     assign branch_misspredict = tr.branch_misspredict;
     assign return_misspredict = tr.return_misspredict;
+    assign wb_mux_contention = tr.wb_mux_contention;
 
 endmodule

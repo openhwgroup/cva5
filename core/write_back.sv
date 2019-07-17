@@ -39,7 +39,10 @@ module write_back(
         tracking_interface.wb ti,
         output logic instruction_complete,
         output logic instruction_queue_empty,
-        output instruction_id_t oldest_id
+        output instruction_id_t oldest_id,
+
+        //Trace signals
+        output logic tr_wb_mux_contention
         );
     //////////////////////////////////////
 
@@ -218,8 +221,23 @@ module write_back(
     assign rf_wb.rs2_data_out = ({32{rf_wb.forward_rs2}}  & rf_wb.rd_data) | rf_wb.rs2_data_in;
 
     ////////////////////////////////////////////////////
-    //Assertions
-    //check if multiple done signals for the same ID
+    //End of Implementation
+    ////////////////////////////////////////////////////
 
+    ////////////////////////////////////////////////////
+    //Assertions
+
+    ////////////////////////////////////////////////////
+    //Trace Interface
+
+    //Checks if any two pairs are set indicating mux contention
+    always_comb begin
+        tr_wb_mux_contention = 0;
+        for (int i=0; i<NUM_WB_UNITS; i++) begin
+                for (int j=i+1; j<NUM_WB_UNITS; j++) begin
+                    tr_wb_mux_contention |= (id_done[i] & id_done[j]);
+                end
+        end
+    end
 
 endmodule

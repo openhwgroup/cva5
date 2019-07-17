@@ -340,7 +340,8 @@ module decode(
     assign branch_inputs.is_return = ib.data_out.is_return;
     assign branch_inputs.instruction = ib.data_out.instruction;
     assign branch_inputs.branch_metadata = ib.data_out.branch_metadata;
-
+    assign branch_inputs.branch_prediction_used = ib.data_out.branch_prediction_used;
+    assign branch_inputs.bp_update_way = ib.data_out.bp_update_way;
     ////////////////////////////////////////////////////
     //Global Control unit inputs
     logic sfence;

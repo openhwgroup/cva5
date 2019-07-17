@@ -85,6 +85,7 @@
 
 ../core/l1_arbiter.sv  
 ../core/ras.sv  
+../core/branch_predictor_ram.sv
 ../core/branch_predictor.sv  
 ../core/fetch.sv  
 ../core/instruction_buffer.sv  

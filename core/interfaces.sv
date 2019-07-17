@@ -34,16 +34,17 @@ interface branch_predictor_interface;
     logic [31:0] branch_flush_pc;
     logic [31:0] predicted_pc;
     logic use_prediction;
+    logic [BRANCH_PREDICTOR_WAYS-1:0] update_way;
     logic use_ras;
     branch_predictor_metadata_t metadata;
     logic flush;
 
     modport branch_predictor (
         input if_pc, new_mem_request, next_pc,
-        output branch_flush_pc, predicted_pc, use_prediction, use_ras, metadata, flush
+        output branch_flush_pc, predicted_pc, use_prediction, update_way, use_ras, metadata, flush
     );
     modport fetch (
-        input branch_flush_pc, predicted_pc, use_prediction, use_ras, metadata, flush,
+        input branch_flush_pc, predicted_pc, use_prediction, update_way, use_ras, metadata, flush,
         output if_pc, new_mem_request, next_pc
      );
 

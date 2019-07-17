@@ -92,7 +92,7 @@ verilator_taiga_compliance_tests:
 
 .PHONY: verilator_taiga_coremark
 verilator_taiga_coremark:
-	$(MAKE) -C  $(COREMARK_DIR) compile PORT_DIR=taiga-sim ITERATIONS=100
+	$(MAKE) -C  $(COREMARK_DIR) compile PORT_DIR=taiga-sim ITERATIONS=5000
 	cd $(MAKEFILE_DIR);
 	$(ELF_TO_HW_INIT) $(COREMARK_DIR)/coremark.bin coremark.hw_init coremark.sim_init
 	$(call verilator_local_mem_test,\"coremark.hw_init\", "coremark.log", "coremark.sig")

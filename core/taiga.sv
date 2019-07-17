@@ -132,8 +132,9 @@ module taiga (
     logic [31:0] tr_instruction_pc_dec;
     logic [31:0] tr_instruction_data_dec;
 
-   logic tr_branch_misspredict;
-   logic tr_return_misspredict;
+    logic tr_branch_misspredict;
+    logic tr_return_misspredict;
+    logic tr_wb_mux_contention;
     ////////////////////////////////////////////////////
     //Implementation
 
@@ -221,6 +222,7 @@ module taiga (
             tr.instruction_data_dec <= tr_instruction_data_dec;
             tr.branch_misspredict <= tr_branch_misspredict;
             tr.return_misspredict <= tr_return_misspredict;
+            tr.wb_mux_contention <= tr_wb_mux_contention;
         end
     end
     endgenerate

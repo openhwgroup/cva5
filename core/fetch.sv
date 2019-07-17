@@ -264,11 +264,17 @@ module fetch(
     assign ib.data_in.is_call = (opcode_trimmed inside {JAL_T, JALR_T}) && rd_link;
 
     logic [1:0] branch_metadata_r;
+    logic prediction_used;
+    logic [BRANCH_PREDICTOR_WAYS-1:0] update_way;
     always_ff @(posedge clk) begin
         if (new_mem_request) begin
             branch_metadata_r <= bp.metadata;
+            prediction_used <= bp.use_prediction;
+            update_way <= bp.update_way;
         end
     end
     assign ib.data_in.branch_metadata = branch_metadata_r;
+    assign ib.data_in.branch_prediction_used = prediction_used;
+    assign ib.data_in.bp_update_way = update_way;
 
 endmodule
