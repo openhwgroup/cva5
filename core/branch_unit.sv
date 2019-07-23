@@ -82,12 +82,6 @@ module branch_unit(
     logic is_call;
     logic is_return;
 
-    //Perf monitoring
-    logic [31:0] jump_count;
-    logic [31:0] call_count;
-    logic [31:0] ret_count;
-    logic [31:0] br_count;
-
     //implementation
     ////////////////////////////////////////////////////
 
@@ -200,7 +194,7 @@ module branch_unit(
         end
     end
 
-    assign branch_wb.done_next_cycle = branch_ex.possible_issue & branch_inputs.uses_rd;
+    assign branch_wb.done_next_cycle = branch_ex.new_request_dec & branch_inputs.uses_rd;
     assign branch_wb.instruction_id = branch_ex.instruction_id;
 
     ////////////////////////////////////////////////////

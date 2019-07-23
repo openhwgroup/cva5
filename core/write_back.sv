@@ -66,12 +66,12 @@ module write_back(
     logic [MAX_INFLIGHT_COUNT-1:0] id_done_next;
     logic [MAX_INFLIGHT_COUNT-1:0] id_done_r;
 
-    logic [MAX_INFLIGHT_COUNT-1:0] shift_bits;
-    logic [MAX_INFLIGHT_COUNT-1:0] store_shift_bits;
+    logic [MAX_INFLIGHT_COUNT-1:0] id_done_ordered;
 
     logic retired, retired_r;
     logic first_cycle_completion_abort;
-    //////////////////////////////////////////
+    ////////////////////////////////////////////////////
+    //Implementation
 
     //Re-assigning interface inputs to array types so that they can be dynamically indexed
     genvar i;
@@ -93,8 +93,7 @@ module write_back(
             .retired(retired),
             .store_committed(store_committed),
             .store_id(store_id),
-            .shift_bits(shift_bits),
-            .store_shift_bits(store_shift_bits),
+            .id_done_ordered(id_done_ordered),
             .retired_id(retired_id),
             .ordering(id_ordering),
             .ordering_post_store(id_ordering_post_store),
@@ -121,17 +120,11 @@ module write_back(
 
 
     //Or together all unit done signals for the same ID.
-    //Inclusion of ti.issue results in id_done_r being the longest path.
-    //TODO: possible fix, remove ti.issue from here.  Consequence: on next cycle,
-    //a single cycle unit (ALU/BRANCH) will be marked falsely as done, however,
-    //the oldest instruction will still have been selected (if any are done).  As such,
-    //this can be mitigated by clearing the done_r on the next cycle / masking for
-    //the next cycle comparison purposes.
     always_comb begin
         id_done_next = 0;
         for (int i=0; i<MAX_INFLIGHT_COUNT; i++) begin
             for (int j=0; j<NUM_WB_UNITS; j++) begin
-                id_done_next[i] |= (unit_instruction_id[j] == i && unit_done_next_cycle[j])  && ~(ti.id_available && issue_id == i && ~ti.issued);
+                id_done_next[i] |= (unit_instruction_id[j] == i) && unit_done_next_cycle[j];
             end
         end
     end
@@ -147,13 +140,7 @@ module write_back(
     end
 
     //ID done is a combination of newly completed and already completed instructions
-    always_comb begin
-        for (int i=0; i<MAX_INFLIGHT_COUNT; i++) begin
-            id_done[i] = id_done_r[i] | id_done_next[i];
-        end
-    end
-
-    assign oldest_id = id_ordering[MAX_INFLIGHT_COUNT-1];
+    assign id_done = id_done_r | id_done_next;
 
     assign retired = (inorder ? id_done_ordered[MAX_INFLIGHT_COUNT-1] : |id_done);
     always_ff @(posedge clk) begin
@@ -161,27 +148,13 @@ module write_back(
         retired_id_r <= retired_id;
     end
 
+    assign oldest_id = id_ordering[MAX_INFLIGHT_COUNT-1];
+
     //Stack ordered from newest to oldest issued instruction
     //Find oldest done.
-    logic [MAX_INFLIGHT_COUNT-1:0] id_done_ordered;
     always_comb begin
         foreach (id_done[i]) begin
             id_done_ordered[i] = id_done[id_ordering_post_store[i]];
-        end
-
-        //Lowest entry always shifted, each older entry shifts all below
-        store_shift_bits = 0;
-        store_shift_bits[0] = 1;
-        for (int i=1; i<MAX_INFLIGHT_COUNT; i++) begin
-            if (store_committed && id_ordering[i] == store_id)
-                store_shift_bits |= (2**(i+1)-1);
-        end
-
-        shift_bits = 0;
-        shift_bits[0] = 1;
-        for (int i=1; i<MAX_INFLIGHT_COUNT; i++) begin
-            if (id_done_ordered[i])
-                shift_bits |= (2**(i+1)-1);
         end
 
         retired_id = id_ordering_post_store[0];
@@ -193,9 +166,6 @@ module write_back(
 
         if (inorder)
             retired_id = id_ordering_post_store[MAX_INFLIGHT_COUNT-1];
-
-        if (~|id_done_ordered[MAX_INFLIGHT_COUNT-1:1])
-            retired_id = issue_id;
 
     end
 

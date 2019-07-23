@@ -30,9 +30,8 @@ module id_stack # (
         input logic retired,
         input logic store_committed,
         input instruction_id_t store_id,
-        input logic [STACK_DEPTH-1:0] shift_bits,
-        input logic [STACK_DEPTH-1:0] store_shift_bits,
-        input logic [$clog2(STACK_DEPTH)-1:0] retired_id,
+        input logic [STACK_DEPTH-1:0] id_done_ordered,
+        input instruction_id_t retired_id,
         output logic [$clog2(STACK_DEPTH)-1:0] ordering [STACK_DEPTH-1:0],
         output logic [$clog2(STACK_DEPTH)-1:0] ordering_post_store [STACK_DEPTH-1:0],
         output logic id_available,
@@ -43,13 +42,17 @@ module id_stack # (
     localparam STACK_DEPTH_W = $clog2(STACK_DEPTH);
 
     logic [STACK_DEPTH_W-1:0] stack [STACK_DEPTH-1:0];
-    logic [STACK_DEPTH_W-1:0] stack_shift_input [STACK_DEPTH-1:0];
-    logic [STACK_DEPTH_W-1:0] retired_stack_shift_input [STACK_DEPTH-1:0];
-    logic [STACK_DEPTH_W-1:0] store_stack_shift_input [STACK_DEPTH-1:0];
     logic [STACK_DEPTH_W-1:0] new_stack [STACK_DEPTH-1:0];
+    logic [STACK_DEPTH_W-1:0] store_shiffted_stack_input [STACK_DEPTH-1:0];
+    logic [STACK_DEPTH_W-1:0] store_shiffted_stack [STACK_DEPTH-1:0];
+    logic [STACK_DEPTH_W-1:0] retired_store_shiffted_stack [STACK_DEPTH-1:0];
 
-    logic [STACK_DEPTH_W:0] oldest_valid;
-    //////////////////////////////////////////
+    logic [STACK_DEPTH-1:0] store_shift_bits;
+    logic [STACK_DEPTH-1:0] retired_shift_bits;
+
+    logic [STACK_DEPTH_W:0] next_id_index;
+    ////////////////////////////////////////////////////
+    //Implementation
 
     //Initial ordering, stack has no reset, as ID ordering is arbitrary
     initial begin
@@ -59,47 +62,64 @@ module id_stack # (
     end
 
     always_comb begin
-
-        store_stack_shift_input[STACK_DEPTH-1:1] = stack[STACK_DEPTH-2:0];
-        store_stack_shift_input[0] = store_id;
-        foreach (stack_shift_input[i]) begin
-            stack_shift_input[i] = (store_committed & store_shift_bits[i]) ? store_stack_shift_input[i] : stack[i];
-        end
-        ordering_post_store = stack_shift_input;
-
-        retired_stack_shift_input[STACK_DEPTH-1:1] = stack_shift_input[STACK_DEPTH-2:0];
-        retired_stack_shift_input[0] = retired_id;
-        foreach (new_stack[i]) begin
-            new_stack[i] = (retired & shift_bits[i]) ? retired_stack_shift_input[i] : stack_shift_input[i];
+        //Lowest entry always shifted, each older entry shifts all below
+        store_shift_bits = 0;
+        store_shift_bits[0] = 1;
+        for (int i=1; i<STACK_DEPTH; i++) begin
+            if (stack[i] == store_id)
+                store_shift_bits |= (2**(i+1)-1);
         end
 
-        //stack_shift_input[3:1] = stack[2:0];
-        // stack_shift_input[0] = retired_id;
+        //Stack shift due to stores being popped
+        store_shiffted_stack_input[STACK_DEPTH-1:1] = stack[STACK_DEPTH-2:0];
+        store_shiffted_stack_input[0] = store_id;
+        foreach (store_shiffted_stack[i]) begin
+            store_shiffted_stack[i] = (store_committed & store_shift_bits[i]) ? store_shiffted_stack_input[i] : stack[i];
+        end
     end
 
-    assign next_id = stack[oldest_valid[STACK_DEPTH_W-1:0]];
+    always_comb begin
+        retired_shift_bits = 0;
+        retired_shift_bits[0] = 1;
+        for (int i=1; i<STACK_DEPTH; i++) begin
+            if (id_done_ordered[i])
+                retired_shift_bits |= (2**(i+1)-1);
+        end
+
+        //Stack shift due to writes to register file being popped
+        retired_store_shiffted_stack[STACK_DEPTH-1:1] = store_shiffted_stack[STACK_DEPTH-2:0];
+        retired_store_shiffted_stack[0] = retired_id;
+        foreach (new_stack[i]) begin
+            new_stack[i] = (retired & retired_shift_bits[i]) ? retired_store_shiffted_stack[i] : store_shiffted_stack[i];
+        end
+    end
 
     //Starts at oldest entry (STACK_DEPTH-1).
     //When entry 0 is issued, id_available will become zero
     always_ff @ (posedge clk) begin
-        if (rst) begin
-            oldest_valid <= '1;
-        end else
-            oldest_valid <= oldest_valid + retired + store_committed - issued;
+        if (rst)
+            next_id_index <= '1;
+        else
+            next_id_index <= next_id_index + retired + store_committed - issued;
     end
-    assign id_available = oldest_valid[STACK_DEPTH_W];
-    assign empty = &oldest_valid;
+
+    assign next_id = stack[next_id_index[STACK_DEPTH_W-1:0]];
+
+    assign id_available = next_id_index[STACK_DEPTH_W];
+    assign empty = &next_id_index;//all ones
 
     //Shift bits computed in parallel to retired_id in write-back
     always_ff @ (posedge clk) begin
         stack <= new_stack;
-        //foreach (stack[i]) begin
-        //     if (retired | store_committed)
-        //       stack[i] <= shift_bits[i] ? stack_shift_input[i] : stack[i];
-        //end
     end
 
     assign ordering = stack;
+    assign ordering_post_store = store_shiffted_stack;
+
+    ////////////////////////////////////////////////////
+    //End of Implementation
+    ////////////////////////////////////////////////////
+
     ////////////////////////////////////////////////////
     //Assertions
     logic entries_different = 1;

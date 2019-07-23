@@ -94,7 +94,7 @@ module alu_unit(
             done <= 0;
     end
 
-    assign alu_wb.done_next_cycle = alu_ex.possible_issue;
+    assign alu_wb.done_next_cycle = alu_ex.new_request_dec;
     assign alu_wb.instruction_id = alu_ex.instruction_id;
     ////////////////////////////////////////////////////
     //Assertions
