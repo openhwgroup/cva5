@@ -5,6 +5,7 @@
 #include "verilated.h"
 #include "verilated_vcd_c.h"
 
+//#define TRACE_ON
 ////////////////////////////////////////////////////
 //Trace Interface Counters
 uint64_t operand_stall = 0;
@@ -89,7 +90,7 @@ int main(int argc, char **argv) {
 
 
 		//Custom nop to change to signature phase for compliance tests
-		if (tb->instruction_data_dec == 0x00B00013U) {
+		if (tb->instruction_data_dec == 0x00B00013U && tb->instruction_issued_dec) {
 			logPhase = false;
 			cout << "\n--------------------------------------------------------------\n";
 			cout << "                   Signature\n";
@@ -111,11 +112,11 @@ int main(int argc, char **argv) {
 		}
 
 		//Custom nop for error termination
-		if (tb->instruction_data_dec == 0x00F00013U) {
+		if (tb->instruction_data_dec == 0x00F00013U && tb->instruction_issued_dec) {
 			cout << "\n\nError!!!!\n\n";
 			break;
 		}//Custom nop for regular termination
-		else if (tb->instruction_data_dec == 0x00A00013U) {
+		else if (tb->instruction_data_dec == 0x00A00013U && tb->instruction_issued_dec) {
 			break;
 		}
 		#ifdef TRACE_ON
