@@ -226,15 +226,15 @@ module gc_unit(
     always_ff @ (posedge clk) begin
         gc_issue_hold <= gc_ex.new_request_dec || processing || (next_state inside {PRE_CLEAR_STATE, CLEAR_STATE, TLB_CLEAR_STATE, IQ_DRAIN, IQ_DISCARD});
         inuse_clear <= (next_state == CLEAR_STATE);
-        inorder <= 0;//(next_state inside {LS_EXCEPTION_POSSIBLE, IQ_DRAIN}) ? 1 : 0;
+        inorder <= 0;//(next_state inside {LS_EXCEPTION_POSSIBLE, IQ_DRAIN});
     end
 
     always_ff @ (posedge clk) begin
-        gc_issue_flush <= (next_state inside {IQ_DISCARD}) ? 1 : 0;
+        gc_issue_flush <= (next_state == IQ_DISCARD);
     end
 
     always_ff @ (posedge clk) begin
-        gc_supress_writeback <= (next_state inside {PRE_CLEAR_STATE, CLEAR_STATE, TLB_CLEAR_STATE, IQ_DISCARD}) ? 1 : 0;
+        gc_supress_writeback <= next_state inside {PRE_CLEAR_STATE, CLEAR_STATE, TLB_CLEAR_STATE, IQ_DISCARD} ? 1 : 0;
     end
 
 

@@ -142,10 +142,10 @@ module decode(
     //Unit Determination
     assign mult_div_op = ib.data_out.instruction[25];
 
-    assign new_request[BRANCH_UNIT_WB_ID] = opcode_trim inside {BRANCH_T, JAL_T, JALR_T} ? 1 : 0;
+    assign new_request[BRANCH_UNIT_WB_ID] = opcode_trim inside {BRANCH_T, JAL_T, JALR_T};
     assign new_request[ALU_UNIT_WB_ID] =  ((opcode_trim == ARITH_T)  && ~mult_div_op) || opcode_trim inside {ARITH_IMM_T, AUIPC_T, LUI_T};
-    assign new_request[LS_UNIT_WB_ID] = opcode_trim inside {LOAD_T, STORE_T, AMO_T} ? 1 : 0;
-    assign new_request[GC_UNIT_WB_ID] = (opcode_trim == SYSTEM_T) || (opcode_trim == FENCE_T);
+    assign new_request[LS_UNIT_WB_ID] = opcode_trim inside {LOAD_T, STORE_T, AMO_T};
+    assign new_request[GC_UNIT_WB_ID] = opcode_trim inside {SYSTEM_T, FENCE_T};
 
     generate if (USE_MUL)
             assign new_request[MUL_UNIT_WB_ID] = (opcode_trim == ARITH_T) && mult_div_op && ~fn3[2];
@@ -195,7 +195,7 @@ module decode(
     assign instruction_issued =  (|issue_ready) & issue_valid & load_store_operands_ready;
     assign instruction_issued_no_rd = instruction_issued & ~uses_rd;
     assign instruction_issued_with_rd = instruction_issued & uses_rd;
-    assign store_issued = instruction_issued && (opcode_trim == STORE_T); //TODO: AMO
+    assign store_issued = instruction_issued && (opcode_trim == STORE_T);
 
     //Decode outputs
     assign load_store_issue = issue[LS_UNIT_WB_ID];
@@ -345,7 +345,11 @@ module decode(
     ////////////////////////////////////////////////////
     //Global Control unit inputs
     logic sfence;
+    logic ifence;
+    logic environment_op;
     assign sfence = ib.data_out.instruction[25];
+    assign ifence =  (opcode_trim == FENCE_T) && fn3[0];
+    assign environment_op = (opcode_trim == SYSTEM_T) && (fn3 == 0);
 
     always_ff @(posedge clk) begin
         if (issue_ready[GC_UNIT_WB_ID]) begin
@@ -357,11 +361,11 @@ module decode(
             gc_inputs.is_fence <= (opcode_trim == FENCE_T) && ~fn3[0];
             gc_inputs.is_csr <= (opcode_trim == SYSTEM_T) && (fn3 != 0);
         end
-        gc_inputs.flush_required <= issue[GC_UNIT_WB_ID] && (((opcode_trim == SYSTEM_T) && (fn3 == 0)) || ((opcode_trim == FENCE_T) && fn3[0]));
-        gc_inputs.is_ecall <= issue[GC_UNIT_WB_ID] && (opcode_trim == SYSTEM_T) && (fn3 == 0) && ib.data_out.instruction[21:20] == 0;
-        gc_inputs.is_ebreak <= issue[GC_UNIT_WB_ID] && (opcode_trim == SYSTEM_T) && (fn3 == 0) && ib.data_out.instruction[21:20] == 2'b01;
-        gc_inputs.is_ret <= issue[GC_UNIT_WB_ID] && (opcode_trim == SYSTEM_T) && (fn3 == 0) && ib.data_out.instruction[21:20] == 2'b10;
-        gc_inputs.is_i_fence <= issue[GC_UNIT_WB_ID] && (opcode_trim == FENCE_T) && fn3[0];
+        gc_inputs.flush_required <= issue[GC_UNIT_WB_ID] && (environment_op | ifence);
+        gc_inputs.is_ecall <= issue[GC_UNIT_WB_ID] && environment_op && (ib.data_out.instruction[21:20] == 0);
+        gc_inputs.is_ebreak <= issue[GC_UNIT_WB_ID] && environment_op && (ib.data_out.instruction[21:20] == 2'b01);
+        gc_inputs.is_ret <= issue[GC_UNIT_WB_ID] && environment_op && (ib.data_out.instruction[21:20] == 2'b10);
+        gc_inputs.is_i_fence <= issue[GC_UNIT_WB_ID] && ifence;
     end
 
 
