@@ -1,5 +1,5 @@
 /*
- * Copyright © 2017, 2019 Eric Matthews,  Lesley Shannon
+ * Copyright © 2017-2019 Eric Matthews,  Lesley Shannon
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,20 +31,15 @@ package taiga_config;
     //Privileged ISA Options
 
     //Enable Machine level privilege spec
-    parameter ENABLE_M_MODE = 0;
+    parameter ENABLE_M_MODE = 1;
     //Enable Supervisor level privilege spec
     parameter ENABLE_S_MODE = 0;
 
-    parameter CPU_ID = 0;//32 bit value
+    parameter CPU_ID = 0;//32-bit value
     parameter bit[31:0] RESET_VEC = 32'h80000000;
 
     //CSR counter width (33-64 bits): 48-bits --> 32 days @ 100MHz
     parameter COUNTER_W = 33;
-
-    ////////////////////////////////////////////////////
-    //Trace Options
-    parameter ENABLE_TRACE_INTERFACE = 1;
-
 
     ////////////////////////////////////////////////////
     //ISA Options
@@ -159,18 +154,23 @@ package taiga_config;
     ////////////////////////////////////////////////////
     //Branch Predictor Options
     parameter USE_BRANCH_PREDICTOR = 1;
-    parameter BRANCH_PREDICTOR_WAYS = 2;
+    parameter BRANCH_PREDICTOR_WAYS = 1;
     parameter BRANCH_TABLE_ENTRIES = 512;
     parameter RAS_DEPTH = 8;
 
 
     ////////////////////////////////////////////////////
     //FIFO/Buffer Depths
+    //All parameters restricted to powers of two
     parameter MAX_INFLIGHT_COUNT = 4;
     parameter FETCH_BUFFER_DEPTH = 4;
 
-    parameter LS_INPUT_BUFFER_DEPTH = 2;
-    parameter DIV_INPUT_BUFFER_DEPTH = 2;
+    parameter LS_INPUT_BUFFER_DEPTH = 4;
+    parameter DIV_INPUT_BUFFER_DEPTH = 4;
+
+    ////////////////////////////////////////////////////
+    //Trace Options
+    parameter ENABLE_TRACE_INTERFACE = 1;
 
 
     ////////////////////////////////////////////////////

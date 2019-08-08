@@ -48,9 +48,9 @@ module branch_predictor (
     logic [31:0] predicted_pc [BRANCH_PREDICTOR_WAYS-1:0];
 
     logic [BRANCH_PREDICTOR_WAYS-1:0] tag_matches;
-    logic [$clog2(BRANCH_PREDICTOR_WAYS)-1:0] hit_way;
     logic [BRANCH_PREDICTOR_WAYS-1:0] replacement_way;
     logic [BRANCH_PREDICTOR_WAYS-1:0] update_way;
+    logic [$clog2(BRANCH_PREDICTOR_WAYS > 1 ? BRANCH_PREDICTOR_WAYS : 2)-1:0] hit_way;
     logic tag_match;
     /////////////////////////////////////////
 

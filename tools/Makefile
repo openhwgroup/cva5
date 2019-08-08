@@ -57,7 +57,7 @@ COREMARK_DIR=/home/ematthew/Research/RISCV/software/coremark
 define verilator_local_mem_test
 	mkdir -p $@
 	cp $(VERILATOR_DIR)/taiga_local_mem.cc $@/
-	verilator -cc -Wno-WIDTH --exe --Mdir $@ $(VERILATOR_LINT_IGNORE) $(VERILATOR_CFLAGS) $(TAIGA_SRCS) \
+	verilator -cc --exe --Mdir $@ $(VERILATOR_LINT_IGNORE) $(VERILATOR_CFLAGS) $(TAIGA_SRCS) \
 		 ../test_benches/verilator/taiga_local_mem.sv --top-module taiga_local_mem  taiga_local_mem.cc \
 		-GMEMORY_FILE=$1
 	$(MAKE) -C  $@ -f Vtaiga_local_mem.mk AR="gcc-ar" RANLIB="gcc-ranlib"
@@ -69,7 +69,7 @@ lint:
 	verilator -cc $(TAIGA_SRCS) \
 	../test_benches/verilator/taiga_local_mem.sv \
 	--top-module taiga_local_mem \
-	--lint-only
+	--lint-only -Wno-WIDTH
 		
 .PHONY: verilator_taiga_dhrystone
 verilator_taiga_dhrystone:

@@ -82,6 +82,9 @@ module decode(
 
     logic nop;
 
+    logic last_ls_request_was_load;
+    logic [4:0] load_rd;
+
     logic issue_valid;
     logic store_issued_with_forwarding;
     logic load_store_operands_ready;
@@ -280,12 +283,10 @@ module decode(
 
     ////////////////////////////////////////////////////
     //Load Store unit inputs
-    logic [31:0] ls_offset;
+    logic [11:0] ls_offset;
     logic [31:0] virtual_address;
     logic ls_is_load;
 
-    logic [4:0] load_rd;
-    logic last_ls_request_was_load;
     logic amo_op;
     logic store_conditional;
     logic [4:0] amo_type;
@@ -295,8 +296,9 @@ module decode(
     assign store_conditional = (amo_type == AMO_SC);
     assign ls_is_load = (opcode_trim inside {LOAD_T, AMO_T}) && !store_conditional; //LR and AMO_ops perform a read operation as well
 
-    assign ls_inputs.offset = opcode[5] ? {ib.data_out.instruction[31:25], ib.data_out.instruction[11:7]} : ib.data_out.instruction[31:20];
-    assign ls_inputs.virtual_address = rf_decode.rs1_data + 32'(signed'(ls_inputs.offset));
+    assign ls_offset = opcode[5] ? {ib.data_out.instruction[31:25], ib.data_out.instruction[11:7]} : ib.data_out.instruction[31:20];
+    assign ls_inputs.offset = ls_offset;
+    assign ls_inputs.virtual_address = rf_decode.rs1_data + 32'(signed'(ls_offset));
     assign ls_inputs.rs2 = rf_decode.rs2_data;
     assign ls_inputs.pc = ib.data_out.pc;
     assign ls_inputs.fn3 = amo_op ? LS_W_fn3 : fn3;
@@ -317,7 +319,7 @@ module decode(
         if (rst)
             last_ls_request_was_load <= 0;
         else if (instruction_issued) begin
-            if (new_request[LS_UNIT_WB_ID] & ls_inputs.load)
+            if (new_request[LS_UNIT_WB_ID] & ls_is_load)
                 last_ls_request_was_load <= 1;
             else if (uses_rd && (load_rd == future_rd_addr))
                 last_ls_request_was_load <=0;

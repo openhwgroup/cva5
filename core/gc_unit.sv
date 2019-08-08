@@ -134,8 +134,8 @@ module gc_unit(
     gc_state state;
     gc_state next_state;
 
-
     logic i_fence_flush;
+    exception_code_t ecall_code;
 
     //CSR
     logic mret;
@@ -265,12 +265,12 @@ module gc_unit(
     assign csr_inputs.rs1_is_zero = (rs1_addr == 0);
     assign csr_inputs.rd_is_zero = gc_inputs.rd_is_zero;
 
-    exception_code_t ecall_code;
     always_comb begin
-        unique case (current_privilege)
+        case (current_privilege)
             USER_PRIVILEGE : ecall_code = ECALL_U;
             SUPERVISOR_PRIVILEGE : ecall_code = ECALL_S;
             MACHINE_PRIVILEGE : ecall_code = ECALL_M;
+            default : ecall_code = ECALL_U;
         endcase
     end
 
