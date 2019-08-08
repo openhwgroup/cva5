@@ -1,5 +1,5 @@
 /*
- * Copyright © 2017, 2018, 2019 Eric Matthews,  Lesley Shannon
+ * Copyright © 2017-2019 Eric Matthews,  Lesley Shannon
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -52,6 +52,7 @@ module write_back(
     //aliases for write-back-interface signals
     logic [NUM_WB_UNITS-1:0] unit_done_next_cycle;
     instruction_id_t unit_instruction_id [NUM_WB_UNITS-1:0];
+    logic [MAX_INFLIGHT_COUNT-1:0] per_unit_one_hot_id_done [NUM_WB_UNITS-1:0];
     logic [XLEN-1:0] unit_rd [NUM_WB_UNITS-1:0];
     logic [NUM_WB_UNITS-1:0] accepted;
     /////
@@ -119,28 +120,39 @@ module write_back(
     //////////////////////
 
 
+    //One-hot id done for each unit
+    always_comb begin
+            for (int i=0; i< NUM_WB_UNITS; i++) begin
+                per_unit_one_hot_id_done[i] = 0;
+                per_unit_one_hot_id_done[i][unit_instruction_id[i]] = unit_done_next_cycle[i];
+            end
+    end
     //Or together all unit done signals for the same ID.
     always_comb begin
         id_done_next = 0;
         for (int i=0; i<MAX_INFLIGHT_COUNT; i++) begin
             for (int j=0; j<NUM_WB_UNITS; j++) begin
-                id_done_next[i] |= (unit_instruction_id[j] == i) && unit_done_next_cycle[j];
+                id_done_next[i] |= per_unit_one_hot_id_done[j][i];
             end
         end
     end
 
-    //If not servicing a unit on the next cycle, save its done status
-    always_ff @ (posedge clk) begin
-        for (int i=0; i<MAX_INFLIGHT_COUNT; i++) begin
-            if (rst || (retired && retired_id == i))
-                id_done_r[i] = 0;
-            else if (id_done_next[i])
-                id_done_r[i] = 1;
-        end
+    //One-hot ID retired last cycle
+    logic [MAX_INFLIGHT_COUNT-1:0] id_retired_last_cycle;
+    always_comb begin
+        id_retired_last_cycle = 0;
+        id_retired_last_cycle[retired_id_r] = retired_r;
     end
 
     //ID done is a combination of newly completed and already completed instructions
-    assign id_done = id_done_r | id_done_next;
+    assign id_done = id_done_next | (id_done_r & ~id_retired_last_cycle);
+
+    always_ff @ (posedge clk) begin
+        if (rst)
+            id_done_r = '0;
+        else
+            id_done_r = id_done;
+    end
 
     assign retired = (inorder ? id_done_ordered[MAX_INFLIGHT_COUNT-1] : |id_done);
     always_ff @(posedge clk) begin
@@ -199,15 +211,17 @@ module write_back(
 
     ////////////////////////////////////////////////////
     //Trace Interface
-
-    //Checks if any two pairs are set indicating mux contention
-    always_comb begin
-        tr_wb_mux_contention = 0;
-        for (int i=0; i<NUM_WB_UNITS; i++) begin
-                for (int j=i+1; j<NUM_WB_UNITS; j++) begin
-                    tr_wb_mux_contention |= (id_done[i] & id_done[j]);
-                end
+    generate if (ENABLE_TRACE_INTERFACE) begin
+        //Checks if any two pairs are set indicating mux contention
+        always_comb begin
+            tr_wb_mux_contention = 0;
+            for (int i=0; i<MAX_INFLIGHT_COUNT-1; i++) begin
+                    for (int j=i+1; j<MAX_INFLIGHT_COUNT; j++) begin
+                        tr_wb_mux_contention |= (id_done[i] & id_done[j]);
+                    end
+            end
         end
     end
+    endgenerate
 
 endmodule
