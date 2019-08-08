@@ -87,8 +87,8 @@ package taiga_config;
     parameter bus_type_t BUS_TYPE = AXI_BUS;
 
     //Caches
-    parameter USE_DCACHE = 0;
-    parameter USE_ICACHE = 0;
+    parameter USE_DCACHE = 1;
+    parameter USE_ICACHE = 1;
 
 
     ////////////////////////////////////////////////////
@@ -162,7 +162,7 @@ package taiga_config;
     ////////////////////////////////////////////////////
     //FIFO/Buffer Depths
     //All parameters restricted to powers of two
-    parameter MAX_INFLIGHT_COUNT = 4;
+    parameter MAX_INFLIGHT_COUNT = 8;
     parameter FETCH_BUFFER_DEPTH = 4;
 
     parameter LS_INPUT_BUFFER_DEPTH = 4;
