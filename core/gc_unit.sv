@@ -221,7 +221,7 @@ module gc_unit(
     assign gc_exception.valid = gc_inputs.is_ecall | gc_inputs.is_ebreak | ls_exception_second_cycle;
 
 
-    assign gc_fetch_flush = branch_flush | gc_inputs.flush_required | ls_exception_first_cycle;
+    assign gc_fetch_flush = branch_flush | gc_inputs.flush_required | gc_fetch_pc_override | ls_exception_first_cycle;
 
     always_ff @ (posedge clk) begin
         gc_issue_hold <= gc_ex.new_request_dec || processing || (next_state inside {PRE_CLEAR_STATE, CLEAR_STATE, TLB_CLEAR_STATE, IQ_DRAIN, IQ_DISCARD});

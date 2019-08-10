@@ -97,6 +97,8 @@ module load_store_unit (
     logic unaligned_addr;
     logic [NUM_SUB_UNITS-1:0] sub_unit_address_match;
 
+
+    amo_details_t amo;
     logic dcache_forward_data;
     logic [2:0] dcache_stage2_fn3;
 
@@ -126,21 +128,24 @@ module load_store_unit (
     fifo_interface #(.DATA_WIDTH($bits(load_store_inputs_t))) input_fifo();
     fifo_interface #(.DATA_WIDTH($bits(load_attributes_t))) load_attributes();
     fifo_interface #(.DATA_WIDTH(XLEN)) wb_fifo();
-    /////////////////////////////////////////
+    ////////////////////////////////////////////////////
+    //Implementation
+
+    ////////////////////////////////////////////////////
+    //Input FIFO
+    taiga_fifo #(.DATA_WIDTH($bits(load_store_inputs_t)), .FIFO_DEPTH(LS_INPUT_BUFFER_DEPTH), .FIFO_TYPE(NON_MUXED_INPUT_FIFO)
+        ) ls_input_fifo (.fifo(input_fifo), .*);
+
+    assign input_fifo.data_in = ls_inputs;
+    assign input_fifo.push = ls_ex.new_request_dec;
+    assign ls_ex.ready = ~input_fifo.full;
+    assign input_fifo.pop = issue_request | gc_issue_flush;
+    assign load_store_FIFO_emptying = input_fifo.early_empty;
+    assign stage1 = input_fifo.data_out;
 
 
-    /*********************************
-     *  Primary control signals
-     *********************************/
-    always_ff @(posedge clk) begin
-        if (rst)
-            inflight_count <= 0;
-        else if (load_attributes.push & ~ls_wb.accepted)
-            inflight_count <= inflight_count + 1;
-        else if (~load_attributes.push &  ls_wb.accepted)
-            inflight_count <= inflight_count - 1;
-    end
-
+    ////////////////////////////////////////////////////
+    //Sub unit ready/data_valid
     genvar i;
     generate
         for(i=0; i < NUM_SUB_UNITS; i++) begin
@@ -152,13 +157,20 @@ module load_store_unit (
     assign units_ready = &unit_ready;
     assign data_valid = |unit_data_valid;
 
-    //initial last_unit = 0;//For simulator
+    ////////////////////////////////////////////////////
+    //Unit tracking
     assign current_unit = sub_unit_address_match;
     always_ff @ (posedge clk) begin
         if (rst)
             last_unit <= 0;
         else if (load_attributes.push)
             last_unit <= sub_unit_address_match;
+    end
+
+    ////////////////////////////////////////////////////
+    //Store commit tracking
+    always_ff @ (posedge clk) begin
+            store_id <= stage1.instruction_id;
     end
 
     always_ff @ (posedge clk) begin
@@ -168,9 +180,9 @@ module load_store_unit (
             store_committed <= stage1.store & (issue_request | ls_exception_valid);
     end
 
-    always_ff @ (posedge clk) begin
-            store_id <= stage1.instruction_id;
-    end
+
+    ////////////////////////////////////////////////////
+    //Primary Control Signals
 
     //When switching units, ensure no outstanding loads so that there can be no timing collisions with results
     assign unit_stall = (current_unit != last_unit) && ~load_attributes.empty;
@@ -182,6 +194,8 @@ module load_store_unit (
         assert ((issue_request & |sub_unit_address_match) || (!issue_request)) else $error("invalid L/S address");
     end
 
+    ////////////////////////////////////////////////////
+    //Unit Determination
     generate if (USE_D_SCRATCH_MEM) begin
             assign sub_unit_address_match[BRAM_ID] = tlb.physical_address[31:32-SCRATCH_BIT_CHECK] == SCRATCH_ADDR_L[31:32-SCRATCH_BIT_CHECK];
             assign ls_sub[BRAM_ID].new_request = sub_unit_address_match[BRAM_ID] & issue_request;
@@ -199,35 +213,20 @@ module load_store_unit (
             assign ls_sub[DCACHE_ID].new_request = sub_unit_address_match[DCACHE_ID] & issue_request;
         end
     endgenerate
-    /*********************************************/
 
 
-    /*********************************
-     *  Input FIFO
-     *********************************/
-    taiga_fifo #(.DATA_WIDTH($bits(load_store_inputs_t)), .FIFO_DEPTH(LS_INPUT_BUFFER_DEPTH), .FIFO_TYPE(NON_MUXED_INPUT_FIFO)
-        ) ls_input_fifo (.fifo(input_fifo), .*);
-
-    assign input_fifo.data_in = ls_inputs;
-    assign input_fifo.push = ls_ex.new_request_dec;
-    assign ls_ex.ready = ~input_fifo.full;
-    assign input_fifo.pop = issue_request | gc_issue_flush;
-    assign load_store_FIFO_emptying = input_fifo.early_empty;
-    assign stage1 = input_fifo.data_out;
-    /*********************************
-     * TLB interface
-     *********************************/
+    ////////////////////////////////////////////////////
+    //TLB interface
     assign virtual_address = stage1.virtual_address;// + 32'(signed'(stage1.offset));
 
     assign tlb.virtual_address = virtual_address;
     assign tlb.new_request = input_fifo.valid;
     assign tlb.execute = 0;
     assign tlb.rnw = stage1.load & ~stage1.store;
-    /*********************************************/
 
-    /*********************************
-     * Alignment Exception
-     *********************************/
+
+    ////////////////////////////////////////////////////
+    //Alignment Exception
     always_comb begin
         case(stage1.fn3)
             LS_H_fn3 : unaligned_addr = virtual_address[0];
@@ -249,10 +248,9 @@ module load_store_unit (
     /*********************************************/
 
 
-    /*********************************
-     * Input Processing
-     * (byte enables, input muxing)
-     *********************************/
+    ////////////////////////////////////////////////////
+    //Input Processing
+
     /*Byte enable generation
      * Only set on store
      *   SW: all bytes
@@ -261,32 +259,17 @@ module load_store_unit (
      */
     always_comb begin
         for (int i = 0; i < XLEN/8; i = i+ 1) begin
-            case({stage1.store,stage1.fn3[1:0]})
-                {1'b1, LS_B_fn3[1:0]} : be[i] = (virtual_address[1:0] == i[1:0]);
-                {1'b1, LS_H_fn3[1:0]} : be[i] = (virtual_address[1] == i[1]);
-                {1'b1, LS_W_fn3[1:0]} : be[i] = '1;
-                default : be[i] = 0;
+            case(stage1.fn3[1:0])
+                LS_B_fn3[1:0] : be[i] = (virtual_address[1:0] == i[1:0]);
+                LS_H_fn3[1:0] : be[i] = (virtual_address[1] == i[1]);
+                default : be[i] = '1; //LS_W_fn3[1:0]
             endcase
+            be[i] &= stage1.store;
         end
     end
 
-
-    //AMO identification for dcache
-    generate
-        if (USE_AMO) begin
-            assign lr = stage1.is_amo && (stage1.amo == AMO_LR);
-            assign sc = stage1.is_amo && (stage1.amo == AMO_SC);
-            assign is_amo = stage1.is_amo & ~(lr | sc);
-            assign amo_op = stage1.amo;
-        end else begin
-            assign lr = 0;
-            assign sc = 0;
-            assign is_amo = 0;
-            assign amo_op = 0;
-        end
-    endgenerate
-
-    //Shared inputs
+    ////////////////////////////////////////////////////
+    //Unit Inputs
     assign d_inputs.addr = tlb.physical_address;
     assign d_inputs.load = stage1.load;
     assign d_inputs.store = stage1.store;
@@ -299,7 +282,7 @@ module load_store_unit (
 
     //Input: ABCD
     //Assuming aligned requests,
-    //Possible selections: (A/C/D, B/D, C/D, D)
+    //Possible byte selections: (A/C/D, B/D, C/D, D)
     logic [1:0] data_in_mux;
     always_comb begin
         data_in_mux = dcache_forward_data ? dcache_stage2_fn3[1:0] : virtual_address[1:0];
@@ -313,9 +296,22 @@ module load_store_unit (
         endcase
     end
 
-    /*********************************
-     *  Load attributes FIFO
-     *********************************/
+    //AMO details for data cache
+    assign amo = stage1.amo;
+
+    ////////////////////////////////////////////////////
+    //Load In-flight count
+    always_ff @(posedge clk) begin
+        if (rst)
+            inflight_count <= 0;
+        else if (load_attributes.push & ~ls_wb.accepted)
+            inflight_count <= inflight_count + 1;
+        else if (~load_attributes.push &  ls_wb.accepted)
+            inflight_count <= inflight_count - 1;
+    end
+
+    ////////////////////////////////////////////////////
+    //Load attributes FIFO
     taiga_fifo #(.DATA_WIDTH($bits(load_attributes_t)), .FIFO_DEPTH(ATTRIBUTES_DEPTH), .FIFO_TYPE(LUTRAM_FIFO)
         ) attributes_fifo (.fifo(load_attributes), .*);
     assign load_attributes_in.fn3 = stage1.fn3;
@@ -329,9 +325,9 @@ module load_store_unit (
 
     assign stage2_attr  = load_attributes.data_out;
 
-    /*********************************
-     *  Unit Instantiation
-     *********************************/
+    ////////////////////////////////////////////////////
+    //Unit Instantiation
+
     //BRAM
     generate if (USE_D_SCRATCH_MEM)
             dbram d_bram (.clk(clk), .rst(rst), .ls_inputs(d_inputs), .ls(ls_sub[BRAM_ID]), .data_out(unit_data_array[BRAM_ID]), .*);
@@ -350,11 +346,13 @@ module load_store_unit (
 
     //Cache
     generate if (USE_DCACHE)
-            dcache data_cache (.clk(clk), .rst(rst), .ls_inputs(d_inputs), .ls(ls_sub[DCACHE_ID]), .is_amo(is_amo), .use_forwarded_data(stage1.load_store_forward), .data_out(unit_data_array[DCACHE_ID]), .*);
+            dcache data_cache (.clk(clk), .rst(rst), .ls_inputs(d_inputs), .ls(ls_sub[DCACHE_ID]), .use_forwarded_data(stage1.load_store_forward), .data_out(unit_data_array[DCACHE_ID]), .*);
     endgenerate
-    /*************************************
-     * Output Muxing
-     *************************************/
+
+
+    ////////////////////////////////////////////////////
+    //Output Muxing
+
     //unit mux
     always_comb begin
         unit_muxed_load_data = 0;
@@ -386,9 +384,8 @@ module load_store_unit (
     end
 
 
-    /*********************************
-     *  Output FIFO
-     *********************************/
+    ////////////////////////////////////////////////////
+    //Output FIFO
     localparam LS_OUTPUT_FIFO_DEPTH = 2;
     logic[LS_OUTPUT_FIFO_DEPTH:0] valid_chain;
 
@@ -423,6 +420,11 @@ module load_store_unit (
 
     assign ls_wb.done_next_cycle = load_complete | exception_complete;
     assign ls_wb.instruction_id = stage2_attr.instruction_id;
+
+    ////////////////////////////////////////////////////
+    //End of Implementation
+    ////////////////////////////////////////////////////
+
     ////////////////////////////////////////////////////
     //Assertions
     always_ff @ (posedge clk) begin

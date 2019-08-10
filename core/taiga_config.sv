@@ -87,8 +87,8 @@ package taiga_config;
     parameter bus_type_t BUS_TYPE = AXI_BUS;
 
     //Caches
-    parameter USE_DCACHE = 1;
-    parameter USE_ICACHE = 1;
+    parameter USE_DCACHE = 0;
+    parameter USE_ICACHE = 0;
 
 
     ////////////////////////////////////////////////////

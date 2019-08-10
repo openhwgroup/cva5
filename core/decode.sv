@@ -82,17 +82,19 @@ module decode(
 
     logic nop;
 
-    logic last_ls_request_was_load;
-    logic [4:0] load_rd;
+    logic  register_in_use_by_unit [31:0];
+
+    logic [WB_UNITS_WIDTH-1:0] store_data_in_use_by_unit;
+    logic load_store_forward_possible;
 
     logic issue_valid;
-    logic store_issued_with_forwarding;
     logic load_store_operands_ready;
     logic operands_ready;
 
     logic mult_div_op;
 
     logic [NUM_WB_UNITS-1:0] new_request;
+    logic [WB_UNITS_WIDTH-1:0] new_request_int;
     logic [NUM_WB_UNITS-1:0] issue_ready;
     logic [NUM_WB_UNITS-1:0] issue;
 
@@ -175,14 +177,10 @@ module decode(
 
     ////////////////////////////////////////////////////
     //Issue Determination
-    logic load_store_forward;
-
     assign issue_valid = ib.valid & ti.id_available & ~gc_issue_hold & ~gc_fetch_flush;
 
     assign operands_ready = ~rf_decode.rs1_conflict & ~rf_decode.rs2_conflict;
-
-    assign load_store_forward = ((opcode_trim == STORE_T) && last_ls_request_was_load && (rs2_addr == load_rd));
-    assign load_store_operands_ready =  ~rf_decode.rs1_conflict & ~(rf_decode.rs2_conflict & ~load_store_forward);
+    assign load_store_operands_ready =  ~rf_decode.rs1_conflict & (~rf_decode.rs2_conflict | (rf_decode.rs2_conflict & load_store_forward_possible));
 
     assign issue[BRANCH_UNIT_WB_ID] = issue_valid & operands_ready & issue_ready[BRANCH_UNIT_WB_ID];
     assign issue[ALU_UNIT_WB_ID] = issue_valid & operands_ready & issue_ready[ALU_UNIT_WB_ID];
@@ -284,48 +282,56 @@ module decode(
     ////////////////////////////////////////////////////
     //Load Store unit inputs
     logic [11:0] ls_offset;
-    logic [31:0] virtual_address;
     logic ls_is_load;
 
     logic amo_op;
     logic store_conditional;
+    logic load_reserve;
     logic [4:0] amo_type;
 
-    assign amo_op =  USE_AMO ? (opcode_trim == AMO_T) : 0;
-    assign amo_type = USE_AMO ? ib.data_out.instruction[31:27] : 0;
+    assign amo_op =  USE_AMO ? (opcode_trim == AMO_T) : 1'b0;
+    assign amo_type = ib.data_out.instruction[31:27];
     assign store_conditional = (amo_type == AMO_SC);
-    assign ls_is_load = (opcode_trim inside {LOAD_T, AMO_T}) && !store_conditional; //LR and AMO_ops perform a read operation as well
+    assign load_reserve = (amo_type == AMO_LR);
 
+    generate if (USE_AMO) begin
+            assign ls_inputs.amo.is_lr = load_reserve;
+            assign ls_inputs.amo.is_sc = store_conditional;
+            assign ls_inputs.amo.is_amo = amo_op & ~(load_reserve | store_conditional);
+            assign ls_inputs.amo.op = amo_type;
+        end
+        else begin
+            assign ls_inputs.amo = '0;
+        end
+    endgenerate
+
+    assign ls_is_load = (opcode_trim inside {LOAD_T, AMO_T}) && !(amo_op & store_conditional); //LR and AMO_ops perform a read operation as well
     assign ls_offset = opcode[5] ? {ib.data_out.instruction[31:25], ib.data_out.instruction[11:7]} : ib.data_out.instruction[31:20];
+
     assign ls_inputs.offset = ls_offset;
     assign ls_inputs.virtual_address = rf_decode.rs1_data + 32'(signed'(ls_offset));
     assign ls_inputs.rs2 = rf_decode.rs2_data;
     assign ls_inputs.pc = ib.data_out.pc;
     assign ls_inputs.fn3 = amo_op ? LS_W_fn3 : fn3;
-    assign ls_inputs.amo = amo_type;
-    assign ls_inputs.is_amo = amo_op;
     assign ls_inputs.load = ls_is_load;
-    assign ls_inputs.store = (opcode_trim == STORE_T) || store_conditional;
+    assign ls_inputs.store = (opcode_trim == STORE_T) || (amo_op && store_conditional);
     assign ls_inputs.load_store_forward = (opcode_trim == STORE_T) && rf_decode.rs2_conflict;
     assign ls_inputs.instruction_id = ti.issue_id;
 
-    //TODO: switch from rd_addr usage to instruction ID/in_use_by
-    always_ff @(posedge clk) begin
-        if (issue[LS_UNIT_WB_ID])
-            load_rd <= future_rd_addr;
+    //Last store RD tracking for Load-Store data forwarding
+    logic [4:0] last_load_rd;
+    always_ff @ (posedge clk) begin
+        if (issue[LS_UNIT_WB_ID] & ls_is_load)
+            last_load_rd <= future_rd_addr;
     end
 
-    always_ff @(posedge clk) begin
-        if (rst)
-            last_ls_request_was_load <= 0;
-        else if (instruction_issued) begin
-            if (new_request[LS_UNIT_WB_ID] & ls_is_load)
-                last_ls_request_was_load <= 1;
-            else if (uses_rd && (load_rd == future_rd_addr))
-                last_ls_request_was_load <=0;
-        end
+    always_ff @ (posedge clk) begin
+       if (instruction_issued_with_rd)
+           register_in_use_by_unit[future_rd_addr] <= new_request[LS_UNIT_WB_ID];
     end
 
+    assign store_data_in_use_by_unit = register_in_use_by_unit[rs2_addr];
+    assign load_store_forward_possible = (opcode_trim == STORE_T) && store_data_in_use_by_unit && (last_load_rd == rs2_addr);
 
     ////////////////////////////////////////////////////
     //Branch unit inputs
@@ -387,7 +393,7 @@ module decode(
             logic [4:0] prev_div_rs1_addr;
             logic [4:0] prev_div_rs2_addr;
             logic prev_div_result_valid;
-
+            logic prev_div_result_valid_r;
             //If a subsequent div request uses the same inputs then
             //don't rerun div operation
             logic div_rd_overwrites_rs1_or_rs2;
@@ -405,16 +411,19 @@ module decode(
             assign rd_overwrites_previously_saved_rs1_or_rs2 = (future_rd_addr == prev_div_rs1_addr || future_rd_addr == prev_div_rs2_addr);
             assign current_op_resuses_rs1_rs2 = (prev_div_rs1_addr == rs1_addr) && (prev_div_rs2_addr == rs2_addr);
 
+            always_comb begin
+                prev_div_result_valid = prev_div_result_valid_r;
+                if (new_request[DIV_UNIT_WB_ID])
+                    prev_div_result_valid = ~div_rd_overwrites_rs1_or_rs2;
+                else if (uses_rd & rd_overwrites_previously_saved_rs1_or_rs2)
+                    prev_div_result_valid = 0;
+            end
+
             always_ff @(posedge clk) begin
-                if (rst) begin
-                    prev_div_result_valid <= 0;
-                end
-                else if (instruction_issued) begin
-                    if(new_request[DIV_UNIT_WB_ID] & ~div_rd_overwrites_rs1_or_rs2)
-                        prev_div_result_valid <=1;
-                    else if (uses_rd & rd_overwrites_previously_saved_rs1_or_rs2)
-                        prev_div_result_valid <=0;
-                end
+                if (rst)
+                    prev_div_result_valid_r <= 0;
+                else if (instruction_issued)
+                    prev_div_result_valid_r <= prev_div_result_valid;
             end
 
             assign div_inputs.rs1 = rf_decode.rs1_data;

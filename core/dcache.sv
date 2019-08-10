@@ -35,10 +35,8 @@ module dcache(
 
         input data_access_shared_inputs_t ls_inputs,
         output logic[31:0] data_out,
-        input logic lr,
-        input logic sc,
-        input logic is_amo,
-        input logic [4:0] amo_op,
+
+        input amo_details_t amo,
 
         input logic use_forwarded_data,
         output logic dcache_forward_data,
@@ -77,11 +75,7 @@ module dcache(
     logic stage2_use_forwarded_data;
     logic [31:0] stage2_forwarded_data;
 
-    logic stage2_lr;
-    logic stage2_sc;
-    logic stage2_is_amo;
-    logic [4:0] stage2_amo_op;
-
+    amo_details_t stage2_amo;
 
     logic [31:0] dbank_data_out;
     logic [31:0] hit_data;
@@ -132,17 +126,7 @@ module dcache(
             stage2_store <= ls_inputs.store;
             stage2_fn3 <= ls_inputs.fn3;
             stage2_data_in <= ls_inputs.data_in;
-            if (USE_AMO) begin
-                stage2_lr <= lr;
-                stage2_is_amo <= is_amo; //excludes lr/sc
-                stage2_sc <= sc;
-                stage2_amo_op <= amo_op;
-            end else begin
-                stage2_lr <= 0;
-                stage2_is_amo <= 0; //excludes lr/sc
-                stage2_sc <= 0;
-                stage2_amo_op <= 0;
-            end
+            stage2_amo <= amo;
         end
     end
 
@@ -158,7 +142,7 @@ module dcache(
         if (rst)
             read_hit_allowed <= 0;
         else
-            read_hit_allowed <= ls.new_request & ls_inputs.load & dcache_on & ~(lr | is_amo);
+            read_hit_allowed <= ls.new_request & ls_inputs.load & dcache_on & ~(amo.is_lr | amo.is_amo);
     end
 
     always_ff @ (posedge clk) begin
@@ -174,7 +158,7 @@ module dcache(
         if (rst)
             reservation <= 0;
         else if (second_cycle)
-            reservation <= stage2_lr;
+            reservation <= stage2_amo.is_lr;
         else if (sc_complete | clear_reservation)
             reservation <= 0;
     end
@@ -203,8 +187,8 @@ module dcache(
     assign l1_request.rnw = stage2_load;
     assign l1_request.be = stage2_be;
     assign l1_request.size = stage2_load ? (DCACHE_LINE_W-1) : 0;//LR and AMO ops are included in load
-    assign l1_request.is_amo = (stage2_is_amo | stage2_lr | stage2_sc);
-    assign l1_request.amo = stage2_amo_op;
+    assign l1_request.is_amo = (stage2_amo.is_amo | stage2_amo.is_lr | stage2_amo.is_sc);
+    assign l1_request.amo = stage2_amo.op;
 
     always_ff @ (posedge clk) begin
         if (rst)
@@ -236,10 +220,12 @@ module dcache(
 
 
     //If atomic load (LR or AMO op) and there's a tag hit reuse same line
+    logic stage2_amo_with_load;
+    assign stage2_amo_with_load = stage2_amo.is_amo | stage2_amo.is_lr;
     always_ff @ (posedge clk) begin
         if (second_cycle) begin
-            tag_update_way<= ((stage2_is_amo | stage2_lr) & tag_hit) ? tag_hit_way : replacement_way;
-            tag_update_way_int <= ((stage2_is_amo | stage2_lr) & tag_hit) ? tag_hit_way_int : replacement_way_int;
+            tag_update_way<= (stage2_amo_with_load & tag_hit) ? tag_hit_way : replacement_way;
+            tag_update_way_int <= (stage2_amo_with_load & tag_hit) ? tag_hit_way_int : replacement_way_int;
         end
     end
 
@@ -267,16 +253,16 @@ module dcache(
 
     assign amo_alu_inputs.rs1_load = l1_response.data;
     assign amo_alu_inputs.rs2 = amo_rs2;
-    assign amo_alu_inputs.op = stage2_amo_op;
+    assign amo_alu_inputs.op = stage2_amo.op;
 
     generate if (USE_AMO)
             amo_alu amo_unit (.*, .result(amo_result));
     endgenerate
 
     always_comb begin
-        if (stage2_is_amo & is_target_word)
+        if (stage2_amo.is_amo & is_target_word)
             new_line_data = amo_result;
-        else if (stage2_sc)
+        else if (stage2_amo.is_sc)
             new_line_data = stage2_data_in;//Only forwarding on STORE opcode
         else
             new_line_data = l1_response.data;
@@ -284,7 +270,7 @@ module dcache(
 
 
     assign sc_write_index = stage2_addr[DCACHE_SUB_LINE_ADDR_W+1:2];
-    assign update_word_index = stage2_sc ? sc_write_index : word_count;
+    assign update_word_index = stage2_amo.is_sc ? sc_write_index : word_count;
     ////////////////////////////////////////////////////////
     assign stage2_data = stage2_use_forwarded_data ? ls_inputs.data_in : stage2_data_in;
 
@@ -320,7 +306,7 @@ module dcache(
      * Pipeline Advancement
      *************************************/
     assign line_complete = (l1_response.data_valid && (word_count == (DCACHE_LINE_W-1))); //covers load, LR, AMO
-    assign store_complete = l1_request.ack & stage2_store & ~stage2_sc;
+    assign store_complete = l1_request.ack & stage2_store & ~stage2_amo.is_sc;
 
     always_ff @ (posedge clk) begin
         if (rst)

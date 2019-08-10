@@ -337,20 +337,26 @@ package taiga_types;
         logic [4:0] op;
     }amo_alu_inputs_t;
 
+    typedef struct packed{
+        logic is_lr;
+        logic is_sc;
+        logic is_amo;
+        logic [4:0] op;
+    } amo_details_t;
 
     typedef struct packed{
         logic [XLEN-1:0] virtual_address;
         logic [11:0] offset;
         logic [XLEN-1:0] rs2;
         logic [2:0] fn3;
-        logic [4:0] amo;
-        logic is_amo;
         logic load;
         logic store;
         logic load_store_forward;
         instruction_id_t instruction_id;
         //exception support
         logic [31:0] pc;
+        //amo support
+        amo_details_t amo;
     } load_store_inputs_t;
 
     typedef struct packed{
