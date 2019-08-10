@@ -429,7 +429,7 @@ module decode(
             assign div_inputs.rs1 = rf_decode.rs1_data;
             assign div_inputs.rs2 = rf_decode.rs2_data;
             assign div_inputs.op = fn3[1:0];
-            assign div_inputs.reuse_result = prev_div_result_valid & current_op_resuses_rs1_rs2;
+            assign div_inputs.reuse_result = prev_div_result_valid_r & current_op_resuses_rs1_rs2;
             assign div_inputs.instruction_id = ti.issue_id;
         end
     endgenerate
