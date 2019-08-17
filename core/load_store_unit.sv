@@ -187,7 +187,7 @@ module load_store_unit (
     //When switching units, ensure no outstanding loads so that there can be no timing collisions with results
     assign unit_stall = (current_unit != last_unit) && ~load_attributes.empty;
 
-    assign issue_request = input_fifo.valid && units_ready && (inflight_count < 2) && ~unit_stall && ~unaligned_addr;
+    assign issue_request = input_fifo.valid && units_ready && (ls_wb.accepted || inflight_count < 2) && ~unit_stall && ~unaligned_addr;
     assign load_complete = data_valid;
 
     always_ff @ (posedge clk) begin
