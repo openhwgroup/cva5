@@ -82,9 +82,9 @@ module decode(
 
     logic nop;
 
-    logic  register_in_use_by_unit [31:0];
+    logic  register_in_use_by_load_op [31:0];
 
-    logic [WB_UNITS_WIDTH-1:0] store_data_in_use_by_unit;
+    logic store_data_in_use_by_load_op;
     logic load_store_forward_possible;
 
     logic issue_valid;
@@ -327,11 +327,11 @@ module decode(
 
     always_ff @ (posedge clk) begin
        if (instruction_issued_with_rd)
-           register_in_use_by_unit[future_rd_addr] <= new_request[LS_UNIT_WB_ID];
+           register_in_use_by_load_op[future_rd_addr] <= new_request[LS_UNIT_WB_ID];
     end
 
-    assign store_data_in_use_by_unit = register_in_use_by_unit[rs2_addr];
-    assign load_store_forward_possible = (opcode_trim == STORE_T) && store_data_in_use_by_unit && (last_load_rd == rs2_addr);
+    assign store_data_in_use_by_load_op = register_in_use_by_load_op[rs2_addr];
+    assign load_store_forward_possible = (opcode_trim == STORE_T) && store_data_in_use_by_load_op && (last_load_rd == rs2_addr);
 
     ////////////////////////////////////////////////////
     //Branch unit inputs
