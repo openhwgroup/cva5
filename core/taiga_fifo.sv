@@ -47,12 +47,22 @@ module taiga_fifo #(parameter DATA_WIDTH = 32, parameter FIFO_DEPTH = 4, paramet
 
     //implementation
     ////////////////////////////////////////////////////
-
-
-
+    generate if (FIFO_DEPTH == 1) begin
+        one_hot_occupancy #(.DEPTH(FIFO_DEPTH)) occupancy_tracking
+        (
+            .push(fifo.push), .pop(fifo.pop),
+            .early_full(fifo.early_full), .full(fifo.full),
+            .empty(fifo.empty), .early_empty(fifo.early_empty), .valid(fifo.valid), .early_valid(fifo.early_valid), .two_plus(two_plus), .*
+        );
+        always_ff @ (posedge clk) begin
+            if (fifo.push)
+                fifo.data_out <= fifo.data_in;
+        end
+    end
+    else begin
     ////////////////////////////////////////////////////
     //LUT-RAM version
-    generate if (FIFO_TYPE == LUTRAM_FIFO) begin
+    if (FIFO_TYPE == LUTRAM_FIFO) begin
             ////////////////////////////////////////////////////
             //Occupancy Tracking
             one_hot_occupancy #(.DEPTH(FIFO_DEPTH)) occupancy_tracking
@@ -68,8 +78,8 @@ module taiga_fifo #(parameter DATA_WIDTH = 32, parameter FIFO_DEPTH = 4, paramet
                     write_index <= '0;
                 end
                 else begin
-                    read_index <= read_index + {{(LOG2_FIFO_DEPTH-1){1'b0}}, fifo.pop};
-                    write_index <= write_index + {{(LOG2_FIFO_DEPTH-1){1'b0}}, fifo.push};
+                    read_index <= read_index + fifo.pop;
+                    write_index <= write_index + fifo.push;
                 end
             end
             assign fifo.data_out = lut_ram[read_index];
@@ -80,12 +90,11 @@ module taiga_fifo #(parameter DATA_WIDTH = 32, parameter FIFO_DEPTH = 4, paramet
             end
 
         end
-    endgenerate
     ////////////////////////////////////////////////////
     //SRL version
     //Uses a read index 2x the size of the FIFO to allow for simpler status determination
     //FIFO valid starts at FIFO_DEPTH to allow fifo.valid to come from the index reg
-    generate if (FIFO_TYPE == NON_MUXED_INPUT_FIFO) begin
+    if (FIFO_TYPE == NON_MUXED_INPUT_FIFO) begin
 
             ////////////////////////////////////////////////////
             localparam SRL_DEPTH = FIFO_DEPTH+1;
@@ -104,7 +113,7 @@ module taiga_fifo #(parameter DATA_WIDTH = 32, parameter FIFO_DEPTH = 4, paramet
                     srl_index[SRL_DEPTH_W-1] <= 0;
                     srl_index[SRL_DEPTH_W-2:0] <= '1;
                 end else
-                    srl_index <= srl_index + {{(LOG2_FIFO_DEPTH-1){1'b0}}, fifo.push} - {{(LOG2_FIFO_DEPTH-1){1'b0}}, fifo.pop};
+                    srl_index <= srl_index + fifo.push - fifo.pop;
             end
 
             //Helper expressions
@@ -140,10 +149,9 @@ module taiga_fifo #(parameter DATA_WIDTH = 32, parameter FIFO_DEPTH = 4, paramet
 
 
         end
-    endgenerate
     ////////////////////////////////////////////////////
     //Non-muxed output version
-    generate if (FIFO_TYPE == NON_MUXED_OUTPUT_FIFO) begin
+    if (FIFO_TYPE == NON_MUXED_OUTPUT_FIFO) begin
             ////////////////////////////////////////////////////
 
             always_ff @ (posedge clk) begin
@@ -176,10 +184,10 @@ module taiga_fifo #(parameter DATA_WIDTH = 32, parameter FIFO_DEPTH = 4, paramet
                         shift_reg[i] <= shift_reg_new[i];
                 end
             end
-
         end
-    endgenerate
 
+    end
+    endgenerate
 endmodule
 
 
