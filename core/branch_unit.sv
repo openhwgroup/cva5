@@ -82,6 +82,8 @@ module branch_unit(
     logic is_call;
     logic is_return;
 
+    logic [31:0] rd_bank [MAX_INFLIGHT_COUNT-1:0];
+    instruction_id_t id;
     //implementation
     ////////////////////////////////////////////////////
 
@@ -166,35 +168,23 @@ module branch_unit(
 
             assign ras.push = is_call;
             assign ras.pop = is_return;
-            assign ras.new_addr = rd_ex;
+            assign ras.new_addr = njump_pc;
         end
     endgenerate
 
-    //WB Output
     ////////////////////////////////////////////////////
-    //if the destination reg is zero, the result is not "written back" to the register file.
+    //Output bank
     assign new_jal_jalr_dec_with_rd = branch_ex.new_request_dec & branch_inputs.uses_rd;
 
-    always_ff @(posedge clk) begin
-        if (branch_ex.possible_issue & branch_inputs.uses_rd) begin
-            rd_ex <= pc_plus_4;
-        end
-    end
+     always_ff @ (posedge clk) begin
+         if (new_jal_jalr_dec_with_rd)
+             rd_bank[branch_ex.instruction_id] <= pc_plus_4;
+     end
 
-    assign branch_ex.ready = ~done | (done & branch_wb.accepted);
-    assign branch_wb.rd = rd_ex;
+    assign branch_ex.ready = 1;
+    assign branch_wb.rd = rd_bank[branch_wb.writeback_instruction_id];
 
-    always_ff @(posedge clk) begin
-        if (rst) begin
-            done <= 0;
-        end else if (branch_ex.new_request_dec & branch_inputs.uses_rd) begin
-            done <= 1;
-        end else if (branch_wb.accepted) begin
-            done <= 0;
-        end
-    end
-
-    assign branch_wb.done_next_cycle = branch_ex.new_request_dec & branch_inputs.uses_rd;
+    assign branch_wb.done_next_cycle = new_jal_jalr_dec_with_rd;
     assign branch_wb.instruction_id = branch_ex.instruction_id;
 
     ////////////////////////////////////////////////////
@@ -203,9 +193,6 @@ module branch_unit(
 
     ////////////////////////////////////////////////////
     //Assertions
-    always_ff @ (posedge clk) begin
-        assert (~branch_wb.accepted | (branch_wb.accepted & done)) else $error("Spurious ack for Branch Unit");
-    end
 
     ////////////////////////////////////////////////////
     //Trace Interface
