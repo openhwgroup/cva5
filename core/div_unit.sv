@@ -1,5 +1,5 @@
 /*
- * Copyright © 2017, 2018 Eric Matthews,  Lesley Shannon
+ * Copyright © 2017-2019 Eric Matthews,  Lesley Shannon
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,8 +48,6 @@ module div_unit
     logic start;
     logic in_progress;
     logic abort;
-    logic output_ready;
-    logic ack;
 
     logic [31:0] complementerA;
     logic [31:0] complementerB;
@@ -60,16 +58,17 @@ module div_unit
 
     logic [31:0] div_result_sign_corrected;
     logic [31:0] wb_div_result;
+    logic [31:0] rd_bank [MAX_INFLIGHT_COUNT-1:0];
 
     div_inputs_t stage1;
 
     fifo_interface #(.DATA_WIDTH($bits(div_inputs_t))) input_fifo();
     fifo_interface #(.DATA_WIDTH(XLEN)) wb_fifo();
+    ////////////////////////////////////////////////////
+    //Implementation
 
-
-    /*********************************
-     *  Input FIFO
-     *********************************/
+    ////////////////////////////////////////////////////
+    //Input FIFO
     taiga_fifo #(.DATA_WIDTH($bits(div_inputs_t)), .FIFO_DEPTH(DIV_INPUT_BUFFER_DEPTH), .FIFO_TYPE(NON_MUXED_INPUT_FIFO)
         ) div_input_fifo (.fifo(input_fifo), .*);
 
@@ -78,16 +77,15 @@ module div_unit
     assign div_ex.ready = ~input_fifo.full;
     assign input_fifo.pop = div_done;
     assign stage1 = input_fifo.data_out;
-    /*********************************************/
 
-    assign output_ready = ~done | (done & div_wb.accepted);
-    assign ack = computation_complete & output_ready;
+    ////////////////////////////////////////////////////
+    //Control Signals
 
     //Abort prevents divider circuit from starting in the case that we are done in one cycle
     assign abort = stage1.reuse_result;
 
     assign start = input_fifo.valid & (~in_progress) & ~abort;
-    assign div_done = (computation_complete | (input_fifo.valid & abort)) & output_ready;
+    assign div_done = (computation_complete | (input_fifo.valid & abort));
 
     //If more than one cycle, set in_progress so that multiple start signals are not sent to the div unit.  Also in progress if an abort occurs but the output FIFO is full
     always_ff @(posedge clk) begin
@@ -95,10 +93,11 @@ module div_unit
             in_progress <= 0;
         else if (start)
             in_progress <= 1;
-        else if (ack)
+        else if (computation_complete)
             in_progress <= 0;
     end
 
+    ////////////////////////////////////////////////////
     //Input and output sign determination
     assign signed_divop =  ~stage1.op[0];
 
@@ -107,42 +106,34 @@ module div_unit
 
     assign quotient_signed = signed_divop & (stage1.rs1[31] ^ stage1.rs2[31]);
     assign remainder_signed = signed_divop & (stage1.rs1[31]);
-    //************
 
-    assign complementerA = (dividend_signed ? ~stage1.rs1 : stage1.rs1) + dividend_signed;
-    assign complementerB = (divisor_signed ? ~stage1.rs2 : stage1.rs2) + divisor_signed;
+    ////////////////////////////////////////////////////
+    //Input Processing
+    assign complementerA = ({32{dividend_signed}} ^ stage1.rs1) + dividend_signed;
+    assign complementerB = ({32{divisor_signed}} ^ stage1.rs2) + divisor_signed;
 
-    always_comb begin
-        negateResult = stage1.op[1] ? remainder_signed : (~divisor_zero & quotient_signed);
-        result_input = stage1.op[1] ? remainder : quotient;
-        wb_div_result = (negateResult ? ~result_input : result_input) + negateResult;
-    end
-    //*************
+    ////////////////////////////////////////////////////
+    //Output muxing
+    assign negateResult = stage1.op[1] ? remainder_signed : (~divisor_zero & quotient_signed);
+    assign result_input = stage1.op[1] ? remainder : quotient;
+    assign wb_div_result = ({32{negateResult}} ^ result_input) + negateResult;
 
-    div_algorithm #(XLEN) div (.*, .start(start), .A(complementerA), .B(complementerB), .Q(quotient), .R(remainder), .complete(computation_complete), .ack(ack), .B_is_zero(divisor_zero));
+    ////////////////////////////////////////////////////
+    //Div core
+    div_algorithm #(XLEN) div (.*, .start(start), .A(complementerA), .B(complementerB), .Q(quotient), .R(remainder), .complete(computation_complete), .ack(computation_complete), .B_is_zero(divisor_zero));
 
-    /*********************************
-     *  Output registering/handshaking
-     *********************************/
+    ////////////////////////////////////////////////////
+    //Output bank
     always_ff @(posedge clk) begin
         if (div_done)
-            div_wb.rd <= wb_div_result;
+            rd_bank[stage1.instruction_id] <= wb_div_result;
     end
 
-    always_ff @(posedge clk) begin
-        if (rst)
-            done <= 0;
-        else if (div_done)
-            done <= 1;
-        else if (div_wb.accepted)
-            done <= 0;
-    end
-
+    assign div_wb.rd = rd_bank[div_wb.writeback_instruction_id];
     assign div_wb.done_next_cycle = div_done;
     assign div_wb.instruction_id = stage1.instruction_id;
+
     ////////////////////////////////////////////////////
     //Assertions
-    always_ff @ (posedge clk) begin
-        assert (~div_wb.accepted | (div_wb.accepted & done)) else $error("Spurious ack for Div Unit");
-    end
+
 endmodule

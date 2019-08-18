@@ -31,45 +31,18 @@ module mul_unit(
         unit_writeback_interface.unit mul_wb
         );
 
-    logic signed [65:0] result [1:0];
-    logic [2:0] mulh;
-    logic stage1_advance;
-    logic stage2_advance;
-    logic stage3_advance;
-
-    logic [2:0] advance;
-    logic [2:0] valid;
+    logic signed [65:0] result;
+    logic [1:0] mulh;
+    logic [1:0] valid;
+    instruction_id_t id [1:0];
 
     logic rs1_signed, rs2_signed;
     logic signed [32:0] rs1_ext, rs2_ext;
     logic signed [32:0] rs1_r, rs2_r;
 
-    //implementation
+    logic [31:0] rd_bank [MAX_INFLIGHT_COUNT-1:0];
     ////////////////////////////////////////////////////
-    assign stage1_advance = stage2_advance | (~valid[0]);
-    assign stage2_advance = stage3_advance | (~valid[1]);
-    assign stage3_advance = mul_wb.accepted | (~valid[2]);
-
-    always_ff @ (posedge clk) begin
-        if (rst)
-            valid[0] <= 0;
-        else if (stage1_advance)
-            valid[0] <= mul_ex.new_request_dec;
-    end
-
-    always_ff @ (posedge clk) begin
-        if (rst)
-            valid[1] <= 0;
-        else if (stage2_advance)
-            valid[1] <= valid[0];
-    end
-
-    always_ff @ (posedge clk) begin
-        if (rst)
-            valid[2] <= 0;
-        else if (stage3_advance)
-            valid[2] <= valid[1];
-    end
+    //Implementation
 
     assign rs1_signed = mul_inputs.op[1:0] inside {MULH_fn3[1:0], MULHSU_fn3[1:0]};//MUL doesn't matter
     assign rs2_signed = mul_inputs.op[1:0] inside {MUL_fn3[1:0], MULH_fn3[1:0]};//MUL doesn't matter
@@ -79,38 +52,42 @@ module mul_unit(
 
     //Input and output registered Multiply
     always_ff @ (posedge clk) begin
-        if (mul_ex.new_request_dec) begin
-            rs1_r <= rs1_ext;
-            rs2_r <= rs2_ext;
-            mulh[0] <= (mul_inputs.op[1:0] != MUL_fn3[1:0]);
-        end
-        if (stage2_advance) begin
-            result[0] <= rs1_r * rs2_r;
-            mulh[1] <= mulh[0];
-        end
-        if (stage3_advance) begin
-            result[1] <= result[0];
-            mulh[2] <= mulh[1];
-        end
+        rs1_r <= rs1_ext;
+        rs2_r <= rs2_ext;
+        result <= rs1_r * rs2_r;
     end
+
+    always_ff @ (posedge clk) begin
+        valid[0] <= mul_ex.new_request_dec;
+        valid[1] <= valid[0];
+
+        mulh[0] <= (mul_inputs.op[1:0] != MUL_fn3[1:0]);
+        mulh[1] <= mulh[0];
+
+        id[0] <= mul_ex.instruction_id;
+        id[1] <= id[0];
+    end
+
+    ////////////////////////////////////////////////////
+    //Output bank
+     always_ff @ (posedge clk) begin
+         if (valid[1])
+             rd_bank[id[1]] <= mulh[1] ? result[63:32] : result[31:0];
+     end
 
     //Issue/write-back handshaking
     ////////////////////////////////////////////////////
-    assign mul_ex.ready = mul_wb.accepted | ~(&valid);//If any stage is not valid we can accept a new request
+    assign mul_ex.ready = 1;
 
-    assign mul_wb.rd = mulh[2] ? result[1][63:32] : result[1][31:0];
+    assign mul_wb.rd = rd_bank[mul_wb.writeback_instruction_id];
+    assign mul_wb.done_next_cycle = valid[1];
+    assign mul_wb.instruction_id = id[1];
 
+    ////////////////////////////////////////////////////
+    //End of Implementation
+    ////////////////////////////////////////////////////
 
-    //Write_back
-    instruction_id_t instruction_id_r;
-    always_ff @(posedge clk) begin
-        mul_wb.done_next_cycle <= mul_ex.new_request;
-        instruction_id_r <= mul_ex.instruction_id;
-        mul_wb.instruction_id <= instruction_id_r;
-    end
     ////////////////////////////////////////////////////
     //Assertions
-    always_ff @ (posedge clk) begin
-        assert (~mul_wb.accepted | (mul_wb.accepted & valid[2])) else $error("Spurious ack for Mul Unit");
-    end
+
 endmodule
