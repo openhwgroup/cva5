@@ -326,8 +326,8 @@ module decode(
     end
 
     always_ff @ (posedge clk) begin
-       if (instruction_issued_with_rd)
-           register_in_use_by_load_op[future_rd_addr] <= new_request[LS_UNIT_WB_ID];
+       if (instruction_issued)
+           register_in_use_by_load_op[future_rd_addr] <= new_request[LS_UNIT_WB_ID] & ls_is_load;
     end
 
     assign store_data_in_use_by_load_op = register_in_use_by_load_op[rs2_addr];

@@ -74,12 +74,15 @@ interface ras_interface;
 endinterface
 
 interface unit_writeback_interface;
+    //unit output
     logic done_next_cycle;
     instruction_id_t instruction_id;
-    logic accepted;
     logic [XLEN-1:0] rd;
-    modport writeback (input done_next_cycle, instruction_id, rd, output accepted);
-    modport unit (output done_next_cycle, instruction_id, rd, input accepted);
+    //writeback output
+    logic accepted;
+    instruction_id_t writeback_instruction_id;
+    modport writeback (input done_next_cycle, instruction_id, rd, output accepted, writeback_instruction_id);
+    modport unit (output done_next_cycle, instruction_id, rd, input accepted, writeback_instruction_id);
 endinterface
 
 //********************************
@@ -237,10 +240,14 @@ interface tlb_interface;
 endinterface
 
 
-interface ls_sub_unit_interface;
+interface ls_sub_unit_interface #(parameter BASE_ADDR = 32'h00000000, parameter UPPER_BOUND = 32'hFFFFFFFF, parameter BIT_CHECK = 4);
     logic data_valid;
     logic ready;
     logic new_request;
+
+    function  address_range_check (input logic[31:0] addr);
+        return (addr[31:32-BIT_CHECK] == BASE_ADDR[31:32-BIT_CHECK]);
+    endfunction
 
     modport sub_unit (input new_request, output data_valid, ready);
     modport ls (output new_request, input data_valid, ready);

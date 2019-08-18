@@ -82,6 +82,7 @@ module write_back(
             assign unit_instruction_id[i] = unit_wb[i].instruction_id;
             assign unit_rd[i] = unit_wb[i].rd;
             assign unit_wb[i].accepted = accepted[i];
+            assign unit_wb[i].writeback_instruction_id = retired_id_r;
         end
     endgenerate
 
