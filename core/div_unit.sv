@@ -115,7 +115,7 @@ module div_unit
 
     ////////////////////////////////////////////////////
     //Div core
-    div_algorithm #(XLEN) div (.*, .start_algorithm(start_algorithm), .A(complementerA), .B(complementerB), .Q(quotient), .R(remainder), .complete(computation_complete), .ack(computation_complete), .B_is_zero(divisor_zero));
+    div_algorithm #(XLEN) div (.*, .start(start_algorithm), .A(complementerA), .B(complementerB), .Q(quotient), .R(remainder), .complete(computation_complete), .ack(computation_complete), .B_is_zero(divisor_zero));
 
     ////////////////////////////////////////////////////
     //Output bank
