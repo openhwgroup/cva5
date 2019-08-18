@@ -45,9 +45,8 @@ module div_unit
     logic dividend_signed;
     logic divisor_signed;
 
-    logic start;
+    logic start_algorithm;
     logic in_progress;
-    logic abort;
 
     logic [31:0] complementerA;
     logic [31:0] complementerB;
@@ -80,18 +79,14 @@ module div_unit
 
     ////////////////////////////////////////////////////
     //Control Signals
+    assign start_algorithm = input_fifo.valid & (~in_progress) & ~stage1.reuse_result;
+    assign div_done = computation_complete | (input_fifo.valid & stage1.reuse_result);
 
-    //Abort prevents divider circuit from starting in the case that we are done in one cycle
-    assign abort = stage1.reuse_result;
-
-    assign start = input_fifo.valid & (~in_progress) & ~abort;
-    assign div_done = (computation_complete | (input_fifo.valid & abort));
-
-    //If more than one cycle, set in_progress so that multiple start signals are not sent to the div unit.  Also in progress if an abort occurs but the output FIFO is full
+    //If more than one cycle, set in_progress so that multiple start_algorithm signals are not sent to the div unit.
     always_ff @(posedge clk) begin
         if (rst)
             in_progress <= 0;
-        else if (start)
+        else if (start_algorithm)
             in_progress <= 1;
         else if (computation_complete)
             in_progress <= 0;
@@ -99,7 +94,7 @@ module div_unit
 
     ////////////////////////////////////////////////////
     //Input and output sign determination
-    assign signed_divop =  ~stage1.op[0];
+    assign signed_divop = ~stage1.op[0];
 
     assign dividend_signed = signed_divop & stage1.rs1[31];
     assign divisor_signed = signed_divop & stage1.rs2[31];
@@ -120,7 +115,7 @@ module div_unit
 
     ////////////////////////////////////////////////////
     //Div core
-    div_algorithm #(XLEN) div (.*, .start(start), .A(complementerA), .B(complementerB), .Q(quotient), .R(remainder), .complete(computation_complete), .ack(computation_complete), .B_is_zero(divisor_zero));
+    div_algorithm #(XLEN) div (.*, .start_algorithm(start_algorithm), .A(complementerA), .B(complementerB), .Q(quotient), .R(remainder), .complete(computation_complete), .ack(computation_complete), .B_is_zero(divisor_zero));
 
     ////////////////////////////////////////////////////
     //Output bank
