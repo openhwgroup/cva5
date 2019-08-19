@@ -158,7 +158,9 @@ module load_store_unit (
 
     //When switching units, ensure no outstanding loads so that there can be no timing collisions with results
     assign unit_stall = (current_unit != last_unit) && ~load_attributes.empty;
-    assign issue_request = input_fifo.valid & units_ready & ~unit_stall & ~unaligned_addr;
+    logic store_bypass_stall;
+    assign store_bypass_stall = stage1.store & stage1.load_store_forward & ~load_attributes.empty;
+    assign issue_request = input_fifo.valid & units_ready & ~unit_stall & ~unaligned_addr & ~store_bypass_stall;
 
     ////////////////////////////////////////////////////
     //TLB interface
@@ -220,7 +222,7 @@ module load_store_unit (
 
     logic forward_data;
     assign forward_data = stage1.load_store_forward | dcache_forward_data;
-    assign stage1_raw_data =  forward_data ? (load_attributes.valid ? final_load_data : previous_load) : stage1.rs2;
+    assign stage1_raw_data =  forward_data ?  previous_load : stage1.rs2;
 
     //Input: ABCD
     //Assuming aligned requests,

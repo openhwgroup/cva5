@@ -98,7 +98,6 @@ module decode(
     logic [NUM_WB_UNITS-1:0] issue_ready;
     logic [NUM_WB_UNITS-1:0] issue;
 
-    logic store_issued;
     logic instruction_issued;
 
     instruction_id_t last_id;
@@ -141,7 +140,8 @@ module decode(
     assign ti.inflight_packet.unit_id = new_request;
     assign ti.inflight_packet.rd_addr = future_rd_addr;
     assign ti.inflight_packet.rd_addr_nzero = ~rd_zero;
-    assign ti.issued = instruction_issued_with_rd | store_issued;
+    assign ti.issued = instruction_issued & (uses_rd | new_request[LS_UNIT_WB_ID]);
+
 
     ////////////////////////////////////////////////////
     //Unit Determination
@@ -196,7 +196,6 @@ module decode(
     assign instruction_issued =  (|issue_ready) & issue_valid & load_store_operands_ready;
     assign instruction_issued_no_rd = instruction_issued & ~uses_rd;
     assign instruction_issued_with_rd = instruction_issued & uses_rd;
-    assign store_issued = instruction_issued && (opcode_trim == STORE_T);
 
     //Decode outputs
     assign load_store_issue = issue[LS_UNIT_WB_ID];
@@ -315,19 +314,22 @@ module decode(
     assign ls_inputs.fn3 = amo_op ? LS_W_fn3 : fn3;
     assign ls_inputs.load = ls_is_load;
     assign ls_inputs.store = (opcode_trim == STORE_T) || (amo_op && store_conditional);
-    assign ls_inputs.load_store_forward = (opcode_trim == STORE_T) && rf_decode.rs2_conflict;
+    assign ls_inputs.load_store_forward = rf_decode.rs2_conflict;
     assign ls_inputs.instruction_id = ti.issue_id;
 
     //Last store RD tracking for Load-Store data forwarding
     logic [4:0] last_load_rd;
+    logic basic_load;
+
+    assign basic_load = (opcode_trim == LOAD_T);
     always_ff @ (posedge clk) begin
-        if (issue[LS_UNIT_WB_ID] & ls_is_load)
+        if (issue[LS_UNIT_WB_ID] & basic_load)
             last_load_rd <= future_rd_addr;
     end
 
     always_ff @ (posedge clk) begin
        if (instruction_issued)
-           register_in_use_by_load_op[future_rd_addr] <= new_request[LS_UNIT_WB_ID] & ls_is_load;
+           register_in_use_by_load_op[future_rd_addr] <= new_request[LS_UNIT_WB_ID] & basic_load;
     end
 
     assign store_data_in_use_by_load_op = register_in_use_by_load_op[rs2_addr];

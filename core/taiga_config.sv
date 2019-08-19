@@ -94,7 +94,7 @@ package taiga_config;
     ////////////////////////////////////////////////////
     //Address space
     parameter SCRATCH_ADDR_L = 32'h80000000;
-    parameter SCRATCH_ADDR_H = 32'h8000FFFF;
+    parameter SCRATCH_ADDR_H = 32'h800FFFFF;
     parameter SCRATCH_BIT_CHECK = 4;
 
     parameter MEMORY_ADDR_L = 32'h40000000;
@@ -154,7 +154,7 @@ package taiga_config;
     ////////////////////////////////////////////////////
     //Branch Predictor Options
     parameter USE_BRANCH_PREDICTOR = 1;
-    parameter BRANCH_PREDICTOR_WAYS = 1;
+    parameter BRANCH_PREDICTOR_WAYS = 2;
     parameter BRANCH_TABLE_ENTRIES = 512;
     parameter RAS_DEPTH = 8;
 
@@ -166,7 +166,7 @@ package taiga_config;
     parameter FETCH_BUFFER_DEPTH = 4;
 
     parameter LS_INPUT_BUFFER_DEPTH = 4;
-    parameter DIV_INPUT_BUFFER_DEPTH = 4;
+    parameter DIV_INPUT_BUFFER_DEPTH = 2;
 
     ////////////////////////////////////////////////////
     //Trace Options
@@ -187,12 +187,13 @@ package taiga_config;
     parameter NUM_WB_UNITS = 4 + USE_MUL + USE_DIV;
     parameter WB_UNITS_WIDTH = $clog2(NUM_WB_UNITS);
 
-    parameter LS_UNIT_WB_ID = 0;
-    parameter DIV_UNIT_WB_ID = USE_DIV;
+
+    parameter ALU_UNIT_WB_ID = 0;//uses accepted
+    parameter GC_UNIT_WB_ID = 1;//uses accepted
+    parameter BRANCH_UNIT_WB_ID = 2;
+    parameter LS_UNIT_WB_ID = 3;
+    parameter DIV_UNIT_WB_ID = LS_UNIT_WB_ID + USE_DIV;
     parameter MUL_UNIT_WB_ID = DIV_UNIT_WB_ID + USE_MUL;
-    parameter GC_UNIT_WB_ID = MUL_UNIT_WB_ID + 1;
-    parameter ALU_UNIT_WB_ID = GC_UNIT_WB_ID + 1;//single cycle path
-    parameter BRANCH_UNIT_WB_ID = ALU_UNIT_WB_ID + 1;//single cycle path
     ////////////////////////////////////////////////////
 
 endpackage
