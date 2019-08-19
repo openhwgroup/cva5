@@ -52,32 +52,33 @@ module xilinx_byte_enable_ram #(
             $readmemh(preload_file,ram, 0, LINES-1);
     end
 
-    always_ff @(posedge clk) begin
-        if (en_a) begin
-            for (int i=0; i < 4; i++) begin
-                if (be_a[i])
+    generate
+    genvar i;
+    for (i=0; i < 4; i++) begin
+        always_ff @(posedge clk) begin
+            if (en_a) begin
+                if (be_a[i]) begin
                     ram[addr_a][8*i+:8] <= data_in_a[8*i+:8];
+                    data_out_a[8*i+:8] <= data_in_a[8*i+:8];
+                end else begin
+                    data_out_a[8*i+:8] <= ram[addr_a][8*i+:8];
+                end
             end
         end
     end
-
-    always_ff @(posedge clk) begin
-        if (en_a)
-            data_out_a <= ram[addr_a];
-    end
-
-    always_ff @(posedge clk) begin
-        if (en_b) begin
-            for (int i=0; i < 4; i++) begin
-                if (be_b[i])
+    
+    for (i=0; i < 4; i++) begin
+        always_ff @(posedge clk) begin
+            if (en_b) begin
+                if (be_b[i]) begin
                     ram[addr_b][8*i+:8] <= data_in_b[8*i+:8];
+                    data_out_b[8*i+:8] <= data_in_b[8*i+:8];
+                end else begin
+                    data_out_b[8*i+:8] <= ram[addr_b][8*i+:8];
+                end
             end
         end
     end
-
-    always_ff @(posedge clk) begin
-        if (en_b)
-            data_out_b <= ram[addr_b];
-    end
+    endgenerate
 
 endmodule

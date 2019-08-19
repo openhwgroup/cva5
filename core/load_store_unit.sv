@@ -221,19 +221,17 @@ module load_store_unit (
     assign shared_inputs.fn3 = stage1.fn3;
 
     logic forward_data;
-    assign forward_data = stage1.load_store_forward | dcache_forward_data;
+    assign forward_data = stage1.load_store_forward;
     assign stage1_raw_data =  forward_data ?  previous_load : stage1.rs2;
 
     //Input: ABCD
     //Assuming aligned requests,
     //Possible byte selections: (A/C/D, B/D, C/D, D)
-    logic [1:0] data_in_mux;
     always_comb begin
-        data_in_mux = dcache_forward_data ? dcache_stage2_fn3[1:0] : virtual_address[1:0];
         shared_inputs.data_in[7:0] = stage1_raw_data[7:0];
-        shared_inputs.data_in[15:8] = (data_in_mux == 2'b01) ? stage1_raw_data[7:0] : stage1_raw_data[15:8];
-        shared_inputs.data_in[23:16] = (data_in_mux == 2'b10) ? stage1_raw_data[7:0] : stage1_raw_data[23:16];
-        case(data_in_mux)
+        shared_inputs.data_in[15:8] = (virtual_address[1:0] == 2'b01) ? stage1_raw_data[7:0] : stage1_raw_data[15:8];
+        shared_inputs.data_in[23:16] = (virtual_address[1:0] == 2'b10) ? stage1_raw_data[7:0] : stage1_raw_data[23:16];
+        case(virtual_address[1:0])
             2'b10 : shared_inputs.data_in[31:24] = stage1_raw_data[15:8];
             2'b11 : shared_inputs.data_in[31:24] = stage1_raw_data[7:0];
             default : shared_inputs.data_in[31:24] = stage1_raw_data[31:24];
