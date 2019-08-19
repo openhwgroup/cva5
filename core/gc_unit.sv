@@ -151,7 +151,6 @@ module gc_unit(
 
     //Write-back handshaking
     logic processing;
-    logic wb_done;
 
     logic [2:0] fn3;
     logic [6:0] opcode;
@@ -283,7 +282,7 @@ module gc_unit(
             processing <= 0;
         else if (gc_ex.new_request_dec)
             processing <= 1;
-        else if (state == IDLE_STATE && instruction_queue_empty && (~wb_done | (wb_done & gc_wb.accepted )))
+        else if ((state == IDLE_STATE) && instruction_queue_empty)
             processing <= 0;
     end
 
@@ -306,21 +305,9 @@ module gc_unit(
         end
     end
 
-    always_ff @(posedge clk) begin
-        if (rst) begin
-            wb_done <= 0;
-        end else if (gc_ex.new_request & gc_inputs.is_csr) begin
-            wb_done <= 1;
-        end else if (gc_wb.accepted) begin
-            wb_done <= 0;
-        end
-    end
-
     ////////////////////////////////////////////////////
     //Assertions
-    always_ff @ (posedge clk) begin
-        assert (~gc_wb.accepted | (gc_wb.accepted & wb_done)) else $error("Spurious ack for CSR Unit");
-    end
+
     ////////////////////////////////////////////////////
 
 endmodule
