@@ -73,7 +73,7 @@ module div_unit
 
     assign input_fifo.data_in = div_inputs;
     assign input_fifo.push = div_ex.new_request_dec;
-    assign div_ex.ready = ~input_fifo.full;
+    assign div_ex.ready = (DIV_INPUT_BUFFER_DEPTH >= MAX_INFLIGHT_COUNT) ? 1 : ~input_fifo.full;
     assign input_fifo.pop = div_done;
     assign stage1 = input_fifo.data_out;
 
