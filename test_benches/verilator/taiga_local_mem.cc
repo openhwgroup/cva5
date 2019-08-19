@@ -50,7 +50,7 @@ int main(int argc, char **argv) {
 		VerilatedVcdC	*tracer;
 		tracer = new VerilatedVcdC;
 		tb->trace(tracer, 99);
-		tracer->open("sim_results.vcd");
+		tracer->open("/data/sim-logs/sim_results.vcd");
 	#endif
 
 	cout << "--------------------------------------------------------------\n";

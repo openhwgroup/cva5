@@ -1,5 +1,5 @@
 #
-#  Copyright © 2017 Eric Matthews,  Lesley Shannon
+#  Copyright © 2017-2019 Eric Matthews,  Lesley Shannon
 # 
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -52,15 +52,16 @@ parser.add_argument('--quiet', '-q', help='Suppresses diagnostic output ', actio
 args = parser.parse_args()
 
 # open input file
-subprocess.run([args.toolPrefix + 'objdump', '-Dzs', args.inputFile], stdout=open(args.inputFile + '.dumpDzs', "w"))
-subprocess.run([args.toolPrefix + 'objdump', '-d', args.inputFile], stdout=open(args.inputFile + '.dumpd', "w"))
+print(args.inputFile)
+subprocess.run([args.toolPrefix + 'objcopy', '--gap-fill=0x00', '-O',  'binary', args.inputFile, args.inputFile + '.rawbinary'])
+subprocess.run([args.toolPrefix + 'objdump', '-fd', '--prefix-addresses', args.inputFile], stdout=open(args.inputFile + '.dissasembled', "w"))
 
 
 try:
-    program_input = open(args.inputFile + '.dumpDzs', 'r')
-    opcode_input = open(args.inputFile + '.dumpd', 'r')
+    program_input = open(args.inputFile + '.rawbinary', 'rb')
+    opcode_input = open(args.inputFile + '.dissasembled', 'r')
 except IOError:
-    print('Could not open files: ', args.inputFile + '.dumpDzs ', args.inputFile + '.dumpd')
+    print('Could not open files: ', args.inputFile + '.raw ', args.inputFile + '.dissasembled')
     sys.exit()
 
     program_output = args.inputFile + '.bin'
@@ -82,37 +83,44 @@ except IOError:
     
 print('array size ', int(int(args.ramSize)/4))
 
+#Initialize with zero
 ramData = ['00000000'] * int((int(args.ramSize)/4));
 
-lineRegex = re.compile(r'\s+')
-instLineRegex = re.compile(r'\s+|:\s+')
-dataLineRegex = re.compile(r' [a-f0-9]{8}\s+')
-
+instLineRegex = re.compile(r'\s+')
+isInstLine = re.compile(r'[a-f0-9]{8}\s+<\S+') #pattern hexaddress <function name and offset> instruction
+#parses the block output format
+addressRegex = re.compile(r'0x[a-f0-9]{8}')
 hexRegex = re.compile(r'[a-f0-9]{8}')
 
-#parses the block output format
-for line in program_input:
-    lineContents = lineRegex.split(line)
-
-    if (dataLineRegex.match(line) != None) :
-        index = int((int(lineContents[1],16) - int(args.baseAddr,16))/4)
-
-        for entry in lineContents[2:]: #skip address
-            if (hexRegex.match(entry)) :
-                ramData[index] = stringByteSwap(entry)
-                index+=1
-
+#Find start address and lowest address in dissasembly file
+index = 0
+lowestAddress = sys.maxsize
+for line in opcode_input:
+	if (isInstLine.match(line)) :
+		addressMatch = hexRegex.match(line)
+		if (int(addressMatch[0],16) < lowestAddress) :
+			lowestAddress = int(addressMatch[0],16)
+			index = int(lowestAddress/4) -  int(int(args.baseAddr,16)/4)
+	if (line.find('start address') != -1) :
+		addressMatch = addressRegex.search(line)
+		print('start address: ', addressMatch[0])
+		
+#Reads binary 4 bytes at a time and converts to Verilog readmemh format
+word = program_input.read(4)
+while word != b"":
+	ramData[index] = stringByteSwap(word.hex())
+	index+=1
+	word = program_input.read(4)
+		
 program_output.write('\n'.join(str(line) for line in ramData))
 
-#overwrite instruction entries with instruction info
-#<ins hex> <opcode> <instruction details>...
+#append instruction details to data
+opcode_input.seek(0)
 for line in opcode_input:
-    lineContents = instLineRegex.split(line)
-    if (hexRegex.match(lineContents[0])) :
+    if (isInstLine.match(line)) :
+        lineContents = list(filter(None, instLineRegex.split(line))) #split line and remove empty strings
         index = int((int(lineContents[0],16) - int(args.baseAddr,16))/4)
-    
-        for entry in lineContents[1:]: #skip address
-                ramData[index] = lineContents[1] + ' ' + ' '.join(lineContents[2:])
+        ramData[index] +=  ' ' + ' '.join(lineContents[1:])
 
 sim_output.write(' --\n'.join(str(line) for line in ramData))
 sim_output.write(' --')
