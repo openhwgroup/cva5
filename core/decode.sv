@@ -100,6 +100,8 @@ module decode(
 
     logic instruction_issued;
 
+    logic valid_opcode;
+
     instruction_id_t last_id;
 
     ////////////////////////////////////////////////////
@@ -160,10 +162,11 @@ module decode(
             assign new_request[DIV_UNIT_WB_ID] = (opcode_trim == ARITH_T) && mult_div_op && fn3[2];
     endgenerate
 
+    assign valid_opcode = opcode_trim inside {BRANCH_T, JAL_T, JALR_T, ARITH_T, ARITH_IMM_T, AUIPC_T, LUI_T, LOAD_T, STORE_T, AMO_T, SYSTEM_T, FENCE_T};
 
     ////////////////////////////////////////////////////
     //Unit ready
-    assign issue_ready[BRANCH_UNIT_WB_ID] = new_request[BRANCH_UNIT_WB_ID] & (branch_ex.ready | ~uses_rd);
+    assign issue_ready[BRANCH_UNIT_WB_ID] = new_request[BRANCH_UNIT_WB_ID] & branch_ex.ready;
     assign issue_ready[ALU_UNIT_WB_ID] = new_request[ALU_UNIT_WB_ID] & alu_ex.ready;
     assign issue_ready[LS_UNIT_WB_ID] = new_request[LS_UNIT_WB_ID] & ls_ex.ready;
     assign issue_ready[GC_UNIT_WB_ID] = new_request[GC_UNIT_WB_ID] & gc_ex.ready;
@@ -193,7 +196,12 @@ module decode(
             assign issue[DIV_UNIT_WB_ID] = issue_valid & operands_ready & issue_ready[DIV_UNIT_WB_ID];
     endgenerate
 
-    assign instruction_issued =  (|issue_ready) & issue_valid & load_store_operands_ready;
+    assign instruction_issued =
+        ((LS_INPUT_BUFFER_DEPTH >= MAX_INFLIGHT_COUNT) &&
+        (DIV_INPUT_BUFFER_DEPTH >= MAX_INFLIGHT_COUNT)) ?
+        (valid_opcode & issue_valid & load_store_operands_ready) :
+        ((|issue_ready) & issue_valid & load_store_operands_ready);
+
     assign instruction_issued_no_rd = instruction_issued & ~uses_rd;
     assign instruction_issued_with_rd = instruction_issued & uses_rd;
 

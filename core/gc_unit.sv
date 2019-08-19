@@ -286,12 +286,8 @@ module gc_unit(
             processing <= 0;
     end
 
-    always_ff @(posedge clk) begin
-        if (rst)
-            gc_ex.ready <= 1;
-        else
-           gc_ex.ready <= (state == IDLE_STATE) & ~processing;
-    end
+    //gc_issue_hold prevents further instructions from being issued until processing returns to zero
+    assign gc_ex.ready = 1;
 
     //Write_back
     always_ff @(posedge clk) begin
