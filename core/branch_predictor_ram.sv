@@ -25,8 +25,8 @@ import taiga_types::*;
 
 module branch_predictor_ram
         #(
-        parameter C_DATA_WIDTH = 6,
-        parameter C_DEPTH = 64
+        parameter C_DATA_WIDTH = 20,
+        parameter C_DEPTH = 512
         )
         (
         input logic clk,

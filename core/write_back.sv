@@ -28,7 +28,6 @@ module write_back(
         input logic rst,
 
         input logic inorder,
-        input logic gc_supress_writeback,
 
         input logic instruction_issued_with_rd,
         input logic store_committed,
@@ -50,9 +49,7 @@ module write_back(
     inflight_instruction_packet packet_table [MAX_INFLIGHT_COUNT-1:0];
 
     //aliases for write-back-interface signals
-    logic [NUM_WB_UNITS-1:0] unit_done_next_cycle;
-    instruction_id_t unit_instruction_id [NUM_WB_UNITS-1:0];
-    logic [MAX_INFLIGHT_COUNT-1:0] per_unit_one_hot_id_done [NUM_WB_UNITS-1:0];
+    logic [MAX_INFLIGHT_COUNT-1:0] unit_done_next_cycle [NUM_WB_UNITS-1:0];
     logic [XLEN-1:0] unit_rd [NUM_WB_UNITS-1:0];
     logic [NUM_WB_UNITS-1:0] accepted;
     /////
@@ -79,7 +76,6 @@ module write_back(
     generate
         for (i=0; i< NUM_WB_UNITS; i++) begin : interface_to_array_g
             assign unit_done_next_cycle[i] = unit_wb[i].done_next_cycle;
-            assign unit_instruction_id[i] = unit_wb[i].instruction_id;
             assign unit_rd[i] = unit_wb[i].rd;
             assign unit_wb[i].accepted = accepted[i];
             assign unit_wb[i].writeback_instruction_id = retired_id_r;
@@ -105,6 +101,10 @@ module write_back(
         );
 
     assign ti.issue_id = issue_id;
+    always_comb begin
+        ti.issue_id_one_hot = 0;
+        ti.issue_id_one_hot[issue_id] = 1;
+    end
 
     //Inflight Instruction ID table
     //Stores unit id (in one-hot encoding), rd_addr and whether rd_addr is zero
@@ -115,26 +115,16 @@ module write_back(
     end
 
     always_ff @ (posedge clk) begin
-        if (instruction_issued_with_rd)
+        if (ti.id_available)//instruction_issued_with_rd
             packet_table[issue_id] <= ti.inflight_packet;
     end
     //////////////////////
 
-
-    //One-hot id done for each unit
-    always_comb begin
-            for (int i=0; i< NUM_WB_UNITS; i++) begin
-                per_unit_one_hot_id_done[i] = 0;
-                per_unit_one_hot_id_done[i][unit_instruction_id[i]] = unit_done_next_cycle[i];
-            end
-    end
     //Or together all unit done signals for the same ID.
     always_comb begin
         id_done_next = 0;
-        for (int i=0; i<MAX_INFLIGHT_COUNT; i++) begin
-            for (int j=0; j<NUM_WB_UNITS; j++) begin
-                id_done_next[i] |= per_unit_one_hot_id_done[j][i];
-            end
+        for (int i=0; i< NUM_WB_UNITS; i++) begin
+            id_done_next |= unit_done_next_cycle[i];
         end
     end
 
@@ -191,7 +181,8 @@ module write_back(
     //Register file interaction
     assign rf_wb.rd_addr = retired_instruction_packet.rd_addr;
     assign rf_wb.id = retired_id_r;
-    assign rf_wb.valid_write = retired_r & retired_instruction_packet.rd_addr_nzero & ~gc_supress_writeback;
+    assign rf_wb.valid_write = retired_r;
+    assign rf_wb.rd_nzero = retired_instruction_packet.rd_addr_nzero;
 
     always_comb begin
         rf_wb.rd_data = 0;
@@ -199,9 +190,6 @@ module write_back(
             rf_wb.rd_data |= unit_rd[i] & {32{retired_instruction_packet.unit_id[i]}};
         end
     end
-
-    assign rf_wb.rs1_data_out = ({32{rf_wb.forward_rs1}}  & rf_wb.rd_data) | rf_wb.rs1_data_in;
-    assign rf_wb.rs2_data_out = ({32{rf_wb.forward_rs2}}  & rf_wb.rd_data) | rf_wb.rs2_data_in;
 
     ////////////////////////////////////////////////////
     //End of Implementation

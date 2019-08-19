@@ -183,10 +183,7 @@ module branch_unit(
 
     assign branch_ex.ready = 1;
     assign branch_wb.rd = rd_bank[branch_wb.writeback_instruction_id];
-
-    assign branch_wb.done_next_cycle = new_jal_jalr_dec_with_rd;
-    assign branch_wb.instruction_id = branch_ex.instruction_id;
-
+    assign branch_wb.done_next_cycle =  branch_ex.instruction_id_one_hot & {MAX_INFLIGHT_COUNT{new_jal_jalr_dec_with_rd}};
     ////////////////////////////////////////////////////
     //End of Implementation
     ////////////////////////////////////////////////////

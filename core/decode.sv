@@ -204,12 +204,6 @@ module decode(
     //ALU unit inputs
     logic [XLEN-1:0] alu_rs1_data;
     logic [XLEN-1:0] alu_rs2_data;
-    logic [XLEN-1:0] left_shift_in;
-
-    logic alu_sub;
-
-    logic [1:0] alu_op;
-    logic [1:0] alu_logic_op;
 
     always_comb begin
         if (opcode[2] & opcode[5]) //LUI
@@ -229,54 +223,14 @@ module decode(
             alu_rs2_data = rf_decode.rs2_data;
     end
 
-    always_comb begin
-        case (fn3)
-            SLT_fn3 : alu_logic_op = ALU_LOGIC_ADD;
-            SLTU_fn3 : alu_logic_op = ALU_LOGIC_ADD;
-            SLL_fn3 : alu_logic_op = ALU_LOGIC_ADD;
-            XOR_fn3 : alu_logic_op = ALU_LOGIC_XOR;
-            OR_fn3 : alu_logic_op = ALU_LOGIC_OR;
-            AND_fn3 : alu_logic_op = ALU_LOGIC_AND;
-            SRA_fn3 : alu_logic_op = ALU_LOGIC_ADD;
-            ADD_SUB_fn3 : alu_logic_op = ALU_LOGIC_ADD;
-        endcase
-    end
-
-    always_comb begin
-        case (fn3)
-            SLT_fn3 : alu_op = ALU_SLT;
-            SLTU_fn3 : alu_op = ALU_SLT;
-            SLL_fn3 : alu_op = ALU_LSHIFT;
-            XOR_fn3 : alu_op = ALU_ADD_SUB;
-            OR_fn3 : alu_op = ALU_ADD_SUB;
-            AND_fn3 : alu_op = ALU_ADD_SUB;
-            SRA_fn3 : alu_op = ALU_RSHIFT;
-            ADD_SUB_fn3 : alu_op = ALU_ADD_SUB;
-        endcase
-    end
-
-    always_comb begin
-        foreach (left_shift_in[i])
-            left_shift_in[i] = rf_decode.rs1_data[XLEN-i-1];
-    end
-
-    //Add cases: LUI, AUIPC, ADD[I], all logic ops
-    //sub cases: SUB, SLT[U][I]
-    assign alu_sub = opcode[2] ? 0 : ((fn3 inside {SLTU_fn3, SLT_fn3}) || ((fn3 == ADD_SUB_fn3) && ib.data_out.instruction[30]) && opcode[5]);
-
-    always_ff @(posedge clk) begin
-        if (issue_ready[ALU_UNIT_WB_ID]) begin
-            alu_inputs.in1 <= {(alu_rs1_data[XLEN-1] & ~fn3[0]), alu_rs1_data};//(fn3[0]  is SLTU_fn3);
-            alu_inputs.in2 <= {(alu_rs2_data[XLEN-1] & ~fn3[0]), alu_rs2_data};
-            alu_inputs.shifter_in <= fn3[2] ? rf_decode.rs1_data : left_shift_in;
-            alu_inputs.subtract <= alu_sub;
-            alu_inputs.arith <= alu_rs1_data[XLEN-1] & ib.data_out.instruction[30];//shift in bit
-            alu_inputs.lshift <= ~fn3[2];
-            alu_inputs.logic_op <= opcode[2] ? ALU_LOGIC_ADD : alu_logic_op;//put LUI and AUIPC through adder path
-            alu_inputs.op <= opcode[2] ? ALU_ADD_SUB : alu_op;//put LUI and AUIPC through adder path
-        end
-    end
-
+    assign alu_inputs.in1 = {(alu_rs1_data[XLEN-1] & ~fn3[0]), alu_rs1_data};//(fn3[0]  is SLTU_fn3);
+    assign alu_inputs.in2 = {(alu_rs2_data[XLEN-1] & ~fn3[0]), alu_rs2_data};
+    assign alu_inputs.shifter_in = rf_decode.rs1_data;
+    assign alu_inputs.subtract = ib.data_out.alu_sub;
+    assign alu_inputs.arith = alu_rs1_data[XLEN-1] & ib.data_out.instruction[30];//shift in bit
+    assign alu_inputs.lshift = ~fn3[2];
+    assign alu_inputs.logic_op = ib.data_out.alu_logic_op;
+    assign alu_inputs.op = ib.data_out.alu_op;
 
     ////////////////////////////////////////////////////
     //Load Store unit inputs
@@ -315,6 +269,7 @@ module decode(
     assign ls_inputs.load = ls_is_load;
     assign ls_inputs.store = (opcode_trim == STORE_T) || (amo_op && store_conditional);
     assign ls_inputs.load_store_forward = rf_decode.rs2_conflict;
+    assign ls_inputs.instruction_id_one_hot = ti.issue_id_one_hot;
     assign ls_inputs.instruction_id = ti.issue_id;
 
     //Last store RD tracking for Load-Store data forwarding
@@ -432,6 +387,7 @@ module decode(
             assign div_inputs.rs2 = rf_decode.rs2_data;
             assign div_inputs.op = fn3[1:0];
             assign div_inputs.reuse_result = prev_div_result_valid_r & current_op_resuses_rs1_rs2;
+            assign div_inputs.instruction_id_one_hot = ti.issue_id_one_hot;
             assign div_inputs.instruction_id = ti.issue_id;
         end
     endgenerate
@@ -451,9 +407,12 @@ module decode(
         gc_ex.new_request <= issue[GC_UNIT_WB_ID];
     end
 
+    assign branch_ex.instruction_id_one_hot = ti.issue_id_one_hot;
     assign branch_ex.instruction_id = ti.issue_id;
+    assign alu_ex.instruction_id_one_hot = ti.issue_id_one_hot;
     assign alu_ex.instruction_id = ti.issue_id;
     //Load Store unit stores ID in input FIFO
+    assign gc_ex.instruction_id_one_hot = ti.issue_id_one_hot;
     assign gc_ex.instruction_id = ti.issue_id;
 
     generate if (USE_MUL)
@@ -461,8 +420,9 @@ module decode(
                 mul_ex.new_request <= issue[MUL_UNIT_WB_ID];
             end
         assign mul_ex.new_request_dec = issue[MUL_UNIT_WB_ID];
+        assign mul_ex.instruction_id_one_hot = ti.issue_id_one_hot;
         assign mul_ex.instruction_id = ti.issue_id;
-        assign mul_ex.possible_issue = new_request[MUL_UNIT_WB_ID];
+        assign mul_ex.possible_issue = new_request[MUL_UNIT_WB_ID] & ti.id_available;
     endgenerate
     generate if (USE_DIV)
             always_ff @(posedge clk) begin
@@ -470,13 +430,13 @@ module decode(
             end
         //DIV unit stores ID in input FIFO
         assign div_ex.new_request_dec = issue[DIV_UNIT_WB_ID];
-        assign div_ex.possible_issue = new_request[DIV_UNIT_WB_ID];
+        assign div_ex.possible_issue = new_request[DIV_UNIT_WB_ID] & ti.id_available;
     endgenerate
 
-    assign branch_ex.possible_issue = new_request[BRANCH_UNIT_WB_ID];
-    assign alu_ex.possible_issue = new_request[ALU_UNIT_WB_ID];
-    assign ls_ex.possible_issue = new_request[LS_UNIT_WB_ID];
-    assign gc_ex.possible_issue = new_request[GC_UNIT_WB_ID];
+    assign branch_ex.possible_issue = new_request[BRANCH_UNIT_WB_ID] & ti.id_available;
+    assign alu_ex.possible_issue = new_request[ALU_UNIT_WB_ID] & ti.id_available;
+    assign ls_ex.possible_issue = new_request[LS_UNIT_WB_ID] & ti.id_available;
+    assign gc_ex.possible_issue = new_request[GC_UNIT_WB_ID] & ti.id_available;
 
 
     ////////////////////////////////////////////////////

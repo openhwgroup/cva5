@@ -160,7 +160,7 @@ module gc_unit(
     logic [4:0] rs1_addr;
     logic [4:0] rs2_addr;
     logic [4:0] future_rd_addr;
-
+    instruction_id_one_hot_t id;
     //implementation
     ////////////////////////////////////////////////////
 
@@ -287,19 +287,23 @@ module gc_unit(
             processing <= 0;
     end
 
-    assign gc_ex.ready = (state == IDLE_STATE) & ~processing;
+    always_ff @(posedge clk) begin
+        if (rst)
+            gc_ex.ready <= 1;
+        else
+           gc_ex.ready <= (state == IDLE_STATE) & ~processing;
+    end
+
+    //Write_back
+    always_ff @(posedge clk) begin
+        id <= gc_ex.instruction_id_one_hot;
+        gc_wb.done_next_cycle <= id & {MAX_INFLIGHT_COUNT{(gc_ex.new_request & gc_inputs.is_csr)}};
+    end
 
     always_ff @(posedge clk) begin
         if (gc_ex.new_request) begin
             gc_wb.rd <= selected_csr;
         end
-    end
-
-
-    //Write_back
-    assign gc_wb.done_next_cycle = gc_ex.new_request & gc_inputs.is_csr;
-    always_ff @(posedge clk) begin
-        gc_wb.instruction_id <= gc_ex.instruction_id;
     end
 
     always_ff @(posedge clk) begin

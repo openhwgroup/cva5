@@ -41,6 +41,8 @@ module alu_unit(
     logic[XLEN:0] adder_in2;
     logic[XLEN:0] adder_in2_logic;
 
+    logic[XLEN-1:0] result;
+    logic [31:0] rd_bank [MAX_INFLIGHT_COUNT-1:0];
     //implementation
     ////////////////////////////////////////////////////
 
@@ -74,32 +76,25 @@ module alu_unit(
     //Result mux
     always_comb begin
         case (alu_inputs.op)
-            ALU_ADD_SUB : alu_wb.rd = add_sub_result[XLEN-1:0];
-            ALU_SLT : alu_wb.rd = {31'b0, add_sub_result[XLEN]};
-            ALU_RSHIFT : alu_wb.rd = rshift_result;
-            ALU_LSHIFT : alu_wb.rd = lshift_result;
+            ALU_ADD_SUB : result = add_sub_result[XLEN-1:0];
+            ALU_SLT : result = {31'b0, add_sub_result[XLEN]};
+            ALU_RSHIFT : result = rshift_result;
+            ALU_LSHIFT : result = lshift_result;
         endcase
     end
 
-    //Issue/write-back handshaking
     ////////////////////////////////////////////////////
-    assign alu_ex.ready =  ~done | (done & alu_wb.accepted);
+    //Output bank
+     always_ff @ (posedge clk) begin
+         if (alu_ex.possible_issue)
+             rd_bank[alu_ex.instruction_id] <= result;
+     end
 
-    always_ff @(posedge clk) begin
-        if (rst)
-            done <= 0;
-        else if (alu_ex.new_request_dec)
-            done <= 1;
-        else if (alu_wb.accepted)
-            done <= 0;
-    end
+    assign alu_ex.ready = 1;
+    assign alu_wb.rd = rd_bank[alu_wb.writeback_instruction_id];
+    assign alu_wb.done_next_cycle = alu_ex.instruction_id_one_hot & {MAX_INFLIGHT_COUNT{alu_ex.new_request_dec}};
 
-    assign alu_wb.done_next_cycle = alu_ex.new_request_dec;
-    assign alu_wb.instruction_id = alu_ex.instruction_id;
     ////////////////////////////////////////////////////
     //Assertions
-    always_ff @ (posedge clk) begin
-        assert (~alu_wb.accepted | (alu_wb.accepted & done)) else $error("Spurious ack for ALU");
-    end
 
 endmodule

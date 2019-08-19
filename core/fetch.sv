@@ -277,4 +277,38 @@ module fetch(
     assign ib.data_in.branch_prediction_used = prediction_used;
     assign ib.data_in.bp_update_way = update_way;
 
+    //Add cases: LUI, AUIPC, ADD[I], all logic ops
+    //sub cases: SUB, SLT[U][I]
+    assign ib.data_in.alu_sub = opcode[2] ? 0 : ((fn3 inside {SLTU_fn3, SLT_fn3}) || ((fn3 == ADD_SUB_fn3) && final_instruction[30]) && opcode[5]);
+
+        always_comb begin
+        case (fn3)
+            SLT_fn3 : ib.data_in.alu_logic_op = ALU_LOGIC_ADD;
+            SLTU_fn3 : ib.data_in.alu_logic_op = ALU_LOGIC_ADD;
+            SLL_fn3 : ib.data_in.alu_logic_op = ALU_LOGIC_ADD;
+            XOR_fn3 : ib.data_in.alu_logic_op = ALU_LOGIC_XOR;
+            OR_fn3 : ib.data_in.alu_logic_op = ALU_LOGIC_OR;
+            AND_fn3 : ib.data_in.alu_logic_op = ALU_LOGIC_AND;
+            SRA_fn3 : ib.data_in.alu_logic_op = ALU_LOGIC_ADD;
+            ADD_SUB_fn3 : ib.data_in.alu_logic_op = ALU_LOGIC_ADD;
+        endcase
+        //put LUI and AUIPC through adder path
+        ib.data_in.alu_logic_op = opcode[2] ? ALU_LOGIC_ADD : ib.data_in.alu_logic_op;
+    end
+
+    always_comb begin
+        case (fn3)
+            SLT_fn3 : ib.data_in.alu_op = ALU_SLT;
+            SLTU_fn3 : ib.data_in.alu_op = ALU_SLT;
+            SLL_fn3 : ib.data_in.alu_op = ALU_LSHIFT;
+            XOR_fn3 : ib.data_in.alu_op = ALU_ADD_SUB;
+            OR_fn3 : ib.data_in.alu_op = ALU_ADD_SUB;
+            AND_fn3 : ib.data_in.alu_op = ALU_ADD_SUB;
+            SRA_fn3 : ib.data_in.alu_op = ALU_RSHIFT;
+            ADD_SUB_fn3 : ib.data_in.alu_op = ALU_ADD_SUB;
+        endcase
+        //put LUI and AUIPC through adder path
+        ib.data_in.alu_op = opcode[2] ? ALU_ADD_SUB : ib.data_in.alu_op;
+    end
+
 endmodule

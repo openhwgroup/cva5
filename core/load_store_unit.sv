@@ -105,6 +105,7 @@ module load_store_unit (
         logic [2:0] fn3;
         logic [1:0] byte_addr;
         instruction_id_t instruction_id;
+        instruction_id_one_hot_t instruction_id_one_hot;
     } load_attributes_t;
     load_attributes_t  load_attributes_in, stage2_attr;
     load_store_inputs_t  stage1;
@@ -221,17 +222,19 @@ module load_store_unit (
     assign shared_inputs.fn3 = stage1.fn3;
 
     logic forward_data;
-    assign forward_data = stage1.load_store_forward;
+    assign forward_data = stage1.load_store_forward | dcache_forward_data;
     assign stage1_raw_data =  forward_data ?  previous_load : stage1.rs2;
 
     //Input: ABCD
     //Assuming aligned requests,
     //Possible byte selections: (A/C/D, B/D, C/D, D)
+    logic [1:0] data_in_mux;
     always_comb begin
+        data_in_mux = dcache_forward_data ? dcache_stage2_fn3[1:0] : virtual_address[1:0];
         shared_inputs.data_in[7:0] = stage1_raw_data[7:0];
-        shared_inputs.data_in[15:8] = (virtual_address[1:0] == 2'b01) ? stage1_raw_data[7:0] : stage1_raw_data[15:8];
-        shared_inputs.data_in[23:16] = (virtual_address[1:0] == 2'b10) ? stage1_raw_data[7:0] : stage1_raw_data[23:16];
-        case(virtual_address[1:0])
+        shared_inputs.data_in[15:8] = (data_in_mux == 2'b01) ? stage1_raw_data[7:0] : stage1_raw_data[15:8];
+        shared_inputs.data_in[23:16] = (data_in_mux == 2'b10) ? stage1_raw_data[7:0] : stage1_raw_data[23:16];
+        case(data_in_mux)
             2'b10 : shared_inputs.data_in[31:24] = stage1_raw_data[15:8];
             2'b11 : shared_inputs.data_in[31:24] = stage1_raw_data[7:0];
             default : shared_inputs.data_in[31:24] = stage1_raw_data[31:24];
@@ -245,6 +248,7 @@ module load_store_unit (
     assign load_attributes_in.fn3 = stage1.fn3;
     assign load_attributes_in.byte_addr = virtual_address[1:0];
     assign load_attributes_in.instruction_id = stage1.instruction_id;
+    assign load_attributes_in.instruction_id_one_hot = stage1.instruction_id_one_hot;
 
     assign load_attributes.data_in = load_attributes_in;
 
@@ -346,9 +350,7 @@ module load_store_unit (
         exception_complete <= (input_fifo.valid & ls_exception_valid & stage1.load);
     end
 
-    assign ls_wb.done_next_cycle = load_complete | exception_complete;
-    assign ls_wb.instruction_id = stage2_attr.instruction_id;
-
+    assign ls_wb.done_next_cycle = stage2_attr.instruction_id_one_hot & {MAX_INFLIGHT_COUNT{(load_complete | exception_complete)}};
     ////////////////////////////////////////////////////
     //End of Implementation
     ////////////////////////////////////////////////////

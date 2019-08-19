@@ -56,9 +56,10 @@ interface func_unit_ex_interface;
     logic new_request;
     logic ready;
     instruction_id_t instruction_id;
+    instruction_id_one_hot_t instruction_id_one_hot;
 
-    modport decode (input ready, output possible_issue, new_request_dec, new_request, instruction_id);
-    modport unit (output ready, input possible_issue, new_request_dec, new_request, instruction_id);
+    modport decode (input ready, output possible_issue, new_request_dec, new_request, instruction_id, instruction_id_one_hot);
+    modport unit (output ready, input possible_issue, new_request_dec, new_request, instruction_id, instruction_id_one_hot);
 endinterface
 
 interface ras_interface;
@@ -75,14 +76,13 @@ endinterface
 
 interface unit_writeback_interface;
     //unit output
-    logic done_next_cycle;
-    instruction_id_t instruction_id;
+    instruction_id_one_hot_t done_next_cycle;
     logic [XLEN-1:0] rd;
     //writeback output
     logic accepted;
     instruction_id_t writeback_instruction_id;
-    modport writeback (input done_next_cycle, instruction_id, rd, output accepted, writeback_instruction_id);
-    modport unit (output done_next_cycle, instruction_id, rd, input accepted, writeback_instruction_id);
+    modport writeback (input done_next_cycle, rd, output accepted, writeback_instruction_id);
+    modport unit (output done_next_cycle, rd, input accepted, writeback_instruction_id);
 endinterface
 
 //********************************
@@ -135,33 +135,30 @@ endinterface
 interface register_file_writeback_interface;
     logic[4:0] rd_addr;
     logic valid_write;
+    logic rd_nzero;
 
     logic[XLEN-1:0] rd_data;
     instruction_id_t id;
 
-    logic[XLEN-1:0] rs1_data_in;
-    logic[XLEN-1:0] rs2_data_in;
     logic forward_rs1;
     logic forward_rs2;
     
-    logic[XLEN-1:0] rs1_data_out;
-    logic[XLEN-1:0] rs2_data_out;
-
-    modport writeback (output rd_addr, valid_write, rd_data, id, rs1_data_out, rs2_data_out, input rs1_data_in, rs2_data_in, forward_rs1, forward_rs2);
-    modport unit (input rd_addr, valid_write, rd_data, id, rs1_data_out, rs2_data_out, output rs1_data_in, rs2_data_in, forward_rs1, forward_rs2);
+    modport writeback (output rd_addr, valid_write, rd_nzero, rd_data, id, input forward_rs1, forward_rs2);
+    modport unit (input rd_addr, valid_write, rd_nzero, rd_data, id, output forward_rs1, forward_rs2);
 
 endinterface
 
 
 interface tracking_interface;
     instruction_id_t issue_id;
+    instruction_id_one_hot_t issue_id_one_hot;
     logic id_available;
     
     inflight_instruction_packet inflight_packet;
     logic issued;
 
-    modport decode (input issue_id, id_available, output inflight_packet, issued);
-    modport wb (output issue_id, id_available, input inflight_packet, issued);
+    modport decode (input issue_id, id_available, issue_id_one_hot, output inflight_packet, issued);
+    modport wb (output issue_id, id_available, issue_id_one_hot, input inflight_packet, issued);
 endinterface
 
 

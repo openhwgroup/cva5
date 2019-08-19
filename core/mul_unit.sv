@@ -33,7 +33,7 @@ module mul_unit(
 
     logic signed [65:0] result;
     logic [1:0] mulh;
-    logic [1:0] valid;
+    instruction_id_one_hot_t id_one_hot_done [1:0];
     instruction_id_t id [1:0];
 
     logic rs1_signed, rs2_signed;
@@ -58,30 +58,28 @@ module mul_unit(
     end
 
     always_ff @ (posedge clk) begin
-        valid[0] <= mul_ex.new_request_dec;
-        valid[1] <= valid[0];
-
         mulh[0] <= (mul_inputs.op[1:0] != MUL_fn3[1:0]);
         mulh[1] <= mulh[0];
 
         id[0] <= mul_ex.instruction_id;
         id[1] <= id[0];
+
+        id_one_hot_done[0] <= mul_ex.instruction_id_one_hot & {MAX_INFLIGHT_COUNT{mul_ex.new_request_dec}};
+        id_one_hot_done[1] <= id_one_hot_done[0];
     end
 
     ////////////////////////////////////////////////////
     //Output bank
      always_ff @ (posedge clk) begin
-         if (valid[1])
+         if (|id_one_hot_done[1])
              rd_bank[id[1]] <= mulh[1] ? result[63:32] : result[31:0];
      end
 
     //Issue/write-back handshaking
     ////////////////////////////////////////////////////
     assign mul_ex.ready = 1;
-
     assign mul_wb.rd = rd_bank[mul_wb.writeback_instruction_id];
-    assign mul_wb.done_next_cycle = valid[1];
-    assign mul_wb.instruction_id = id[1];
+    assign mul_wb.done_next_cycle = id_one_hot_done[1];
 
     ////////////////////////////////////////////////////
     //End of Implementation

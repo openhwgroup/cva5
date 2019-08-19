@@ -162,7 +162,7 @@ package taiga_config;
     ////////////////////////////////////////////////////
     //FIFO/Buffer Depths
     //All parameters restricted to powers of two
-    parameter MAX_INFLIGHT_COUNT = 8;
+    parameter MAX_INFLIGHT_COUNT = 4;
     parameter FETCH_BUFFER_DEPTH = 4;
 
     parameter LS_INPUT_BUFFER_DEPTH = 4;
@@ -188,7 +188,7 @@ package taiga_config;
     parameter WB_UNITS_WIDTH = $clog2(NUM_WB_UNITS);
 
 
-    parameter ALU_UNIT_WB_ID = 0;//uses accepted
+    parameter ALU_UNIT_WB_ID = 0;
     parameter GC_UNIT_WB_ID = 1;//uses accepted
     parameter BRANCH_UNIT_WB_ID = 2;
     parameter LS_UNIT_WB_ID = 3;

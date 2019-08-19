@@ -28,6 +28,7 @@ module register_file(
         input logic rst,
         input logic inorder,
         input logic inuse_clear,
+        input logic gc_supress_writeback,
         register_file_writeback_interface.unit rf_wb,
         register_file_decode_interface.unit rf_decode
         );
@@ -55,7 +56,7 @@ module register_file(
 
     //Writeback unit does not assert rf_wb.valid_write when the target register is r0
     always_ff @ (posedge clk) begin
-        if (rf_wb.valid_write & (in_use_match | inorder)) //inorder needed for case when multiple outstanding writes to this register (common pattern: load, store, load) where the first load hasn't completed by the second causes an exception.  Without inorder we wouldn't commit the first load
+        if (~gc_supress_writeback & rf_wb.rd_nzero & rf_wb.valid_write & (in_use_match | inorder)) //inorder needed for case when multiple outstanding writes to this register (common pattern: load, store, load) where the first load hasn't completed by the second causes an exception.  Without inorder we wouldn't commit the first load
             register[rf_wb.rd_addr] <= rf_wb.rd_data;
     end
 
@@ -75,18 +76,13 @@ module register_file(
     end
 
     assign in_use_by_id = in_use_by[rf_wb.rd_addr];
-    assign in_use_match = ({1'b1, in_use_by_id} == {rf_wb.valid_write, rf_wb.id});
+    assign in_use_match = ({3'b011, in_use_by_id} == {gc_supress_writeback, rf_wb.rd_nzero, rf_wb.valid_write, rf_wb.id});
 
-    assign rs1_feedforward = ({2'b11, in_use_by_id, rf_decode.rs1_addr} == {rf_decode.uses_rs1, rf_wb.valid_write, rf_wb.id, rf_wb.rd_addr});
-    assign rs2_feedforward = ({2'b11, in_use_by_id, rf_decode.rs2_addr} == {rf_decode.uses_rs2, rf_wb.valid_write, rf_wb.id, rf_wb.rd_addr});
+    assign rs1_feedforward = ({4'b0111, in_use_by_id, rf_decode.rs1_addr} == {gc_supress_writeback, rf_wb.rd_nzero, rf_decode.uses_rs1, rf_wb.valid_write, rf_wb.id, rf_wb.rd_addr});
+    assign rs2_feedforward = ({4'b0111, in_use_by_id, rf_decode.rs2_addr} == {gc_supress_writeback, rf_wb.rd_nzero, rf_decode.uses_rs2, rf_wb.valid_write, rf_wb.id, rf_wb.rd_addr});
 
-    assign rf_wb.forward_rs1 = rs1_feedforward;
-    assign rf_wb.forward_rs2 = rs2_feedforward;
-    assign rf_wb.rs1_data_in = {32{~rs1_feedforward}} & register[rf_decode.rs1_addr];
-    assign rf_wb.rs2_data_in = {32{~rs2_feedforward}} & register[rf_decode.rs2_addr];
-
-    assign rf_decode.rs1_data = rf_wb.rs1_data_out;//rs1_feedforward ? rf_wb.rd_data : register[rf_decode.rs1_addr];
-    assign rf_decode.rs2_data = rf_wb.rs2_data_out;//rs2_feedforward ? rf_wb.rd_data : register[rf_decode.rs2_addr];
+    assign rf_decode.rs1_data = rs1_feedforward ? rf_wb.rd_data : register[rf_decode.rs1_addr];
+    assign rf_decode.rs2_data = rs2_feedforward ? rf_wb.rd_data : register[rf_decode.rs2_addr];
 
     assign rf_decode.rs1_conflict = rs1_inuse & ~rs1_feedforward;
     assign rf_decode.rs2_conflict = rs2_inuse & ~rs2_feedforward;
@@ -95,10 +91,6 @@ module register_file(
     //Assertions
     always_ff @ (posedge clk) begin
         assert (!(rf_decode.instruction_issued && rf_decode.future_rd_addr == 0)) else $error("Write to inuse for register x0 occured!");
-    end
-
-    always_ff @ (posedge clk) begin
-        assert (!(rf_wb.valid_write && rf_wb.rd_addr == 0)) else $error("Register file write to zero register occured!");
     end
 
     ////////////////////////////////////////////////////

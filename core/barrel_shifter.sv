@@ -33,15 +33,19 @@ module barrel_shifter (
         );
 
     logic[XLEN-1:0] shiftx8, shiftx2, shiftx1, shiftx1_l;
-
+    logic[XLEN-1:0] preshifted_input;
     //Bit flipping shared shifter
-    //left shift occurs in decode logic
+    always_comb begin
+        foreach (shifter_input[i])
+            preshifted_input[i] = lshift ? shifter_input[XLEN-i-1] : shifter_input[i];
+    end
+
     always_comb begin//8
         case (shift_amount[4:3])
-            0: shiftx8 = shifter_input;
-            1: shiftx8 = {{8{arith}}, shifter_input[31:8]};
-            2: shiftx8 = {{16{arith}}, shifter_input[31:16]};
-            3: shiftx8 =  {{24{arith}}, shifter_input[31:24]};
+            0: shiftx8 = preshifted_input;
+            1: shiftx8 = {{8{arith}}, preshifted_input[31:8]};
+            2: shiftx8 = {{16{arith}}, preshifted_input[31:16]};
+            3: shiftx8 =  {{24{arith}}, preshifted_input[31:24]};
         endcase
     end
 
@@ -54,14 +58,10 @@ module barrel_shifter (
         endcase
     end
 
-    //assign shiftx1_l = {arith,shiftx2[31:1]};
     always_comb begin
-        //case ({lshift, shift_amount[0]})
         case (shift_amount[0])
             0: shiftx1 = shiftx2[31:0];
             1: shiftx1 = {arith,shiftx2[31:1]};
-            //2: foreach (shiftx1[i]) shiftx1[i] = shiftx2[31-i];
-           // 3: foreach (shiftx1[i]) shiftx1[i] = shiftx1_l[31-i];
         endcase
     end
 
@@ -69,8 +69,6 @@ module barrel_shifter (
    always_comb begin
        foreach (shiftx1[i]) shifted_resultl[i] = shiftx1[31-i];
    end
-
-    //assign shifted_result =  lshift ? signed'({arith,shifter_input} <<< shift_amount) : signed'({arith,shifter_input} >>> shift_amount);
 
 endmodule
 
