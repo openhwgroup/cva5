@@ -61,7 +61,6 @@ module write_back(
     instruction_id_t id_ordering_post_store [MAX_INFLIGHT_COUNT-1:0];
 
     logic [MAX_INFLIGHT_COUNT-1:0] id_done;
-    logic [MAX_INFLIGHT_COUNT-1:0] id_done_next;
     logic [MAX_INFLIGHT_COUNT-1:0] id_done_r;
 
     logic [MAX_INFLIGHT_COUNT-1:0] id_done_ordered;
@@ -120,14 +119,6 @@ module write_back(
     end
     //////////////////////
 
-    //Or together all unit done signals for the same ID.
-    always_comb begin
-        id_done_next = 0;
-        for (int i=0; i< NUM_WB_UNITS; i++) begin
-            id_done_next |= unit_done_next_cycle[i];
-        end
-    end
-
     //One-hot ID retired last cycle
     logic [MAX_INFLIGHT_COUNT-1:0] id_retired_last_cycle;
     always_comb begin
@@ -135,8 +126,13 @@ module write_back(
         id_retired_last_cycle[retired_id_r] = retired_r;
     end
 
-    //ID done is a combination of newly completed and already completed instructions
-    assign id_done = id_done_next | (id_done_r & ~id_retired_last_cycle);
+    //Or together all unit done signals for the same ID.
+    always_comb begin
+        id_done = (id_done_r & ~id_retired_last_cycle); //Still pending instructions
+        for (int i=0; i< NUM_WB_UNITS; i++) begin
+            id_done |= unit_done_next_cycle[i];
+        end
+    end
 
     always_ff @ (posedge clk) begin
         if (rst)
@@ -160,11 +156,11 @@ module write_back(
             id_done_ordered[i] = id_done[id_ordering_post_store[i]];
         end
 
-        retired_id = id_ordering_post_store[0];
-        for (int i=1; i<MAX_INFLIGHT_COUNT; i++) begin
-            if (id_done_ordered[i]) begin
-                retired_id = id_ordering_post_store[i];
-            end
+        retired_id = id_ordering_post_store[MAX_INFLIGHT_COUNT-1];
+        for (int i=MAX_INFLIGHT_COUNT-1; i>0; i--) begin
+            if (id_done_ordered[i])
+                break;
+            retired_id = id_ordering_post_store[i-1];
         end
 
         if (inorder)
@@ -174,7 +170,7 @@ module write_back(
 
     //Read table for unit ID (acks, and rd_addr for register file)
     assign retired_instruction_packet = packet_table[retired_id_r];
-    assign accepted = retired_instruction_packet.unit_id & {NUM_WB_UNITS{retired_r}};
+    //assign accepted = retired_instruction_packet.unit_id & {NUM_WB_UNITS{retired_r}};
 
     assign instruction_complete = retired_r;
 

@@ -47,6 +47,8 @@ module id_stack # (
     logic [STACK_DEPTH_W-1:0] store_shiffted_stack [STACK_DEPTH-1:0];
     logic [STACK_DEPTH_W-1:0] retired_store_shiffted_stack [STACK_DEPTH-1:0];
 
+    logic [STACK_DEPTH-1:0] store_done_ordered;
+
     logic [STACK_DEPTH-1:0] store_shift_bits;
     logic [STACK_DEPTH-1:0] retired_shift_bits;
 
@@ -61,13 +63,21 @@ module id_stack # (
         end
     end
 
+    //TODO inorder support
+    generate begin
+    genvar i;
+        assign store_shift_bits[0] = 1;
+        assign retired_shift_bits[0] = retired;
+        for (i=1; i<STACK_DEPTH; i++) begin
+           assign store_shift_bits[i] = |store_done_ordered[STACK_DEPTH-1:i];
+           assign retired_shift_bits[i] = |id_done_ordered[STACK_DEPTH-1:i];
+        end
+    end endgenerate
+
     always_comb begin
         //Lowest entry always shifted, each older entry shifts all below
-        store_shift_bits = 0;
-        store_shift_bits[0] = 1;
-        for (int i=1; i<STACK_DEPTH; i++) begin
-            if (stack[i] == store_id)
-                store_shift_bits |= (2**(i+1)-1);
+        for (int i=0; i<STACK_DEPTH; i++) begin
+            store_done_ordered[i] = (stack[i] == store_id);
         end
 
         //Stack shift due to stores being popped
@@ -79,18 +89,11 @@ module id_stack # (
     end
 
     always_comb begin
-        retired_shift_bits = 0;
-        retired_shift_bits[0] = 1;
-        for (int i=1; i<STACK_DEPTH; i++) begin
-            if (id_done_ordered[i])
-                retired_shift_bits |= (2**(i+1)-1);
-        end
-
         //Stack shift due to writes to register file being popped
         retired_store_shiffted_stack[STACK_DEPTH-1:1] = store_shiffted_stack[STACK_DEPTH-2:0];
         retired_store_shiffted_stack[0] = retired_id;
         foreach (new_stack[i]) begin
-            new_stack[i] = (retired & retired_shift_bits[i]) ? retired_store_shiffted_stack[i] : store_shiffted_stack[i];
+            new_stack[i] = (retired_shift_bits[i]) ? retired_store_shiffted_stack[i] : store_shiffted_stack[i];
         end
     end
 

@@ -33,7 +33,7 @@ module gc_unit(
         func_unit_ex_interface.unit gc_ex,
         input gc_inputs_t gc_inputs,
         input logic instruction_issued_no_rd,
-
+        input logic gc_flush_required,
         //Branch miss predict
         input logic branch_flush,
 
@@ -136,6 +136,7 @@ module gc_unit(
 
     logic i_fence_flush;
     exception_code_t ecall_code;
+    logic second_cycle_flush;
 
     //CSR
     logic mret;
@@ -220,7 +221,7 @@ module gc_unit(
     assign gc_exception.valid = gc_inputs.is_ecall | gc_inputs.is_ebreak | ls_exception_second_cycle;
 
 
-    assign gc_fetch_flush = branch_flush | gc_inputs.flush_required | gc_fetch_pc_override | ls_exception_first_cycle;
+    assign gc_fetch_flush = branch_flush | gc_fetch_pc_override;
 
     always_ff @ (posedge clk) begin
         gc_issue_hold <= gc_ex.new_request_dec || processing || (next_state inside {PRE_CLEAR_STATE, CLEAR_STATE, TLB_CLEAR_STATE, IQ_DRAIN, IQ_DISCARD});
@@ -238,7 +239,8 @@ module gc_unit(
 
 
     always_ff @ (posedge clk) begin
-        gc_fetch_pc_override <= gc_inputs.flush_required | ls_exception_first_cycle;
+        second_cycle_flush <= gc_flush_required;
+        gc_fetch_pc_override <= gc_flush_required | second_cycle_flush | ls_exception_first_cycle;
         gc_fetch_pc <=
             gc_inputs.is_i_fence ? gc_inputs.pc + 4 :
             gc_inputs.is_ret ? csr_mepc :

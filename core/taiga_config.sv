@@ -166,7 +166,7 @@ package taiga_config;
     parameter FETCH_BUFFER_DEPTH = 4;
 
     parameter LS_INPUT_BUFFER_DEPTH = 4;
-    parameter DIV_INPUT_BUFFER_DEPTH = 2;
+    parameter DIV_INPUT_BUFFER_DEPTH = 4;
 
     ////////////////////////////////////////////////////
     //Trace Options

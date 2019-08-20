@@ -48,6 +48,7 @@ module decode(
         input logic gc_issue_hold,
         input logic gc_fetch_flush,
         input logic gc_issue_flush,
+        output logic gc_flush_required,
 
         output logic load_store_issue,
 
@@ -334,12 +335,12 @@ module decode(
             gc_inputs.is_fence <= (opcode_trim == FENCE_T) && ~fn3[0];
             gc_inputs.is_csr <= (opcode_trim == SYSTEM_T) && (fn3 != 0);
         end
-        gc_inputs.flush_required <= issue[GC_UNIT_WB_ID] && (environment_op | ifence);
         gc_inputs.is_ecall <= issue[GC_UNIT_WB_ID] && environment_op && (ib.data_out.instruction[21:20] == 0);
         gc_inputs.is_ebreak <= issue[GC_UNIT_WB_ID] && environment_op && (ib.data_out.instruction[21:20] == 2'b01);
         gc_inputs.is_ret <= issue[GC_UNIT_WB_ID] && environment_op && (ib.data_out.instruction[21:20] == 2'b10);
         gc_inputs.is_i_fence <= issue[GC_UNIT_WB_ID] && ifence;
     end
+    assign gc_flush_required = issue[GC_UNIT_WB_ID] && (environment_op | ifence);
 
 
     ////////////////////////////////////////////////////
