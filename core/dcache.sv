@@ -69,7 +69,6 @@ module dcache(
     logic stage2_store;
     logic [3:0] stage2_be;
     logic [2:0] stage2_fn3;
-    logic [31:0] stage2_data_in;
     logic [31:0] stage2_data;
 
     logic stage2_use_forwarded_data;
@@ -110,28 +109,16 @@ module dcache(
      * 2nd cycle signals
      *************************************/
     always_ff @ (posedge clk) begin
-        if(rst)
-            stage2_use_forwarded_data <= 0;
-        else if (ls.new_request)
-            stage2_use_forwarded_data <= use_forwarded_data;
-        else if (store_complete)
-            stage2_use_forwarded_data <= 0;
-    end
-
-    always_ff @ (posedge clk) begin
         if (ls.new_request) begin
             stage2_addr <= ls_inputs.addr;
             stage2_be <= ls_inputs.be;
             stage2_load <= ls_inputs.load;
             stage2_store <= ls_inputs.store;
             stage2_fn3 <= ls_inputs.fn3;
-            stage2_data_in <= ls_inputs.data_in;
+            stage2_data <= ls_inputs.data_in;
             stage2_amo <= amo;
         end
     end
-
-    assign dcache_stage2_fn3 = stage2_fn3;
-    assign dcache_forward_data = stage2_use_forwarded_data;
 
     /*************************************
      * General Control Logic
@@ -248,7 +235,7 @@ module dcache(
 
     //AMO op processing on incoming data
     always_ff @ (posedge clk) begin
-        amo_rs2 <= stage2_data_in; //Only forwarding on STORE opcode
+        amo_rs2 <= stage2_data;
     end
 
     assign amo_alu_inputs.rs1_load = l1_response.data;
@@ -263,7 +250,7 @@ module dcache(
         if (stage2_amo.is_amo & is_target_word)
             new_line_data = amo_result;
         else if (stage2_amo.is_sc)
-            new_line_data = stage2_data_in;//Only forwarding on STORE opcode
+            new_line_data = stage2_data;
         else
             new_line_data = l1_response.data;
     end
@@ -272,7 +259,6 @@ module dcache(
     assign sc_write_index = stage2_addr[DCACHE_SUB_LINE_ADDR_W+1:2];
     assign update_word_index = stage2_amo.is_sc ? sc_write_index : word_count;
     ////////////////////////////////////////////////////////
-    assign stage2_data = stage2_use_forwarded_data ? ls_inputs.data_in : stage2_data_in;
 
     //Data Bank(s)
     ddata_bank #(DCACHE_LINES*DCACHE_LINE_W*DCACHE_WAYS) data_bank (
