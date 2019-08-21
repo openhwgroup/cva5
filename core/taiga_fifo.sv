@@ -1,5 +1,5 @@
 /*
- * Copyright © 2017 Eric Matthews,  Lesley Shannon
+ * Copyright © 2017-2019 Eric Matthews,  Lesley Shannon
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@ import taiga_types::*;
 /*
  *  FIFOs Not underflow/overflow safe.
  *  Intended for small FIFO depths.
+ *  For continuous operation when full, enqueing side must inspect pop signal
  */
 module taiga_fifo #(parameter DATA_WIDTH = 32, parameter FIFO_DEPTH = 4, parameter fifo_type_t FIFO_TYPE = NON_MUXED_INPUT_FIFO)
         (
@@ -48,12 +49,17 @@ module taiga_fifo #(parameter DATA_WIDTH = 32, parameter FIFO_DEPTH = 4, paramet
     //implementation
     ////////////////////////////////////////////////////
     generate if (FIFO_DEPTH == 1) begin
-        one_hot_occupancy #(.DEPTH(FIFO_DEPTH)) occupancy_tracking
-        (
-            .push(fifo.push), .pop(fifo.pop),
-            .early_full(fifo.early_full), .full(fifo.full),
-            .empty(fifo.empty), .early_empty(fifo.early_empty), .valid(fifo.valid), .early_valid(fifo.early_valid), .two_plus(two_plus), .*
-        );
+        always_ff @ (posedge clk) begin
+            if (rst)
+                fifo.valid <= 0;
+            else if (fifo.push)
+                fifo.valid <= 1;
+            else if (fifo.pop)
+                fifo.valid <= 0;
+        end
+        assign fifo.full = fifo.valid;
+        assign fifo.empty = ~fifo.valid;
+
         always_ff @ (posedge clk) begin
             if (fifo.push)
                 fifo.data_out <= fifo.data_in;
@@ -68,8 +74,8 @@ module taiga_fifo #(parameter DATA_WIDTH = 32, parameter FIFO_DEPTH = 4, paramet
             one_hot_occupancy #(.DEPTH(FIFO_DEPTH)) occupancy_tracking
                 (
                     .push(fifo.push), .pop(fifo.pop),
-                    .early_full(fifo.early_full), .full(fifo.full),
-                    .empty(fifo.empty), .early_empty(fifo.early_empty), .valid(fifo.valid), .early_valid(fifo.early_valid), .two_plus(two_plus), .*
+                    .almost_full(fifo.almost_full), .full(fifo.full),
+                    .empty(fifo.empty), .almost_empty(fifo.almost_empty), .valid(fifo.valid), .*
                 );
 
             always_ff @ (posedge clk) begin
@@ -103,7 +109,6 @@ module taiga_fifo #(parameter DATA_WIDTH = 32, parameter FIFO_DEPTH = 4, paramet
             logic [SRL_DEPTH_W-1:0] srl_index;
             logic full;
             logic full_minus_one;
-            logic more_than_one;
             logic one_entry;
 
             //On first write will roll over to [1,00...0]
@@ -119,7 +124,6 @@ module taiga_fifo #(parameter DATA_WIDTH = 32, parameter FIFO_DEPTH = 4, paramet
             //Helper expressions
             assign full = fifo.valid && (srl_index[SRL_DEPTH_W-2:0] == (FIFO_DEPTH-1));
             assign full_minus_one = fifo.valid && (srl_index[SRL_DEPTH_W-2:0] == (FIFO_DEPTH-2));
-            assign more_than_one = fifo.valid && (srl_index[SRL_DEPTH_W-2:0] != 0);
             assign one_entry = fifo.valid && (srl_index[SRL_DEPTH_W-2:0] == 0);
 
             assign fifo.valid = srl_index[SRL_DEPTH_W-1];
@@ -129,9 +133,8 @@ module taiga_fifo #(parameter DATA_WIDTH = 32, parameter FIFO_DEPTH = 4, paramet
                 fifo.full = ~fifo.pop & ((fifo.push & full_minus_one) | full);
             end
 
-            assign fifo.early_valid = fifo.push | (fifo.valid & ~fifo.pop) | more_than_one;
-            assign fifo.early_empty = one_entry  & fifo.pop & ~fifo.push;
-            assign fifo.early_full = fifo.full | (full_minus_one & fifo.push);
+            assign fifo.almost_empty = one_entry;
+            assign fifo.almost_full = full_minus_one;
 
             always_ff @ (posedge clk) begin
                 if (fifo.push)

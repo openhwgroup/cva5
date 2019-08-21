@@ -1,5 +1,5 @@
 /*
- * Copyright © 2017 Eric Matthews,  Lesley Shannon
+ * Copyright © 2017-2019 Eric Matthews,  Lesley Shannon
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,14 +29,12 @@ module binary_occupancy #(parameter DEPTH = 4)
         input logic rst,
         input logic push,
         input logic pop,
-        output logic early_full,
+        output logic almost_full,
         output logic full,
         output logic empty,
-        output logic valid,
-        output logic early_valid,
-        output logic two_plus
+        output logic almost_empty,
+        output logic valid
         );
-
 
     logic[$clog2(DEPTH)-1:0] count;
 
@@ -44,56 +42,64 @@ module binary_occupancy #(parameter DEPTH = 4)
     always_ff @ (posedge clk) begin
         if (rst)
             count <= 0;
-        else if (push & ~pop)
-            count <= count + 1;
-        else if (pop & ~push)
-            count <= count - 1;
+        else begin
+            case ({push, pop})
+                2'b10: count <= count + 1;
+                2'b01: count <= count - 1;
+                default : count <= count;
+            endcase
+        end
     end
 
     always_ff @ (posedge clk) begin
         if (rst)
             valid <= 0;
-        else if (push)
-            valid <= 1;
-        else if (pop && (count == 1))
-            valid <= 0;
+        else begin
+            case ({push, pop})
+                2'b10: valid <= 1;
+                2'b01: valid <= !(count == 1);
+                default : valid <= valid;
+            endcase
+        end
     end
 
-    always_ff @ (posedge clk) begin
-        if (rst)
-            full <= 0;
-        else if ((push & ~pop) && (count == DEPTH-1))
-            full <= 1;
-        else if (pop)
-            full <= 0;
-    end
+    // always_ff @ (posedge clk) begin
+    //     if (rst)
+    //         full <= 0;
+    //     else begin
+    //         case ({push, pop})
+    //             2'b10: full <= (count == DEPTH-2);
+    //             2'b01: full <= 0;
+    //             default : full <= full;
+    //         endcase
+    //     end
+    // end
 
-    always_ff @ (posedge clk) begin
-        if (rst)
-            early_full <= 0;
-        else if ((push & ~pop) && (count == DEPTH-2))
-            early_full <= 1;
-        else if (pop && (count == DEPTH-1))
-            early_full <= 0;
-    end
+    // always_ff @ (posedge clk) begin
+    //     if (rst)
+    //         almost_full <= 0;
+    //     else begin
+    //         case ({push, pop})
+    //             2'b10: almost_full <= (count == DEPTH-3);
+    //             2'b01: almost_full <= (count == DEPTH-1);
+    //             default : almost_full <= almost_full;
+    //         endcase
+    //     end
+    // end
 
-    always_ff @ (posedge clk) begin
-        if (rst)
-            two_plus <= 0;
-        else if ((push & ~pop) && (count >= 1))
-            two_plus <= 1;
-        else if (pop && (count == 2))
-            two_plus <= 0;
-    end
+    // always_ff @ (posedge clk) begin
+    //     if (rst)
+    //         almost_empty <= 0;
+    //     else begin
+    //         case ({push, pop})
+    //             2'b10: almost_empty <=(count == 0);
+    //             2'b01: almost_empty <= (count == 2);
+    //             default : almost_empty <= almost_empty;
+    //         endcase
+    //     end
+    // end
 
-    assign empty = ~valid;//(count == 0);
-    //assign valid = //(count != 0);
-    //assign full = (count == (DEPTH-1));
-    //assign early_full = (count == (DEPTH-2)) & push & ~pop;
-
-    //pushing, or more than one, or at least one and not popping
-    //assign two_plus = (count > 1);
-    assign early_valid = push | (two_plus) | (valid & ~pop);
+    assign empty = ~valid;
 
     ////////////////////////////////////////////////////
     //Assertions
@@ -101,7 +107,6 @@ module binary_occupancy #(parameter DEPTH = 4)
         assert (!(~rst & full & push)) else $error("overflow");
         assert (!(~rst & empty & pop)) else $error("underflow");
     end
-
 
 endmodule
 

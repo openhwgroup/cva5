@@ -124,7 +124,7 @@ module load_store_unit (
     assign input_fifo.push = ls_ex.new_request_dec;
     assign ls_ex.ready = (LS_INPUT_BUFFER_DEPTH >= MAX_INFLIGHT_COUNT) ? 1 : ~input_fifo.full;
     assign input_fifo.pop = issue_request | gc_issue_flush;
-    assign load_store_FIFO_emptying = input_fifo.early_empty;
+    assign load_store_FIFO_emptying = input_fifo.almost_empty & issue_request & ~ls_ex.new_request_dec;
     assign stage1 = input_fifo.data_out;
 
     ////////////////////////////////////////////////////

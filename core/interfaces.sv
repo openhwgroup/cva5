@@ -170,10 +170,9 @@ interface instruction_buffer_interface;
     instruction_buffer_packet data_out;
     logic valid;
     logic full;
-    logic early_full;
 
-    modport buffer (input push, pop, flush, data_in, output data_out, valid, full, early_full);
-    modport fetch (input full, early_full, pop, output push, data_in, flush);
+    modport buffer (input push, pop, flush, data_in, output data_out, valid, full);
+    modport fetch (input full, pop, output push, data_in, flush);
     modport decode (input valid, data_out, output pop);
     //modport exception_control (output flush);
 endinterface
@@ -187,12 +186,11 @@ interface fifo_interface #(parameter DATA_WIDTH = 42);//#(parameter type data_ty
     logic valid;
     logic full;
     logic empty;
-    logic early_full;
-    logic early_valid;
-    logic early_empty;
-    modport enqueue (input  early_full, full, empty, output data_in, push);
-    modport dequeue (input early_valid, valid, early_empty, data_out, output pop);
-    modport structure(input push, pop, data_in, output data_out, early_valid, valid, early_full, full, empty, early_empty);
+    logic almost_full;//full minus 1
+    logic almost_empty;//only one entry
+    modport enqueue (input  almost_full, full, empty, output data_in, push);
+    modport dequeue (input valid, almost_empty, data_out, output pop);
+    modport structure(input push, pop, data_in, output data_out, valid, almost_full, full, empty, almost_empty);
 endinterface
 
 interface mmu_interface;

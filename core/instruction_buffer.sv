@@ -49,7 +49,6 @@ module instruction_buffer
 
     assign ib.valid = ib_fifo.valid;
     assign ib.full = ib_fifo.full;
-    assign ib.early_full = ib_fifo.early_full;
 
     taiga_fifo #(
             .DATA_WIDTH($bits(instruction_buffer_packet)),
