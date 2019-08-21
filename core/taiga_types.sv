@@ -256,7 +256,7 @@ package taiga_types;
     } exception_packet_t;
 
     typedef struct packed{
-        logic [NUM_WB_UNITS-1:0] unit_id;
+        logic [$clog2(NUM_WB_UNITS)-1:0] unit_id;
         logic [4:0] rd_addr;
         logic rd_addr_nzero;
     } inflight_instruction_packet;

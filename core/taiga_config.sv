@@ -189,7 +189,7 @@ package taiga_config;
 
 
     parameter ALU_UNIT_WB_ID = 0;
-    parameter GC_UNIT_WB_ID = 1;//uses accepted
+    parameter GC_UNIT_WB_ID = 1;
     parameter BRANCH_UNIT_WB_ID = 2;
     parameter LS_UNIT_WB_ID = 3;
     parameter DIV_UNIT_WB_ID = LS_UNIT_WB_ID + USE_DIV;

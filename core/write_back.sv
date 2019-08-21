@@ -50,8 +50,7 @@ module write_back(
 
     //aliases for write-back-interface signals
     logic [MAX_INFLIGHT_COUNT-1:0] unit_done_next_cycle [NUM_WB_UNITS-1:0];
-    logic [XLEN-1:0] unit_rd [NUM_WB_UNITS-1:0];
-    logic [NUM_WB_UNITS-1:0] accepted;
+    logic [XLEN-1:0] unit_rd [2**($clog2(NUM_WB_UNITS))-1:0];
     /////
 
     instruction_id_t issue_id, retired_id, retired_id_r;
@@ -76,9 +75,10 @@ module write_back(
         for (i=0; i< NUM_WB_UNITS; i++) begin : interface_to_array_g
             assign unit_done_next_cycle[i] = unit_wb[i].done_next_cycle;
             assign unit_rd[i] = unit_wb[i].rd;
-            assign unit_wb[i].accepted = accepted[i];
             assign unit_wb[i].writeback_instruction_id = retired_id_r;
         end
+        assign unit_rd[6] = unit_rd[GC_UNIT_WB_ID];
+        assign unit_rd[7] = unit_rd[ALU_UNIT_WB_ID];
     endgenerate
 
     //ID stack.  id_ordering[0] is the next ID to be issued.  Entries filled from
@@ -170,8 +170,6 @@ module write_back(
 
     //Read table for unit ID (acks, and rd_addr for register file)
     assign retired_instruction_packet = packet_table[retired_id_r];
-    //assign accepted = retired_instruction_packet.unit_id & {NUM_WB_UNITS{retired_r}};
-
     assign instruction_complete = retired_r;
 
     //Register file interaction
@@ -180,12 +178,8 @@ module write_back(
     assign rf_wb.valid_write = retired_r;
     assign rf_wb.rd_nzero = retired_instruction_packet.rd_addr_nzero;
 
-    always_comb begin
-        rf_wb.rd_data = 0;
-        for (int i=0; i< NUM_WB_UNITS; i++) begin
-            rf_wb.rd_data |= unit_rd[i] & {32{retired_instruction_packet.unit_id[i]}};
-        end
-    end
+    assign rf_wb.rd_data = unit_rd[retired_instruction_packet.unit_id];
+
 
     ////////////////////////////////////////////////////
     //End of Implementation

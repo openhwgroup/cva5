@@ -140,12 +140,11 @@ module decode(
 
     ////////////////////////////////////////////////////
     //Tracking Interface
-    assign ti.inflight_packet.unit_id = new_request;
+    //assign ti.inflight_packet.unit_id = new_request;
     assign ti.inflight_packet.rd_addr = future_rd_addr;
     assign ti.inflight_packet.rd_addr_nzero = ~rd_zero;
     assign ti.issued = instruction_issued & (uses_rd | new_request[LS_UNIT_WB_ID]);
-
-
+    one_hot_to_integer #(NUM_WB_UNITS) new_request_to_int (.*, .one_hot(new_request), .int_out(ti.inflight_packet.unit_id));
     ////////////////////////////////////////////////////
     //Unit Determination
     assign mult_div_op = ib.data_out.instruction[25];
