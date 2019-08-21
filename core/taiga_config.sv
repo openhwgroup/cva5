@@ -184,16 +184,18 @@ package taiga_config;
 
     ////////////////////////////////////////////////////
     //Write-Back Unit IDs
-    parameter NUM_WB_UNITS = 4 + USE_MUL + USE_DIV;
+    parameter NUM_WB_UNITS = 3 + USE_MUL + USE_DIV;
     parameter WB_UNITS_WIDTH = $clog2(NUM_WB_UNITS);
-
+    parameter NUM_UNITS = NUM_WB_UNITS + 1;
 
     parameter ALU_UNIT_WB_ID = 0;
     parameter GC_UNIT_WB_ID = 1;
-    parameter BRANCH_UNIT_WB_ID = 2;
-    parameter LS_UNIT_WB_ID = 3;
+    parameter LS_UNIT_WB_ID = 2;
     parameter DIV_UNIT_WB_ID = LS_UNIT_WB_ID + USE_DIV;
     parameter MUL_UNIT_WB_ID = DIV_UNIT_WB_ID + USE_MUL;
+    //Non-writeback units
+    parameter BRANCH_UNIT_ID = MUL_UNIT_WB_ID + 1;
+
     ////////////////////////////////////////////////////
 
 endpackage

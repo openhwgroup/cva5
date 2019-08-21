@@ -42,7 +42,14 @@ module fetch(
         l1_arbiter_request_interface.master l1_request,
         l1_arbiter_return_interface.master l1_response,
 
-        instruction_buffer_interface.fetch ib
+        input logic pre_decode_pop,
+
+        output logic [31:0] pre_decode_instruction,
+        output logic [31:0] pre_decode_pc,
+        output branch_predictor_metadata_t branch_metadata,
+        output logic branch_prediction_used,
+        output logic [BRANCH_PREDICTOR_WAYS-1:0] bp_update_way,
+        output logic pre_decode_push
         );
 
     localparam NUM_SUB_UNITS = USE_I_SCRATCH_MEM + USE_ICACHE;
@@ -66,6 +73,7 @@ module fetch(
     logic [31:0] next_pc;
     logic [31:0] if_pc;
 
+    logic[$clog2(FETCH_BUFFER_DEPTH+1)-1:0] inflight_count;
     logic space_in_inst_buffer;
     logic mem_ready;
     logic new_mem_request;
@@ -81,19 +89,8 @@ module fetch(
     logic update_pc;
 
     logic [31:0] final_instruction;
-    logic [6:0] opcode;
-    logic [4:0] opcode_trimmed;
-    logic [4:0] rs1_addr;
-    logic [4:0] rs2_addr;
-    logic [4:0] rd_addr;
-    logic [2:0] fn3;
 
-    logic csr_imm_op;
-    logic sys_op;
-    logic jal_jalr_x0;
 
-    logic rs1_link, rd_link, rs1_eq_rd, use_ras;
-    logic[$clog2(FETCH_BUFFER_DEPTH+1)-1:0] inflight_count;
     /////////////////////////////////////////
 
     genvar i;
@@ -147,18 +144,18 @@ module fetch(
     always_ff @(posedge clk) begin
         if (rst | gc_fetch_flush)
             inflight_count <= 0;
-        else if (mem_ready  & ~ib.pop)
+        else if (mem_ready  & ~pre_decode_pop)
             inflight_count <= inflight_count + 1;
-        else if (~mem_ready &  ib.pop)
+        else if (~mem_ready &  pre_decode_pop)
             inflight_count <= inflight_count - 1;
     end
 
     always_ff @(posedge clk) begin
         if (rst | gc_fetch_flush)
             space_in_inst_buffer <= 1;
-        else if (mem_ready  & ~ib.pop)
+        else if (mem_ready  & ~pre_decode_pop)
             space_in_inst_buffer <= inflight_count < (FETCH_BUFFER_DEPTH-1);
-        else if (~mem_ready &  ib.pop)
+        else if (~mem_ready &  pre_decode_pop)
             space_in_inst_buffer <= 1;
     end
 
@@ -215,9 +212,6 @@ module fetch(
 
     assign mem_valid = ~(gc_fetch_flush | delayed_flush);
     assign new_issue =  mem_valid & (|unit_data_valid);
-    assign ib.push = new_issue;
-    assign ib.flush = gc_fetch_flush;
-
 
     //bitwise AND all subunit outputs with valid signal then or all outputs together
     always_comb begin
@@ -228,87 +222,18 @@ module fetch(
         end
     end
 
-    assign ib.data_in.instruction = final_instruction;
-    assign ib.data_in.pc = stage2_phys_address;
+    ////////////////////////////////////////////////////
+    //Pre-Decode Output
+    assign pre_decode_instruction = final_instruction;
+    assign pre_decode_pc = stage2_phys_address;
+    assign pre_decode_push = new_issue;
 
-    ///////////////////////////////////
-    //Early decode
-    ///////////////////////////////////
-    assign fn3 = final_instruction[14:12];
-    assign opcode = final_instruction[6:0];
-    assign opcode_trimmed = opcode[6:2];
-
-    assign rs1_addr = final_instruction[19:15];
-    assign rs2_addr = final_instruction[24:20];
-    assign rd_addr  = final_instruction[11:7];
-
-    assign csr_imm_op = (opcode_trimmed == SYSTEM_T) && fn3[2];
-    assign sys_op =  (opcode_trimmed == SYSTEM_T) && (fn3 == 0);
-
-    assign jal_jalr_x0 = (opcode_trimmed inside {JAL_T, JALR_T}) && (rd_addr == 0);
-
-    //RAS support ///////////////////
-    assign rs1_link = (rs1_addr inside {1,5});
-    assign rd_link = (rd_addr inside {1,5});
-    assign rs1_eq_rd = (rs1_addr == rd_addr);
-    assign use_ras =  (opcode_trimmed == JALR_T) && ((rs1_link & ~rd_link) | (rs1_link & rd_link & ~rs1_eq_rd));
-    ///////////////////////////////////
-
-    //Output FIFO
-    assign ib.data_in.uses_rs1 = !(opcode_trimmed inside {LUI_T, AUIPC_T, JAL_T, FENCE_T} || csr_imm_op || sys_op);
-    assign ib.data_in.uses_rs2 = opcode_trimmed inside {BRANCH_T, STORE_T, ARITH_T, AMO_T};
-    assign ib.data_in.uses_rd = !(opcode_trimmed inside {BRANCH_T, STORE_T, FENCE_T} || sys_op || jal_jalr_x0);
-    assign ib.data_in.rd_zero = (rd_addr == 0);
-
-    assign ib.data_in.is_return = use_ras;
-    assign ib.data_in.is_call = (opcode_trimmed inside {JAL_T, JALR_T}) && rd_link;
-
-    logic [1:0] branch_metadata_r;
-    logic prediction_used;
-    logic [BRANCH_PREDICTOR_WAYS-1:0] update_way;
     always_ff @(posedge clk) begin
         if (new_mem_request) begin
-            branch_metadata_r <= bp.metadata;
-            prediction_used <= bp.use_prediction;
-            update_way <= bp.update_way;
+            branch_metadata <= bp.metadata;
+            branch_prediction_used <= bp.use_prediction;
+            bp_update_way <= bp.update_way;
         end
-    end
-    assign ib.data_in.branch_metadata = branch_metadata_r;
-    assign ib.data_in.branch_prediction_used = prediction_used;
-    assign ib.data_in.bp_update_way = update_way;
-
-    //Add cases: LUI, AUIPC, ADD[I], all logic ops
-    //sub cases: SUB, SLT[U][I]
-    assign ib.data_in.alu_sub = opcode[2] ? 0 : ((fn3 inside {SLTU_fn3, SLT_fn3}) || ((fn3 == ADD_SUB_fn3) && final_instruction[30]) && opcode[5]);
-
-        always_comb begin
-        case (fn3)
-            SLT_fn3 : ib.data_in.alu_logic_op = ALU_LOGIC_ADD;
-            SLTU_fn3 : ib.data_in.alu_logic_op = ALU_LOGIC_ADD;
-            SLL_fn3 : ib.data_in.alu_logic_op = ALU_LOGIC_ADD;
-            XOR_fn3 : ib.data_in.alu_logic_op = ALU_LOGIC_XOR;
-            OR_fn3 : ib.data_in.alu_logic_op = ALU_LOGIC_OR;
-            AND_fn3 : ib.data_in.alu_logic_op = ALU_LOGIC_AND;
-            SRA_fn3 : ib.data_in.alu_logic_op = ALU_LOGIC_ADD;
-            ADD_SUB_fn3 : ib.data_in.alu_logic_op = ALU_LOGIC_ADD;
-        endcase
-        //put LUI and AUIPC through adder path
-        ib.data_in.alu_logic_op = opcode[2] ? ALU_LOGIC_ADD : ib.data_in.alu_logic_op;
-    end
-
-    always_comb begin
-        case (fn3)
-            SLT_fn3 : ib.data_in.alu_op = ALU_SLT;
-            SLTU_fn3 : ib.data_in.alu_op = ALU_SLT;
-            SLL_fn3 : ib.data_in.alu_op = ALU_LSHIFT;
-            XOR_fn3 : ib.data_in.alu_op = ALU_ADD_SUB;
-            OR_fn3 : ib.data_in.alu_op = ALU_ADD_SUB;
-            AND_fn3 : ib.data_in.alu_op = ALU_ADD_SUB;
-            SRA_fn3 : ib.data_in.alu_op = ALU_RSHIFT;
-            ADD_SUB_fn3 : ib.data_in.alu_op = ALU_ADD_SUB;
-        endcase
-        //put LUI and AUIPC through adder path
-        ib.data_in.alu_op = opcode[2] ? ALU_ADD_SUB : ib.data_in.alu_op;
     end
 
 endmodule

@@ -50,7 +50,7 @@ module write_back(
 
     //aliases for write-back-interface signals
     logic [MAX_INFLIGHT_COUNT-1:0] unit_done_next_cycle [NUM_WB_UNITS-1:0];
-    logic [XLEN-1:0] unit_rd [2**($clog2(NUM_WB_UNITS))-1:0];
+    logic [XLEN-1:0] unit_rd [NUM_WB_UNITS-1:0];
     /////
 
     instruction_id_t issue_id, retired_id, retired_id_r;
@@ -77,8 +77,6 @@ module write_back(
             assign unit_rd[i] = unit_wb[i].rd;
             assign unit_wb[i].writeback_instruction_id = retired_id_r;
         end
-        assign unit_rd[6] = unit_rd[GC_UNIT_WB_ID];
-        assign unit_rd[7] = unit_rd[ALU_UNIT_WB_ID];
     endgenerate
 
     //ID stack.  id_ordering[0] is the next ID to be issued.  Entries filled from
@@ -177,9 +175,7 @@ module write_back(
     assign rf_wb.id = retired_id_r;
     assign rf_wb.valid_write = retired_r;
     assign rf_wb.rd_nzero = retired_instruction_packet.rd_addr_nzero;
-
     assign rf_wb.rd_data = unit_rd[retired_instruction_packet.unit_id];
-
 
     ////////////////////////////////////////////////////
     //End of Implementation

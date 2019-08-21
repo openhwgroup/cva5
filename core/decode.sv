@@ -27,7 +27,10 @@ module decode(
         input logic clk,
         input logic rst,
 
-        instruction_buffer_interface.decode ib,
+        output logic pre_decode_pop,
+        input logic fb_valid,
+        input fetch_buffer_packet_t fb,
+
         tracking_interface.decode ti,
         register_file_decode_interface.decode rf_decode,
 
@@ -94,10 +97,10 @@ module decode(
 
     logic mult_div_op;
 
-    logic [NUM_WB_UNITS-1:0] new_request;
+    logic [NUM_UNITS-1:0] new_request;
     logic [WB_UNITS_WIDTH-1:0] new_request_int;
-    logic [NUM_WB_UNITS-1:0] issue_ready;
-    logic [NUM_WB_UNITS-1:0] issue;
+    logic [NUM_UNITS-1:0] issue_ready;
+    logic [NUM_UNITS-1:0] issue;
 
     logic instruction_issued;
 
@@ -111,20 +114,20 @@ module decode(
 
     ////////////////////////////////////////////////////
     //Instruction Buffer / Instruction aliases
-    assign ib.pop = instruction_issued;
+    assign pre_decode_pop = instruction_issued;
 
-    assign opcode = ib.data_out.instruction[6:0];
+    assign opcode = fb.instruction[6:0];
     assign opcode_trim = opcode[6:2];
-    assign fn3 = ib.data_out.instruction[14:12];
+    assign fn3 = fb.instruction[14:12];
 
-    assign uses_rs1 = ib.data_out.uses_rs1;
-    assign uses_rs2 = ib.data_out.uses_rs2;
-    assign uses_rd = ib.data_out.uses_rd;
-    assign rd_zero = ib.data_out.rd_zero;
+    assign uses_rs1 = fb.uses_rs1;
+    assign uses_rs2 = fb.uses_rs2;
+    assign uses_rd = fb.uses_rd;
+    assign rd_zero = fb.rd_zero;
 
-    assign rs1_addr = ib.data_out.instruction[19:15];
-    assign rs2_addr = ib.data_out.instruction[24:20];
-    assign future_rd_addr = ib.data_out.instruction[11:7];
+    assign rs1_addr = fb.instruction[19:15];
+    assign rs2_addr = fb.instruction[24:20];
+    assign future_rd_addr = fb.instruction[11:7];
     assign nop = (opcode_trim inside {LUI_T, AUIPC_T, ARITH_T, ARITH_IMM_T} && rd_zero);
 
     ////////////////////////////////////////////////////
@@ -144,13 +147,13 @@ module decode(
     assign ti.inflight_packet.rd_addr = future_rd_addr;
     assign ti.inflight_packet.rd_addr_nzero = ~rd_zero;
     assign ti.issued = instruction_issued & (uses_rd | new_request[LS_UNIT_WB_ID]);
-    one_hot_to_integer #(NUM_WB_UNITS) new_request_to_int (.*, .one_hot(new_request), .int_out(ti.inflight_packet.unit_id));
+    one_hot_to_integer #(NUM_WB_UNITS) new_request_to_int (.*, .one_hot(new_request[NUM_WB_UNITS-1:0]), .int_out(ti.inflight_packet.unit_id));
     ////////////////////////////////////////////////////
     //Unit Determination
-    assign mult_div_op = ib.data_out.instruction[25];
+    assign mult_div_op = fb.instruction[25];
 
-    assign new_request[BRANCH_UNIT_WB_ID] = opcode_trim inside {BRANCH_T, JAL_T, JALR_T};
-    assign new_request[ALU_UNIT_WB_ID] =  ((opcode_trim == ARITH_T)  && ~mult_div_op) || opcode_trim inside {ARITH_IMM_T, AUIPC_T, LUI_T};
+    assign new_request[BRANCH_UNIT_ID] = opcode_trim inside {BRANCH_T, JAL_T, JALR_T};
+    assign new_request[ALU_UNIT_WB_ID] = fb.alu_request;
     assign new_request[LS_UNIT_WB_ID] = opcode_trim inside {LOAD_T, STORE_T, AMO_T};
     assign new_request[GC_UNIT_WB_ID] = opcode_trim inside {SYSTEM_T, FENCE_T};
 
@@ -166,7 +169,7 @@ module decode(
 
     ////////////////////////////////////////////////////
     //Unit ready
-    assign issue_ready[BRANCH_UNIT_WB_ID] = new_request[BRANCH_UNIT_WB_ID] & branch_ex.ready;
+    assign issue_ready[BRANCH_UNIT_ID] = new_request[BRANCH_UNIT_ID] & branch_ex.ready;
     assign issue_ready[ALU_UNIT_WB_ID] = new_request[ALU_UNIT_WB_ID] & alu_ex.ready;
     assign issue_ready[LS_UNIT_WB_ID] = new_request[LS_UNIT_WB_ID] & ls_ex.ready;
     assign issue_ready[GC_UNIT_WB_ID] = new_request[GC_UNIT_WB_ID] & gc_ex.ready;
@@ -180,12 +183,12 @@ module decode(
 
     ////////////////////////////////////////////////////
     //Issue Determination
-    assign issue_valid = ib.valid & ti.id_available & ~gc_issue_hold & ~gc_fetch_flush;
+    assign issue_valid = fb_valid & ti.id_available & ~gc_issue_hold & ~gc_fetch_flush;
 
     assign operands_ready = ~rf_decode.rs1_conflict & ~rf_decode.rs2_conflict;
     assign load_store_operands_ready =  ~rf_decode.rs1_conflict & (~rf_decode.rs2_conflict | (rf_decode.rs2_conflict & load_store_forward_possible));
 
-    assign issue[BRANCH_UNIT_WB_ID] = issue_valid & operands_ready & issue_ready[BRANCH_UNIT_WB_ID];
+    assign issue[BRANCH_UNIT_ID] = issue_valid & operands_ready & issue_ready[BRANCH_UNIT_ID];
     assign issue[ALU_UNIT_WB_ID] = issue_valid & operands_ready & issue_ready[ALU_UNIT_WB_ID];
     assign issue[LS_UNIT_WB_ID] = issue_valid & load_store_operands_ready & issue_ready[LS_UNIT_WB_ID];
     assign issue[GC_UNIT_WB_ID] = issue_valid & operands_ready &  issue_ready[GC_UNIT_WB_ID];
@@ -214,31 +217,28 @@ module decode(
     logic [XLEN-1:0] alu_rs2_data;
 
     always_comb begin
-        if (opcode[2] & opcode[5]) //LUI
-            alu_rs1_data = '0;
-        else if (opcode[2] & ~opcode[5])//AUIPC
-            alu_rs1_data = ib.data_out.pc;
-        else
-            alu_rs1_data = rf_decode.rs1_data;
-    end
+        case(fb.alu_rs1_sel)
+            ALU_RS1_ZERO : alu_rs1_data = '0;
+            ALU_RS1_PC : alu_rs1_data = fb.pc;
+            default : alu_rs1_data = rf_decode.rs1_data; //ALU_RS1_RF
+        endcase
 
-    always_comb begin
-        if (opcode[2])//LUI or AUIPC
-            alu_rs2_data = {ib.data_out.instruction[31:12], 12'b0};
-        else if (~opcode[5]) //ARITH_IMM
-            alu_rs2_data = 32'(signed'(ib.data_out.instruction[31:20]));
-        else// ARITH instructions
-            alu_rs2_data = rf_decode.rs2_data;
+        case(fb.alu_rs2_sel)
+            ALU_RS2_LUI_AUIPC : alu_rs2_data = {fb.instruction[31:12], 12'b0};
+            ALU_RS2_ARITH_IMM : alu_rs2_data = 32'(signed'(fb.instruction[31:20]));
+            ALU_RS2_JAL_JALR : alu_rs2_data = 4;
+            ALU_RS2_RF : alu_rs2_data = rf_decode.rs2_data;
+        endcase
     end
 
     assign alu_inputs.in1 = {(alu_rs1_data[XLEN-1] & ~fn3[0]), alu_rs1_data};//(fn3[0]  is SLTU_fn3);
     assign alu_inputs.in2 = {(alu_rs2_data[XLEN-1] & ~fn3[0]), alu_rs2_data};
     assign alu_inputs.shifter_in = rf_decode.rs1_data;
-    assign alu_inputs.subtract = ib.data_out.alu_sub;
-    assign alu_inputs.arith = alu_rs1_data[XLEN-1] & ib.data_out.instruction[30];//shift in bit
+    assign alu_inputs.subtract = fb.alu_sub;
+    assign alu_inputs.arith = alu_rs1_data[XLEN-1] & fb.instruction[30];//shift in bit
     assign alu_inputs.lshift = ~fn3[2];
-    assign alu_inputs.logic_op = ib.data_out.alu_logic_op;
-    assign alu_inputs.op = ib.data_out.alu_op;
+    assign alu_inputs.logic_op = fb.alu_logic_op;
+    assign alu_inputs.op = fb.alu_op;
 
     ////////////////////////////////////////////////////
     //Load Store unit inputs
@@ -251,7 +251,7 @@ module decode(
     logic [4:0] amo_type;
 
     assign amo_op =  USE_AMO ? (opcode_trim == AMO_T) : 1'b0;
-    assign amo_type = ib.data_out.instruction[31:27];
+    assign amo_type = fb.instruction[31:27];
     assign store_conditional = (amo_type == AMO_SC);
     assign load_reserve = (amo_type == AMO_LR);
 
@@ -267,12 +267,12 @@ module decode(
     endgenerate
 
     assign ls_is_load = (opcode_trim inside {LOAD_T, AMO_T}) && !(amo_op & store_conditional); //LR and AMO_ops perform a read operation as well
-    assign ls_offset = opcode[5] ? {ib.data_out.instruction[31:25], ib.data_out.instruction[11:7]} : ib.data_out.instruction[31:20];
+    assign ls_offset = opcode[5] ? {fb.instruction[31:25], fb.instruction[11:7]} : fb.instruction[31:20];
 
     assign ls_inputs.offset = ls_offset;
     assign ls_inputs.virtual_address = rf_decode.rs1_data + 32'(signed'(ls_offset));
     assign ls_inputs.rs2 = rf_decode.rs2_data;
-    assign ls_inputs.pc = ib.data_out.pc;
+    assign ls_inputs.pc = fb.pc;
     assign ls_inputs.fn3 = amo_op ? LS_W_fn3 : fn3;
     assign ls_inputs.load = ls_is_load;
     assign ls_inputs.store = (opcode_trim == STORE_T) || (amo_op && store_conditional);
@@ -303,40 +303,39 @@ module decode(
     assign branch_inputs.rs1 = rf_decode.rs1_data;
     assign branch_inputs.rs2 = rf_decode.rs2_data;
     assign branch_inputs.fn3 = fn3;
-    assign branch_inputs.dec_pc = ib.data_out.pc;
-    assign branch_inputs.dec_pc_valid = ib.valid;
+    assign branch_inputs.dec_pc = fb.pc;
+    assign branch_inputs.dec_pc_valid = fb_valid;
     assign branch_inputs.use_signed = !(fn3 inside {BLTU_fn3, BGEU_fn3});
     assign branch_inputs.jal = opcode[3];//(opcode == JAL);
     assign branch_inputs.jalr = ~opcode[3] & opcode[2];//(opcode == JALR);
-    assign branch_inputs.uses_rd = uses_rd;//not (future_rd_addr == 0); jal jalr x0
-    assign branch_inputs.is_call = ib.data_out.is_call;
-    assign branch_inputs.is_return = ib.data_out.is_return;
-    assign branch_inputs.instruction = ib.data_out.instruction;
-    assign branch_inputs.branch_metadata = ib.data_out.branch_metadata;
-    assign branch_inputs.branch_prediction_used = ib.data_out.branch_prediction_used;
-    assign branch_inputs.bp_update_way = ib.data_out.bp_update_way;
+    assign branch_inputs.is_call = fb.is_call;
+    assign branch_inputs.is_return = fb.is_return;
+    assign branch_inputs.instruction = fb.instruction;
+    assign branch_inputs.branch_metadata = fb.branch_metadata;
+    assign branch_inputs.branch_prediction_used = fb.branch_prediction_used;
+    assign branch_inputs.bp_update_way = fb.bp_update_way;
     ////////////////////////////////////////////////////
     //Global Control unit inputs
     logic sfence;
     logic ifence;
     logic environment_op;
-    assign sfence = ib.data_out.instruction[25];
+    assign sfence = fb.instruction[25];
     assign ifence =  (opcode_trim == FENCE_T) && fn3[0];
     assign environment_op = (opcode_trim == SYSTEM_T) && (fn3 == 0);
 
     always_ff @(posedge clk) begin
         if (issue_ready[GC_UNIT_WB_ID]) begin
-            gc_inputs.pc <= ib.data_out.pc;
-            gc_inputs.instruction <= ib.data_out.instruction;
+            gc_inputs.pc <= fb.pc;
+            gc_inputs.instruction <= fb.instruction;
             gc_inputs.rs1 <= rf_decode.rs1_data;
             gc_inputs.rs2 <= rf_decode.rs2_data;
             gc_inputs.rd_is_zero <= rd_zero;
             gc_inputs.is_fence <= (opcode_trim == FENCE_T) && ~fn3[0];
             gc_inputs.is_csr <= (opcode_trim == SYSTEM_T) && (fn3 != 0);
         end
-        gc_inputs.is_ecall <= issue[GC_UNIT_WB_ID] && environment_op && (ib.data_out.instruction[21:20] == 0);
-        gc_inputs.is_ebreak <= issue[GC_UNIT_WB_ID] && environment_op && (ib.data_out.instruction[21:20] == 2'b01);
-        gc_inputs.is_ret <= issue[GC_UNIT_WB_ID] && environment_op && (ib.data_out.instruction[21:20] == 2'b10);
+        gc_inputs.is_ecall <= issue[GC_UNIT_WB_ID] && environment_op && (fb.instruction[21:20] == 0);
+        gc_inputs.is_ebreak <= issue[GC_UNIT_WB_ID] && environment_op && (fb.instruction[21:20] == 2'b01);
+        gc_inputs.is_ret <= issue[GC_UNIT_WB_ID] && environment_op && (fb.instruction[21:20] == 2'b10);
         gc_inputs.is_i_fence <= issue[GC_UNIT_WB_ID] && ifence;
     end
     assign gc_flush_required = issue[GC_UNIT_WB_ID] && (environment_op | ifence);
@@ -405,13 +404,13 @@ module decode(
     //Unit EX signals
     assign alu_ex.new_request_dec = issue[ALU_UNIT_WB_ID];
     assign ls_ex.new_request_dec = issue[LS_UNIT_WB_ID];
-    assign branch_ex.new_request_dec = issue[BRANCH_UNIT_WB_ID];
+    assign branch_ex.new_request_dec = issue[BRANCH_UNIT_ID];
     assign gc_ex.new_request_dec = issue[GC_UNIT_WB_ID];
 
     always_ff @(posedge clk) begin
         alu_ex.new_request <= issue[ALU_UNIT_WB_ID];
         ls_ex.new_request <= issue[LS_UNIT_WB_ID];
-        branch_ex.new_request <= issue[BRANCH_UNIT_WB_ID];
+        branch_ex.new_request <= issue[BRANCH_UNIT_ID];
         gc_ex.new_request <= issue[GC_UNIT_WB_ID];
     end
 
@@ -441,7 +440,7 @@ module decode(
         assign div_ex.possible_issue = new_request[DIV_UNIT_WB_ID] & ti.id_available;
     endgenerate
 
-    assign branch_ex.possible_issue = new_request[BRANCH_UNIT_WB_ID] & ti.id_available;
+    assign branch_ex.possible_issue = new_request[BRANCH_UNIT_ID] & ti.id_available;
     assign alu_ex.possible_issue = new_request[ALU_UNIT_WB_ID] & ti.id_available;
     assign ls_ex.possible_issue = new_request[LS_UNIT_WB_ID] & ti.id_available;
     assign gc_ex.possible_issue = new_request[GC_UNIT_WB_ID] & ti.id_available;
@@ -453,11 +452,11 @@ module decode(
         illegal_instruction = !(opcode inside {LUI, AUIPC, JAL, JALR, BRANCH, LOAD, STORE, ARITH, ARITH_IMM, FENCE, AMO, SYSTEM});
         if (opcode == ARITH) begin
             if (!USE_MUL && !USE_DIV)
-                illegal_instruction = ib.data_out.instruction[25];
+                illegal_instruction = fb.instruction[25];
             else if (!USE_MUL && USE_DIV)
-                illegal_instruction = ib.data_out.instruction[25] & ~fn3[2];
+                illegal_instruction = fb.instruction[25] & ~fn3[2];
             else if (!USE_MUL && !USE_DIV)
-                illegal_instruction = ib.data_out.instruction[25] & fn3[2];
+                illegal_instruction = fb.instruction[25] & fn3[2];
             else
                 illegal_instruction = 0;
         end
@@ -474,13 +473,13 @@ module decode(
     //Trace Interface
     assign tr_operand_stall = (|issue_ready) & issue_valid & ~load_store_operands_ready;
     assign tr_unit_stall = ~(|issue_ready) & issue_valid & load_store_operands_ready;
-    assign tr_no_id_stall = (|issue_ready) & (ib.valid & ~ti.id_available & ~gc_issue_hold & ~gc_fetch_flush) & load_store_operands_ready;
-    assign tr_no_instruction_stall = ~ib.valid;
+    assign tr_no_id_stall = (|issue_ready) & (fb_valid & ~ti.id_available & ~gc_issue_hold & ~gc_fetch_flush) & load_store_operands_ready;
+    assign tr_no_instruction_stall = ~fb_valid;
     assign tr_other_stall = ~instruction_issued & ~(tr_operand_stall | tr_unit_stall | tr_no_id_stall | tr_no_instruction_stall);
 
     assign tr_instruction_issued_dec = instruction_issued;
-    assign tr_instruction_pc_dec = ib.data_out.pc;
-    assign tr_instruction_data_dec = ib.data_out.instruction;
+    assign tr_instruction_pc_dec = fb.pc;
+    assign tr_instruction_data_dec = fb.instruction;
 
 
 endmodule

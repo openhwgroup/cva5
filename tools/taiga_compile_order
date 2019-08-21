@@ -88,7 +88,7 @@
 ../core/branch_predictor_ram.sv
 ../core/branch_predictor.sv  
 ../core/fetch.sv  
-../core/instruction_buffer.sv  
+../core/pre_decode.sv
 ../core/decode.sv  
 
 ../core/inuse.sv 

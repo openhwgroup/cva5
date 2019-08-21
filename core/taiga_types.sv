@@ -90,6 +90,19 @@ package taiga_types;
         ALU_LSHIFT =2'b11
     } alu_op_t;
 
+    typedef enum bit [1:0] {
+        ALU_RS1_ZERO = 2'b00,
+        ALU_RS1_PC = 2'b01,
+        ALU_RS1_RF =2'b10
+    } alu_rs1_op_t;
+
+    typedef enum bit [1:0] {
+        ALU_RS2_LUI_AUIPC = 2'b00,
+        ALU_RS2_ARITH_IMM = 2'b01,
+        ALU_RS2_JAL_JALR = 2'b10,
+        ALU_RS2_RF =2'b11
+    } alu_rs2_op_t;
+
     typedef enum bit [2:0] {
         LS_B_fn3 = 3'b000,
         LS_H_fn3 = 3'b001,
@@ -276,7 +289,10 @@ package taiga_types;
         logic alu_sub;
         logic [1:0] alu_logic_op;
         logic [1:0] alu_op;
-    } instruction_buffer_packet;
+        logic alu_request;
+        alu_rs1_op_t alu_rs1_sel;
+        alu_rs2_op_t alu_rs2_sel;
+    } fetch_buffer_packet_t;
 
 
     typedef struct packed{
@@ -299,7 +315,6 @@ package taiga_types;
         logic use_signed;
         logic jal;
         logic jalr;
-        logic uses_rd;
         logic is_call;
         logic is_return;
         logic [31:0] instruction;
@@ -398,7 +413,6 @@ package taiga_types;
         logic is_ecall;
         logic is_ebreak;
         logic is_ret;
-        logic flush_required;
     } gc_inputs_t;
 
     typedef struct packed{

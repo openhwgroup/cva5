@@ -68,8 +68,6 @@ module taiga (
     func_unit_ex_interface mul_ex();
     func_unit_ex_interface div_ex();
 
-    instruction_buffer_interface ib();
-
     exception_packet_t  ls_exception;
     logic ls_exception_valid;
 
@@ -85,6 +83,17 @@ module taiga (
     logic tlb_on;
     logic [ASIDLEN-1:0] asid;
     logic return_from_exception;
+
+    //Pre-Decode
+    logic pre_decode_push;
+    logic pre_decode_pop;
+    logic [31:0] pre_decode_instruction;
+    logic [31:0] pre_decode_pc;
+    branch_predictor_metadata_t branch_metadata;
+    logic branch_prediction_used;
+    logic [BRANCH_PREDICTOR_WAYS-1:0] bp_update_way;
+    logic fb_valid;
+    fetch_buffer_packet_t fb;
 
     //Global Control
     logic load_store_FIFO_emptying;
@@ -111,7 +120,6 @@ module taiga (
     logic jalr;
 
     //Decode Unit and Fetch Unit
-    logic dec_instruction_issued;
     logic illegal_instruction;
 
     logic instruction_queue_empty;
@@ -160,7 +168,7 @@ module taiga (
             assign itlb.physical_address = itlb.virtual_address;
         end
     endgenerate
-    instruction_buffer inst_buffer(.*);
+    pre_decode pre_decode_block(.*);
 
     ////////////////////////////////////////////////////
     //Decode/Issue
@@ -169,7 +177,7 @@ module taiga (
 
     ////////////////////////////////////////////////////
     //Execution Units
-    branch_unit branch_unit_block (.*, .branch_wb(unit_wb[BRANCH_UNIT_WB_ID]));
+    branch_unit branch_unit_block (.*);
     alu_unit alu_unit_block (.*, .alu_wb(unit_wb[ALU_UNIT_WB_ID]));
     load_store_unit load_store_unit_block (.*, .dcache_on(1'b1), .clear_reservation(1'b0), .tlb(dtlb), .ls_wb(unit_wb[LS_UNIT_WB_ID]), .l1_request(l1_request[L1_DCACHE_ID]), .l1_response(l1_response[L1_DCACHE_ID]));
     generate if (ENABLE_S_MODE) begin

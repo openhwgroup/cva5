@@ -161,23 +161,6 @@ interface tracking_interface;
     modport wb (output issue_id, id_available, issue_id_one_hot, input inflight_packet, issued);
 endinterface
 
-
-interface instruction_buffer_interface;
-    logic push;
-    logic pop;
-    logic flush;
-    instruction_buffer_packet data_in;
-    instruction_buffer_packet data_out;
-    logic valid;
-    logic full;
-
-    modport buffer (input push, pop, flush, data_in, output data_out, valid, full);
-    modport fetch (input full, pop, output push, data_in, flush);
-    modport decode (input valid, data_out, output pop);
-    //modport exception_control (output flush);
-endinterface
-
-
 interface fifo_interface #(parameter DATA_WIDTH = 42);//#(parameter type data_type = logic[31:0]);
     logic push;
     logic pop;

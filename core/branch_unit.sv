@@ -1,5 +1,5 @@
 /*
- * Copyright © 2017, 2018 Eric Matthews,  Lesley Shannon
+ * Copyright © 2017-2019 Eric Matthews,  Lesley Shannon
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,8 +33,6 @@ module branch_unit(
         ras_interface.branch_unit ras,
         output branch_flush,
 
-        unit_writeback_interface.unit branch_wb,
-
         //Trace signals
         output logic tr_branch_misspredict,
         output logic tr_return_misspredict
@@ -47,8 +45,6 @@ module branch_unit(
     logic [31:0] pc_offset;
     logic [31:0] jump_base;
     logic [31:0] jump_pc_dec;
-
-    logic [31:0] pc_plus_4;
 
     logic signed [32:0] rs1_sext;
     logic signed [32:0] rs2_sext;
@@ -86,6 +82,7 @@ module branch_unit(
     instruction_id_t id;
     //implementation
     ////////////////////////////////////////////////////
+    assign branch_ex.ready = 1;
 
     branch_comparator bc (
             .use_signed(branch_inputs.use_signed),
@@ -119,8 +116,6 @@ module branch_unit(
     end
 
     assign jump_pc_dec = jump_base + pc_offset;
-    assign pc_plus_4 = branch_inputs.dec_pc + 4;
-
 
     always_ff @(posedge clk) begin
         fn3_ex <= branch_inputs.fn3;
@@ -128,13 +123,12 @@ module branch_unit(
         jump_ex <= (branch_inputs.jal | branch_inputs.jalr);
     end
 
-
     //Predictor support
     ////////////////////////////////////////////////////
     always_ff @(posedge clk) begin
         pc_ex <= branch_inputs.dec_pc;
         jump_pc <= {jump_pc_dec[31:1], 1'b0};
-        njump_pc <= pc_plus_4;
+        njump_pc <= branch_inputs.dec_pc + 4;
         branch_metadata <= branch_inputs.branch_metadata;
         branch_prediction_used <= branch_inputs.branch_prediction_used;
         bp_update_way <= branch_inputs.bp_update_way;
@@ -171,19 +165,6 @@ module branch_unit(
             assign ras.new_addr = njump_pc;
         end
     endgenerate
-
-    ////////////////////////////////////////////////////
-    //Output bank
-    assign new_jal_jalr_dec_with_rd = branch_ex.new_request_dec & branch_inputs.uses_rd;
-
-     always_ff @ (posedge clk) begin
-         if (new_jal_jalr_dec_with_rd)
-             rd_bank[branch_ex.instruction_id] <= pc_plus_4;
-     end
-
-    assign branch_ex.ready = 1;
-    assign branch_wb.rd = rd_bank[branch_wb.writeback_instruction_id];
-    assign branch_wb.done_next_cycle =  branch_ex.instruction_id_one_hot & {MAX_INFLIGHT_COUNT{new_jal_jalr_dec_with_rd}};
     ////////////////////////////////////////////////////
     //End of Implementation
     ////////////////////////////////////////////////////
