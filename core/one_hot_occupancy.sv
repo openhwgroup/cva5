@@ -33,8 +33,7 @@ module one_hot_occupancy #(parameter DEPTH = 4)
         output logic full,
         output logic empty,
         output logic almost_empty,
-        output logic valid,
-        output logic two_plus
+        output logic valid
         );
 
     logic [DEPTH:0] valid_chain;
