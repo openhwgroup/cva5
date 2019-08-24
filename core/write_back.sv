@@ -46,7 +46,7 @@ module write_back(
     //////////////////////////////////////
 
     //Inflight packets
-    inflight_instruction_packet packet_table [MAX_INFLIGHT_COUNT-1:0];
+    logic[$bits(inflight_instruction_packet)-1:0] packet_table [MAX_INFLIGHT_COUNT-1:0];
 
     //aliases for write-back-interface signals
     logic [MAX_INFLIGHT_COUNT-1:0] unit_done_next_cycle [NUM_WB_UNITS-1:0];
