@@ -1,5 +1,5 @@
 /*
- * Copyright © 2017, 2018 Eric Matthews,  Lesley Shannon
+ * Copyright © 2017-2019 Eric Matthews,  Lesley Shannon
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,7 +44,8 @@ module register_file(
 
     logic in_use_match;
     instruction_id_t in_use_by_id;
-
+    instruction_id_t rs1_id;
+    instruction_id_t rs2_id;
     //////////////////////////////////////////
     //Assign zero to r0 and initialize all registers to zero
     initial begin
@@ -76,16 +77,19 @@ module register_file(
     end
 
     assign in_use_by_id = in_use_by[rf_wb.rd_addr];
-    assign in_use_match = ({3'b011, in_use_by_id} == {gc_supress_writeback, rf_wb.rd_nzero, rf_wb.valid_write, rf_wb.id});
+    assign rs1_id =  in_use_by[rf_decode.rs1_addr];
+    assign rs2_id =  in_use_by[rf_decode.rs2_addr];
+    
+    assign in_use_match = ~gc_supress_writeback && rf_wb.rd_nzero && rf_wb.valid_write && (rf_wb.id == in_use_by_id);
 
-    assign rs1_feedforward = ({4'b0111, in_use_by_id, rf_decode.rs1_addr} == {gc_supress_writeback, rf_wb.rd_nzero, rf_decode.uses_rs1, rf_wb.valid_write, rf_wb.id, rf_wb.rd_addr});
-    assign rs2_feedforward = ({4'b0111, in_use_by_id, rf_decode.rs2_addr} == {gc_supress_writeback, rf_wb.rd_nzero, rf_decode.uses_rs2, rf_wb.valid_write, rf_wb.id, rf_wb.rd_addr});
+    assign rs1_feedforward = rs1_inuse && (rs1_id == rf_wb.id) && rf_wb.valid_write;
+    assign rs2_feedforward = rs2_inuse && (rs2_id == rf_wb.id) && rf_wb.valid_write;
 
     assign rf_decode.rs1_data = rs1_feedforward ? rf_wb.rd_data : register[rf_decode.rs1_addr];
     assign rf_decode.rs2_data = rs2_feedforward ? rf_wb.rd_data : register[rf_decode.rs2_addr];
 
-    assign rf_decode.rs1_conflict = rs1_inuse & ~rs1_feedforward;
-    assign rf_decode.rs2_conflict = rs2_inuse & ~rs2_feedforward;
+    assign rf_decode.rs1_conflict = rf_decode.uses_rs1 & rs1_inuse & ~rs1_feedforward;
+    assign rf_decode.rs2_conflict = rf_decode.uses_rs2 & rs2_inuse & ~rs2_feedforward;
 
     ////////////////////////////////////////////////////
     //Assertions
