@@ -46,6 +46,11 @@ module load_store_unit (
 
         local_memory_interface.master data_bram,
 
+        input logic[31:0] csr_rd,
+        input instruction_id_one_hot_t csr_id_done,
+        input instruction_id_t csr_id,
+        input logic csr_done,
+
         output logic store_committed,
         output instruction_id_t store_id,
 
@@ -328,8 +333,8 @@ module load_store_unit (
     ////////////////////////////////////////////////////
     //Output bank
      always_ff @ (posedge clk) begin
-         if (load_complete)
-             rd_bank[stage2_attr.instruction_id] <= final_load_data;
+         if (load_complete | csr_done)
+             rd_bank[csr_done ? csr_id : stage2_attr.instruction_id] <= csr_done ? csr_rd : final_load_data;
      end
 
     always_ff @ (posedge clk) begin
@@ -340,11 +345,13 @@ module load_store_unit (
     assign ls_wb.rd = rd_bank[ls_wb.writeback_instruction_id];
 
     logic exception_complete;
+    logic ls_done;
     always_ff @ (posedge clk) begin
         exception_complete <= (input_fifo.valid & ls_exception_valid & stage1.load);
     end
+    assign ls_done = load_complete | exception_complete;
 
-    assign ls_wb.done_next_cycle = stage2_attr.instruction_id_one_hot & {MAX_INFLIGHT_COUNT{(load_complete | exception_complete)}};
+    assign ls_wb.done_next_cycle = csr_id_done | (stage2_attr.instruction_id_one_hot & {MAX_INFLIGHT_COUNT{ls_done}});
     ////////////////////////////////////////////////////
     //End of Implementation
     ////////////////////////////////////////////////////

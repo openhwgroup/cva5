@@ -55,7 +55,7 @@ module gc_unit(
         input logic instruction_complete,
         input logic instruction_queue_empty,
         input instruction_id_t oldest_id,
-        unit_writeback_interface.unit gc_wb,
+        //unit_writeback_interface.unit gc_wb,
 
         //External
         input logic interrupt,
@@ -71,7 +71,13 @@ module gc_unit(
         output logic inorder,
         output logic inuse_clear,
 
-        output logic [31:0] gc_fetch_pc
+        output logic [31:0] gc_fetch_pc,
+
+        //Write-back to Load-Store Unit
+        output logic[31:0] csr_rd,
+        output instruction_id_t csr_id,
+        output instruction_id_one_hot_t csr_id_done,
+        output logic csr_done
         );
 
     //Largest depth for TLBs
@@ -82,8 +88,6 @@ module gc_unit(
     logic [CLEAR_DEPTH-1:0] clear_shift_count;
     logic [TLB_CLEAR_DEPTH-1:0] tlb_clear_shift_count;
     ////////////////////////////////////////////////////
-    enum {OP_ECALL, OP_EBREAK, OP_SRET, OP_MRET, OP_SFENCE, OP_FENCE, OP_FENCEI} operation;
-
     //Instructions
     //All instructions are processed only if in IDLE state, meaning there can be no exceptions caused by instructions already further in the pipeline.
     //FENCE:
@@ -141,7 +145,7 @@ module gc_unit(
     //CSR
     logic mret;
     logic sret;
-    logic [XLEN-1:0] selected_csr;
+    logic [XLEN-1:0] wb_csr;
     csr_inputs_t csr_inputs;
     exception_packet_t gc_exception;
     exception_packet_t csr_exception;
@@ -151,8 +155,6 @@ module gc_unit(
     logic [31:0] csr_sepc;
 
     //Write-back handshaking
-    logic processing;
-
     logic [2:0] fn3;
     logic [6:0] opcode;
     logic [4:0] opcode_trim;
@@ -161,6 +163,9 @@ module gc_unit(
     logic [4:0] rs2_addr;
     logic [4:0] future_rd_addr;
     instruction_id_one_hot_t id;
+
+    logic is_csr;
+    logic processing_csr;
     //implementation
     ////////////////////////////////////////////////////
 
@@ -171,60 +176,14 @@ module gc_unit(
     assign fn3 = gc_inputs.instruction[14:12];
     assign rs1_addr = gc_inputs.instruction[19:15];
 
-    always @(posedge clk) begin
-        if (rst)
-            state <= RST_STATE;
-        else
-            state <= next_state;
-    end
-
-    always_comb begin
-        next_state = state;
-        case (state)
-            RST_STATE : next_state = PRE_CLEAR_STATE;
-            PRE_CLEAR_STATE : next_state = CLEAR_STATE;
-            CLEAR_STATE : if (clear_shift_count[CLEAR_DEPTH-1]) next_state = IDLE_STATE;
-            IDLE_STATE : if (load_store_issue) next_state = LS_EXCEPTION_POSSIBLE;
-            TLB_CLEAR_STATE : if (tlb_clear_shift_count[TLB_CLEAR_DEPTH-1]) next_state = IDLE_STATE;
-            LS_EXCEPTION_POSSIBLE :
-                if (load_store_FIFO_emptying)
-                    next_state = IDLE_STATE;
-                else if (ls_exception_valid) begin
-                    if (ls_exception.id == oldest_id)
-                        next_state = IQ_DISCARD;
-                    else
-                        next_state = IQ_DRAIN;
-                end
-            IQ_DRAIN :
-                if (ls_exception.id == oldest_id)
-                    next_state = IQ_DISCARD;
-            IQ_DISCARD :
-                if (instruction_queue_empty)
-                    next_state = IDLE_STATE;
-            default : next_state = RST_STATE;
-        endcase
-    end
-
-    logic ls_exception_first_cycle;
-    logic ls_exception_second_cycle;
-
-    assign ls_exception_first_cycle =  ls_exception_valid && (state == LS_EXCEPTION_POSSIBLE);
-    always_ff @ (posedge clk) begin
-        ls_exception_second_cycle <= ls_exception_first_cycle;
-    end
-
-    assign gc_exception.code =
-        ls_exception_second_cycle ? ls_exception.code :
-        gc_inputs.is_ecall ? ecall_code : BREAK;
-    assign gc_exception.pc = ls_exception_second_cycle ? ls_exception.pc : gc_inputs.pc;
-    assign gc_exception.tval = ls_exception_second_cycle ? ls_exception.tval : '0;
-    assign gc_exception.valid = gc_inputs.is_ecall | gc_inputs.is_ebreak | ls_exception_second_cycle;
-
+    ////////////////////////////////////////////////////
+    //GC Operation
+    assign is_csr = gc_ex.new_request & gc_inputs.is_csr;
 
     assign gc_fetch_flush = branch_flush | gc_fetch_pc_override;
 
     always_ff @ (posedge clk) begin
-        gc_issue_hold <= gc_ex.new_request_dec || processing || (next_state inside {PRE_CLEAR_STATE, CLEAR_STATE, TLB_CLEAR_STATE, IQ_DRAIN, IQ_DISCARD});
+        gc_issue_hold <= gc_ex.new_request_dec || is_csr || processing_csr || (next_state inside {PRE_CLEAR_STATE, CLEAR_STATE, TLB_CLEAR_STATE, IQ_DRAIN, IQ_DISCARD});
         inuse_clear <= (next_state == CLEAR_STATE);
         inorder <= 0;//(next_state inside {LS_EXCEPTION_POSSIBLE, IQ_DRAIN});
     end
@@ -237,14 +196,39 @@ module gc_unit(
         gc_supress_writeback <= next_state inside {PRE_CLEAR_STATE, CLEAR_STATE, TLB_CLEAR_STATE, IQ_DISCARD} ? 1 : 0;
     end
 
+    ////////////////////////////////////////////////////
+    //GC State Machine
+    always @(posedge clk) begin
+        if (rst)
+            state <= RST_STATE;
+        else
+            state <= next_state;
+    end
 
-    always_ff @ (posedge clk) begin
-        second_cycle_flush <= gc_flush_required;
-        gc_fetch_pc_override <= gc_flush_required | second_cycle_flush | ls_exception_first_cycle;
-        gc_fetch_pc <=
-            gc_inputs.is_i_fence ? gc_inputs.pc + 4 :
-            gc_inputs.is_ret ? csr_mepc :
-            trap_pc;
+    gc_state ls_exception_next_state;
+    always_comb begin
+        ls_exception_next_state = state;
+        if (load_store_FIFO_emptying)
+            ls_exception_next_state = IDLE_STATE;
+        else if (ls_exception_valid) begin
+            if (ls_exception.id == oldest_id)
+                ls_exception_next_state = IQ_DISCARD;
+            else
+                ls_exception_next_state = IQ_DRAIN;
+        end
+
+        next_state = state;
+        case (state)
+            RST_STATE : next_state = PRE_CLEAR_STATE;
+            PRE_CLEAR_STATE : next_state = CLEAR_STATE;
+            CLEAR_STATE : if (clear_shift_count[CLEAR_DEPTH-1]) next_state = IDLE_STATE;
+            IDLE_STATE : if (load_store_issue) next_state = LS_EXCEPTION_POSSIBLE;
+            TLB_CLEAR_STATE : if (tlb_clear_shift_count[TLB_CLEAR_DEPTH-1]) next_state = IDLE_STATE;
+            LS_EXCEPTION_POSSIBLE : next_state = ls_exception_next_state;
+            IQ_DRAIN : if (ls_exception.id == oldest_id) next_state = IQ_DISCARD;
+            IQ_DISCARD : if (instruction_queue_empty) next_state = IDLE_STATE;
+            default : next_state = RST_STATE;
+        endcase
     end
 
     //CLEAR state shift reg
@@ -259,12 +243,14 @@ module gc_unit(
     end
 
     ////////////////////////////////////////////////////
-    //CSR registers
-    assign csr_inputs.rs1 = fn3[2] ? {27'b0, rs1_addr} : gc_inputs.rs1;
-    assign csr_inputs.csr_addr = gc_inputs.instruction[31:20];
-    assign csr_inputs.csr_op = fn3[1:0];
-    assign csr_inputs.rs1_is_zero = (rs1_addr == 0);
-    assign csr_inputs.rd_is_zero = gc_inputs.rd_is_zero;
+    //Exception handling
+    logic ls_exception_first_cycle;
+    logic ls_exception_second_cycle;
+
+    assign ls_exception_first_cycle =  ls_exception_valid && (state == LS_EXCEPTION_POSSIBLE);
+    always_ff @ (posedge clk) begin
+        ls_exception_second_cycle <= ls_exception_first_cycle;
+    end
 
     always_comb begin
         case (current_privilege)
@@ -275,33 +261,62 @@ module gc_unit(
         endcase
     end
 
-    csr_regs csr_registers (.*, .new_request(gc_inputs.is_csr & gc_ex.new_request));
+    assign gc_exception.code =
+        ls_exception_second_cycle ? ls_exception.code :
+        gc_inputs.is_ecall ? ecall_code : BREAK;
+    assign gc_exception.pc = ls_exception_second_cycle ? ls_exception.pc : gc_inputs.pc;
+    assign gc_exception.tval = ls_exception_second_cycle ? ls_exception.tval : '0;
+    assign gc_exception.valid = gc_inputs.is_ecall | gc_inputs.is_ebreak | ls_exception_second_cycle;
+
+    always_ff @ (posedge clk) begin
+        second_cycle_flush <= gc_flush_required;
+        gc_fetch_pc_override <= gc_flush_required | second_cycle_flush | ls_exception_first_cycle;
+        gc_fetch_pc <=
+            gc_inputs.is_i_fence ? gc_inputs.pc + 4 :
+            gc_inputs.is_ret ? csr_mepc :
+            trap_pc;
+    end
+
+    ////////////////////////////////////////////////////
+    //CSR registers
+    assign csr_inputs.rs1 = fn3[2] ? {27'b0, rs1_addr} : gc_inputs.rs1;
+    assign csr_inputs.csr_addr = gc_inputs.instruction[31:20];
+    assign csr_inputs.csr_op = fn3[1:0];
+    assign csr_inputs.rs1_is_zero = (rs1_addr == 0);
+    assign csr_inputs.rd_is_zero = gc_inputs.rd_is_zero;
+
+    csr_regs csr_registers (.*, .new_request(is_csr), .commit(csr_ready_to_complete_r));
 
     ////////////////////////////////////////////////////
     //Decode / Write-back Handshaking
-    always_ff @(posedge clk) begin
-        if (rst)
-            processing <= 0;
-        else if (gc_ex.new_request_dec)
-            processing <= 1;
-        else if ((state == IDLE_STATE) && instruction_queue_empty)
-            processing <= 0;
-    end
-
-    //gc_issue_hold prevents further instructions from being issued until processing returns to zero
+    logic csr_ready_to_complete;
+    logic csr_ready_to_complete_r;
+    //CSR reads are passed through the Load-Store unit
+    //A CSR write is only committed once it is the oldest instruction in the pipeline
+    //while processing a csr operation, gc_issue_hold prevents further instructions from being issued
     assign gc_ex.ready = 1;
 
-    //Write_back
     always_ff @(posedge clk) begin
-        id <= gc_ex.instruction_id_one_hot;
-        gc_wb.done_next_cycle <= id & {MAX_INFLIGHT_COUNT{(gc_ex.new_request & gc_inputs.is_csr)}};
+        if (rst)
+            processing_csr <= 0;
+        else if (csr_ready_to_complete)
+            processing_csr <= 0;
+        else if (is_csr)
+            processing_csr <= 1;
     end
 
+    assign csr_ready_to_complete = (is_csr | processing_csr) && (oldest_id == csr_id);
     always_ff @(posedge clk) begin
-        if (gc_ex.new_request) begin
-            gc_wb.rd <= selected_csr;
+        csr_ready_to_complete_r <= csr_ready_to_complete;
+        csr_id_done <= id & {MAX_INFLIGHT_COUNT{csr_ready_to_complete}};
+        if (gc_ex.new_request_dec) begin
+            id <= gc_ex.instruction_id_one_hot;
+            csr_id <= gc_ex.instruction_id;
         end
     end
+
+    assign csr_done = csr_ready_to_complete_r;
+    assign csr_rd = wb_csr;
 
     ////////////////////////////////////////////////////
     //Assertions

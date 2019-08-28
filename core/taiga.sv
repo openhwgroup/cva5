@@ -113,6 +113,11 @@ module taiga (
     logic store_committed;
     instruction_id_t store_id;
 
+    logic[31:0] csr_rd;
+    instruction_id_t csr_id;
+    instruction_id_one_hot_t csr_id_done;
+    logic csr_done;
+
     //Branch Unit and Fetch Unit
     logic branch_taken;
     logic [31:0] pc_offset;
@@ -189,7 +194,7 @@ module taiga (
             assign dtlb.physical_address = dtlb.virtual_address;
         end
     endgenerate
-    gc_unit gc_unit_block (.*, .gc_wb(unit_wb[GC_UNIT_WB_ID]));
+    gc_unit gc_unit_block (.*);
 
     generate if (USE_MUL)
             mul_unit mul_unit_block (.*, .mul_wb(unit_wb[MUL_UNIT_WB_ID]));

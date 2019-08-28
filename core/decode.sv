@@ -97,6 +97,7 @@ module decode(
 
     logic mult_div_op;
 
+    logic [NUM_WB_UNITS-1:0] new_request_for_id_gen;
     logic [NUM_UNITS-1:0] new_request;
     logic [WB_UNITS_WIDTH-1:0] new_request_int;
     logic [NUM_UNITS-1:0] issue_ready;
@@ -147,7 +148,13 @@ module decode(
     assign ti.inflight_packet.rd_addr = future_rd_addr;
     assign ti.inflight_packet.rd_addr_nzero = ~rd_zero;
     assign ti.issued = instruction_issued & (uses_rd | new_request[LS_UNIT_WB_ID]);
-    one_hot_to_integer #(NUM_WB_UNITS) new_request_to_int (.*, .one_hot(new_request[NUM_WB_UNITS-1:0]), .int_out(ti.inflight_packet.unit_id));
+
+    always_comb begin
+        new_request_for_id_gen = new_request[NUM_WB_UNITS-1:0];
+        new_request_for_id_gen[LS_UNIT_WB_ID] |= new_request[GC_UNIT_ID];
+    end
+
+    one_hot_to_integer #(NUM_WB_UNITS) new_request_to_int (.*, .one_hot(new_request_for_id_gen), .int_out(ti.inflight_packet.unit_id));
     ////////////////////////////////////////////////////
     //Unit Determination
     assign mult_div_op = fb.instruction[25];
@@ -155,7 +162,7 @@ module decode(
     assign new_request[BRANCH_UNIT_ID] = opcode_trim inside {BRANCH_T, JAL_T, JALR_T};
     assign new_request[ALU_UNIT_WB_ID] = fb.alu_request;
     assign new_request[LS_UNIT_WB_ID] = opcode_trim inside {LOAD_T, STORE_T, AMO_T};
-    assign new_request[GC_UNIT_WB_ID] = opcode_trim inside {SYSTEM_T, FENCE_T};
+    assign new_request[GC_UNIT_ID] = opcode_trim inside {SYSTEM_T, FENCE_T};
 
     generate if (USE_MUL)
             assign new_request[MUL_UNIT_WB_ID] = (opcode_trim == ARITH_T) && mult_div_op && ~fn3[2];
@@ -172,7 +179,7 @@ module decode(
     assign issue_ready[BRANCH_UNIT_ID] = new_request[BRANCH_UNIT_ID] & branch_ex.ready;
     assign issue_ready[ALU_UNIT_WB_ID] = new_request[ALU_UNIT_WB_ID] & alu_ex.ready;
     assign issue_ready[LS_UNIT_WB_ID] = new_request[LS_UNIT_WB_ID] & ls_ex.ready;
-    assign issue_ready[GC_UNIT_WB_ID] = new_request[GC_UNIT_WB_ID] & gc_ex.ready;
+    assign issue_ready[GC_UNIT_ID] = new_request[GC_UNIT_ID] & gc_ex.ready;
     generate if (USE_MUL)
             assign issue_ready[MUL_UNIT_WB_ID] = new_request[MUL_UNIT_WB_ID] & mul_ex.ready;
     endgenerate
@@ -191,7 +198,7 @@ module decode(
     assign issue[BRANCH_UNIT_ID] = issue_valid & operands_ready & issue_ready[BRANCH_UNIT_ID];
     assign issue[ALU_UNIT_WB_ID] = issue_valid & operands_ready & issue_ready[ALU_UNIT_WB_ID];
     assign issue[LS_UNIT_WB_ID] = issue_valid & load_store_operands_ready & issue_ready[LS_UNIT_WB_ID];
-    assign issue[GC_UNIT_WB_ID] = issue_valid & operands_ready &  issue_ready[GC_UNIT_WB_ID];
+    assign issue[GC_UNIT_ID] = issue_valid & operands_ready &  issue_ready[GC_UNIT_ID];
     generate if (USE_MUL)
             assign issue[MUL_UNIT_WB_ID] = issue_valid & operands_ready & issue_ready[MUL_UNIT_WB_ID];
     endgenerate
@@ -324,21 +331,21 @@ module decode(
     assign environment_op = (opcode_trim == SYSTEM_T) && (fn3 == 0);
 
     always_ff @(posedge clk) begin
-        if (issue_ready[GC_UNIT_WB_ID]) begin
+        if (issue_ready[GC_UNIT_ID]) begin
             gc_inputs.pc <= fb.pc;
             gc_inputs.instruction <= fb.instruction;
             gc_inputs.rs1 <= rf_decode.rs1_data;
             gc_inputs.rs2 <= rf_decode.rs2_data;
             gc_inputs.rd_is_zero <= rd_zero;
             gc_inputs.is_fence <= (opcode_trim == FENCE_T) && ~fn3[0];
-            gc_inputs.is_csr <= (opcode_trim == SYSTEM_T) && (fn3 != 0);
         end
-        gc_inputs.is_ecall <= issue[GC_UNIT_WB_ID] && environment_op && (fb.instruction[21:20] == 0);
-        gc_inputs.is_ebreak <= issue[GC_UNIT_WB_ID] && environment_op && (fb.instruction[21:20] == 2'b01);
-        gc_inputs.is_ret <= issue[GC_UNIT_WB_ID] && environment_op && (fb.instruction[21:20] == 2'b10);
-        gc_inputs.is_i_fence <= issue[GC_UNIT_WB_ID] && ifence;
+        gc_inputs.is_csr <= (opcode_trim == SYSTEM_T) && (fn3 != 0);
+        gc_inputs.is_ecall <= issue[GC_UNIT_ID] && environment_op && (fb.instruction[21:20] == 0);
+        gc_inputs.is_ebreak <= issue[GC_UNIT_ID] && environment_op && (fb.instruction[21:20] == 2'b01);
+        gc_inputs.is_ret <= issue[GC_UNIT_ID] && environment_op && (fb.instruction[21:20] == 2'b10);
+        gc_inputs.is_i_fence <= issue[GC_UNIT_ID] && ifence;
     end
-    assign gc_flush_required = issue[GC_UNIT_WB_ID] && (environment_op | ifence);
+    assign gc_flush_required = issue[GC_UNIT_ID] && (environment_op | ifence);
 
 
     ////////////////////////////////////////////////////
@@ -405,13 +412,13 @@ module decode(
     assign alu_ex.new_request_dec = issue[ALU_UNIT_WB_ID];
     assign ls_ex.new_request_dec = issue[LS_UNIT_WB_ID];
     assign branch_ex.new_request_dec = issue[BRANCH_UNIT_ID];
-    assign gc_ex.new_request_dec = issue[GC_UNIT_WB_ID];
+    assign gc_ex.new_request_dec = issue[GC_UNIT_ID];
 
     always_ff @(posedge clk) begin
         alu_ex.new_request <= issue[ALU_UNIT_WB_ID];
         ls_ex.new_request <= issue[LS_UNIT_WB_ID];
         branch_ex.new_request <= issue[BRANCH_UNIT_ID];
-        gc_ex.new_request <= issue[GC_UNIT_WB_ID];
+        gc_ex.new_request <= issue[GC_UNIT_ID];
     end
 
     assign branch_ex.instruction_id_one_hot = ti.issue_id_one_hot;
@@ -443,7 +450,7 @@ module decode(
     assign branch_ex.possible_issue = new_request[BRANCH_UNIT_ID] & ti.id_available;
     assign alu_ex.possible_issue = new_request[ALU_UNIT_WB_ID] & ti.id_available;
     assign ls_ex.possible_issue = new_request[LS_UNIT_WB_ID] & ti.id_available;
-    assign gc_ex.possible_issue = new_request[GC_UNIT_WB_ID] & ti.id_available;
+    assign gc_ex.possible_issue = new_request[GC_UNIT_ID] & ti.id_available;
 
 
     ////////////////////////////////////////////////////
@@ -475,7 +482,7 @@ module decode(
     assign tr_unit_stall = ~(|issue_ready) & issue_valid & load_store_operands_ready;
     assign tr_no_id_stall = (|issue_ready) & (fb_valid & ~ti.id_available & ~gc_issue_hold & ~gc_fetch_flush) & load_store_operands_ready;
     assign tr_no_instruction_stall = ~fb_valid;
-    assign tr_other_stall = ~instruction_issued & ~(tr_operand_stall | tr_unit_stall | tr_no_id_stall | tr_no_instruction_stall);
+    assign tr_other_stall = fb_valid & ~instruction_issued & ~(tr_operand_stall | tr_unit_stall | tr_no_id_stall | tr_no_instruction_stall) & ~gc_fetch_flush;
 
     assign tr_instruction_issued_dec = instruction_issued;
     assign tr_instruction_pc_dec = fb.pc;

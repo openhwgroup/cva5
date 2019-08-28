@@ -31,6 +31,7 @@ module csr_regs (
         //GC unit
         input csr_inputs_t csr_inputs,
         input new_request,
+        input commit,
         input exception_packet_t gc_exception,
         output exception_packet_t csr_exception,
         output logic [1:0] current_privilege,
@@ -58,7 +59,7 @@ module csr_regs (
         input logic interrupt,
         input logic timer_interrupt,
 
-        output logic [XLEN-1:0] selected_csr,
+        output logic [XLEN-1:0] wb_csr,
         output logic [31:0] trap_pc,
         output logic [31:0] csr_mepc,
         output logic [31:0] csr_sepc
@@ -123,6 +124,9 @@ module csr_regs (
     csr_addr_t csr_addr;
     logic privilege_exception;
 
+    logic [XLEN-1:0] selected_csr;
+    logic [XLEN-1:0] selected_csr_r;
+
     logic [31:0] updated_csr;
 
     logic invalid_addr;
@@ -162,10 +166,10 @@ module csr_regs (
 
     //convert addr into packed struct form
     assign csr_addr = csr_inputs.csr_addr;
-    assign privilege_exception = new_request && (csr_addr.privilege > privilege_level);
+    assign privilege_exception = new_request & (csr_addr.privilege > privilege_level);
 
-    assign supervisor_write = new_request && !privilege_exception && (csr_addr.rw_bits != CSR_READ_ONLY && csr_addr.privilege == SUPERVISOR_PRIVILEGE);
-    assign machine_write = new_request && !privilege_exception && (csr_addr.rw_bits != CSR_READ_ONLY && csr_addr.privilege == MACHINE_PRIVILEGE);
+    assign supervisor_write = commit && !privilege_exception && (csr_addr.rw_bits != CSR_READ_ONLY && csr_addr.privilege == SUPERVISOR_PRIVILEGE);
+    assign machine_write = commit && !privilege_exception && (csr_addr.rw_bits != CSR_READ_ONLY && csr_addr.privilege == MACHINE_PRIVILEGE);
 
     logic illegal_instruction;
     assign illegal_instruction = invalid_addr | privilege_exception;
@@ -177,8 +181,8 @@ module csr_regs (
     always_comb begin
         case (csr_inputs.csr_op)
             CSR_RW : updated_csr = csr_inputs.rs1;
-            CSR_RS : updated_csr = selected_csr | csr_inputs.rs1;
-            CSR_RC : updated_csr = selected_csr & ~csr_inputs.rs1;
+            CSR_RS : updated_csr = selected_csr_r | csr_inputs.rs1;
+            CSR_RC : updated_csr = selected_csr_r & ~csr_inputs.rs1;
             default : updated_csr = csr_inputs.rs1;
         endcase
     end
@@ -524,5 +528,11 @@ endgenerate
             default : begin selected_csr = 0; invalid_addr = 1; end
         endcase
     end
+
+    always_ff @(posedge clk) begin
+        selected_csr_r <= selected_csr;
+    end
+
+    assign wb_csr = selected_csr_r;
 
 endmodule
