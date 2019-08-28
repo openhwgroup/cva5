@@ -63,6 +63,7 @@ module write_back(
     logic [MAX_INFLIGHT_COUNT-1:0] id_done_r;
 
     logic [MAX_INFLIGHT_COUNT-1:0] id_done_ordered;
+    logic [MAX_INFLIGHT_COUNT-1:0] id_done_ordered_post_store;
 
     logic retired, retired_r;
     logic first_cycle_completion_abort;
@@ -88,7 +89,7 @@ module write_back(
             .retired(retired),
             .store_committed(store_committed),
             .store_id(store_id),
-            .id_done_ordered(id_done_ordered),
+            .id_done_ordered(id_done_ordered_post_store),
             .retired_id(retired_id),
             .ordering(id_ordering),
             .ordering_post_store(id_ordering_post_store),
@@ -151,19 +152,16 @@ module write_back(
     //Find oldest done.
     always_comb begin
         foreach (id_done[i]) begin
-            id_done_ordered[i] = id_done[id_ordering_post_store[i]];
+            id_done_ordered[i] = id_done[id_ordering[i]];
+            id_done_ordered_post_store[i] = id_done[id_ordering_post_store[i]];
         end
 
-        retired_id = id_ordering_post_store[MAX_INFLIGHT_COUNT-1];
+        retired_id = id_ordering[MAX_INFLIGHT_COUNT-1];
         for (int i=MAX_INFLIGHT_COUNT-1; i>0; i--) begin
-            if (id_done_ordered[i])
+            if (inorder | id_done_ordered[i])
                 break;
-            retired_id = id_ordering_post_store[i-1];
+            retired_id = id_ordering[i-1];
         end
-
-        if (inorder)
-            retired_id = id_ordering_post_store[MAX_INFLIGHT_COUNT-1];
-
     end
 
     //Read table for unit ID (acks, and rd_addr for register file)

@@ -67,7 +67,7 @@ module id_stack # (
     generate begin
     genvar i;
         assign store_shift_bits[0] = 1;
-        assign retired_shift_bits[0] = retired;
+        assign retired_shift_bits[0] = 1;
         for (i=1; i<STACK_DEPTH; i++) begin
            assign store_shift_bits[i] = |store_done_ordered[STACK_DEPTH-1:i];
            assign retired_shift_bits[i] = |id_done_ordered[STACK_DEPTH-1:i];
@@ -93,7 +93,7 @@ module id_stack # (
         retired_store_shiffted_stack[STACK_DEPTH-1:1] = store_shiffted_stack[STACK_DEPTH-2:0];
         retired_store_shiffted_stack[0] = retired_id;
         foreach (new_stack[i]) begin
-            new_stack[i] = (retired_shift_bits[i]) ? retired_store_shiffted_stack[i] : store_shiffted_stack[i];
+            new_stack[i] = (retired & retired_shift_bits[i]) ? retired_store_shiffted_stack[i] : store_shiffted_stack[i];
         end
     end
 
