@@ -134,7 +134,7 @@ endinterface
 
 interface register_file_writeback_interface;
     logic[4:0] rd_addr;
-    logic valid_write;
+    logic commit;
     logic rd_nzero;
 
     logic[XLEN-1:0] rd_data;
@@ -143,8 +143,8 @@ interface register_file_writeback_interface;
     logic forward_rs1;
     logic forward_rs2;
     
-    modport writeback (output rd_addr, valid_write, rd_nzero, rd_data, id, input forward_rs1, forward_rs2);
-    modport unit (input rd_addr, valid_write, rd_nzero, rd_data, id, output forward_rs1, forward_rs2);
+    modport writeback (output rd_addr, commit, rd_nzero, rd_data, id, input forward_rs1, forward_rs2);
+    modport unit (input rd_addr, commit, rd_nzero, rd_data, id, output forward_rs1, forward_rs2);
 
 endinterface
 

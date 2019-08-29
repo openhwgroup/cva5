@@ -24,7 +24,7 @@ export RANLIB
 
 #Compiance parameters
 ###############################################################
-COMPLIANCE_DIR=/home/ematthew/Research/RISCV/software/riscv-compliance/
+COMPLIANCE_DIR=/home/ematthew/Research/RISCV/sfu-rcl/taiga-riscv-compliance/
 COMPLIANCE_TARGET=rv32im
 ###############################################################
 
@@ -49,7 +49,7 @@ BENCHMARKS = \
 #Benchmark parameters
 #Assumes binaries are in the BENCHMARK_DIR
 ###############################################################
-EMBENCH_DIR=/home/ematthew/Research/RISCV/software/embench/build/src
+EMBENCH_DIR=/home/ematthew/Research/RISCV/sfu-rcl/taiga-embench/build/src
 EMBENCH_BENCHMARKS = \
 aha-mont64 \
 crc32 \
@@ -126,7 +126,7 @@ verilator_taiga_compliance_unit_test:
 .PHONY: verilator_taiga_compliance_tests
 verilator_taiga_compliance_tests:
 	$(MAKE) -C $(COMPLIANCE_DIR) clean
-	$(MAKE) -C $(COMPLIANCE_DIR) RISCV_TARGET=taiga RISCV_DEVICE=$(COMPLIANCE_TARGET) RISCV_PREFIX=$(RISCV_PREFIX)
+	$(MAKE) -C $(COMPLIANCE_DIR) RISCV_TARGET=taiga RISCV_DEVICE=$(COMPLIANCE_TARGET) RISCV_PREFIX=$(RISCV_PREFIX) TAIGA_ROOT=$(TAIGA_DIR)/tools
 
 .PHONY: verilator_taiga_coremark
 verilator_taiga_coremark:

@@ -171,7 +171,7 @@ module write_back(
     //Register file interaction
     assign rf_wb.rd_addr = retired_instruction_packet.rd_addr;
     assign rf_wb.id = retired_id_r;
-    assign rf_wb.valid_write = retired_r;
+    assign rf_wb.commit = retired_r;
     assign rf_wb.rd_nzero = retired_instruction_packet.rd_addr_nzero;
     assign rf_wb.rd_data = unit_rd[retired_instruction_packet.unit_id];
 

@@ -1,5 +1,5 @@
 /*
- * Copyright © 2018 Eric Matthews,  Lesley Shannon
+ * Copyright © 2018-2019 Eric Matthews,  Lesley Shannon
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,24 +23,6 @@
 import taiga_config::*;
 import taiga_types::*;
 
-/*Overview:
- * Inuse tracking logic.  Tracks whether there is an outstanding write to any given register.
- * Inuse tracking has two write-ports.  One port, (issue), always sets bits, and (completed) always clears bits.
- */
-
-/* Constraints
- *   + Issue has precedence over completed.  Addresses may/will overlap.
- */
-
-/*Implementation:
- * If the addresses overlap, then issue has precedence over completed.  After a reset, all memory bits are zero.
- * Seperate memories are used for each write port (issue and completed).  Whenever a write occurs to either block,
- * the bit is toggled.  If the xor of the two memories is one, then the register is inuse.  Issues and completed occur
- * in pairs so after an instruction completes the two memories will have the same value (0 or 1).
- * If a new issue to the same address as a completing instruction occurs the memories will continue to have different values,
- * satisfing the requirement that issue has precedence over completion.
- */
-
 module inuse (
         input logic clk,
         input logic rst,
@@ -61,8 +43,10 @@ module inuse (
 
     logic [4:0] w_clear;
     logic [4:0] wb_rd_addr_muxed;
+    logic [4:0] decode_rd_addr_muxed;
 
     logic wb_collision;
+    logic rd_inuse;
     //////////////////////////////////////////
     //Initialize to all inuse (0,1) for simulation,
     //will be cleared by GC after reset in hardware
@@ -77,26 +61,29 @@ module inuse (
 
     //After reset, clear is held for at least 32 cycles to reset memory block
     assign wb_rd_addr_muxed = clr ? w_clear : wb_rd_addr;
-
+    assign decode_rd_addr_muxed = clr ? w_clear : decode_rd_addr;
 
     //reset is for simulation purposes only, not needed for actual design
     always_ff @ (posedge clk) begin
         if (rst)
             w_clear <= 0;
         else
-            w_clear <= w_clear + {4'b0, clr};
+            w_clear <= w_clear + 5'(clr);
     end
 
-    assign wb_collision = completed && (decode_rd_addr == wb_rd_addr);
+    //Toggle issue (bankA) and write-back (bankB) values for inuse tracking
+    //Special cases are when multiple instructions are in flight that write to the same address
+    //Only the newest write will toggle BankB
+    //When issueing multiple times, don't toggle for subsequent issues unless the previous write is completing on this cycle
+	assign wb_collision = completed && (decode_rd_addr == wb_rd_addr);
+	assign rd_inuse = ~wb_collision & (bankA[decode_rd_addr_muxed] ^ bankB[decode_rd_addr_muxed]);
 
     always_ff @ (posedge clk) begin
-        if (issued)
-            bankA[decode_rd_addr] <= wb_collision ? ~bankA[wb_rd_addr_muxed] : ~bankB[decode_rd_addr];
+        	bankA[decode_rd_addr_muxed] <= clr | ((~rd_inuse & issued) ^ bankA[decode_rd_addr_muxed]);
     end
 
     always_ff @ (posedge clk) begin
-        if (completed | clr)
-            bankB[wb_rd_addr_muxed] <= bankA[wb_rd_addr_muxed];
+        	bankB[wb_rd_addr_muxed] <= clr | (completed ^ bankB[wb_rd_addr_muxed]);
     end
 
     assign rs1_inuse = bankA[rs1_addr] ^ bankB[rs1_addr];
@@ -117,5 +104,6 @@ module inuse (
     // synthesis translate_on
 
 endmodule
+
 
 

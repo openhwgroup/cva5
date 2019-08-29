@@ -42,6 +42,7 @@ module register_file(
     logic rs1_feedforward;
     logic rs2_feedforward;
 
+    logic valid_write;
     logic in_use_match;
     instruction_id_t in_use_by_id;
     instruction_id_t rs1_id;
@@ -55,9 +56,9 @@ module register_file(
         end
     end
 
-    //Writeback unit does not assert rf_wb.valid_write when the target register is r0
+    //Writeback unit does not assert rf_wb.commit when the target register is r0
     always_ff @ (posedge clk) begin
-        if (~gc_supress_writeback & rf_wb.rd_nzero & rf_wb.valid_write & (in_use_match | inorder)) //inorder needed for case when multiple outstanding writes to this register (common pattern: load, store, load) where the first load hasn't completed by the second causes an exception.  Without inorder we wouldn't commit the first load
+        if (~gc_supress_writeback & valid_write & (in_use_match | inorder)) //inorder needed for when a L/S exception occurs
             register[rf_wb.rd_addr] <= rf_wb.rd_data;
     end
 
@@ -66,7 +67,7 @@ module register_file(
             .rs1_addr(rf_decode.rs1_addr),.rs2_addr(rf_decode.rs2_addr), .decode_rd_addr(rf_decode.future_rd_addr),
             .wb_rd_addr(rf_wb.rd_addr),
             .issued(rf_decode.instruction_issued),
-            .completed(in_use_match),
+            .completed(valid_write & in_use_match),
             .rs1_inuse(rs1_inuse),
             .rs2_inuse(rs2_inuse)
             );
@@ -80,10 +81,11 @@ module register_file(
     assign rs1_id =  in_use_by[rf_decode.rs1_addr];
     assign rs2_id =  in_use_by[rf_decode.rs2_addr];
     
-    assign in_use_match = ~gc_supress_writeback && rf_wb.rd_nzero && rf_wb.valid_write && (rf_wb.id == in_use_by_id);
+    assign valid_write = rf_wb.rd_nzero && rf_wb.commit;
+    assign in_use_match = (rf_wb.id == in_use_by_id);
 
-    assign rs1_feedforward = rs1_inuse && (rs1_id == rf_wb.id) && rf_wb.valid_write;
-    assign rs2_feedforward = rs2_inuse && (rs2_id == rf_wb.id) && rf_wb.valid_write;
+    assign rs1_feedforward = rs1_inuse && (rs1_id == rf_wb.id) && rf_wb.commit;
+    assign rs2_feedforward = rs2_inuse && (rs2_id == rf_wb.id) && rf_wb.commit;
 
     assign rf_decode.rs1_data = rs1_feedforward ? rf_wb.rd_data : register[rf_decode.rs1_addr];
     assign rf_decode.rs2_data = rs2_feedforward ? rf_wb.rd_data : register[rf_decode.rs2_addr];

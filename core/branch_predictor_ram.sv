@@ -38,7 +38,7 @@ module branch_predictor_ram
         output logic [C_DATA_WIDTH-1:0] read_data
         );
 
-    logic [C_DATA_WIDTH-1:0] branch_ram [C_DEPTH-1:0];
+    (* ram_style = "block" *)logic [C_DATA_WIDTH-1:0] branch_ram [C_DEPTH-1:0];
     //implementation
     ////////////////////////////////////////////////////
 

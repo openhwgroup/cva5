@@ -331,15 +331,15 @@ module decode(
     assign environment_op = (opcode_trim == SYSTEM_T) && (fn3 == 0);
 
     always_ff @(posedge clk) begin
-        if (issue_ready[GC_UNIT_ID]) begin
+        if (issue[GC_UNIT_ID]) begin
             gc_inputs.pc <= fb.pc;
             gc_inputs.instruction <= fb.instruction;
             gc_inputs.rs1 <= rf_decode.rs1_data;
             gc_inputs.rs2 <= rf_decode.rs2_data;
             gc_inputs.rd_is_zero <= rd_zero;
             gc_inputs.is_fence <= (opcode_trim == FENCE_T) && ~fn3[0];
+            gc_inputs.is_csr <= (opcode_trim == SYSTEM_T) && (fn3 != 0);
         end
-        gc_inputs.is_csr <= (opcode_trim == SYSTEM_T) && (fn3 != 0);
         gc_inputs.is_ecall <= issue[GC_UNIT_ID] && environment_op && (fb.instruction[21:20] == 0);
         gc_inputs.is_ebreak <= issue[GC_UNIT_ID] && environment_op && (fb.instruction[21:20] == 2'b01);
         gc_inputs.is_ret <= issue[GC_UNIT_ID] && environment_op && (fb.instruction[21:20] == 2'b10);
@@ -417,8 +417,17 @@ module decode(
     always_ff @(posedge clk) begin
         alu_ex.new_request <= issue[ALU_UNIT_WB_ID];
         ls_ex.new_request <= issue[LS_UNIT_WB_ID];
-        branch_ex.new_request <= issue[BRANCH_UNIT_ID];
         gc_ex.new_request <= issue[GC_UNIT_ID];
+    end
+
+    //Branch new request is held if
+    always_ff @(posedge clk) begin
+        if (rst)
+            branch_ex.new_request <= 0;
+        else if (issue[BRANCH_UNIT_ID])
+            branch_ex.new_request <= 1;
+        else if (fb_valid)
+            branch_ex.new_request <= 0;
     end
 
     assign branch_ex.instruction_id_one_hot = ti.issue_id_one_hot;

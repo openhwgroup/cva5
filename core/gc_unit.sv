@@ -291,6 +291,7 @@ module gc_unit(
     //Decode / Write-back Handshaking
     logic csr_ready_to_complete;
     logic csr_ready_to_complete_r;
+    instruction_id_t instruction_id;
     //CSR reads are passed through the Load-Store unit
     //A CSR write is only committed once it is the oldest instruction in the pipeline
     //while processing a csr operation, gc_issue_hold prevents further instructions from being issued
@@ -309,9 +310,10 @@ module gc_unit(
     always_ff @(posedge clk) begin
         csr_ready_to_complete_r <= csr_ready_to_complete;
         csr_id_done <= id & {MAX_INFLIGHT_COUNT{csr_ready_to_complete}};
+        csr_id <= instruction_id;
         if (gc_ex.new_request_dec) begin
             id <= gc_ex.instruction_id_one_hot;
-            csr_id <= gc_ex.instruction_id;
+            instruction_id <= gc_ex.instruction_id;
         end
     end
 
