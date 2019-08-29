@@ -26,8 +26,8 @@ import taiga_types::*;
 module alu_unit(
         input logic clk,
         input logic rst,
-        func_unit_ex_interface.unit alu_ex,
-        unit_writeback_interface.unit alu_wb,
+        unit_issue_interface.unit issue,
+        unit_writeback_interface.unit wb,
         input alu_inputs_t alu_inputs
         );
 
@@ -86,13 +86,13 @@ module alu_unit(
     ////////////////////////////////////////////////////
     //Output bank
      always_ff @ (posedge clk) begin
-         if (alu_ex.possible_issue)
-             rd_bank[alu_ex.instruction_id] <= result;
+         if (issue.possible_issue)
+             rd_bank[issue.instruction_id] <= result;
      end
 
-    assign alu_ex.ready = 1;
-    assign alu_wb.rd = rd_bank[alu_wb.writeback_instruction_id];
-    assign alu_wb.done_next_cycle = alu_ex.instruction_id_one_hot & {MAX_INFLIGHT_COUNT{alu_ex.new_request_dec}};
+    assign issue.ready = 1;
+    assign wb.rd = rd_bank[wb.writeback_instruction_id];
+    assign wb.done_next_cycle = issue.instruction_id_one_hot & {MAX_INFLIGHT_COUNT{issue.new_request}};
 
     ////////////////////////////////////////////////////
     //Assertions

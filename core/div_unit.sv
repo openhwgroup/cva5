@@ -27,9 +27,10 @@ module div_unit
     (
         input logic clk,
         input logic rst,
-        func_unit_ex_interface.unit div_ex,
+
         input div_inputs_t div_inputs,
-        unit_writeback_interface.unit div_wb
+        unit_issue_interface.unit issue,
+        unit_writeback_interface.unit wb
     );
 
     logic computation_complete;
@@ -72,8 +73,8 @@ module div_unit
         ) div_input_fifo (.fifo(input_fifo), .*);
 
     assign input_fifo.data_in = div_inputs;
-    assign input_fifo.push = div_ex.new_request_dec;
-    assign div_ex.ready = (DIV_INPUT_BUFFER_DEPTH >= MAX_INFLIGHT_COUNT) ? 1 : ~input_fifo.full;
+    assign input_fifo.push = issue.new_request;
+    assign issue.ready = (DIV_INPUT_BUFFER_DEPTH >= MAX_INFLIGHT_COUNT) ? 1 : ~input_fifo.full;
     assign input_fifo.pop = div_done;
     assign stage1 = input_fifo.data_out;
 
@@ -124,8 +125,8 @@ module div_unit
             rd_bank[stage1.instruction_id] <= wb_div_result;
     end
 
-    assign div_wb.done_next_cycle = stage1.instruction_id_one_hot & {MAX_INFLIGHT_COUNT{div_done}};
-    assign div_wb.rd = rd_bank[div_wb.writeback_instruction_id];
+    assign wb.done_next_cycle = stage1.instruction_id_one_hot & {MAX_INFLIGHT_COUNT{div_done}};
+    assign wb.rd = rd_bank[wb.writeback_instruction_id];
 
 
     ////////////////////////////////////////////////////

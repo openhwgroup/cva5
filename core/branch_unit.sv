@@ -27,11 +27,13 @@ module branch_unit(
         input logic clk,
         input logic rst,
 
-        func_unit_ex_interface.unit branch_ex,
+        unit_issue_interface.unit issue,
         input branch_inputs_t branch_inputs,
         output branch_results_t br_results,
         ras_interface.branch_unit ras,
         output branch_flush,
+
+        input branch_issued,
 
         //Trace signals
         output logic tr_branch_misspredict,
@@ -82,7 +84,7 @@ module branch_unit(
     instruction_id_t id;
     //implementation
     ////////////////////////////////////////////////////
-    assign branch_ex.ready = 1;
+    assign issue.ready = 1;
 
     branch_comparator bc (
             .use_signed(branch_inputs.use_signed),
@@ -92,7 +94,7 @@ module branch_unit(
             .result(result)
         );
 
-    assign branch_taken = branch_ex.new_request & ((~jump_ex & (result_ex ^ fn3_ex[0])) | jump_ex);
+    assign branch_taken = branch_issued & ((~jump_ex & (result_ex ^ fn3_ex[0])) | jump_ex);
 
 
     assign jal_imm = {branch_inputs.instruction[31], branch_inputs.instruction[19:12], branch_inputs.instruction[20], branch_inputs.instruction[30:21]};
@@ -118,7 +120,7 @@ module branch_unit(
     assign jump_pc_dec = jump_base + pc_offset;
 
     always_ff @(posedge clk) begin
-        if (branch_ex.new_request_dec) begin
+        if (issue.new_request) begin
             fn3_ex <= branch_inputs.fn3;
             result_ex <= result;
             jump_ex <= (branch_inputs.jal | branch_inputs.jalr);
@@ -128,7 +130,7 @@ module branch_unit(
     //Predictor support
     ////////////////////////////////////////////////////
     always_ff @(posedge clk) begin
-        if (branch_ex.new_request_dec) begin
+        if (issue.new_request) begin
             pc_ex <= branch_inputs.dec_pc;
             jump_pc <= {jump_pc_dec[31:1], 1'b0};
             njump_pc <= branch_inputs.dec_pc + 4;
@@ -144,7 +146,7 @@ module branch_unit(
     assign br_results.branch_ex_metadata = branch_metadata;
 
     assign br_results.branch_taken = branch_taken;
-    assign br_results.branch_ex = branch_ex.new_request & branch_inputs.dec_pc_valid;
+    assign br_results.branch_ex = branch_issued & branch_inputs.dec_pc_valid;
     assign br_results.is_return_ex = is_return;
     assign br_results.branch_prediction_used = branch_prediction_used;
     assign br_results.bp_update_way = bp_update_way;
@@ -152,16 +154,16 @@ module branch_unit(
 
     assign branch_correctly_taken = {br_results.branch_taken, branch_inputs.dec_pc[31:1]} == {1'b1, br_results.jump_pc[31:1]};
     assign branch_correclty_not_taken = {br_results.branch_taken, branch_inputs.dec_pc[31:1]} == {1'b0, br_results.njump_pc[31:1]};
-    assign miss_predict = branch_ex.new_request && branch_inputs.dec_pc_valid && ~(branch_correctly_taken || branch_correclty_not_taken);
+    assign miss_predict = branch_issued && branch_inputs.dec_pc_valid && ~(branch_correctly_taken || branch_correclty_not_taken);
 
-    assign branch_flush = USE_BRANCH_PREDICTOR ? miss_predict : branch_ex.new_request & branch_taken & branch_inputs.dec_pc_valid;
+    assign branch_flush = USE_BRANCH_PREDICTOR ? miss_predict : branch_issued & branch_taken & branch_inputs.dec_pc_valid;
 
     //RAS support
     ////////////////////////////////////////////////////
     generate if (USE_BRANCH_PREDICTOR) begin
             always_ff @(posedge clk) begin
-                is_call <= branch_ex.new_request_dec & branch_inputs.is_call;
-                is_return <= branch_ex.new_request_dec & branch_inputs.is_return;
+                is_call <= issue.new_request & branch_inputs.is_call;
+                is_return <= issue.new_request & branch_inputs.is_return;
             end
 
             assign ras.push = is_call;

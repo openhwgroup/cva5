@@ -27,7 +27,7 @@ module load_store_unit (
         input logic clk,
         input logic rst,
         input load_store_inputs_t ls_inputs,
-        func_unit_ex_interface.unit ls_ex,
+        unit_issue_interface.unit issue,
 
         input logic dcache_on,
         input logic clear_reservation,
@@ -58,7 +58,7 @@ module load_store_unit (
         output exception_packet_t ls_exception,
         output logic ls_exception_valid,
 
-        unit_writeback_interface.unit ls_wb
+        unit_writeback_interface.unit wb
         );
 
     localparam NUM_SUB_UNITS = USE_D_SCRATCH_MEM+USE_BUS+USE_DCACHE;
@@ -126,10 +126,10 @@ module load_store_unit (
         ) ls_input_fifo (.fifo(input_fifo), .*);
 
     assign input_fifo.data_in = ls_inputs;
-    assign input_fifo.push = ls_ex.new_request_dec;
-    assign ls_ex.ready = (LS_INPUT_BUFFER_DEPTH >= MAX_INFLIGHT_COUNT) ? 1 : ~input_fifo.full;
+    assign input_fifo.push = issue.new_request;
+    assign issue.ready = (LS_INPUT_BUFFER_DEPTH >= MAX_INFLIGHT_COUNT) ? 1 : ~input_fifo.full;
     assign input_fifo.pop = issue_request | gc_issue_flush;
-    assign load_store_FIFO_emptying = input_fifo.almost_empty & issue_request & ~ls_ex.new_request_dec;
+    assign load_store_FIFO_emptying = input_fifo.almost_empty & issue_request & ~issue.new_request;
     assign stage1 = input_fifo.data_out;
 
     ////////////////////////////////////////////////////
@@ -342,7 +342,7 @@ module load_store_unit (
             previous_load <= final_load_data;
     end
 
-    assign ls_wb.rd = rd_bank[ls_wb.writeback_instruction_id];
+    assign wb.rd = rd_bank[wb.writeback_instruction_id];
 
     logic exception_complete;
     logic ls_done;
@@ -351,7 +351,7 @@ module load_store_unit (
     end
     assign ls_done = load_complete | exception_complete;
 
-    assign ls_wb.done_next_cycle = csr_id_done | (stage2_attr.instruction_id_one_hot & {MAX_INFLIGHT_COUNT{ls_done}});
+    assign wb.done_next_cycle = csr_id_done | (stage2_attr.instruction_id_one_hot & {MAX_INFLIGHT_COUNT{ls_done}});
     ////////////////////////////////////////////////////
     //End of Implementation
     ////////////////////////////////////////////////////

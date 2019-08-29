@@ -26,9 +26,10 @@ import taiga_types::*;
 module mul_unit(
         input logic clk,
         input logic rst,
-        func_unit_ex_interface.unit mul_ex,
+
         input mul_inputs_t mul_inputs,
-        unit_writeback_interface.unit mul_wb
+        unit_issue_interface.unit issue,
+        unit_writeback_interface.unit wb
         );
 
     logic signed [65:0] result;
@@ -61,10 +62,10 @@ module mul_unit(
         mulh[0] <= (mul_inputs.op[1:0] != MUL_fn3[1:0]);
         mulh[1] <= mulh[0];
 
-        id[0] <= mul_ex.instruction_id;
+        id[0] <= issue.instruction_id;
         id[1] <= id[0];
 
-        id_one_hot_done[0] <= mul_ex.instruction_id_one_hot & {MAX_INFLIGHT_COUNT{mul_ex.new_request_dec}};
+        id_one_hot_done[0] <= issue.instruction_id_one_hot & {MAX_INFLIGHT_COUNT{issue.new_request}};
         id_one_hot_done[1] <= id_one_hot_done[0];
     end
 
@@ -77,9 +78,9 @@ module mul_unit(
 
     //Issue/write-back handshaking
     ////////////////////////////////////////////////////
-    assign mul_ex.ready = 1;
-    assign mul_wb.rd = rd_bank[mul_wb.writeback_instruction_id];
-    assign mul_wb.done_next_cycle = id_one_hot_done[1];
+    assign issue.ready = 1;
+    assign wb.rd = rd_bank[wb.writeback_instruction_id];
+    assign wb.done_next_cycle = id_one_hot_done[1];
 
     ////////////////////////////////////////////////////
     //End of Implementation

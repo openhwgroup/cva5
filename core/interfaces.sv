@@ -50,16 +50,17 @@ interface branch_predictor_interface;
 
 endinterface
 
-interface func_unit_ex_interface;
-    logic new_request_dec;
+interface unit_issue_interface;
     logic possible_issue;
     logic new_request;
-    logic ready;
+    logic new_request_r;
     instruction_id_t instruction_id;
     instruction_id_one_hot_t instruction_id_one_hot;
 
-    modport decode (input ready, output possible_issue, new_request_dec, new_request, instruction_id, instruction_id_one_hot);
-    modport unit (output ready, input possible_issue, new_request_dec, new_request, instruction_id, instruction_id_one_hot);
+    logic ready;
+
+    modport decode (input ready, output possible_issue, new_request, new_request_r, instruction_id, instruction_id_one_hot);
+    modport unit (output ready, input possible_issue, new_request, new_request_r, instruction_id, instruction_id_one_hot);
 endinterface
 
 interface ras_interface;

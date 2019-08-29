@@ -41,17 +41,13 @@ module decode(
         output mul_inputs_t mul_inputs,
         output  div_inputs_t div_inputs,
 
-        func_unit_ex_interface.decode alu_ex,
-        func_unit_ex_interface.decode ls_ex,
-        func_unit_ex_interface.decode branch_ex,
-        func_unit_ex_interface.decode gc_ex,
-        func_unit_ex_interface.decode mul_ex,
-        func_unit_ex_interface.decode div_ex,
+        unit_issue_interface.decode unit_issue [NUM_UNITS-1:0],
 
         input logic gc_issue_hold,
         input logic gc_fetch_flush,
         input logic gc_issue_flush,
         output logic gc_flush_required,
+        output logic branch_issued,
 
         output logic load_store_issue,
 
@@ -94,7 +90,7 @@ module decode(
     logic issue_valid;
     logic load_store_operands_ready;
     logic operands_ready;
-
+    logic [NUM_UNITS-1:0] unit_operands_ready;
     logic mult_div_op;
 
     logic [NUM_WB_UNITS-1:0] new_request_for_id_gen;
@@ -108,7 +104,7 @@ module decode(
     logic valid_opcode;
 
     instruction_id_t last_id;
-
+    genvar i;
     ////////////////////////////////////////////////////
     //Implementation
 
@@ -176,17 +172,11 @@ module decode(
 
     ////////////////////////////////////////////////////
     //Unit ready
-    assign issue_ready[BRANCH_UNIT_ID] = new_request[BRANCH_UNIT_ID] & branch_ex.ready;
-    assign issue_ready[ALU_UNIT_WB_ID] = new_request[ALU_UNIT_WB_ID] & alu_ex.ready;
-    assign issue_ready[LS_UNIT_WB_ID] = new_request[LS_UNIT_WB_ID] & ls_ex.ready;
-    assign issue_ready[GC_UNIT_ID] = new_request[GC_UNIT_ID] & gc_ex.ready;
-    generate if (USE_MUL)
-            assign issue_ready[MUL_UNIT_WB_ID] = new_request[MUL_UNIT_WB_ID] & mul_ex.ready;
+    generate
+        for (i=0; i<NUM_UNITS; i++) begin
+            assign issue_ready[i] = new_request[i] & unit_issue[i].ready;
+        end
     endgenerate
-    generate if (USE_DIV)
-            assign issue_ready[DIV_UNIT_WB_ID] = new_request[DIV_UNIT_WB_ID] & div_ex.ready;
-    endgenerate
-
 
     ////////////////////////////////////////////////////
     //Issue Determination
@@ -195,16 +185,13 @@ module decode(
     assign operands_ready = ~rf_decode.rs1_conflict & ~rf_decode.rs2_conflict;
     assign load_store_operands_ready =  ~rf_decode.rs1_conflict & (~rf_decode.rs2_conflict | (rf_decode.rs2_conflict & load_store_forward_possible));
 
-    assign issue[BRANCH_UNIT_ID] = issue_valid & operands_ready & issue_ready[BRANCH_UNIT_ID];
-    assign issue[ALU_UNIT_WB_ID] = issue_valid & operands_ready & issue_ready[ALU_UNIT_WB_ID];
-    assign issue[LS_UNIT_WB_ID] = issue_valid & load_store_operands_ready & issue_ready[LS_UNIT_WB_ID];
-    assign issue[GC_UNIT_ID] = issue_valid & operands_ready &  issue_ready[GC_UNIT_ID];
-    generate if (USE_MUL)
-            assign issue[MUL_UNIT_WB_ID] = issue_valid & operands_ready & issue_ready[MUL_UNIT_WB_ID];
-    endgenerate
-    generate if (USE_DIV)
-            assign issue[DIV_UNIT_WB_ID] = issue_valid & operands_ready & issue_ready[DIV_UNIT_WB_ID];
-    endgenerate
+    //All units share the same operand ready logic except load-store which has an internal forwarding path
+    always_comb begin
+        unit_operands_ready = {NUM_UNITS{operands_ready}};
+        unit_operands_ready[LS_UNIT_WB_ID] = load_store_operands_ready;
+    end
+
+    assign issue = {NUM_UNITS{issue_valid}} & unit_operands_ready & issue_ready;
 
     assign instruction_issued =
         ((LS_INPUT_BUFFER_DEPTH >= MAX_INFLIGHT_COUNT) &&
@@ -321,6 +308,7 @@ module decode(
     assign branch_inputs.branch_metadata = fb.branch_metadata;
     assign branch_inputs.branch_prediction_used = fb.branch_prediction_used;
     assign branch_inputs.bp_update_way = fb.bp_update_way;
+
     ////////////////////////////////////////////////////
     //Global Control unit inputs
     logic sfence;
@@ -409,58 +397,28 @@ module decode(
 
     ////////////////////////////////////////////////////
     //Unit EX signals
-    assign alu_ex.new_request_dec = issue[ALU_UNIT_WB_ID];
-    assign ls_ex.new_request_dec = issue[LS_UNIT_WB_ID];
-    assign branch_ex.new_request_dec = issue[BRANCH_UNIT_ID];
-    assign gc_ex.new_request_dec = issue[GC_UNIT_ID];
+    generate
+        for(i = 0; i < NUM_UNITS; i++) begin
+            assign unit_issue[i].possible_issue = new_request[i] & ti.id_available;
+            assign unit_issue[i].new_request = issue[i];
+            assign unit_issue[i].instruction_id = ti.issue_id;
+            assign unit_issue[i].instruction_id_one_hot = ti.issue_id_one_hot;
+            always_ff @(posedge clk) begin
+                unit_issue[i].new_request_r = issue[i];
+            end
+        end
+    endgenerate
 
-    always_ff @(posedge clk) begin
-        alu_ex.new_request <= issue[ALU_UNIT_WB_ID];
-        ls_ex.new_request <= issue[LS_UNIT_WB_ID];
-        gc_ex.new_request <= issue[GC_UNIT_ID];
-    end
-
-    //Branch new request is held if
+    //Special case for branch unit:
+    //Branch new request is held if the following instruction hasn't arrived at decode/issue yet
     always_ff @(posedge clk) begin
         if (rst)
-            branch_ex.new_request <= 0;
+            branch_issued <= 0;
         else if (issue[BRANCH_UNIT_ID])
-            branch_ex.new_request <= 1;
+            branch_issued <= 1;
         else if (fb_valid)
-            branch_ex.new_request <= 0;
+            branch_issued <= 0;
     end
-
-    assign branch_ex.instruction_id_one_hot = ti.issue_id_one_hot;
-    assign branch_ex.instruction_id = ti.issue_id;
-    assign alu_ex.instruction_id_one_hot = ti.issue_id_one_hot;
-    assign alu_ex.instruction_id = ti.issue_id;
-    //Load Store unit stores ID in input FIFO
-    assign gc_ex.instruction_id_one_hot = ti.issue_id_one_hot;
-    assign gc_ex.instruction_id = ti.issue_id;
-
-    generate if (USE_MUL)
-            always_ff @(posedge clk) begin
-                mul_ex.new_request <= issue[MUL_UNIT_WB_ID];
-            end
-        assign mul_ex.new_request_dec = issue[MUL_UNIT_WB_ID];
-        assign mul_ex.instruction_id_one_hot = ti.issue_id_one_hot;
-        assign mul_ex.instruction_id = ti.issue_id;
-        assign mul_ex.possible_issue = new_request[MUL_UNIT_WB_ID] & ti.id_available;
-    endgenerate
-    generate if (USE_DIV)
-            always_ff @(posedge clk) begin
-                div_ex.new_request <= issue[DIV_UNIT_WB_ID];
-            end
-        //DIV unit stores ID in input FIFO
-        assign div_ex.new_request_dec = issue[DIV_UNIT_WB_ID];
-        assign div_ex.possible_issue = new_request[DIV_UNIT_WB_ID] & ti.id_available;
-    endgenerate
-
-    assign branch_ex.possible_issue = new_request[BRANCH_UNIT_ID] & ti.id_available;
-    assign alu_ex.possible_issue = new_request[ALU_UNIT_WB_ID] & ti.id_available;
-    assign ls_ex.possible_issue = new_request[LS_UNIT_WB_ID] & ti.id_available;
-    assign gc_ex.possible_issue = new_request[GC_UNIT_ID] & ti.id_available;
-
 
     ////////////////////////////////////////////////////
     //Illegal Opcode check

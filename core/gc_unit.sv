@@ -30,7 +30,7 @@ module gc_unit(
 
 
         //Decode
-        func_unit_ex_interface.unit gc_ex,
+        unit_issue_interface.unit issue,
         input gc_inputs_t gc_inputs,
         input logic instruction_issued_no_rd,
         input logic gc_flush_required,
@@ -178,12 +178,12 @@ module gc_unit(
 
     ////////////////////////////////////////////////////
     //GC Operation
-    assign is_csr = gc_ex.new_request & gc_inputs.is_csr;
+    assign is_csr = issue.new_request_r & gc_inputs.is_csr;
 
     assign gc_fetch_flush = branch_flush | gc_fetch_pc_override;
 
     always_ff @ (posedge clk) begin
-        gc_issue_hold <= gc_ex.new_request_dec || is_csr || processing_csr || (next_state inside {PRE_CLEAR_STATE, CLEAR_STATE, TLB_CLEAR_STATE, IQ_DRAIN, IQ_DISCARD});
+        gc_issue_hold <= issue.new_request || is_csr || processing_csr || (next_state inside {PRE_CLEAR_STATE, CLEAR_STATE, TLB_CLEAR_STATE, IQ_DRAIN, IQ_DISCARD});
         inuse_clear <= (next_state == CLEAR_STATE);
         inorder <= 0;//(next_state inside {LS_EXCEPTION_POSSIBLE, IQ_DRAIN});
     end
@@ -295,7 +295,7 @@ module gc_unit(
     //CSR reads are passed through the Load-Store unit
     //A CSR write is only committed once it is the oldest instruction in the pipeline
     //while processing a csr operation, gc_issue_hold prevents further instructions from being issued
-    assign gc_ex.ready = 1;
+    assign issue.ready = 1;
 
     always_ff @(posedge clk) begin
         if (rst)
@@ -311,9 +311,9 @@ module gc_unit(
         csr_ready_to_complete_r <= csr_ready_to_complete;
         csr_id_done <= id & {MAX_INFLIGHT_COUNT{csr_ready_to_complete}};
         csr_id <= instruction_id;
-        if (gc_ex.new_request_dec) begin
-            id <= gc_ex.instruction_id_one_hot;
-            instruction_id <= gc_ex.instruction_id;
+        if (issue.new_request) begin
+            id <= issue.instruction_id_one_hot;
+            instruction_id <= issue.instruction_id;
         end
     end
 
