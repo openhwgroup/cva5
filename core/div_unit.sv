@@ -35,7 +35,6 @@ module div_unit
 
     logic computation_complete;
     logic div_done;
-    logic done;
 
     logic [31:0] quotient;
     logic [31:0] remainder;
@@ -56,7 +55,6 @@ module div_unit
     logic negateResult;
     logic divisor_zero;
 
-    logic [31:0] div_result_sign_corrected;
     logic [31:0] wb_div_result;
     logic [31:0] rd_bank [MAX_INFLIGHT_COUNT-1:0];
 
@@ -105,14 +103,14 @@ module div_unit
 
     ////////////////////////////////////////////////////
     //Input Processing
-    assign complementerA = ({32{dividend_signed}} ^ stage1.rs1) + dividend_signed;
-    assign complementerB = ({32{divisor_signed}} ^ stage1.rs2) + divisor_signed;
+    assign complementerA = ({32{dividend_signed}} ^ stage1.rs1) + 32'(dividend_signed);
+    assign complementerB = ({32{divisor_signed}} ^ stage1.rs2) + 32'(divisor_signed);
 
     ////////////////////////////////////////////////////
     //Output muxing
     assign negateResult = stage1.op[1] ? remainder_signed : (~divisor_zero & quotient_signed);
     assign result_input = stage1.op[1] ? remainder : quotient;
-    assign wb_div_result = ({32{negateResult}} ^ result_input) + negateResult;
+    assign wb_div_result = ({32{negateResult}} ^ result_input) + 32'(negateResult);
 
     ////////////////////////////////////////////////////
     //Div core

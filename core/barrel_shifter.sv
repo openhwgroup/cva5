@@ -32,7 +32,7 @@ module barrel_shifter (
         output logic[XLEN-1:0] shifted_resultl
         );
 
-    logic[XLEN-1:0] shiftx8, shiftx2, shiftx1, shiftx1_l;
+    logic[XLEN-1:0] shiftx8, shiftx2, shiftx1;
     logic[XLEN-1:0] preshifted_input;
     //Bit flipping shared shifter
     always_comb begin

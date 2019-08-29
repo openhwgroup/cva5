@@ -37,14 +37,13 @@ interface branch_predictor_interface;
     logic [BRANCH_PREDICTOR_WAYS-1:0] update_way;
     logic use_ras;
     branch_predictor_metadata_t metadata;
-    logic flush;
 
     modport branch_predictor (
         input if_pc, new_mem_request, next_pc,
-        output branch_flush_pc, predicted_pc, use_prediction, update_way, use_ras, metadata, flush
+        output branch_flush_pc, predicted_pc, use_prediction, update_way, use_ras, metadata
     );
     modport fetch (
-        input branch_flush_pc, predicted_pc, use_prediction, update_way, use_ras, metadata, flush,
+        input branch_flush_pc, predicted_pc, use_prediction, update_way, use_ras, metadata,
         output if_pc, new_mem_request, next_pc
      );
 
@@ -192,7 +191,7 @@ interface mmu_interface;
     logic [21:0] ppn;
     logic mxr; //Make eXecutable Readable
     logic pum; //Protect User Memory
-    logic privilege;
+    logic [1:0] privilege;
 
     modport mmu (input virtual_address, new_request, execute, rnw, ppn, mxr, pum, privilege, output write_entry, new_phys_addr);
     modport tlb (input write_entry, new_phys_addr, output new_request, virtual_address, execute, rnw);

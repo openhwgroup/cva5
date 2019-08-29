@@ -59,7 +59,7 @@ module id_stack # (
     //Initial ordering, stack has no reset, as ID ordering is arbitrary
     initial begin
         for (int i=0; i<STACK_DEPTH; i++) begin
-            stack[i] = i;
+            stack[i] = i[STACK_DEPTH_W-1:0];
         end
     end
 
@@ -103,7 +103,7 @@ module id_stack # (
         if (rst)
             next_id_index <= '1;
         else
-            next_id_index <= next_id_index + retired + store_committed - issued;
+            next_id_index <= next_id_index + STACK_DEPTH_W'(retired) + STACK_DEPTH_W'(store_committed) - STACK_DEPTH_W'(issued);
     end
 
     assign next_id = stack[next_id_index[STACK_DEPTH_W-1:0]];

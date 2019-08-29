@@ -77,7 +77,6 @@ module taiga (
     tlb_interface dtlb();
     logic tlb_on;
     logic [ASIDLEN-1:0] asid;
-    logic return_from_exception;
 
     //Pre-Decode
     logic pre_decode_push;
@@ -97,11 +96,9 @@ module taiga (
     logic gc_fetch_flush;
     logic gc_fetch_pc_override;
     logic gc_supress_writeback;
-    logic gc_flush_LS_input;
     logic inorder;
     logic inuse_clear;
     instruction_id_t oldest_id;
-    logic inflight_queue_empty;
     logic load_store_issue;
     logic [31:0] gc_fetch_pc;
 
@@ -113,21 +110,13 @@ module taiga (
     instruction_id_one_hot_t csr_id_done;
     logic csr_done;
 
-    //Branch Unit and Fetch Unit
-    logic branch_taken;
-    logic [31:0] pc_offset;
-    logic[31:0] jalr_rs1;
-    logic jalr;
-
     //Decode Unit and Fetch Unit
     logic illegal_instruction;
-
     logic instruction_queue_empty;
 
     logic instruction_issued_no_rd;
     logic instruction_issued_with_rd;
     logic instruction_complete;
-    logic instruction_issued;
     logic gc_flush_required;
     logic branch_issued;
 

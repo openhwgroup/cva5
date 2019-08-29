@@ -87,8 +87,6 @@ module load_store_unit (
     logic [31:0] aligned_load_data;
     logic [31:0] final_load_data;
 
-    logic [31:0] forwarded_data;
-
     logic [31:0] rd_bank [MAX_INFLIGHT_COUNT-1:0];
     logic [31:0] previous_load;
     logic [31:0] stage1_raw_data;

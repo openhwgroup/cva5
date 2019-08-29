@@ -48,20 +48,11 @@ module branch_unit(
     logic [31:0] jump_base;
     logic [31:0] jump_pc_dec;
 
-    logic signed [32:0] rs1_sext;
-    logic signed [32:0] rs2_sext;
-    logic signed [30:0] sub_toss;
-
     logic result;
     logic result_ex;
 
     logic [2:0] fn3_ex;
-    logic [31:0] rd_ex;
     logic jump_ex;
-
-    logic done;
-    logic new_jal_jalr_dec_with_rd;
-
 
     //Branch Predictor
     logic branch_taken;
@@ -80,8 +71,6 @@ module branch_unit(
     logic is_call;
     logic is_return;
 
-    logic [31:0] rd_bank [MAX_INFLIGHT_COUNT-1:0];
-    instruction_id_t id;
     //implementation
     ////////////////////////////////////////////////////
     assign issue.ready = 1;

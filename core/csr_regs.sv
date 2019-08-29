@@ -469,7 +469,7 @@ endgenerate
             minst_ret <= 0;
         end else begin
             mcycle <= mcycle + 1;
-            minst_ret <= minst_ret + inst_ret_inc;
+            minst_ret <= minst_ret + COUNTER_W'(inst_ret_inc);
         end
     end
 
@@ -498,8 +498,8 @@ endgenerate
             //Machine Timers and Counters
             MCYCLE : selected_csr = mcycle[XLEN-1:0];
             MINSTRET : selected_csr = minst_ret[XLEN-1:0];
-            MCYCLEH : selected_csr = mcycle[COUNTER_W-1:XLEN];
-            MINSTRETH : selected_csr = minst_ret[COUNTER_W-1:XLEN];
+            MCYCLEH : selected_csr = 32'(mcycle[COUNTER_W-1:XLEN]);
+            MINSTRETH : selected_csr = 32'(minst_ret[COUNTER_W-1:XLEN]);
 
            //Supervisor Trap Setup
            SSTATUS : selected_csr = (mstatus & mstatus_smask);
@@ -521,9 +521,9 @@ endgenerate
             CYCLE : selected_csr = mcycle[XLEN-1:0];
             TIME : selected_csr = mcycle[XLEN-1:0];
             INSTRET : selected_csr = minst_ret[XLEN-1:0];
-            CYCLEH : selected_csr = mcycle[COUNTER_W-1:XLEN];
-            TIMEH : selected_csr = mcycle[COUNTER_W-1:XLEN];
-            INSTRETH : selected_csr = minst_ret[COUNTER_W-1:XLEN];
+            CYCLEH : selected_csr = 32'(mcycle[COUNTER_W-1:XLEN]);
+            TIMEH : selected_csr = 32'(mcycle[COUNTER_W-1:XLEN]);
+            INSTRETH : selected_csr = 32'(minst_ret[COUNTER_W-1:XLEN]);
 
             default : begin selected_csr = 0; invalid_addr = 1; end
         endcase

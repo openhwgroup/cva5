@@ -66,7 +66,6 @@ module write_back(
     logic [MAX_INFLIGHT_COUNT-1:0] id_done_ordered_post_store;
 
     logic retired, retired_r;
-    logic first_cycle_completion_abort;
     ////////////////////////////////////////////////////
     //Implementation
 
@@ -135,9 +134,9 @@ module write_back(
 
     always_ff @ (posedge clk) begin
         if (rst)
-            id_done_r = '0;
+            id_done_r <= '0;
         else
-            id_done_r = id_done;
+            id_done_r <= id_done;
     end
 
     assign retired = (inorder ? id_done_ordered[MAX_INFLIGHT_COUNT-1] : |id_done);

@@ -31,8 +31,9 @@ module ras (
 
     logic[31:0] lut_ram [RAS_DEPTH-1:0];
 
-    logic[$clog2(RAS_DEPTH)-1:0] read_index;
-    logic[$clog2(RAS_DEPTH)-1:0] write_index;
+    localparam RAS_DEPTH_W = $clog2(RAS_DEPTH);
+    logic[RAS_DEPTH_W-1:0] read_index;
+    logic[RAS_DEPTH_W-1:0] write_index;
     logic valid_chain[RAS_DEPTH-1:0];
     logic valid_chain_update;
     ///////////////////////////////////////////////////////
@@ -61,7 +62,7 @@ module ras (
         else if (ras.pop & ~ras.push)
             read_index <= read_index - 1;
     end
-    assign write_index = (ras.push & ~ras.pop) ? (read_index + valid_chain[read_index]) : read_index;
+    assign write_index = (ras.push & ~ras.pop) ? (read_index + RAS_DEPTH_W'(valid_chain[read_index])) : read_index;
     
     assign valid_chain_update = ras.push | ras.pop;
     always_ff @ (posedge clk) begin

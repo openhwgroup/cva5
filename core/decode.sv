@@ -95,15 +95,12 @@ module decode(
 
     logic [NUM_WB_UNITS-1:0] new_request_for_id_gen;
     logic [NUM_UNITS-1:0] new_request;
-    logic [WB_UNITS_WIDTH-1:0] new_request_int;
     logic [NUM_UNITS-1:0] issue_ready;
     logic [NUM_UNITS-1:0] issue;
 
     logic instruction_issued;
-
     logic valid_opcode;
 
-    instruction_id_t last_id;
     genvar i;
     ////////////////////////////////////////////////////
     //Implementation
@@ -404,7 +401,7 @@ module decode(
             assign unit_issue[i].instruction_id = ti.issue_id;
             assign unit_issue[i].instruction_id_one_hot = ti.issue_id_one_hot;
             always_ff @(posedge clk) begin
-                unit_issue[i].new_request_r = issue[i];
+                unit_issue[i].new_request_r <= issue[i];
             end
         end
     endgenerate

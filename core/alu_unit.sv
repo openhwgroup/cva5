@@ -36,10 +36,8 @@ module alu_unit(
     logic[XLEN-1:0] rshift_result;
     logic[XLEN-1:0] lshift_result;
 
-    logic done;
     logic[XLEN:0] adder_in1;
     logic[XLEN:0] adder_in2;
-    logic[XLEN:0] adder_in2_logic;
 
     logic[XLEN-1:0] result;
     logic [31:0] rd_bank [MAX_INFLIGHT_COUNT-1:0];
