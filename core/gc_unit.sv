@@ -85,8 +85,6 @@ module gc_unit(
     //For general reset clear, greater of TLB depth or inuse memory block (32-bits)
     localparam int CLEAR_DEPTH = ENABLE_S_MODE ? TLB_CLEAR_DEPTH : 32;
 
-    logic [CLEAR_DEPTH-1:0] clear_shift_count;
-    logic [TLB_CLEAR_DEPTH-1:0] tlb_clear_shift_count;
     ////////////////////////////////////////////////////
     //Instructions
     //All instructions are processed only if in IDLE state, meaning there can be no exceptions caused by instructions already further in the pipeline.
@@ -137,6 +135,9 @@ module gc_unit(
     typedef enum {RST_STATE, PRE_CLEAR_STATE, CLEAR_STATE, IDLE_STATE, TLB_CLEAR_STATE, LS_EXCEPTION_POSSIBLE, IQ_DRAIN, IQ_DISCARD} gc_state;
     gc_state state;
     gc_state next_state;
+
+    logic clear_done;
+    logic tlb_clear_done;
 
     logic i_fence_flush;
     exception_code_t ecall_code;
@@ -221,9 +222,9 @@ module gc_unit(
         case (state)
             RST_STATE : next_state = PRE_CLEAR_STATE;
             PRE_CLEAR_STATE : next_state = CLEAR_STATE;
-            CLEAR_STATE : if (clear_shift_count[CLEAR_DEPTH-1]) next_state = IDLE_STATE;
+            CLEAR_STATE : if (clear_done) next_state = IDLE_STATE;
             IDLE_STATE : if (load_store_issue) next_state = LS_EXCEPTION_POSSIBLE;
-            TLB_CLEAR_STATE : if (tlb_clear_shift_count[TLB_CLEAR_DEPTH-1]) next_state = IDLE_STATE;
+            TLB_CLEAR_STATE : if (tlb_clear_done) next_state = IDLE_STATE;
             LS_EXCEPTION_POSSIBLE : next_state = ls_exception_next_state;
             IQ_DRAIN : if (ls_exception.id == oldest_id) next_state = IQ_DISCARD;
             IQ_DISCARD : if (instruction_queue_empty) next_state = IDLE_STATE;
@@ -231,16 +232,9 @@ module gc_unit(
         endcase
     end
 
-    //CLEAR state shift reg
-    always_ff @ (posedge clk) begin
-        clear_shift_count[0] <= (state == PRE_CLEAR_STATE) && (next_state == CLEAR_STATE);
-        clear_shift_count[CLEAR_DEPTH-1:1] <= clear_shift_count[CLEAR_DEPTH-2:0];
-    end
-    //TLB_CLEAR state shift reg
-    always_ff @ (posedge clk) begin
-        tlb_clear_shift_count[0] <= (state == IDLE_STATE) && (next_state == TLB_CLEAR_STATE);
-        tlb_clear_shift_count[TLB_CLEAR_DEPTH-1:1] <= tlb_clear_shift_count[TLB_CLEAR_DEPTH-2:0];
-    end
+    //Counters for clear and tlb clearing states
+    shift_counter #(.DEPTH(CLEAR_DEPTH)) clear_counter (.*, .start((state == PRE_CLEAR_STATE) && (next_state == CLEAR_STATE)), .done(clear_done));
+    shift_counter #(.DEPTH(TLB_CLEAR_DEPTH)) tlb_clear_counter (.*, .start((state == IDLE_STATE) && (next_state == TLB_CLEAR_STATE)), .done(tlb_clear_done));
 
     ////////////////////////////////////////////////////
     //Exception handling

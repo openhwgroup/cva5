@@ -28,7 +28,7 @@
 ../core/one_hot_occupancy.sv 
 ../core/binary_occupancy.sv 
 ../core/taiga_fifo.sv  
-
+../core/shift_counter.sv
 
 ../core/intel_byte_enable_ram.sv  
 ../core/xilinx_byte_enable_ram.sv  
