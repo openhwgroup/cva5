@@ -104,7 +104,7 @@ lint_full:
 	verilator -cc $(TAIGA_SRCS) \
 	../test_benches/verilator/taiga_local_mem.sv \
 	--top-module taiga_local_mem \
-	--lint-only -Wwarn-lint -Wwarn-style
+	--lint-only -Wall
 		
 .PHONY: verilator_taiga_dhrystone
 verilator_taiga_dhrystone:
