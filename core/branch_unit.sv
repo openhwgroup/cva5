@@ -33,12 +33,12 @@ module branch_unit(
         ras_interface.branch_unit ras,
         output branch_flush,
 
-        input branch_issued,
-
         //Trace signals
         output logic tr_branch_misspredict,
         output logic tr_return_misspredict
         );
+
+    logic branch_issued;
 
     logic[19:0] jal_imm;
     logic[11:0] jalr_imm;
@@ -74,6 +74,16 @@ module branch_unit(
     //implementation
     ////////////////////////////////////////////////////
     assign issue.ready = 1;
+
+    //Branch new request is held if the following instruction hasn't arrived at decode/issue yet
+    always_ff @(posedge clk) begin
+        if (rst)
+            branch_issued <= 0;
+        else if (issue.new_request)
+            branch_issued <= 1;
+        else if (branch_inputs.dec_pc_valid )
+            branch_issued <= 0;
+    end
 
     branch_comparator bc (
             .use_signed(branch_inputs.use_signed),

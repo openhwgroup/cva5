@@ -47,7 +47,6 @@ module decode(
         input logic gc_fetch_flush,
         input logic gc_issue_flush,
         output logic gc_flush_required,
-        output logic branch_issued,
 
         output logic load_store_issue,
 
@@ -405,17 +404,6 @@ module decode(
             end
         end
     endgenerate
-
-    //Special case for branch unit:
-    //Branch new request is held if the following instruction hasn't arrived at decode/issue yet
-    always_ff @(posedge clk) begin
-        if (rst)
-            branch_issued <= 0;
-        else if (issue[BRANCH_UNIT_ID])
-            branch_issued <= 1;
-        else if (fb_valid)
-            branch_issued <= 0;
-    end
 
     ////////////////////////////////////////////////////
     //Illegal Opcode check

@@ -118,7 +118,6 @@ module taiga (
     logic instruction_issued_with_rd;
     logic instruction_complete;
     logic gc_flush_required;
-    logic branch_issued;
 
     //Trace Interface Signals
     logic tr_operand_stall;
