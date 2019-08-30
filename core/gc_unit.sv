@@ -163,10 +163,13 @@ module gc_unit(
     logic [4:0] rs1_addr;
     logic [4:0] rs2_addr;
     logic [4:0] future_rd_addr;
-    instruction_id_one_hot_t id;
 
     logic is_csr;
     logic processing_csr;
+    logic csr_ready_to_complete;
+    logic csr_ready_to_complete_r;
+    instruction_id_one_hot_t id;
+    instruction_id_t instruction_id;
     //implementation
     ////////////////////////////////////////////////////
 
@@ -283,9 +286,6 @@ module gc_unit(
 
     ////////////////////////////////////////////////////
     //Decode / Write-back Handshaking
-    logic csr_ready_to_complete;
-    logic csr_ready_to_complete_r;
-    instruction_id_t instruction_id;
     //CSR reads are passed through the Load-Store unit
     //A CSR write is only committed once it is the oldest instruction in the pipeline
     //while processing a csr operation, gc_issue_hold prevents further instructions from being issued
