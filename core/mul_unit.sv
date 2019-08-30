@@ -80,6 +80,8 @@ module mul_unit(
     ////////////////////////////////////////////////////
     assign issue.ready = 1;
     assign wb.rd = rd_bank[wb.writeback_instruction_id];
+    assign wb.rs1_data = rd_bank[wb.writeback_rs1_id];
+    assign wb.rs2_data = rd_bank[wb.writeback_rs2_id];
     assign wb.done_next_cycle = id_one_hot_done[1];
 
     ////////////////////////////////////////////////////

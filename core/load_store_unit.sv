@@ -341,6 +341,8 @@ module load_store_unit (
     end
 
     assign wb.rd = rd_bank[wb.writeback_instruction_id];
+    assign wb.rs1_data = rd_bank[wb.writeback_rs1_id];
+    assign wb.rs2_data = rd_bank[wb.writeback_rs2_id];
 
     logic exception_complete;
     logic ls_done;

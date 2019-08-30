@@ -29,6 +29,7 @@ package taiga_types;
 
     typedef logic[$clog2(MAX_INFLIGHT_COUNT)-1:0] instruction_id_t;
     typedef logic[MAX_INFLIGHT_COUNT-1:0] instruction_id_one_hot_t;
+    typedef logic[$clog2(NUM_WB_UNITS)-1:0] unit_id_t;
     typedef logic[1:0] branch_predictor_metadata_t;
 
     typedef enum bit [6:0] {
@@ -269,7 +270,7 @@ package taiga_types;
     } exception_packet_t;
 
     typedef struct packed{
-        logic [$clog2(NUM_WB_UNITS)-1:0] unit_id;
+        unit_id_t unit_id;
         logic [4:0] rd_addr;
         logic rd_addr_nzero;
     } inflight_instruction_packet;

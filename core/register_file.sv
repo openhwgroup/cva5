@@ -44,6 +44,7 @@ module register_file(
 
     logic valid_write;
     logic in_use_match;
+
     instruction_id_t in_use_by_id;
     instruction_id_t rs1_id;
     instruction_id_t rs2_id;
@@ -81,17 +82,20 @@ module register_file(
     assign rs1_id =  in_use_by[rf_decode.rs1_addr];
     assign rs2_id =  in_use_by[rf_decode.rs2_addr];
     
+    assign rf_wb.rs1_id = rs1_id;
+    assign rf_wb.rs2_id = rs2_id;
+
     assign valid_write = rf_wb.rd_nzero && rf_wb.commit;
     assign in_use_match = (rf_wb.id == in_use_by_id);
 
-    assign rs1_feedforward = rs1_inuse && (rs1_id == rf_wb.id) && rf_wb.commit;
-    assign rs2_feedforward = rs2_inuse && (rs2_id == rf_wb.id) && rf_wb.commit;
+    assign rs1_feedforward = rs1_inuse;// && (rs1_id == rf_wb.id) && rf_wb.commit;
+    assign rs2_feedforward = rs2_inuse;// && (rs2_id == rf_wb.id) && rf_wb.commit;
 
-    assign rf_decode.rs1_data = rs1_feedforward ? rf_wb.rd_data : register[rf_decode.rs1_addr];
-    assign rf_decode.rs2_data = rs2_feedforward ? rf_wb.rd_data : register[rf_decode.rs2_addr];
+    assign rf_decode.rs1_data = rs1_feedforward ? rf_wb.rs1_data : register[rf_decode.rs1_addr];
+    assign rf_decode.rs2_data = rs2_feedforward ? rf_wb.rs2_data : register[rf_decode.rs2_addr];
 
-    assign rf_decode.rs1_conflict = rf_decode.uses_rs1 & rs1_inuse & ~rs1_feedforward;
-    assign rf_decode.rs2_conflict = rf_decode.uses_rs2 & rs2_inuse & ~rs2_feedforward;
+    assign rf_decode.rs1_conflict = rf_decode.uses_rs1 & rs1_inuse & ~rf_wb.rs1_valid;//rs1_inuse & ~rs1_feedforward;
+    assign rf_decode.rs2_conflict = rf_decode.uses_rs2 & rs2_inuse & ~rf_wb.rs2_valid;//rs2_inuse & ~rs2_feedforward;
 
     ////////////////////////////////////////////////////
     //Assertions

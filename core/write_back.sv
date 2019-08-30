@@ -51,10 +51,14 @@ module write_back(
     //aliases for write-back-interface signals
     logic [MAX_INFLIGHT_COUNT-1:0] unit_done_next_cycle [NUM_WB_UNITS-1:0];
     logic [XLEN-1:0] unit_rd [NUM_WB_UNITS-1:0];
+    logic [XLEN-1:0] unit_rs1 [NUM_WB_UNITS-1:0];
+    logic [XLEN-1:0] unit_rs2 [NUM_WB_UNITS-1:0];
     /////
 
     instruction_id_t issue_id, retired_id, retired_id_r;
     inflight_instruction_packet retired_instruction_packet;
+    inflight_instruction_packet rs1_packet;
+    inflight_instruction_packet rs2_packet;
 
     instruction_id_t id_ordering [MAX_INFLIGHT_COUNT-1:0];
     instruction_id_t id_ordering_post_store [MAX_INFLIGHT_COUNT-1:0];
@@ -75,7 +79,11 @@ module write_back(
         for (i=0; i< NUM_WB_UNITS; i++) begin : interface_to_array_g
             assign unit_done_next_cycle[i] = unit_wb[i].done_next_cycle;
             assign unit_rd[i] = unit_wb[i].rd;
+            assign unit_rs1[i] = unit_wb[i].rs1_data;
+            assign unit_rs2[i] = unit_wb[i].rs2_data;
             assign unit_wb[i].writeback_instruction_id = retired_id_r;
+            assign unit_wb[i].writeback_rs1_id = rf_wb.rs1_id;
+            assign unit_wb[i].writeback_rs2_id = rf_wb.rs2_id;
         end
     endgenerate
 
@@ -174,6 +182,14 @@ module write_back(
     assign rf_wb.rd_nzero = retired_instruction_packet.rd_addr_nzero;
     assign rf_wb.rd_data = unit_rd[retired_instruction_packet.unit_id];
 
+    assign rf_wb.rs1_valid = id_done_r[rf_wb.rs1_id];
+    assign rf_wb.rs2_valid = id_done_r[rf_wb.rs2_id];
+
+    assign rs1_packet = packet_table[rf_wb.rs1_id];
+    assign rs2_packet = packet_table[rf_wb.rs2_id];
+
+    assign rf_wb.rs1_data = unit_rs1[rs1_packet.unit_id];
+    assign rf_wb.rs2_data = unit_rs2[rs2_packet.unit_id];
     ////////////////////////////////////////////////////
     //End of Implementation
     ////////////////////////////////////////////////////
