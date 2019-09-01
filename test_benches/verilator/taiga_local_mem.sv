@@ -92,6 +92,10 @@ module taiga_local_mem # (
         output logic return_misspredict,
         output logic wb_mux_contention,
 
+        output logic rs1_forwarding_needed,
+        output logic rs2_forwarding_needed,
+        output logic rs1_and_rs2_forwarding_needed,
+
         //L2
         //l2 request
         output logic [29:0] addr,
@@ -347,5 +351,7 @@ module taiga_local_mem # (
     assign branch_misspredict = tr.branch_misspredict;
     assign return_misspredict = tr.return_misspredict;
     assign wb_mux_contention = tr.wb_mux_contention;
-
+    assign rs1_forwarding_needed = tr.rs1_forwarding_needed;
+    assign rs2_forwarding_needed = tr.rs2_forwarding_needed;
+    assign rs1_and_rs2_forwarding_needed = tr.rs1_and_rs2_forwarding_needed;
 endmodule

@@ -17,6 +17,9 @@ uint64_t instruction_issued_dec = 0;
 uint64_t branch_misspredict = 0;
 uint64_t return_misspredict = 0;
 uint64_t wb_mux_contention = 0;
+uint64_t rs1_forwarding_needed = 0;
+uint64_t rs2_forwarding_needed = 0;
+uint64_t rs1_and_rs2_forwarding_needed = 0;
 
 using namespace std;
 int main(int argc, char **argv) {
@@ -86,6 +89,10 @@ int main(int argc, char **argv) {
             branch_misspredict += tb->branch_misspredict;
             return_misspredict += tb->return_misspredict;
             wb_mux_contention += tb->wb_mux_contention;
+
+            rs1_forwarding_needed += tb->rs1_forwarding_needed;
+            rs2_forwarding_needed += tb->rs2_forwarding_needed;
+            rs1_and_rs2_forwarding_needed += tb->rs1_and_rs2_forwarding_needed;
         }
 
 
@@ -143,11 +150,8 @@ int main(int argc, char **argv) {
 		tracer->close();
 	#endif
 
-	cout << "\n--------------------------------------------------------------\n";
-	cout << "   Simulation Completed:  " << cycle_cout << " cycles.\n";
 	cout << "--------------------------------------------------------------\n";
-
-	cout << "\n\n--------------------------------------------------------------\n";
+	cout << "   Simulation Completed:  " << cycle_cout << " cycles.\n";
 	cout << "   Taiga trace stats:\n";
 	cout << "--------------------------------------------------------------\n";
 	cout << "    operand_stall: " << operand_stall  << "\n";
@@ -159,7 +163,11 @@ int main(int argc, char **argv) {
 	cout << "    branch_misspredict: " << branch_misspredict  << "\n";
 	cout << "    return_misspredict: " << return_misspredict  << "\n";
 	cout << "    wb_mux_contention: " << wb_mux_contention  << "\n";
-	cout << "--------------------------------------------------------------\n";
+	cout << "    rs1_forwarding_needed: " << rs1_forwarding_needed  << "\n";
+	cout << "    rs2_forwarding_needed: " << rs2_forwarding_needed  << "\n";
+	cout << "    rs1_OR_rs2_forwarding_needed: " << rs1_forwarding_needed + rs2_forwarding_needed  << "\n";
+	cout << "    rs1_AND_rs2_forwarding_needed: " << rs1_and_rs2_forwarding_needed  << "\n";
+	cout << "--------------------------------------------------------------\n\n";
 
 	logFile.close();
 	sigFile.close();

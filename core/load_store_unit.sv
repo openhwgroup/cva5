@@ -47,14 +47,9 @@ module load_store_unit (
         local_memory_interface.master data_bram,
 
         input logic[31:0] csr_rd,
-        input instruction_id_one_hot_t csr_id_done,
         input instruction_id_t csr_id,
         input logic csr_done,
 
-        output logic store_committed,
-        output instruction_id_t store_id,
-
-        output logic load_store_FIFO_emptying,
         output exception_packet_t ls_exception,
         output logic ls_exception_valid,
 
@@ -106,7 +101,7 @@ module load_store_unit (
         logic [2:0] fn3;
         logic [1:0] byte_addr;
         instruction_id_t instruction_id;
-        instruction_id_one_hot_t instruction_id_one_hot;
+        logic is_store;
     } load_attributes_t;
     load_attributes_t  load_attributes_in, stage2_attr;
     load_store_inputs_t  stage1;
@@ -127,7 +122,6 @@ module load_store_unit (
     assign input_fifo.push = issue.new_request;
     assign issue.ready = (LS_INPUT_BUFFER_DEPTH >= MAX_INFLIGHT_COUNT) ? 1 : ~input_fifo.full;
     assign input_fifo.pop = issue_request | gc_issue_flush;
-    assign load_store_FIFO_emptying = input_fifo.almost_empty & issue_request & ~issue.new_request;
     assign stage1 = input_fifo.data_out;
 
     ////////////////////////////////////////////////////
@@ -138,19 +132,6 @@ module load_store_unit (
             last_unit <= 0;
         else if (load_attributes.push)
             last_unit <= sub_unit_address_match;
-    end
-
-    ////////////////////////////////////////////////////
-    //Store commit tracking
-    always_ff @ (posedge clk) begin
-        store_id <= stage1.instruction_id;
-    end
-
-    always_ff @ (posedge clk) begin
-        if (rst)
-            store_committed <= 0;
-        else
-            store_committed <= stage1.store & (issue_request | ls_exception_valid);
     end
 
     ////////////////////////////////////////////////////
@@ -245,12 +226,12 @@ module load_store_unit (
     assign load_attributes_in.fn3 = stage1.fn3;
     assign load_attributes_in.byte_addr = virtual_address[1:0];
     assign load_attributes_in.instruction_id = stage1.instruction_id;
-    assign load_attributes_in.instruction_id_one_hot = stage1.instruction_id_one_hot;
+    assign load_attributes_in.is_store = stage1.store;
 
     assign load_attributes.data_in = load_attributes_in;
 
-    assign load_attributes.push = issue_request & stage1.load;
-    assign load_attributes.pop = load_complete;
+    assign load_attributes.push = issue_request;
+    assign load_attributes.pop = load_complete | (stage2_attr.is_store & load_attributes.valid);
 
     assign stage2_attr  = load_attributes.data_out;
 
@@ -349,9 +330,10 @@ module load_store_unit (
     always_ff @ (posedge clk) begin
         exception_complete <= (input_fifo.valid & ls_exception_valid & stage1.load);
     end
-    assign ls_done = load_complete | exception_complete;
+    assign ls_done = load_complete | exception_complete |  (stage2_attr.is_store & load_attributes.valid);
 
-    assign wb.done_next_cycle = csr_id_done | (stage2_attr.instruction_id_one_hot & {MAX_INFLIGHT_COUNT{ls_done}});
+    assign wb.done_next_cycle = csr_done | ls_done;
+    assign wb.id = csr_done ? csr_id : stage2_attr.instruction_id;
     ////////////////////////////////////////////////////
     //End of Implementation
     ////////////////////////////////////////////////////

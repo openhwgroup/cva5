@@ -270,9 +270,11 @@ package taiga_types;
     } exception_packet_t;
 
     typedef struct packed{
+        instruction_id_t id;
         unit_id_t unit_id;
         logic [4:0] rd_addr;
         logic rd_addr_nzero;
+        logic is_store;
     } inflight_instruction_packet;
 
     typedef struct packed{
@@ -451,6 +453,11 @@ package taiga_types;
         logic instruction_issued_dec;
         logic [31:0] instruction_pc_dec;
         logic [31:0] instruction_data_dec;
+
+        //Register File
+        logic rs1_forwarding_needed;
+        logic rs2_forwarding_needed;
+        logic rs1_and_rs2_forwarding_needed;
 
         //Branch Unit
         logic branch_misspredict;

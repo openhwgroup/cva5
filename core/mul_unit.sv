@@ -34,7 +34,7 @@ module mul_unit(
 
     logic signed [65:0] result;
     logic [1:0] mulh;
-    instruction_id_one_hot_t id_one_hot_done [1:0];
+    logic [1:0] done_next_cycle;
     instruction_id_t id [1:0];
 
     logic rs1_signed, rs2_signed;
@@ -65,14 +65,14 @@ module mul_unit(
         id[0] <= issue.instruction_id;
         id[1] <= id[0];
 
-        id_one_hot_done[0] <= issue.instruction_id_one_hot & {MAX_INFLIGHT_COUNT{issue.new_request}};
-        id_one_hot_done[1] <= id_one_hot_done[0];
+        done_next_cycle[0] <= issue.new_request;
+        done_next_cycle[1] <= done_next_cycle[0];
     end
 
     ////////////////////////////////////////////////////
     //Output bank
      always_ff @ (posedge clk) begin
-         if (|id_one_hot_done[1])
+         if (done_next_cycle[1])
              rd_bank[id[1]] <= mulh[1] ? result[63:32] : result[31:0];
      end
 
@@ -82,8 +82,8 @@ module mul_unit(
     assign wb.rd = rd_bank[wb.writeback_instruction_id];
     assign wb.rs1_data = rd_bank[wb.writeback_rs1_id];
     assign wb.rs2_data = rd_bank[wb.writeback_rs2_id];
-    assign wb.done_next_cycle = id_one_hot_done[1];
-
+    assign wb.done_next_cycle = done_next_cycle[1];
+    assign wb.id = id[1];
     ////////////////////////////////////////////////////
     //End of Implementation
     ////////////////////////////////////////////////////

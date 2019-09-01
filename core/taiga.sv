@@ -90,24 +90,19 @@ module taiga (
     fetch_buffer_packet_t fb;
 
     //Global Control
-    logic load_store_FIFO_emptying;
     logic gc_issue_hold;
     logic gc_issue_flush;
     logic gc_fetch_flush;
     logic gc_fetch_pc_override;
     logic gc_supress_writeback;
-    logic inorder;
     logic inuse_clear;
     instruction_id_t oldest_id;
     logic load_store_issue;
     logic [31:0] gc_fetch_pc;
 
-    logic store_committed;
-    instruction_id_t store_id;
 
     logic[31:0] csr_rd;
     instruction_id_t csr_id;
-    instruction_id_one_hot_t csr_id_done;
     logic csr_done;
 
     //Decode Unit and Fetch Unit
@@ -133,6 +128,10 @@ module taiga (
     logic tr_branch_misspredict;
     logic tr_return_misspredict;
     logic tr_wb_mux_contention;
+
+    logic tr_rs1_forwarding_needed;
+    logic tr_rs2_forwarding_needed;
+    logic tr_rs1_and_rs2_forwarding_needed;
     ////////////////////////////////////////////////////
     //Implementation
 
@@ -221,6 +220,9 @@ module taiga (
             tr.branch_misspredict <= tr_branch_misspredict;
             tr.return_misspredict <= tr_return_misspredict;
             tr.wb_mux_contention <= tr_wb_mux_contention;
+            tr.rs1_forwarding_needed <= tr_rs1_forwarding_needed;
+            tr.rs2_forwarding_needed <= tr_rs2_forwarding_needed;
+            tr.rs1_and_rs2_forwarding_needed <= tr_rs1_and_rs2_forwarding_needed;
         end
     end
     endgenerate

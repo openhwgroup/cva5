@@ -92,7 +92,8 @@ module alu_unit(
     assign wb.rd = rd_bank[wb.writeback_instruction_id];
     assign wb.rs1_data = rd_bank[wb.writeback_rs1_id];
     assign wb.rs2_data = rd_bank[wb.writeback_rs2_id];
-    assign wb.done_next_cycle = issue.instruction_id_one_hot & {MAX_INFLIGHT_COUNT{issue.new_request}};
+    assign wb.done_next_cycle = issue.new_request;
+    assign wb.id = issue.instruction_id;
 
     ////////////////////////////////////////////////////
     //Assertions

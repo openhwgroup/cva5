@@ -123,11 +123,11 @@ module div_unit
             rd_bank[stage1.instruction_id] <= wb_div_result;
     end
 
-    assign wb.done_next_cycle = stage1.instruction_id_one_hot & {MAX_INFLIGHT_COUNT{div_done}};
     assign wb.rd = rd_bank[wb.writeback_instruction_id];
     assign wb.rs1_data = rd_bank[wb.writeback_rs1_id];
     assign wb.rs2_data = rd_bank[wb.writeback_rs2_id];
-
+    assign wb.done_next_cycle = div_done;
+    assign wb.id = stage1.instruction_id;
     ////////////////////////////////////////////////////
     //Assertions
 

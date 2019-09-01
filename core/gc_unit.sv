@@ -40,8 +40,6 @@ module gc_unit(
         //Load Store Unit
         input exception_packet_t ls_exception,
         input logic ls_exception_valid,
-        input logic load_store_issue,
-        input logic load_store_FIFO_emptying,
 
         //TLBs
         output logic tlb_on,
@@ -68,7 +66,6 @@ module gc_unit(
         output logic gc_fetch_pc_override,
         output logic gc_supress_writeback,
 
-        output logic inorder,
         output logic inuse_clear,
 
         output logic [31:0] gc_fetch_pc,
@@ -76,7 +73,6 @@ module gc_unit(
         //Write-back to Load-Store Unit
         output logic[31:0] csr_rd,
         output instruction_id_t csr_id,
-        output instruction_id_one_hot_t csr_id_done,
         output logic csr_done
         );
 
@@ -132,7 +128,7 @@ module gc_unit(
     //     *If in-order mode and inflight queue empty, disable zero cycle write-back (eg. ALU)
     //*Hold fetch during potential fetch exception, when fetch buffer drained, if no other exceptions trigger exception
 
-    typedef enum {RST_STATE, PRE_CLEAR_STATE, CLEAR_STATE, IDLE_STATE, TLB_CLEAR_STATE, LS_EXCEPTION_POSSIBLE, IQ_DRAIN, IQ_DISCARD} gc_state;
+    typedef enum {RST_STATE, PRE_CLEAR_STATE, CLEAR_STATE, IDLE_STATE, TLB_CLEAR_STATE, IQ_DRAIN, IQ_DISCARD} gc_state;
     gc_state state;
     gc_state next_state;
 
@@ -168,7 +164,6 @@ module gc_unit(
     logic processing_csr;
     logic csr_ready_to_complete;
     logic csr_ready_to_complete_r;
-    instruction_id_one_hot_t id;
     instruction_id_t instruction_id;
     //implementation
     ////////////////////////////////////////////////////
@@ -189,7 +184,6 @@ module gc_unit(
     always_ff @ (posedge clk) begin
         gc_issue_hold <= issue.new_request || is_csr || processing_csr || (next_state inside {PRE_CLEAR_STATE, CLEAR_STATE, TLB_CLEAR_STATE, IQ_DRAIN, IQ_DISCARD});
         inuse_clear <= (next_state == CLEAR_STATE);
-        inorder <= 0;//(next_state inside {LS_EXCEPTION_POSSIBLE, IQ_DRAIN});
     end
 
     always_ff @ (posedge clk) begin
@@ -209,26 +203,14 @@ module gc_unit(
             state <= next_state;
     end
 
-    gc_state ls_exception_next_state;
     always_comb begin
-        ls_exception_next_state = state;
-        if (load_store_FIFO_emptying)
-            ls_exception_next_state = IDLE_STATE;
-        else if (ls_exception_valid) begin
-            if (ls_exception.id == oldest_id)
-                ls_exception_next_state = IQ_DISCARD;
-            else
-                ls_exception_next_state = IQ_DRAIN;
-        end
-
         next_state = state;
         case (state)
             RST_STATE : next_state = PRE_CLEAR_STATE;
             PRE_CLEAR_STATE : next_state = CLEAR_STATE;
             CLEAR_STATE : if (clear_done) next_state = IDLE_STATE;
-            IDLE_STATE : if (load_store_issue) next_state = LS_EXCEPTION_POSSIBLE;
+            IDLE_STATE : if (ls_exception_valid) next_state = IQ_DISCARD;
             TLB_CLEAR_STATE : if (tlb_clear_done) next_state = IDLE_STATE;
-            LS_EXCEPTION_POSSIBLE : next_state = ls_exception_next_state;
             IQ_DRAIN : if (ls_exception.id == oldest_id) next_state = IQ_DISCARD;
             IQ_DISCARD : if (instruction_queue_empty) next_state = IDLE_STATE;
             default : next_state = RST_STATE;
@@ -244,7 +226,7 @@ module gc_unit(
     logic ls_exception_first_cycle;
     logic ls_exception_second_cycle;
 
-    assign ls_exception_first_cycle =  ls_exception_valid && (state == LS_EXCEPTION_POSSIBLE);
+    assign ls_exception_first_cycle =  ls_exception_valid;
     always_ff @ (posedge clk) begin
         ls_exception_second_cycle <= ls_exception_first_cycle;
     end
@@ -303,10 +285,8 @@ module gc_unit(
     assign csr_ready_to_complete = (is_csr | processing_csr) && (oldest_id == csr_id);
     always_ff @(posedge clk) begin
         csr_ready_to_complete_r <= csr_ready_to_complete;
-        csr_id_done <= id & {MAX_INFLIGHT_COUNT{csr_ready_to_complete}};
         csr_id <= instruction_id;
         if (issue.new_request) begin
-            id <= issue.instruction_id_one_hot;
             instruction_id <= issue.instruction_id;
         end
     end

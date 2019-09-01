@@ -88,7 +88,6 @@ module taiga_fifo #(parameter DATA_WIDTH = 32, parameter FIFO_DEPTH = 4, paramet
                 end
             end
             assign fifo.data_out = lut_ram[read_index];
-
             always_ff @ (posedge clk) begin
                 if (fifo.push)
                     lut_ram[write_index] <= fifo.data_in;

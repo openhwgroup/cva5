@@ -26,15 +26,29 @@ import taiga_types::*;
 module register_file(
         input logic clk,
         input logic rst,
-        input logic inorder,
         input logic inuse_clear,
         input logic gc_supress_writeback,
         register_file_writeback_interface.unit rf_wb,
-        register_file_decode_interface.unit rf_decode
+        register_file_decode_interface.unit rf_decode,
+
+        //Trace signals
+        output logic tr_rs1_forwarding_needed,
+        output logic tr_rs2_forwarding_needed,
+        output logic tr_rs1_and_rs2_forwarding_needed
         );
 
+    typedef struct packed{
+        instruction_id_t id;
+        unit_id_t unit_id;
+    } register_id_store_t;
+
     (* ramstyle = "MLAB, no_rw_check" *) logic [XLEN-1:0] register [31:0];
-    (* ramstyle = "MLAB, no_rw_check" *) instruction_id_t in_use_by [31:0];
+    (* ramstyle = "MLAB, no_rw_check" *) logic[$bits(register_id_store_t)-1:0] in_use_by [31:0];
+
+    register_id_store_t new_id_store;
+    register_id_store_t rs1_usage;
+    register_id_store_t rs2_usage;
+    register_id_store_t wb_usage;
 
     logic rs1_inuse;
     logic rs2_inuse;
@@ -45,7 +59,6 @@ module register_file(
     logic valid_write;
     logic in_use_match;
 
-    instruction_id_t in_use_by_id;
     instruction_id_t rs1_id;
     instruction_id_t rs2_id;
     //////////////////////////////////////////
@@ -59,7 +72,7 @@ module register_file(
 
     //Writeback unit does not assert rf_wb.commit when the target register is r0
     always_ff @ (posedge clk) begin
-        if (~gc_supress_writeback & valid_write & (in_use_match | inorder)) //inorder needed for when a L/S exception occurs
+        if (~gc_supress_writeback & valid_write)
             register[rf_wb.rd_addr] <= rf_wb.rd_data;
     end
 
@@ -73,29 +86,41 @@ module register_file(
             .rs2_inuse(rs2_inuse)
             );
 
+    assign new_id_store.id = rf_decode.id;
+    assign new_id_store.unit_id = rf_decode.unit_id;
+
     always_ff @ (posedge clk) begin
         if (rf_decode.instruction_issued)
-            in_use_by[rf_decode.future_rd_addr] <= rf_decode.id;
+            in_use_by[rf_decode.future_rd_addr] <= new_id_store;
     end
 
-    assign in_use_by_id = in_use_by[rf_wb.rd_addr];
-    assign rs1_id =  in_use_by[rf_decode.rs1_addr];
-    assign rs2_id =  in_use_by[rf_decode.rs2_addr];
-    
-    assign rf_wb.rs1_id = rs1_id;
-    assign rf_wb.rs2_id = rs2_id;
 
-    assign valid_write = rf_wb.rd_nzero && rf_wb.commit;
-    assign in_use_match = (rf_wb.id == in_use_by_id);
 
-    assign rs1_feedforward = rs1_inuse;// && (rs1_id == rf_wb.id) && rf_wb.commit;
-    assign rs2_feedforward = rs2_inuse;// && (rs2_id == rf_wb.id) && rf_wb.commit;
+    assign rs1_usage = in_use_by[rf_decode.rs1_addr];
+    assign rs2_usage = in_use_by[rf_decode.rs2_addr];
+    assign wb_usage = in_use_by[rf_wb.rd_addr];
+
+    assign in_use_match = (wb_usage.id == rf_wb.id);
+
+    assign rf_wb.rs1_id =  rs1_usage.id;
+    assign rf_wb.rs2_id = rs2_usage.id;
+    assign rf_wb.rs1_unit_id =  rs1_usage.unit_id;
+    assign rf_wb.rs2_unit_id = rs2_usage.unit_id;
+
+    assign valid_write = rf_wb.rd_nzero & rf_wb.commit;
+
+    assign rs1_feedforward = rs1_inuse;
+    assign rs2_feedforward = rs2_inuse;
 
     assign rf_decode.rs1_data = rs1_feedforward ? rf_wb.rs1_data : register[rf_decode.rs1_addr];
     assign rf_decode.rs2_data = rs2_feedforward ? rf_wb.rs2_data : register[rf_decode.rs2_addr];
 
-    assign rf_decode.rs1_conflict = rf_decode.uses_rs1 & rs1_inuse & ~rf_wb.rs1_valid;//rs1_inuse & ~rs1_feedforward;
-    assign rf_decode.rs2_conflict = rf_decode.uses_rs2 & rs2_inuse & ~rf_wb.rs2_valid;//rs2_inuse & ~rs2_feedforward;
+    assign rf_decode.rs1_conflict = rf_decode.uses_rs1 & rs1_inuse & ~rf_wb.rs1_valid;
+    assign rf_decode.rs2_conflict = rf_decode.uses_rs2 & rs2_inuse & ~rf_wb.rs2_valid;
+
+    ////////////////////////////////////////////////////
+    //End of Implementation
+    ////////////////////////////////////////////////////
 
     ////////////////////////////////////////////////////
     //Assertions
@@ -114,5 +139,11 @@ module register_file(
         sim_register = sim_registers_unamed;
     end
     // synthesis translate_on
+
+    ////////////////////////////////////////////////////
+    //Trace Interface
+    assign tr_rs1_forwarding_needed = rs1_inuse & rf_decode.uses_rs1 & ~tr_rs1_and_rs2_forwarding_needed;
+    assign tr_rs2_forwarding_needed = rs2_inuse & rf_decode.uses_rs2 & ~tr_rs1_and_rs2_forwarding_needed;
+    assign tr_rs1_and_rs2_forwarding_needed = (rs1_inuse & rf_decode.uses_rs1) & (rs2_inuse & rf_decode.uses_rs2);
 
 endmodule

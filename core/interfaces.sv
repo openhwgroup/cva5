@@ -54,12 +54,11 @@ interface unit_issue_interface;
     logic new_request;
     logic new_request_r;
     instruction_id_t instruction_id;
-    instruction_id_one_hot_t instruction_id_one_hot;
 
     logic ready;
 
-    modport decode (input ready, output possible_issue, new_request, new_request_r, instruction_id, instruction_id_one_hot);
-    modport unit (output ready, input possible_issue, new_request, new_request_r, instruction_id, instruction_id_one_hot);
+    modport decode (input ready, output possible_issue, new_request, new_request_r, instruction_id);
+    modport unit (output ready, input possible_issue, new_request, new_request_r, instruction_id);
 endinterface
 
 interface ras_interface;
@@ -76,7 +75,8 @@ endinterface
 
 interface unit_writeback_interface;
     //unit output
-    instruction_id_one_hot_t done_next_cycle;
+    instruction_id_t id;
+    logic done_next_cycle;
     logic [XLEN-1:0] rd;
     logic [XLEN-1:0] rs1_data;
     logic [XLEN-1:0] rs2_data;
@@ -85,8 +85,8 @@ interface unit_writeback_interface;
     instruction_id_t writeback_instruction_id;
     instruction_id_t writeback_rs1_id;
     instruction_id_t writeback_rs2_id;
-    modport writeback (input done_next_cycle, rd, rs1_data, rs2_data, output accepted, writeback_instruction_id, writeback_rs1_id, writeback_rs2_id);
-    modport unit (output done_next_cycle, rd, rs1_data, rs2_data, input accepted, writeback_instruction_id, writeback_rs1_id, writeback_rs2_id);
+    modport writeback (input id, done_next_cycle, rd, rs1_data, rs2_data, output accepted, writeback_instruction_id, writeback_rs1_id, writeback_rs2_id);
+    modport unit (output id, done_next_cycle, rd, rs1_data, rs2_data, input accepted, writeback_instruction_id, writeback_rs1_id, writeback_rs2_id);
 endinterface
 
 //********************************
@@ -125,14 +125,16 @@ interface register_file_decode_interface;
     logic[4:0] rs2_addr; //if not used required to be zero
     logic[XLEN-1:0] rs2_data;
     instruction_id_t id;
+    unit_id_t unit_id;
+
     logic uses_rs1;
     logic uses_rs2;
     logic rs1_conflict;
     logic rs2_conflict;
     logic instruction_issued;
 
-    modport decode (output future_rd_addr, rs1_addr, rs2_addr, instruction_issued, id, uses_rs1, uses_rs2, input rs1_conflict, rs2_conflict, rs1_data, rs2_data);
-    modport unit (input future_rd_addr, rs1_addr, rs2_addr, instruction_issued, id, uses_rs1, uses_rs2, output rs1_conflict, rs2_conflict, rs1_data, rs2_data);
+    modport decode (output future_rd_addr, rs1_addr, rs2_addr, instruction_issued, id, unit_id, uses_rs1, uses_rs2, input rs1_conflict, rs2_conflict, rs1_data, rs2_data);
+    modport unit (input future_rd_addr, rs1_addr, rs2_addr, instruction_issued, id, unit_id, uses_rs1, uses_rs2, output rs1_conflict, rs2_conflict, rs1_data, rs2_data);
 endinterface
 
 
@@ -146,27 +148,29 @@ interface register_file_writeback_interface;
 
     instruction_id_t rs1_id;
     instruction_id_t rs2_id;
+    unit_id_t rs1_unit_id;
+    unit_id_t rs2_unit_id;
+
     logic[XLEN-1:0] rs1_data;
     logic[XLEN-1:0] rs2_data;
     logic rs1_valid;
     logic rs2_valid;
     
-    modport writeback (output rd_addr, commit, rd_nzero, rd_data, id, rs1_data, rs2_data, rs1_valid, rs2_valid,  input rs1_id, rs2_id);
-    modport unit (input rd_addr, commit, rd_nzero, rd_data, id, rs1_data, rs2_data, rs1_valid, rs2_valid, output rs1_id, rs2_id);
+    modport writeback (output rd_addr, commit, rd_nzero, rd_data, id, rs1_data, rs2_data, rs1_valid, rs2_valid,  input rs1_id, rs2_id, rs1_unit_id, rs2_unit_id);
+    modport unit (input rd_addr, commit, rd_nzero, rd_data, id, rs1_data, rs2_data, rs1_valid, rs2_valid, output rs1_id, rs2_id, rs1_unit_id, rs2_unit_id);
 
 endinterface
 
 
 interface tracking_interface;
     instruction_id_t issue_id;
-    instruction_id_one_hot_t issue_id_one_hot;
     logic id_available;
     
     inflight_instruction_packet inflight_packet;
     logic issued;
 
-    modport decode (input issue_id, id_available, issue_id_one_hot, output inflight_packet, issued);
-    modport wb (output issue_id, id_available, issue_id_one_hot, input inflight_packet, issued);
+    modport decode (input issue_id, id_available, output inflight_packet, issued);
+    modport wb (output issue_id, id_available, input inflight_packet, issued);
 endinterface
 
 interface fifo_interface #(parameter DATA_WIDTH = 42);//#(parameter type data_type = logic[31:0]);

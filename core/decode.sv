@@ -78,6 +78,7 @@ module decode(
     logic [4:0] rs1_addr;
     logic [4:0] rs2_addr;
     logic [4:0] future_rd_addr;
+    unit_id_t unit_id;
 
     logic nop;
 
@@ -130,23 +131,27 @@ module decode(
     assign rf_decode.future_rd_addr  =  future_rd_addr;
     assign rf_decode.instruction_issued = instruction_issued_with_rd & ~rd_zero;
     assign rf_decode.id = ti.issue_id;
+    assign rf_decode.unit_id = unit_id;
     assign rf_decode.uses_rs1 = uses_rs1;
     assign rf_decode.uses_rs2 = uses_rs2;
 
 
     ////////////////////////////////////////////////////
     //Tracking Interface
-    //assign ti.inflight_packet.unit_id = new_request;
-    assign ti.inflight_packet.rd_addr = future_rd_addr;
-    assign ti.inflight_packet.rd_addr_nzero = ~rd_zero;
-    assign ti.issued = instruction_issued & (uses_rd | new_request[LS_UNIT_WB_ID]);
-
     always_comb begin
         new_request_for_id_gen = new_request[NUM_WB_UNITS-1:0];
         new_request_for_id_gen[LS_UNIT_WB_ID] |= new_request[GC_UNIT_ID];
     end
 
-    one_hot_to_integer #(NUM_WB_UNITS) new_request_to_int (.*, .one_hot(new_request_for_id_gen), .int_out(ti.inflight_packet.unit_id));
+    one_hot_to_integer #(NUM_WB_UNITS) new_request_to_int (.*, .one_hot(new_request_for_id_gen), .int_out(unit_id));
+
+    assign ti.inflight_packet.rd_addr = future_rd_addr;
+    assign ti.inflight_packet.rd_addr_nzero = ~rd_zero;
+    assign ti.inflight_packet.is_store = (opcode_trim == STORE_T) || (amo_op && store_conditional);
+    assign ti.inflight_packet.id = ti.issue_id;
+    assign ti.inflight_packet.unit_id = unit_id;
+    assign ti.issued = instruction_issued & (uses_rd | new_request[LS_UNIT_WB_ID]);
+
     ////////////////////////////////////////////////////
     //Unit Determination
     assign mult_div_op = fb.instruction[25];
@@ -267,7 +272,6 @@ module decode(
     assign ls_inputs.load = ls_is_load;
     assign ls_inputs.store = (opcode_trim == STORE_T) || (amo_op && store_conditional);
     assign ls_inputs.load_store_forward = rf_decode.rs2_conflict;
-    assign ls_inputs.instruction_id_one_hot = ti.issue_id_one_hot;
     assign ls_inputs.instruction_id = ti.issue_id;
 
     //Last store RD tracking for Load-Store data forwarding
@@ -385,7 +389,6 @@ module decode(
             assign div_inputs.rs2 = rf_decode.rs2_data;
             assign div_inputs.op = fn3[1:0];
             assign div_inputs.reuse_result = prev_div_result_valid_r & current_op_resuses_rs1_rs2;
-            assign div_inputs.instruction_id_one_hot = ti.issue_id_one_hot;
             assign div_inputs.instruction_id = ti.issue_id;
         end
     endgenerate
@@ -398,7 +401,6 @@ module decode(
             assign unit_issue[i].possible_issue = new_request[i] & ti.id_available;
             assign unit_issue[i].new_request = issue[i];
             assign unit_issue[i].instruction_id = ti.issue_id;
-            assign unit_issue[i].instruction_id_one_hot = ti.issue_id_one_hot;
             always_ff @(posedge clk) begin
                 unit_issue[i].new_request_r <= issue[i];
             end

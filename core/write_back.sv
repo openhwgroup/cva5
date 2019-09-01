@@ -27,11 +27,7 @@ module write_back(
         input logic clk,
         input logic rst,
 
-        input logic inorder,
-
         input logic instruction_issued_with_rd,
-        input logic store_committed,
-        input instruction_id_t store_id,
 
         unit_writeback_interface.writeback unit_wb[NUM_WB_UNITS-1:0],
         register_file_writeback_interface.writeback rf_wb,
@@ -49,7 +45,8 @@ module write_back(
     logic[$bits(inflight_instruction_packet)-1:0] packet_table [MAX_INFLIGHT_COUNT-1:0];
 
     //aliases for write-back-interface signals
-    logic [MAX_INFLIGHT_COUNT-1:0] unit_done_next_cycle [NUM_WB_UNITS-1:0];
+    instruction_id_t unit_instruction_id [NUM_WB_UNITS-1:0];
+    logic [NUM_WB_UNITS-1:0] unit_done_next_cycle;
     logic [XLEN-1:0] unit_rd [NUM_WB_UNITS-1:0];
     logic [XLEN-1:0] unit_rs1 [NUM_WB_UNITS-1:0];
     logic [XLEN-1:0] unit_rs2 [NUM_WB_UNITS-1:0];
@@ -77,6 +74,7 @@ module write_back(
     genvar i;
     generate
         for (i=0; i< NUM_WB_UNITS; i++) begin : interface_to_array_g
+            assign unit_instruction_id[i] = unit_wb[i].id;
             assign unit_done_next_cycle[i] = unit_wb[i].done_next_cycle;
             assign unit_rd[i] = unit_wb[i].rd;
             assign unit_rs1[i] = unit_wb[i].rs1_data;
@@ -87,29 +85,11 @@ module write_back(
         end
     endgenerate
 
-    //ID stack.  id_ordering[0] is the next ID to be issued.  Entries filled from
-    //MAX_INFLIGHT_COUNT-1 downwards.
-    id_stack #(.STACK_DEPTH(MAX_INFLIGHT_COUNT)) instruction_ordering_stack (
-            .clk(clk),
-            .rst(rst),
-            .issued(ti.issued),
-            .retired(retired),
-            .store_committed(store_committed),
-            .store_id(store_id),
-            .id_done_ordered(id_done_ordered_post_store),
-            .retired_id(retired_id),
-            .ordering(id_ordering),
-            .ordering_post_store(id_ordering_post_store),
-            .id_available(ti.id_available),
-            .next_id(issue_id),
-            .empty(instruction_queue_empty)
-        );
+    //ID tracking
+    id_tracking id_fifos (.*, .issued(ti.issued), .retired(retired), .id_available(ti.id_available),
+    .oldest_id(oldest_id), .next_id(issue_id), .empty(instruction_queue_empty));
 
     assign ti.issue_id = issue_id;
-    always_comb begin
-        ti.issue_id_one_hot = 0;
-        ti.issue_id_one_hot[issue_id] = 1;
-    end
 
     //Inflight Instruction ID table
     //Stores unit id (in one-hot encoding), rd_addr and whether rd_addr is zero
@@ -135,8 +115,10 @@ module write_back(
     //Or together all unit done signals for the same ID.
     always_comb begin
         id_done = (id_done_r & ~id_retired_last_cycle); //Still pending instructions
-        for (int i=0; i< NUM_WB_UNITS; i++) begin
-            id_done |= unit_done_next_cycle[i];
+        for (int i=0; i < MAX_INFLIGHT_COUNT; i++) begin
+            for (int j=0; j< NUM_WB_UNITS; j++) begin
+                id_done[i] |= unit_done_next_cycle[j] && (unit_instruction_id[j] == i[$clog2(MAX_INFLIGHT_COUNT)-1:0]);
+            end
         end
     end
 
@@ -147,49 +129,33 @@ module write_back(
             id_done_r <= id_done;
     end
 
-    assign retired = (inorder ? id_done_ordered[MAX_INFLIGHT_COUNT-1] : |id_done);
+    assign retired = id_done[oldest_id];
+    assign retired_id = oldest_id;
+
     always_ff @(posedge clk) begin
         retired_r <= retired;
         retired_id_r <= retired_id;
     end
 
-    assign oldest_id = id_ordering[MAX_INFLIGHT_COUNT-1];
-
-    //Stack ordered from newest to oldest issued instruction
-    //Find oldest done.
-    always_comb begin
-        foreach (id_done[i]) begin
-            id_done_ordered[i] = id_done[id_ordering[i]];
-            id_done_ordered_post_store[i] = id_done[id_ordering_post_store[i]];
-        end
-
-        retired_id = id_ordering[MAX_INFLIGHT_COUNT-1];
-        for (int i=MAX_INFLIGHT_COUNT-1; i>0; i--) begin
-            if (inorder | id_done_ordered[i])
-                break;
-            retired_id = id_ordering[i-1];
-        end
+    //Read table for unit ID (acks, and rd_addr for register file)
+    always_ff @(posedge clk) begin
+        retired_instruction_packet <= instruction_queue_empty ? ti.inflight_packet : packet_table[retired_id];
     end
 
-    //Read table for unit ID (acks, and rd_addr for register file)
-    assign retired_instruction_packet = packet_table[retired_id_r];
-    assign instruction_complete = retired_r;
+    assign instruction_complete = retired_r & ~retired_instruction_packet.is_store;
 
     //Register file interaction
     assign rf_wb.rd_addr = retired_instruction_packet.rd_addr;
     assign rf_wb.id = retired_id_r;
-    assign rf_wb.commit = retired_r;
+    assign rf_wb.commit = retired_r & ~retired_instruction_packet.is_store;
     assign rf_wb.rd_nzero = retired_instruction_packet.rd_addr_nzero;
     assign rf_wb.rd_data = unit_rd[retired_instruction_packet.unit_id];
 
     assign rf_wb.rs1_valid = id_done_r[rf_wb.rs1_id];
     assign rf_wb.rs2_valid = id_done_r[rf_wb.rs2_id];
 
-    assign rs1_packet = packet_table[rf_wb.rs1_id];
-    assign rs2_packet = packet_table[rf_wb.rs2_id];
-
-    assign rf_wb.rs1_data = unit_rs1[rs1_packet.unit_id];
-    assign rf_wb.rs2_data = unit_rs2[rs2_packet.unit_id];
+    assign rf_wb.rs1_data = unit_rs1[rf_wb.rs1_unit_id];
+    assign rf_wb.rs2_data = unit_rs2[rf_wb.rs2_unit_id];
     ////////////////////////////////////////////////////
     //End of Implementation
     ////////////////////////////////////////////////////
