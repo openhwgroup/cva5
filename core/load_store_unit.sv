@@ -315,7 +315,7 @@ module load_store_unit (
 
     ////////////////////////////////////////////////////
     //Output bank
-    assign wb.rd = csr_done ? csr_rd : final_load_data;//rd_bank[wb.writeback_instruction_id];
+    assign wb.rd = csr_rd | final_load_data;
 
     logic exception_complete;
     logic ls_done;

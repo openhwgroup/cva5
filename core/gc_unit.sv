@@ -264,7 +264,7 @@ module gc_unit(
     assign csr_inputs.rs1_is_zero = (rs1_addr == 0);
     assign csr_inputs.rd_is_zero = gc_inputs.rd_is_zero;
 
-    csr_regs csr_registers (.*, .new_request(is_csr), .commit(csr_ready_to_complete_r));
+    csr_regs csr_registers (.*, .new_request(is_csr), .read_regs(csr_ready_to_complete), .commit(csr_ready_to_complete_r));
 
     ////////////////////////////////////////////////////
     //Decode / Write-back Handshaking

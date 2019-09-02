@@ -31,6 +31,7 @@ module csr_regs (
         //GC unit
         input csr_inputs_t csr_inputs,
         input new_request,
+        input read_regs,
         input commit,
         input exception_packet_t gc_exception,
         output exception_packet_t csr_exception,
@@ -530,7 +531,10 @@ endgenerate
     end
 
     always_ff @(posedge clk) begin
-        selected_csr_r <= selected_csr;
+        if (read_regs)
+            selected_csr_r <= selected_csr;
+        else
+            selected_csr_r <= 0;
     end
 
     assign wb_csr = selected_csr_r;

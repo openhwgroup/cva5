@@ -150,10 +150,7 @@ module write_back(
     end
 
     //Read table for unit ID (acks, and rd_addr for register file)
-    always_ff @(posedge clk) begin
-        retired_instruction_packet <= instruction_queue_empty ? ti.inflight_packet : packet_table[retired_id];
-    end
-
+    assign retired_instruction_packet = packet_table[retired_id_r];
     assign instruction_complete = retired_r & ~retired_instruction_packet.is_store;
 
     //Register file interaction
