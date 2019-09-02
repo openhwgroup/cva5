@@ -35,14 +35,11 @@ module id_tracking
         output logic empty
         );
     //////////////////////////////////////////
+    localparam INUSE_COUNTER_W = $clog2(MAX_INFLIGHT_COUNT+1);
 
-    localparam MAX_INFLIGHT_COUNT_W = $clog2(MAX_INFLIGHT_COUNT+1);
+    logic [INUSE_COUNTER_W-1:0] inuse_index;
+    instruction_id_t inuse_ids [MAX_INFLIGHT_COUNT-1:0];
 
-    logic [MAX_INFLIGHT_COUNT_W-1:0] in_use_index;
-    logic [MAX_INFLIGHT_COUNT_W-1:0] available_index;
-
-    instruction_id_t in_use_ids [MAX_INFLIGHT_COUNT-1:0];
-    instruction_id_t available_ids [MAX_INFLIGHT_COUNT-1:0];
     genvar i;
     ////////////////////////////////////////////////////
     //Implementation
@@ -50,61 +47,37 @@ module id_tracking
     //Initial ordering, FIFO has no reset, as ID ordering is arbitrary
     initial begin
         for (int i=0; i<MAX_INFLIGHT_COUNT; i++) begin
-            available_ids[i] = i[$clog2(MAX_INFLIGHT_COUNT)-1:0];
+            inuse_ids[i] = i[$clog2(MAX_INFLIGHT_COUNT)-1:0];
         end
     end
 
-    //On first write will roll over to [1,00...0]
-    //Upper bit indicates is the valid signal
-    always_ff @ (posedge clk) begin
-        if (rst) begin
-            in_use_index[MAX_INFLIGHT_COUNT_W-1] <= 0;
-            in_use_index[MAX_INFLIGHT_COUNT_W-2:0] <= '1;
-        end else
-            in_use_index <= in_use_index + MAX_INFLIGHT_COUNT_W'(issued) - MAX_INFLIGHT_COUNT_W'(retired);
-    end
-
-    //Available FIFO starts full
+    //Upper bit is id_available
     always_ff @ (posedge clk) begin
         if (rst)
-            available_index[MAX_INFLIGHT_COUNT_W-1:0] <= '1;
+            inuse_index <= '1;
         else
-            available_index <= available_index + MAX_INFLIGHT_COUNT_W'(retired) - MAX_INFLIGHT_COUNT_W'(issued);
+            inuse_index <= inuse_index + INUSE_COUNTER_W'(retired) - INUSE_COUNTER_W'(issued);
     end
 
-    assign empty = ~in_use_index[MAX_INFLIGHT_COUNT_W-1];
-    assign id_available = available_index[MAX_INFLIGHT_COUNT_W-1];
+    assign empty = &inuse_index;//all ones
+    assign id_available = inuse_index[INUSE_COUNTER_W-1];
 
-    always_ff @ (posedge clk) begin
-        if (issued)
-            in_use_ids[0] <= next_id;
-    end
-
-    generate
-    for (i=1 ; i < MAX_INFLIGHT_COUNT; i++) begin
-        always_ff @ (posedge clk) begin
-            if (issued)
-                in_use_ids[i] <= in_use_ids[i-1];
-        end
-    end
-    endgenerate
+    assign next_id = inuse_ids[inuse_index[INUSE_COUNTER_W-2:0]];
+    assign oldest_id = inuse_ids[MAX_INFLIGHT_COUNT-1];
 
     always_ff @ (posedge clk) begin
         if (retired)
-            available_ids[0] <= oldest_id;
+            inuse_ids[0] <= inuse_ids[MAX_INFLIGHT_COUNT-1];
     end
 
     generate
     for (i=1 ; i < MAX_INFLIGHT_COUNT; i++) begin
         always_ff @ (posedge clk) begin
             if (retired)
-                available_ids[i] <= available_ids[i-1];
+                inuse_ids[i] <= inuse_ids[i-1];
         end
     end
     endgenerate
-
-    assign next_id = available_ids[available_index[MAX_INFLIGHT_COUNT_W-2:0]];
-    assign oldest_id = in_use_ids[in_use_index[MAX_INFLIGHT_COUNT_W-2:0]];
     ////////////////////////////////////////////////////
     //End of Implementation
     ////////////////////////////////////////////////////
