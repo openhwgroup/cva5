@@ -94,15 +94,13 @@ module register_file(
             in_use_by[rf_decode.future_rd_addr] <= new_id_store;
     end
 
-
-
     assign rs1_usage = in_use_by[rf_decode.rs1_addr];
     assign rs2_usage = in_use_by[rf_decode.rs2_addr];
     assign wb_usage = in_use_by[rf_wb.rd_addr];
 
     assign in_use_match = (wb_usage.id == rf_wb.id);
 
-    assign rf_wb.rs1_id =  rs1_usage.id;
+    assign rf_wb.rs1_id = rs1_usage.id;
     assign rf_wb.rs2_id = rs2_usage.id;
     assign rf_wb.rs1_unit_id =  rs1_usage.unit_id;
     assign rf_wb.rs2_unit_id = rs2_usage.unit_id;

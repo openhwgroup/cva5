@@ -162,11 +162,11 @@ package taiga_config;
     ////////////////////////////////////////////////////
     //FIFO/Buffer Depths
     //All parameters restricted to powers of two
-    parameter MAX_INFLIGHT_COUNT = 8;
+    parameter MAX_INFLIGHT_COUNT = 4;
     parameter FETCH_BUFFER_DEPTH = 4;
 
-    parameter LS_INPUT_BUFFER_DEPTH = 8;
-    parameter DIV_INPUT_BUFFER_DEPTH = 8;
+    parameter LS_INPUT_BUFFER_DEPTH = 4;
+    parameter DIV_INPUT_BUFFER_DEPTH = 4;
 
     ////////////////////////////////////////////////////
     //Trace Options

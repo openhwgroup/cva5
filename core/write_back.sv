@@ -107,14 +107,19 @@ module write_back(
 
     //One-hot ID retired last cycle
     logic [MAX_INFLIGHT_COUNT-1:0] id_retired_last_cycle;
+    logic [MAX_INFLIGHT_COUNT-1:0] id_retired_last_cycle_r;
     always_comb begin
         id_retired_last_cycle = 0;
-        id_retired_last_cycle[retired_id_r] = retired_r;
+        id_retired_last_cycle[retired_id] = retired;
+    end
+
+    always_ff @ (posedge clk) begin
+        id_retired_last_cycle_r <= id_retired_last_cycle;
     end
 
     //Or together all unit done signals for the same ID.
     always_comb begin
-        id_done = (id_done_r & ~id_retired_last_cycle); //Still pending instructions
+        id_done = (id_done_r & ~id_retired_last_cycle_r); //Still pending instructions
         for (int i=0; i < MAX_INFLIGHT_COUNT; i++) begin
             for (int j=0; j< NUM_WB_UNITS; j++) begin
                 id_done[i] |= unit_done_next_cycle[j] && (unit_instruction_id[j] == i[$clog2(MAX_INFLIGHT_COUNT)-1:0]);
