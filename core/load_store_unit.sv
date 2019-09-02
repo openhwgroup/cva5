@@ -53,7 +53,7 @@ module load_store_unit (
         output exception_packet_t ls_exception,
         output logic ls_exception_valid,
 
-        unit_writeback_interface.unit wb
+        output unit_writeback_t wb
         );
 
     localparam NUM_SUB_UNITS = USE_D_SCRATCH_MEM+USE_BUS+USE_DCACHE;

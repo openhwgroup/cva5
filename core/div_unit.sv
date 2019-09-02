@@ -30,7 +30,7 @@ module div_unit
 
         input div_inputs_t div_inputs,
         unit_issue_interface.unit issue,
-        unit_writeback_interface.unit wb
+        output unit_writeback_t wb
     );
 
     logic computation_complete;

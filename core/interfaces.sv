@@ -73,24 +73,6 @@ interface ras_interface;
     modport fetch (input addr, valid);
 endinterface
 
-interface unit_writeback_interface;
-    //unit output
-    instruction_id_t id;
-    logic done_next_cycle;
-    logic [XLEN-1:0] rd;
-    logic [XLEN-1:0] rs1_data;
-    logic [XLEN-1:0] rs2_data;
-    //writeback output
-    logic accepted;
-    instruction_id_t writeback_instruction_id;
-    instruction_id_t writeback_rs1_id;
-    instruction_id_t writeback_rs2_id;
-    modport writeback (input id, done_next_cycle, rd, rs1_data, rs2_data, output accepted, writeback_instruction_id, writeback_rs1_id, writeback_rs2_id);
-    modport unit (output id, done_next_cycle, rd, rs1_data, rs2_data, input accepted, writeback_instruction_id, writeback_rs1_id, writeback_rs2_id);
-endinterface
-
-//********************************
-
 interface csr_exception_interface;
     logic valid;
     exception_code_t code;
@@ -148,16 +130,14 @@ interface register_file_writeback_interface;
 
     instruction_id_t rs1_id;
     instruction_id_t rs2_id;
-    unit_id_t rs1_unit_id;
-    unit_id_t rs2_unit_id;
 
     logic[XLEN-1:0] rs1_data;
     logic[XLEN-1:0] rs2_data;
     logic rs1_valid;
     logic rs2_valid;
     
-    modport writeback (output rd_addr, commit, rd_nzero, rd_data, id, rs1_data, rs2_data, rs1_valid, rs2_valid,  input rs1_id, rs2_id, rs1_unit_id, rs2_unit_id);
-    modport unit (input rd_addr, commit, rd_nzero, rd_data, id, rs1_data, rs2_data, rs1_valid, rs2_valid, output rs1_id, rs2_id, rs1_unit_id, rs2_unit_id);
+    modport writeback (output rd_addr, commit, rd_nzero, rd_data, id, rs1_data, rs2_data, rs1_valid, rs2_valid,  input rs1_id, rs2_id);
+    modport unit (input rd_addr, commit, rd_nzero, rd_data, id, rs1_data, rs2_data, rs1_valid, rs2_valid, output rs1_id, rs2_id);
 
 endinterface
 

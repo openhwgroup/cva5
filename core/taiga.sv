@@ -67,7 +67,7 @@ module taiga (
     logic ls_exception_valid;
 
     tracking_interface ti();
-    unit_writeback_interface unit_wb [NUM_WB_UNITS-1:0]();
+    unit_writeback_t unit_wb [NUM_WB_UNITS-1:0];
     register_file_writeback_interface rf_wb();
 
     mmu_interface immu();

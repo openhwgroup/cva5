@@ -1,5 +1,5 @@
 /*
- * Copyright © 2017 Eric Matthews,  Lesley Shannon
+ * Copyright © 2017-2019 Eric Matthews,  Lesley Shannon
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@ module mul_unit(
 
         input mul_inputs_t mul_inputs,
         unit_issue_interface.unit issue,
-        unit_writeback_interface.unit wb
+        output unit_writeback_t wb
         );
 
     logic signed [65:0] result;

@@ -27,8 +27,8 @@ module alu_unit(
         input logic clk,
         input logic rst,
         unit_issue_interface.unit issue,
-        unit_writeback_interface.unit wb,
-        input alu_inputs_t alu_inputs
+        input alu_inputs_t alu_inputs,
+        output unit_writeback_t wb
         );
 
     logic[XLEN:0] add_sub_result;

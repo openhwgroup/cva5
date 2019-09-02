@@ -29,7 +29,7 @@ module write_back(
 
         input logic instruction_issued_with_rd,
 
-        unit_writeback_interface.writeback unit_wb[NUM_WB_UNITS-1:0],
+        input unit_writeback_t unit_wb[NUM_WB_UNITS-1:0],
         register_file_writeback_interface.writeback rf_wb,
         tracking_interface.wb ti,
         output logic instruction_complete,
@@ -41,7 +41,7 @@ module write_back(
         );
     //////////////////////////////////////
 
-    //Inflight packets
+    //Inflight packetscd
     logic[$bits(inflight_instruction_packet)-1:0] packet_table [MAX_INFLIGHT_COUNT-1:0];
 
     //aliases for write-back-interface signals

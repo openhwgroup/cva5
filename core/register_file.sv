@@ -48,9 +48,6 @@ module register_file(
 
     logic valid_write;
     logic in_use_match;
-
-    instruction_id_t rs1_id;
-    instruction_id_t rs2_id;
     //////////////////////////////////////////
     //Assign zero to r0 and initialize all registers to zero
     initial begin

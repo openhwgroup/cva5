@@ -295,6 +295,11 @@ package taiga_types;
         alu_rs2_op_t alu_rs2_sel;
     } fetch_buffer_packet_t;
 
+    typedef struct packed{
+        instruction_id_t id;
+        logic done_next_cycle;
+        logic [XLEN-1:0] rd;
+    } unit_writeback_t;
 
     typedef struct packed{
         logic [XLEN:0] in1;//contains sign padding bit for slt operation
