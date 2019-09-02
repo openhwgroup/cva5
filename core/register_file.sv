@@ -37,18 +37,8 @@ module register_file(
         output logic tr_rs1_and_rs2_forwarding_needed
         );
 
-    typedef struct packed{
-        instruction_id_t id;
-        unit_id_t unit_id;
-    } register_id_store_t;
-
     (* ramstyle = "MLAB, no_rw_check" *) logic [XLEN-1:0] register [31:0];
-    (* ramstyle = "MLAB, no_rw_check" *) logic[$bits(register_id_store_t)-1:0] in_use_by [31:0];
-
-    register_id_store_t new_id_store;
-    register_id_store_t rs1_usage;
-    register_id_store_t rs2_usage;
-    register_id_store_t wb_usage;
+    (* ramstyle = "MLAB, no_rw_check" *) instruction_id_t in_use_by [31:0];
 
     logic rs1_inuse;
     logic rs2_inuse;
@@ -86,24 +76,14 @@ module register_file(
             .rs2_inuse(rs2_inuse)
             );
 
-    assign new_id_store.id = rf_decode.id;
-    assign new_id_store.unit_id = rf_decode.unit_id;
-
     always_ff @ (posedge clk) begin
         if (rf_decode.instruction_issued)
-            in_use_by[rf_decode.future_rd_addr] <= new_id_store;
+            in_use_by[rf_decode.future_rd_addr] <= rf_decode.id;
     end
 
-    assign rs1_usage = in_use_by[rf_decode.rs1_addr];
-    assign rs2_usage = in_use_by[rf_decode.rs2_addr];
-    assign wb_usage = in_use_by[rf_wb.rd_addr];
-
-    assign in_use_match = (wb_usage.id == rf_wb.id);
-
-    assign rf_wb.rs1_id = rs1_usage.id;
-    assign rf_wb.rs2_id = rs2_usage.id;
-    assign rf_wb.rs1_unit_id =  rs1_usage.unit_id;
-    assign rf_wb.rs2_unit_id = rs2_usage.unit_id;
+    assign in_use_match = (rf_wb.id == in_use_by[rf_wb.rd_addr]);
+    assign rf_wb.rs1_id = in_use_by[rf_decode.rs1_addr];
+    assign rf_wb.rs2_id = in_use_by[rf_decode.rs2_addr];
 
     assign valid_write = rf_wb.rd_nzero & rf_wb.commit;
 

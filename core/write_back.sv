@@ -48,26 +48,18 @@ module write_back(
     instruction_id_t unit_instruction_id [NUM_WB_UNITS-1:0];
     logic [NUM_WB_UNITS-1:0] unit_done_next_cycle;
     logic [XLEN-1:0] unit_rd [NUM_WB_UNITS-1:0];
-    logic [XLEN-1:0] unit_rs1 [NUM_WB_UNITS-1:0];
-    logic [XLEN-1:0] unit_rs2 [NUM_WB_UNITS-1:0];
     /////
 
     logic [XLEN-1:0] rds_by_id [MAX_INFLIGHT_COUNT-1:0];
     logic [XLEN-1:0] rds_by_id_next [MAX_INFLIGHT_COUNT-1:0];
-    logic [NUM_WB_UNITS-1:0][MAX_INFLIGHT_COUNT-1:0] write_reg;
 
     logic [$clog2(NUM_WB_UNITS)-1:0] id_unit_select [MAX_INFLIGHT_COUNT-1:0];
     instruction_id_t issue_id, retired_id, retired_id_r;
     inflight_instruction_packet retired_instruction_packet;
-    inflight_instruction_packet rs1_packet;
-    inflight_instruction_packet rs2_packet;
 
     logic [MAX_INFLIGHT_COUNT-1:0] id_done;
     logic [MAX_INFLIGHT_COUNT-1:0] id_done_new;
     logic [MAX_INFLIGHT_COUNT-1:0] id_done_r;
-
-    logic [MAX_INFLIGHT_COUNT-1:0] id_done_ordered;
-    logic [MAX_INFLIGHT_COUNT-1:0] id_done_ordered_post_store;
 
     logic retired, retired_r;
     ////////////////////////////////////////////////////
@@ -90,7 +82,7 @@ module write_back(
             for (int j=0; j< NUM_WB_UNITS; j++) begin
                 if (unit_done_next_cycle[j] && (unit_instruction_id[j] == i[$clog2(MAX_INFLIGHT_COUNT)-1:0])) begin
                     id_unit_select[i] = j[$clog2(NUM_WB_UNITS)-1:0];
-                    id_done_new[i] |= 1;//unit_done_next_cycle[j] && (unit_instruction_id[j] == i[$clog2(MAX_INFLIGHT_COUNT)-1:0]);
+                    id_done_new[i] |= 1;
                 end
             end
         end
@@ -115,7 +107,7 @@ module write_back(
     assign ti.issue_id = issue_id;
 
     //Inflight Instruction ID table
-    //Stores unit id (in one-hot encoding), rd_addr and whether rd_addr is zero
+    //Stores rd_addr and whether rd_addr is zero
     initial begin
         foreach (packet_table[i]) begin
             packet_table[i] = '0;
@@ -140,16 +132,7 @@ module write_back(
         id_retired_last_cycle_r <= id_retired_last_cycle;
     end
 
-    //Or together all unit done signals for the same ID.
-    // always_comb begin
-    //     id_done_new = 0;
-    //     for (int i=0; i < MAX_INFLIGHT_COUNT; i++) begin
-    //         for (int j=0; j< NUM_WB_UNITS; j++) begin
-    //             id_done_new[i] |= unit_done_next_cycle[j] && (unit_instruction_id[j] == i[$clog2(MAX_INFLIGHT_COUNT)-1:0]);
-    //         end
-    //     end
-    // end
-    assign  id_done = (id_done_r & ~id_retired_last_cycle_r) | id_done_new; //Still pending instructions
+    assign  id_done = (id_done_r & ~id_retired_last_cycle_r) | id_done_new;
 
     always_ff @ (posedge clk) begin
         if (rst)
@@ -178,7 +161,7 @@ module write_back(
     assign rf_wb.id = retired_id_r;
     assign rf_wb.commit = retired_r & ~retired_instruction_packet.is_store;
     assign rf_wb.rd_nzero = retired_instruction_packet.rd_addr_nzero;
-    assign rf_wb.rd_data = rds_by_id[retired_id_r];//unit_rd[retired_instruction_packet.unit_id];
+    assign rf_wb.rd_data = rds_by_id[retired_id_r];
 
     assign rf_wb.rs1_valid = id_done_r[rf_wb.rs1_id];
     assign rf_wb.rs2_valid = id_done_r[rf_wb.rs2_id];
@@ -200,7 +183,7 @@ module write_back(
             tr_wb_mux_contention = 0;
             for (int i=0; i<MAX_INFLIGHT_COUNT-1; i++) begin
                     for (int j=i+1; j<MAX_INFLIGHT_COUNT; j++) begin
-                        tr_wb_mux_contention |= (id_done[i] & id_done[j]);
+                        tr_wb_mux_contention |= (id_done_r[i] & id_done_r[j]);
                     end
             end
         end

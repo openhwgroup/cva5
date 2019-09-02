@@ -148,8 +148,6 @@ module decode(
     assign ti.inflight_packet.rd_addr = future_rd_addr;
     assign ti.inflight_packet.rd_addr_nzero = ~rd_zero;
     assign ti.inflight_packet.is_store = (opcode_trim == STORE_T) || (amo_op && store_conditional);
-    assign ti.inflight_packet.id = ti.issue_id;
-    assign ti.inflight_packet.unit_id = unit_id;
     assign ti.issued = instruction_issued & (uses_rd | new_request[LS_UNIT_WB_ID]);
 
     ////////////////////////////////////////////////////

@@ -270,8 +270,6 @@ package taiga_types;
     } exception_packet_t;
 
     typedef struct packed{
-        instruction_id_t id;
-        unit_id_t unit_id;
         logic [4:0] rd_addr;
         logic rd_addr_nzero;
         logic is_store;
