@@ -59,7 +59,7 @@ module div_radix2
 
     always_ff @ (posedge clk) begin
         if (start) begin
-            PR <= {{(C_WIDTH-2){1'b0}}, A[C_WIDTH-1]};
+            PR <= {{(C_WIDTH){1'b0}}, A[C_WIDTH-1]};
             Q <= {A[C_WIDTH-2:0], 1'b0};
             B_r <= B;
         end

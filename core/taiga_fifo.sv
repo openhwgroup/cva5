@@ -83,8 +83,8 @@ module taiga_fifo #(parameter DATA_WIDTH = 32, parameter FIFO_DEPTH = 4, paramet
                     write_index <= '0;
                 end
                 else begin
-                    read_index <= read_index + fifo.pop;
-                    write_index <= write_index + fifo.push;
+                    read_index <= read_index + LOG2_FIFO_DEPTH'(fifo.pop);
+                    write_index <= write_index + LOG2_FIFO_DEPTH'(fifo.push);
                 end
             end
             assign fifo.data_out = lut_ram[read_index];

@@ -1,5 +1,5 @@
 /*
- * Copyright © 2017, 2018, 2019 Eric Matthews,  Lesley Shannon
+ * Copyright © 2017-2019 Eric Matthews,  Lesley Shannon
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -283,7 +283,7 @@ module decode(
     end
 
     always_ff @ (posedge clk) begin
-       if (instruction_issued)
+       if (instruction_issued_with_rd & ~rd_zero)
            register_in_use_by_load_op[future_rd_addr] <= new_request[LS_UNIT_WB_ID] & basic_load;
     end
 

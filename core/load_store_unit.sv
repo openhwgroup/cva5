@@ -74,6 +74,7 @@ module load_store_unit (
     logic units_ready;
     logic issue_request;
     logic load_complete;
+    logic store_complete;
 
     logic [31:0] virtual_address;
     logic [3:0] be;
@@ -137,6 +138,7 @@ module load_store_unit (
     //Primary Control Signals
     assign units_ready = &unit_ready;
     assign load_complete = |unit_data_valid;
+    assign store_complete = stage2_attr.is_store & load_attributes.valid;
 
     //When switching units, ensure no outstanding loads so that there can be no timing collisions with results
     assign unit_stall = (current_unit != last_unit) && ~load_attributes.empty;
@@ -230,7 +232,7 @@ module load_store_unit (
     assign load_attributes.data_in = load_attributes_in;
 
     assign load_attributes.push = issue_request;
-    assign load_attributes.pop = load_complete | (stage2_attr.is_store & load_attributes.valid);
+    assign load_attributes.pop = load_complete | store_complete;
 
     assign stage2_attr  = load_attributes.data_out;
 
@@ -322,7 +324,7 @@ module load_store_unit (
     always_ff @ (posedge clk) begin
         exception_complete <= (input_fifo.valid & ls_exception_valid & stage1.load);
     end
-    assign ls_done = load_complete | exception_complete |  (stage2_attr.is_store & load_attributes.valid);
+    assign ls_done = load_complete | exception_complete | store_complete;
 
     assign wb.done_next_cycle = csr_done | ls_done;
     assign wb.id = csr_done ? csr_id : stage2_attr.instruction_id;
