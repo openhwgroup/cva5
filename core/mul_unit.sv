@@ -40,8 +40,6 @@ module mul_unit(
     logic rs1_signed, rs2_signed;
     logic signed [32:0] rs1_ext, rs2_ext;
     logic signed [32:0] rs1_r, rs2_r;
-
-    logic [31:0] rd_bank [MAX_INFLIGHT_COUNT-1:0];
     ////////////////////////////////////////////////////
     //Implementation
 
@@ -69,19 +67,10 @@ module mul_unit(
         done_next_cycle[1] <= done_next_cycle[0];
     end
 
-    ////////////////////////////////////////////////////
-    //Output bank
-     always_ff @ (posedge clk) begin
-         if (done_next_cycle[1])
-             rd_bank[id[1]] <= mulh[1] ? result[63:32] : result[31:0];
-     end
-
     //Issue/write-back handshaking
     ////////////////////////////////////////////////////
     assign issue.ready = 1;
-    assign wb.rd = rd_bank[wb.writeback_instruction_id];
-    assign wb.rs1_data = rd_bank[wb.writeback_rs1_id];
-    assign wb.rs2_data = rd_bank[wb.writeback_rs2_id];
+    assign wb.rd = mulh[1] ? result[63:32] : result[31:0];
     assign wb.done_next_cycle = done_next_cycle[1];
     assign wb.id = id[1];
     ////////////////////////////////////////////////////

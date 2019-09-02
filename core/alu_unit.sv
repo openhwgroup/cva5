@@ -40,7 +40,6 @@ module alu_unit(
     logic[XLEN:0] adder_in2;
 
     logic[XLEN-1:0] result;
-    logic [31:0] rd_bank [MAX_INFLIGHT_COUNT-1:0];
     //implementation
     ////////////////////////////////////////////////////
 
@@ -82,16 +81,9 @@ module alu_unit(
     end
 
     ////////////////////////////////////////////////////
-    //Output bank
-     always_ff @ (posedge clk) begin
-         if (issue.possible_issue)
-             rd_bank[issue.instruction_id] <= result;
-     end
-
+    //Output
     assign issue.ready = 1;
-    assign wb.rd = rd_bank[wb.writeback_instruction_id];
-    assign wb.rs1_data = rd_bank[wb.writeback_rs1_id];
-    assign wb.rs2_data = rd_bank[wb.writeback_rs2_id];
+    assign wb.rd = result;
     assign wb.done_next_cycle = issue.new_request;
     assign wb.id = issue.instruction_id;
 

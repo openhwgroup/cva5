@@ -52,15 +52,18 @@ module write_back(
     logic [XLEN-1:0] unit_rs2 [NUM_WB_UNITS-1:0];
     /////
 
+    logic [XLEN-1:0] rds_by_id [MAX_INFLIGHT_COUNT-1:0];
+    logic [XLEN-1:0] rds_by_id_next [MAX_INFLIGHT_COUNT-1:0];
+    logic [NUM_WB_UNITS-1:0][MAX_INFLIGHT_COUNT-1:0] write_reg;
+
+    logic [$clog2(NUM_WB_UNITS)-1:0] id_unit_select [MAX_INFLIGHT_COUNT-1:0];
     instruction_id_t issue_id, retired_id, retired_id_r;
     inflight_instruction_packet retired_instruction_packet;
     inflight_instruction_packet rs1_packet;
     inflight_instruction_packet rs2_packet;
 
-    instruction_id_t id_ordering [MAX_INFLIGHT_COUNT-1:0];
-    instruction_id_t id_ordering_post_store [MAX_INFLIGHT_COUNT-1:0];
-
     logic [MAX_INFLIGHT_COUNT-1:0] id_done;
+    logic [MAX_INFLIGHT_COUNT-1:0] id_done_new;
     logic [MAX_INFLIGHT_COUNT-1:0] id_done_r;
 
     logic [MAX_INFLIGHT_COUNT-1:0] id_done_ordered;
@@ -77,13 +80,33 @@ module write_back(
             assign unit_instruction_id[i] = unit_wb[i].id;
             assign unit_done_next_cycle[i] = unit_wb[i].done_next_cycle;
             assign unit_rd[i] = unit_wb[i].rd;
-            assign unit_rs1[i] = unit_wb[i].rs1_data;
-            assign unit_rs2[i] = unit_wb[i].rs2_data;
-            assign unit_wb[i].writeback_instruction_id = retired_id_r;
-            assign unit_wb[i].writeback_rs1_id = rf_wb.rs1_id;
-            assign unit_wb[i].writeback_rs2_id = rf_wb.rs2_id;
         end
     endgenerate
+
+    always_comb begin
+        foreach(id_done_new[i]) begin
+            id_done_new[i] = 0;
+            id_unit_select[i] = 0;
+            for (int j=0; j< NUM_WB_UNITS; j++) begin
+                if (unit_done_next_cycle[j] && (unit_instruction_id[j] == i[$clog2(MAX_INFLIGHT_COUNT)-1:0])) begin
+                    id_unit_select[i] = j[$clog2(NUM_WB_UNITS)-1:0];
+                    id_done_new[i] |= 1;//unit_done_next_cycle[j] && (unit_instruction_id[j] == i[$clog2(MAX_INFLIGHT_COUNT)-1:0]);
+                end
+            end
+        end
+    end
+
+    always_comb begin
+        foreach(rds_by_id_next[i]) begin
+            rds_by_id_next[i] = unit_rd[id_unit_select[i]];
+        end
+    end
+    always_ff @ (posedge clk) begin
+        foreach(rds_by_id_next[i]) begin
+            if (id_done_new[i])
+                rds_by_id[i] <= rds_by_id_next[i];
+        end
+    end
 
     //ID tracking
     id_tracking id_fifos (.*, .issued(ti.issued), .retired(retired), .id_available(ti.id_available),
@@ -118,14 +141,15 @@ module write_back(
     end
 
     //Or together all unit done signals for the same ID.
-    always_comb begin
-        id_done = (id_done_r & ~id_retired_last_cycle_r); //Still pending instructions
-        for (int i=0; i < MAX_INFLIGHT_COUNT; i++) begin
-            for (int j=0; j< NUM_WB_UNITS; j++) begin
-                id_done[i] |= unit_done_next_cycle[j] && (unit_instruction_id[j] == i[$clog2(MAX_INFLIGHT_COUNT)-1:0]);
-            end
-        end
-    end
+    // always_comb begin
+    //     id_done_new = 0;
+    //     for (int i=0; i < MAX_INFLIGHT_COUNT; i++) begin
+    //         for (int j=0; j< NUM_WB_UNITS; j++) begin
+    //             id_done_new[i] |= unit_done_next_cycle[j] && (unit_instruction_id[j] == i[$clog2(MAX_INFLIGHT_COUNT)-1:0]);
+    //         end
+    //     end
+    // end
+    assign  id_done = (id_done_r & ~id_retired_last_cycle_r) | id_done_new; //Still pending instructions
 
     always_ff @ (posedge clk) begin
         if (rst)
@@ -154,13 +178,13 @@ module write_back(
     assign rf_wb.id = retired_id_r;
     assign rf_wb.commit = retired_r & ~retired_instruction_packet.is_store;
     assign rf_wb.rd_nzero = retired_instruction_packet.rd_addr_nzero;
-    assign rf_wb.rd_data = unit_rd[retired_instruction_packet.unit_id];
+    assign rf_wb.rd_data = rds_by_id[retired_id_r];//unit_rd[retired_instruction_packet.unit_id];
 
     assign rf_wb.rs1_valid = id_done_r[rf_wb.rs1_id];
     assign rf_wb.rs2_valid = id_done_r[rf_wb.rs2_id];
 
-    assign rf_wb.rs1_data = unit_rs1[rf_wb.rs1_unit_id];
-    assign rf_wb.rs2_data = unit_rs2[rf_wb.rs2_unit_id];
+    assign rf_wb.rs1_data = rds_by_id[rf_wb.rs1_id];
+    assign rf_wb.rs2_data = rds_by_id[rf_wb.rs2_id];
     ////////////////////////////////////////////////////
     //End of Implementation
     ////////////////////////////////////////////////////

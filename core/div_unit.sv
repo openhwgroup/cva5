@@ -56,7 +56,6 @@ module div_unit
     logic divisor_zero;
 
     logic [31:0] wb_div_result;
-    logic [31:0] rd_bank [MAX_INFLIGHT_COUNT-1:0];
 
     div_inputs_t stage1;
 
@@ -117,15 +116,8 @@ module div_unit
     div_algorithm #(XLEN) div (.*, .start(start_algorithm), .A(complementerA), .B(complementerB), .Q(quotient), .R(remainder), .complete(computation_complete), .ack(computation_complete), .B_is_zero(divisor_zero));
 
     ////////////////////////////////////////////////////
-    //Output bank
-    always_ff @(posedge clk) begin
-        if (div_done)
-            rd_bank[stage1.instruction_id] <= wb_div_result;
-    end
-
-    assign wb.rd = rd_bank[wb.writeback_instruction_id];
-    assign wb.rs1_data = rd_bank[wb.writeback_rs1_id];
-    assign wb.rs2_data = rd_bank[wb.writeback_rs2_id];
+    //Output
+    assign wb.rd = wb_div_result;
     assign wb.done_next_cycle = div_done;
     assign wb.id = stage1.instruction_id;
     ////////////////////////////////////////////////////

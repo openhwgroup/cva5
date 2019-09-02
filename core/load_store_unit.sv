@@ -82,7 +82,6 @@ module load_store_unit (
     logic [31:0] aligned_load_data;
     logic [31:0] final_load_data;
 
-    logic [31:0] rd_bank [MAX_INFLIGHT_COUNT-1:0];
     logic [31:0] previous_load;
     logic [31:0] stage1_raw_data;
 
@@ -309,21 +308,14 @@ module load_store_unit (
         endcase
     end
 
-    ////////////////////////////////////////////////////
-    //Output bank
-     always_ff @ (posedge clk) begin
-         if (load_complete | csr_done)
-             rd_bank[csr_done ? csr_id : stage2_attr.instruction_id] <= csr_done ? csr_rd : final_load_data;
-     end
-
     always_ff @ (posedge clk) begin
         if (load_complete)
             previous_load <= final_load_data;
     end
 
-    assign wb.rd = rd_bank[wb.writeback_instruction_id];
-    assign wb.rs1_data = rd_bank[wb.writeback_rs1_id];
-    assign wb.rs2_data = rd_bank[wb.writeback_rs2_id];
+    ////////////////////////////////////////////////////
+    //Output bank
+    assign wb.rd = csr_done ? csr_rd : final_load_data;//rd_bank[wb.writeback_instruction_id];
 
     logic exception_complete;
     logic ls_done;
