@@ -108,10 +108,10 @@ CRUFT= $(EMBENCH_BENCHMARKS) $(embench_hw) $(embench_sim) $(embench_logs) embenc
 #Called by compliance makefile
 .PHONY: verilator_taiga_compliance_unit_test
 verilator_taiga_compliance_unit_test:
-	$(call verilator_local_mem_test,\"$(COMPLIANCE_BENCHAMRK)\", $(LOG_FILE_NAME), $(SIG_FILE_NAME))
+	$(call verilator_local_mem_test,$(COMPLIANCE_BENCHAMRK),\"$(HW_INIT)\", $(LOG_FILE_NAME), $(SIG_FILE_NAME))
 
 .PHONY: verilator_taiga_compliance_tests
-verilator_taiga_compliance_tests:
+run_compliance_tests_verilator:
 	$(MAKE) -C $(COMPLIANCE_DIR) clean
 	$(MAKE) -C $(COMPLIANCE_DIR) RISCV_TARGET=taiga RISCV_DEVICE=$(COMPLIANCE_TARGET) RISCV_PREFIX=$(RISCV_PREFIX) TAIGA_ROOT=$(TAIGA_DIR)/tools
 
