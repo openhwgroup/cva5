@@ -107,7 +107,6 @@ interface register_file_decode_interface;
     logic[4:0] rs2_addr; //if not used required to be zero
     logic[XLEN-1:0] rs2_data;
     instruction_id_t id;
-    unit_id_t unit_id;
 
     logic uses_rs1;
     logic uses_rs2;
@@ -115,8 +114,8 @@ interface register_file_decode_interface;
     logic rs2_conflict;
     logic instruction_issued;
 
-    modport decode (output future_rd_addr, rs1_addr, rs2_addr, instruction_issued, id, unit_id, uses_rs1, uses_rs2, input rs1_conflict, rs2_conflict, rs1_data, rs2_data);
-    modport unit (input future_rd_addr, rs1_addr, rs2_addr, instruction_issued, id, unit_id, uses_rs1, uses_rs2, output rs1_conflict, rs2_conflict, rs1_data, rs2_data);
+    modport decode (output future_rd_addr, rs1_addr, rs2_addr, instruction_issued, id, uses_rs1, uses_rs2, input rs1_conflict, rs2_conflict, rs1_data, rs2_data);
+    modport unit (input future_rd_addr, rs1_addr, rs2_addr, instruction_issued, id, uses_rs1, uses_rs2, output rs1_conflict, rs2_conflict, rs1_data, rs2_data);
 endinterface
 
 

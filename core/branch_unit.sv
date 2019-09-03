@@ -38,7 +38,7 @@ module branch_unit(
         output logic tr_return_misspredict
         );
 
-    logic branch_issued;
+    logic branch_issued_r;
 
     logic[19:0] jal_imm;
     logic[11:0] jalr_imm;
@@ -78,11 +78,11 @@ module branch_unit(
     //Branch new request is held if the following instruction hasn't arrived at decode/issue yet
     always_ff @(posedge clk) begin
         if (rst)
-            branch_issued <= 0;
+            branch_issued_r <= 0;
         else if (issue.new_request)
-            branch_issued <= 1;
+            branch_issued_r <= 1;
         else if (branch_inputs.dec_pc_valid )
-            branch_issued <= 0;
+            branch_issued_r <= 0;
     end
 
     branch_comparator bc (
@@ -93,7 +93,7 @@ module branch_unit(
             .result(result)
         );
 
-    assign branch_taken = branch_issued & ((~jump_ex & (result_ex ^ fn3_ex[0])) | jump_ex);
+    assign branch_taken = branch_issued_r & ((~jump_ex & (result_ex ^ fn3_ex[0])) | jump_ex);
 
 
     assign jal_imm = {branch_inputs.instruction[31], branch_inputs.instruction[19:12], branch_inputs.instruction[20], branch_inputs.instruction[30:21]};
@@ -145,7 +145,7 @@ module branch_unit(
     assign br_results.branch_ex_metadata = branch_metadata;
 
     assign br_results.branch_taken = branch_taken;
-    assign br_results.branch_ex = branch_issued & branch_inputs.dec_pc_valid;
+    assign br_results.branch_ex = branch_issued_r & branch_inputs.dec_pc_valid;
     assign br_results.is_return_ex = is_return;
     assign br_results.branch_prediction_used = branch_prediction_used;
     assign br_results.bp_update_way = bp_update_way;
@@ -153,9 +153,9 @@ module branch_unit(
 
     assign branch_correctly_taken = {br_results.branch_taken, branch_inputs.dec_pc[31:1]} == {1'b1, br_results.jump_pc[31:1]};
     assign branch_correclty_not_taken = {br_results.branch_taken, branch_inputs.dec_pc[31:1]} == {1'b0, br_results.njump_pc[31:1]};
-    assign miss_predict = branch_issued && branch_inputs.dec_pc_valid && ~(branch_correctly_taken || branch_correclty_not_taken);
+    assign miss_predict = branch_issued_r && branch_inputs.dec_pc_valid && ~(branch_correctly_taken || branch_correclty_not_taken);
 
-    assign branch_flush = USE_BRANCH_PREDICTOR ? miss_predict : branch_issued & branch_taken & branch_inputs.dec_pc_valid;
+    assign branch_flush = USE_BRANCH_PREDICTOR ? miss_predict : branch_issued_r & branch_taken & branch_inputs.dec_pc_valid;
 
     //RAS support
     ////////////////////////////////////////////////////

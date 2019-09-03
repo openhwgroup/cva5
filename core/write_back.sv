@@ -88,17 +88,15 @@ module write_back(
         end
     end
 
-    always_comb begin
-        foreach(rds_by_id_next[i]) begin
-            rds_by_id_next[i] = unit_rd[id_unit_select[i]];
+    generate
+        for (i=0; i< MAX_INFLIGHT_COUNT; i++) begin
+            assign rds_by_id_next[i] = unit_rd[id_unit_select[i]];
+            always_ff @ (posedge clk) begin
+                if (id_done_new[i])
+                    rds_by_id[i] <= rds_by_id_next[i];
+            end
         end
-    end
-    always_ff @ (posedge clk) begin
-        foreach(rds_by_id_next[i]) begin
-            if (id_done_new[i])
-                rds_by_id[i] <= rds_by_id_next[i];
-        end
-    end
+    endgenerate
 
     //ID tracking
     id_tracking id_fifos (.*, .issued(ti.issued), .retired(retired), .id_available(ti.id_available),
@@ -108,15 +106,13 @@ module write_back(
 
     //Inflight Instruction ID table
     //Stores rd_addr and whether rd_addr is zero
-    initial begin
-        foreach (packet_table[i]) begin
-            packet_table[i] = '0;
-        end
-    end
-
     always_ff @ (posedge clk) begin
         if (ti.id_available)//instruction_issued_with_rd
             packet_table[issue_id] <= ti.inflight_packet;
+    end
+
+    always_ff @ (posedge clk) begin
+        retired_instruction_packet <= instruction_queue_empty ? ti.inflight_packet : packet_table[retired_id];
     end
     //////////////////////
 
@@ -149,8 +145,6 @@ module write_back(
         retired_id_r <= retired_id;
     end
 
-    //Read table for unit ID (acks, and rd_addr for register file)
-    assign retired_instruction_packet = packet_table[retired_id_r];
     assign instruction_complete = retired_r & ~retired_instruction_packet.is_store;
 
     //Register file interaction

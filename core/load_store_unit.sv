@@ -72,6 +72,7 @@ module load_store_unit (
     ls_sub_unit_interface #(.BASE_ADDR(MEMORY_ADDR_L), .UPPER_BOUND(MEMORY_ADDR_H), .BIT_CHECK(BUS_BIT_CHECK)) cache();
 
     logic units_ready;
+    logic store_bypass_stall;
     logic issue_request;
     logic load_complete;
     logic store_complete;
@@ -142,7 +143,6 @@ module load_store_unit (
 
     //When switching units, ensure no outstanding loads so that there can be no timing collisions with results
     assign unit_stall = (current_unit != last_unit) && ~load_attributes.empty;
-    logic store_bypass_stall;
     assign store_bypass_stall = stage1.store & stage1.load_store_forward & ~load_attributes.empty;
     assign issue_request = input_fifo.valid & units_ready & ~unit_stall & ~unaligned_addr & ~store_bypass_stall;
 

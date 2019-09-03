@@ -78,7 +78,6 @@ module decode(
     logic [4:0] rs1_addr;
     logic [4:0] rs2_addr;
     logic [4:0] future_rd_addr;
-    unit_id_t unit_id;
 
     logic nop;
 
@@ -100,6 +99,15 @@ module decode(
 
     logic instruction_issued;
     logic valid_opcode;
+
+    //LS-inputs
+    logic [11:0] ls_offset;
+    logic is_load;
+    logic is_store;
+    logic amo_op;
+    logic store_conditional;
+    logic load_reserve;
+    logic [4:0] amo_type;
 
     genvar i;
     ////////////////////////////////////////////////////
@@ -126,15 +134,13 @@ module decode(
 
     ////////////////////////////////////////////////////
     //Register File interface inputs
-    assign rf_decode.rs1_addr  =  rs1_addr;
-    assign rf_decode.rs2_addr  =  rs2_addr;
-    assign rf_decode.future_rd_addr  =  future_rd_addr;
+    assign rf_decode.rs1_addr = rs1_addr;
+    assign rf_decode.rs2_addr = rs2_addr;
+    assign rf_decode.future_rd_addr = future_rd_addr;
     assign rf_decode.instruction_issued = instruction_issued_with_rd & ~rd_zero;
     assign rf_decode.id = ti.issue_id;
-    assign rf_decode.unit_id = unit_id;
     assign rf_decode.uses_rs1 = uses_rs1;
     assign rf_decode.uses_rs2 = uses_rs2;
-
 
     ////////////////////////////////////////////////////
     //Tracking Interface
@@ -143,11 +149,9 @@ module decode(
         new_request_for_id_gen[LS_UNIT_WB_ID] |= new_request[GC_UNIT_ID];
     end
 
-    one_hot_to_integer #(NUM_WB_UNITS) new_request_to_int (.*, .one_hot(new_request_for_id_gen), .int_out(unit_id));
-
     assign ti.inflight_packet.rd_addr = future_rd_addr;
     assign ti.inflight_packet.rd_addr_nzero = ~rd_zero;
-    assign ti.inflight_packet.is_store = (opcode_trim == STORE_T) || (amo_op && store_conditional);
+    assign ti.inflight_packet.is_store = is_store;
     assign ti.issued = instruction_issued & (uses_rd | new_request[LS_UNIT_WB_ID]);
 
     ////////////////////////////////////////////////////
@@ -182,7 +186,7 @@ module decode(
     assign issue_valid = fb_valid & ti.id_available & ~gc_issue_hold & ~gc_fetch_flush;
 
     assign operands_ready = ~rf_decode.rs1_conflict & ~rf_decode.rs2_conflict;
-    assign load_store_operands_ready =  ~rf_decode.rs1_conflict & (~rf_decode.rs2_conflict | (rf_decode.rs2_conflict & load_store_forward_possible));
+    assign load_store_operands_ready = ~rf_decode.rs1_conflict & (~rf_decode.rs2_conflict | (rf_decode.rs2_conflict & load_store_forward_possible));
 
     //All units share the same operand ready logic except load-store which has an internal forwarding path
     always_comb begin
@@ -235,14 +239,6 @@ module decode(
 
     ////////////////////////////////////////////////////
     //Load Store unit inputs
-    logic [11:0] ls_offset;
-    logic ls_is_load;
-
-    logic amo_op;
-    logic store_conditional;
-    logic load_reserve;
-    logic [4:0] amo_type;
-
     assign amo_op =  USE_AMO ? (opcode_trim == AMO_T) : 1'b0;
     assign amo_type = fb.instruction[31:27];
     assign store_conditional = (amo_type == AMO_SC);
@@ -259,7 +255,8 @@ module decode(
         end
     endgenerate
 
-    assign ls_is_load = (opcode_trim inside {LOAD_T, AMO_T}) && !(amo_op & store_conditional); //LR and AMO_ops perform a read operation as well
+    assign is_load = (opcode_trim inside {LOAD_T, AMO_T}) && !(amo_op & store_conditional); //LR and AMO_ops perform a read operation as well
+    assign is_store = (opcode_trim == STORE_T) || (amo_op && store_conditional);//Used for LS unit and for ID tracking
     assign ls_offset = opcode[5] ? {fb.instruction[31:25], fb.instruction[11:7]} : fb.instruction[31:20];
 
     assign ls_inputs.offset = ls_offset;
@@ -267,8 +264,8 @@ module decode(
     assign ls_inputs.rs2 = rf_decode.rs2_data;
     assign ls_inputs.pc = fb.pc;
     assign ls_inputs.fn3 = amo_op ? LS_W_fn3 : fn3;
-    assign ls_inputs.load = ls_is_load;
-    assign ls_inputs.store = (opcode_trim == STORE_T) || (amo_op && store_conditional);
+    assign ls_inputs.load = is_load;
+    assign ls_inputs.store = is_store;
     assign ls_inputs.load_store_forward = rf_decode.rs2_conflict;
     assign ls_inputs.instruction_id = ti.issue_id;
 
