@@ -51,8 +51,10 @@ module register_file(
     //////////////////////////////////////////
     //Assign zero to r0 and initialize all registers to zero
     initial begin
-        for (int i=0; i<32; i++)
+        for (int i=0; i<32; i++) begin
             register[i] = 0;
+            in_use_by[i] = 0;
+        end
     end
 
     //Writeback unit does not assert rf_wb.commit when the target register is r0
@@ -80,7 +82,7 @@ module register_file(
     assign rf_wb.rs1_id = in_use_by[rf_decode.rs1_addr];
     assign rf_wb.rs2_id = in_use_by[rf_decode.rs2_addr];
 
-    assign valid_write = rf_wb.rd_nzero & rf_wb.commit;
+    assign valid_write = rf_wb.rd_nzero & rf_wb.retired;
 
     assign rs1_feedforward = rs1_inuse;
     assign rs2_feedforward = rs2_inuse;

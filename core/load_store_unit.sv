@@ -165,6 +165,7 @@ module load_store_unit (
         endcase
     end
 
+    assign ls_exception_valid = 0;
 //    always_ff @ (posedge clk) begin
 //        if (rst | gc_issue_flush)
 //            ls_exception_valid <= 0;

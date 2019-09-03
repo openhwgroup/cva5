@@ -27,7 +27,7 @@ import taiga_config::*;
 import taiga_types::*;
 import l2_config_and_types::*;
 
-`define  MEMORY_FILE "/home/ematthew/Research/RISCV/software/riscv-tools/riscv-tests/benchmarks/dhrystone.riscv.sim_init" //change this to appropriate location "/home/ematthew/Downloads/dhrystone.riscv.sim_init"
+`define  MEMORY_FILE "/home/ematthew/taiga/tools/cubic.sim_init" //change this to appropriate location "/home/ematthew/Downloads/dhrystone.riscv.sim_init"
 `define  UART_LOG  "/home/ematthew/uart.log" //change this to appropriate location
 
 module taiga_full_simulation ();
@@ -114,9 +114,36 @@ module taiga_full_simulation ();
 
     axi_interface m_axi();
     avalon_interface m_avalon();
+    wishbone_interface m_wishbone();
 
     l2_requester_interface l2[L2_NUM_PORTS-1:0]();
     l2_memory_interface mem();
+
+    trace_outputs_t tr;
+
+        logic [63:0] operand_stall;
+        logic [63:0] unit_stall;
+        logic [63:0] no_id_stall;
+        logic [63:0] no_instruction_stall;
+        logic [63:0] other_stall;
+
+        logic [63:0] instruction_issued_dec;
+
+        //Register File
+        logic [63:0] rs1_forwarding_needed;
+        logic [63:0] rs2_forwarding_needed;
+        logic [63:0] rs1_and_rs2_forwarding_needed;
+
+        //Branch Unit
+        logic [63:0] branch_misspredict;
+        logic [63:0] return_misspredict;
+
+        //Writeback
+        logic [63:0] wb_mux_contention;
+
+
+
+
 
 
     logic interrupt;
@@ -172,7 +199,7 @@ module taiga_full_simulation ();
 
     axi_to_arb l2_to_mem (.*, .l2(mem));
 
-    axi_mem_sim #(`MEMORY_FILE) ddr_interface (.*, .axi(ddr_axi), .if_pc(if2_pc_debug), .dec_pc(dec_pc_debug));
+    axi_mem_sim #(`MEMORY_FILE) ddr_interface (.*, .axi(ddr_axi), .if_pc(if2_pc_debug), .dec_pc(tr.instruction_pc_dec));
 
     always
         #1 simulator_clk = ~simulator_clk;
@@ -191,11 +218,11 @@ module taiga_full_simulation ();
             $finish;
         end
 
-        output_file2 = $fopen("/home/ematthew/trace", "w");
-        if (output_file2 == 0) begin
-            $error ("couldn't open log file");
-            $finish;
-        end
+//        output_file2 = $fopen("/home/ematthew/trace", "w");
+//        if (output_file2 == 0) begin
+//            $error ("couldn't open log file");
+//            $finish;
+//        end
 
         do_reset();
 
@@ -206,16 +233,7 @@ module taiga_full_simulation ();
         //$finish;
     end
 
-    assign dec_instruction2 = simulation_mem.readw(dec_pc_debug[31:2]);
 
-    always_ff @(posedge simulator_clk) begin
-        //addi r0 r0 1
-        if (dec_instruction2 == 32'h00100013) begin
-            $fclose(output_file);
-            $fclose(output_file2);
-            $finish;
-        end
-    end
 
 
     task do_reset;
@@ -354,22 +372,88 @@ module taiga_full_simulation ();
       //if (m_axi.awready && m_axi.awaddr[13:0] == 4096) begin
       if (m_axi.wvalid && m_axi.wready && m_axi.awaddr[13:0] == 4096) begin
             $fwrite(output_file, "%c",m_axi.wdata[7:0]);
+            $fflush(output_file);
       end
     end
 
 
     assign sin = 0;
 
+    assign dec_instruction2 = simulation_mem.readw(tr.instruction_pc_dec[31:2]);
+
+    always_ff @(posedge simulator_clk) begin
+        //addi r0 r0 1
+        if (dec_instruction2 == 32'h00a00013) begin
+            $fwrite(output_file, "\noperand_stall %d\n",operand_stall);
+            $fwrite(output_file, "unit_stall %d\n",unit_stall);
+            $fwrite(output_file, "no_id_stall %d\n",no_id_stall);
+            $fwrite(output_file, "no_instruction_stall %d\n",no_instruction_stall);
+            $fwrite(output_file, "other_stall %d\n",other_stall);
+            $fwrite(output_file, "instruction_issued_dec %d\n",instruction_issued_dec);
+            $fwrite(output_file, "branch_misspredict %d\n",branch_misspredict);
+            $fwrite(output_file, "return_misspredict %d\n",return_misspredict);
+            $fwrite(output_file, "wb_mux_contention %d\n",wb_mux_contention);
+            $fwrite(output_file, "rs1_forwarding_needed %d\n",rs1_forwarding_needed);
+            $fwrite(output_file, "rs2_forwarding_needed %d\n",rs2_forwarding_needed);
+            $fwrite(output_file, "rs1_OR_rs2_forwarding_needed %d\n",rs1_forwarding_needed + rs2_forwarding_needed);
+            $fwrite(output_file, "rs1_AND_rs2_forwarding_needed %d\n",rs1_and_rs2_forwarding_needed);
+            $fclose(output_file);
+            $fclose(output_file2);
+            $finish;
+        end
+    end
+
+    always_ff @(posedge simulator_clk) begin
+        if (rst) begin
+            operand_stall = 0;
+            unit_stall = 0;
+            no_id_stall = 0;
+            no_instruction_stall = 0;
+            other_stall = 0;
+            instruction_issued_dec = 0;
+            rs1_forwarding_needed = 0;
+            rs2_forwarding_needed = 0;
+            rs1_and_rs2_forwarding_needed = 0;
+            branch_misspredict = 0;
+            return_misspredict = 0;
+            wb_mux_contention = 0;
+        end
+
+        if (tr.operand_stall)
+            operand_stall <= operand_stall + 1;
+        if (tr.unit_stall)
+            unit_stall <= unit_stall + 1;
+        if (tr.no_id_stall)
+            no_id_stall <= no_id_stall + 1;
+        if (tr.no_instruction_stall)
+            no_instruction_stall <= no_instruction_stall + 1;
+        if (tr.other_stall)
+            other_stall <= other_stall + 1;
+        if (tr.instruction_issued_dec)
+            instruction_issued_dec <= instruction_issued_dec + 1;
+        if (tr.rs1_forwarding_needed)
+            rs1_forwarding_needed <= rs1_forwarding_needed + 1;
+        if (tr.rs2_forwarding_needed)
+            rs2_forwarding_needed <= rs2_forwarding_needed + 1;
+        if (tr.rs1_and_rs2_forwarding_needed)
+            rs1_and_rs2_forwarding_needed <= rs1_and_rs2_forwarding_needed + 1;
+        if (tr.branch_misspredict)
+            branch_misspredict <= branch_misspredict + 1;
+        if (tr.return_misspredict)
+            return_misspredict <= return_misspredict + 1;
+        if (tr.wb_mux_contention)
+            wb_mux_contention <= wb_mux_contention + 1;
+    end
 
 
     ////////////////////////////////////////////////////
 
-    always_ff @(posedge clk) begin
-       if (dec_advance_debug) begin
-            $fwrite(output_file2, simulation_mem.readopcode(instruction_bram.addr));
-            $fwrite(output_file2, "\n");
-       end
-    end
+//    always_ff @(posedge clk) begin
+//       if (dec_advance_debug) begin
+//            $fwrite(output_file2, simulation_mem.readopcode(instruction_bram.addr));
+//            $fwrite(output_file2, "\n");
+//       end
+//    end
 
 
 

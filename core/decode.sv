@@ -279,6 +279,11 @@ module decode(
             last_load_rd <= future_rd_addr;
     end
 
+    initial begin
+        foreach(register_in_use_by_load_op[i])
+            register_in_use_by_load_op[i] = 0;
+    end
+
     always_ff @ (posedge clk) begin
        if (instruction_issued_with_rd & ~rd_zero)
            register_in_use_by_load_op[future_rd_addr] <= new_request[LS_UNIT_WB_ID] & basic_load;
@@ -367,9 +372,9 @@ module decode(
 
             always_comb begin
                 prev_div_result_valid = prev_div_result_valid_r;
-                if (new_request[DIV_UNIT_WB_ID])
-                    prev_div_result_valid = ~div_rd_overwrites_rs1_or_rs2;
-                else if (uses_rd & rd_overwrites_previously_saved_rs1_or_rs2)
+                if ((new_request[DIV_UNIT_WB_ID] & ~div_rd_overwrites_rs1_or_rs2))
+                    prev_div_result_valid = 1;
+                else if ((new_request[DIV_UNIT_WB_ID] & div_rd_overwrites_rs1_or_rs2) | (uses_rd & rd_overwrites_previously_saved_rs1_or_rs2))
                     prev_div_result_valid = 0;
             end
 

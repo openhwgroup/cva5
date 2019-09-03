@@ -103,6 +103,10 @@ $(embench_logs) : %_full.log : % $(embench_hw)
 run_embench_verilator: $(embench_logs)
 	cat $^ > embench.log
 
+.PHONY: run_dhrystone_verilator
+run_dhrystone_verilator :
+	$(call verilator_local_mem_test,dhrystone,\"/home/ematthew/Research/RISCV/software/taiga-benchmarks/dhrystone.riscv.hw_init\","/dev/null","/dev/null")
+
 CRUFT= $(EMBENCH_BENCHMARKS) $(embench_hw) $(embench_sim) $(embench_logs) embench.log
 
 #Called by compliance makefile

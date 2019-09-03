@@ -31,7 +31,7 @@ module msb_naive
     always_comb begin
         msb = '0;
         for (int i=0; i<32; i++) begin
-            msb = msb_input[i] ? i : msb;
+            msb = msb_input[i] ? i[4:0] : msb;
         end 
     end
      

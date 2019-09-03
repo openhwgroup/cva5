@@ -16,15 +16,15 @@
       </db_ref>
    </db_ref_list>
    <zoom_setting>
-      <ZoomStartTime time="430450000fs"></ZoomStartTime>
-      <ZoomEndTime time="460800001fs"></ZoomEndTime>
-      <Cursor1Time time="439000000fs"></Cursor1Time>
+      <ZoomStartTime time="0fs"></ZoomStartTime>
+      <ZoomEndTime time="656000000001fs"></ZoomEndTime>
+      <Cursor1Time time="338000000000fs"></Cursor1Time>
    </zoom_setting>
    <column_width_setting>
-      <NameColumnWidth column_width="263"></NameColumnWidth>
-      <ValueColumnWidth column_width="66"></ValueColumnWidth>
+      <NameColumnWidth column_width="259"></NameColumnWidth>
+      <ValueColumnWidth column_width="93"></ValueColumnWidth>
    </column_width_setting>
-   <WVObjectSize size="243" />
+   <WVObjectSize size="171" />
    <wvobject type="logic" fp_name="/taiga_full_simulation/clk">
       <obj_property name="ElementShortName">clk</obj_property>
       <obj_property name="ObjectShortName">clk</obj_property>
@@ -37,54 +37,6 @@
       <obj_property name="label">Fetch</obj_property>
       <obj_property name="DisplayName">label</obj_property>
    </wvobject>
-   <wvobject type="logic" fp_name="/taiga_full_simulation/uut/branch_unit_block/branch_inputs.jal">
-      <obj_property name="ElementShortName">.jal</obj_property>
-      <obj_property name="ObjectShortName">.jal</obj_property>
-   </wvobject>
-   <wvobject type="logic" fp_name="/taiga_full_simulation/uut/branch_unit_block/branch_inputs.jalr">
-      <obj_property name="ElementShortName">.jalr</obj_property>
-      <obj_property name="ObjectShortName">.jalr</obj_property>
-   </wvobject>
-   <wvobject type="array" fp_name="/taiga_full_simulation/uut/branch_unit_block/branch_inputs.rs1">
-      <obj_property name="ElementShortName">.rs1[31:0]</obj_property>
-      <obj_property name="ObjectShortName">.rs1[31:0]</obj_property>
-   </wvobject>
-   <wvobject type="logic" fp_name="/taiga_full_simulation/uut/branch_unit_block/branch_inputs.is_call">
-      <obj_property name="ElementShortName">.is_call</obj_property>
-      <obj_property name="ObjectShortName">.is_call</obj_property>
-   </wvobject>
-   <wvobject type="logic" fp_name="/taiga_full_simulation/uut/branch_unit_block/branch_inputs.is_return">
-      <obj_property name="ElementShortName">.is_return</obj_property>
-      <obj_property name="ObjectShortName">.is_return</obj_property>
-   </wvobject>
-   <wvobject type="array" fp_name="/taiga_full_simulation/uut/branch_unit_block/jal_imm">
-      <obj_property name="ElementShortName">jal_imm[19:0]</obj_property>
-      <obj_property name="ObjectShortName">jal_imm[19:0]</obj_property>
-   </wvobject>
-   <wvobject type="array" fp_name="/taiga_full_simulation/uut/branch_unit_block/jalr_imm">
-      <obj_property name="ElementShortName">jalr_imm[11:0]</obj_property>
-      <obj_property name="ObjectShortName">jalr_imm[11:0]</obj_property>
-   </wvobject>
-   <wvobject type="array" fp_name="/taiga_full_simulation/uut/branch_unit_block/br_imm">
-      <obj_property name="ElementShortName">br_imm[11:0]</obj_property>
-      <obj_property name="ObjectShortName">br_imm[11:0]</obj_property>
-   </wvobject>
-   <wvobject type="array" fp_name="/taiga_full_simulation/uut/branch_unit_block/jump_base">
-      <obj_property name="ElementShortName">jump_base[31:0]</obj_property>
-      <obj_property name="ObjectShortName">jump_base[31:0]</obj_property>
-   </wvobject>
-   <wvobject type="array" fp_name="/taiga_full_simulation/uut/branch_unit_block/pc_offset">
-      <obj_property name="ElementShortName">pc_offset[31:0]</obj_property>
-      <obj_property name="ObjectShortName">pc_offset[31:0]</obj_property>
-   </wvobject>
-   <wvobject type="array" fp_name="/taiga_full_simulation/uut/bt/jump_pc">
-      <obj_property name="ElementShortName">jump_pc[31:0]</obj_property>
-      <obj_property name="ObjectShortName">jump_pc[31:0]</obj_property>
-   </wvobject>
-   <wvobject type="array" fp_name="/taiga_full_simulation/uut/bt/njump_pc">
-      <obj_property name="ElementShortName">njump_pc[31:0]</obj_property>
-      <obj_property name="ObjectShortName">njump_pc[31:0]</obj_property>
-   </wvobject>
    <wvobject type="array" fp_name="/taiga_full_simulation/uut/fetch_block/next_pc">
       <obj_property name="ElementShortName">next_pc[31:0]</obj_property>
       <obj_property name="ObjectShortName">next_pc[31:0]</obj_property>
@@ -92,53 +44,6 @@
    <wvobject type="array" fp_name="/taiga_full_simulation/uut/fetch_block/if_pc">
       <obj_property name="ElementShortName">if_pc[31:0]</obj_property>
       <obj_property name="ObjectShortName">if_pc[31:0]</obj_property>
-   </wvobject>
-   <wvobject type="array" fp_name="/taiga_full_simulation/uut/bt_block/predicted_pc">
-      <obj_property name="ElementShortName">predicted_pc[31:0]</obj_property>
-      <obj_property name="ObjectShortName">predicted_pc[31:0]</obj_property>
-   </wvobject>
-   <wvobject type="logic" fp_name="/taiga_full_simulation/uut/bt/use_prediction">
-      <obj_property name="ElementShortName">use_prediction</obj_property>
-      <obj_property name="ObjectShortName">use_prediction</obj_property>
-   </wvobject>
-   <wvobject type="logic" fp_name="/taiga_full_simulation/uut/bt/use_ras">
-      <obj_property name="ElementShortName">use_ras</obj_property>
-      <obj_property name="ObjectShortName">use_ras</obj_property>
-   </wvobject>
-   <wvobject type="logic" fp_name="/taiga_full_simulation/uut/ras_block/ras/push">
-      <obj_property name="ElementShortName">push</obj_property>
-      <obj_property name="ObjectShortName">push</obj_property>
-   </wvobject>
-   <wvobject type="logic" fp_name="/taiga_full_simulation/uut/ras_block/ras/pop">
-      <obj_property name="ElementShortName">pop</obj_property>
-      <obj_property name="ObjectShortName">pop</obj_property>
-   </wvobject>
-   <wvobject type="array" fp_name="/taiga_full_simulation/uut/ras_block/ras/new_addr">
-      <obj_property name="ElementShortName">new_addr[31:0]</obj_property>
-      <obj_property name="ObjectShortName">new_addr[31:0]</obj_property>
-   </wvobject>
-   <wvobject type="array" fp_name="/taiga_full_simulation/uut/ras_block/ras/addr">
-      <obj_property name="ElementShortName">addr[31:0]</obj_property>
-      <obj_property name="ObjectShortName">addr[31:0]</obj_property>
-   </wvobject>
-   <wvobject type="logic" fp_name="/taiga_full_simulation/uut/ras_block/ras/valid">
-      <obj_property name="ElementShortName">valid</obj_property>
-      <obj_property name="ObjectShortName">valid</obj_property>
-   </wvobject>
-   <wvobject type="array" fp_name="/taiga_full_simulation/uut/ras_block/read_index">
-      <obj_property name="ElementShortName">read_index[2:0]</obj_property>
-      <obj_property name="ObjectShortName">read_index[2:0]</obj_property>
-      <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
-   </wvobject>
-   <wvobject type="array" fp_name="/taiga_full_simulation/uut/ras_block/write_index">
-      <obj_property name="ElementShortName">write_index[2:0]</obj_property>
-      <obj_property name="ObjectShortName">write_index[2:0]</obj_property>
-      <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
-   </wvobject>
-   <wvobject type="array" fp_name="/taiga_full_simulation/ddr_interface/if_inst_text">
-      <obj_property name="ElementShortName">if_inst_text[0:511]</obj_property>
-      <obj_property name="ObjectShortName">if_inst_text[0:511]</obj_property>
-      <obj_property name="Radix">ASCIIRADIX</obj_property>
    </wvobject>
    <wvobject type="array" fp_name="/taiga_full_simulation/uut/fetch_block/stage2_phys_address">
       <obj_property name="ElementShortName">stage2_phys_address[31:0]</obj_property>
@@ -152,6 +57,10 @@
       <obj_property name="ElementShortName">space_in_inst_buffer</obj_property>
       <obj_property name="ObjectShortName">space_in_inst_buffer</obj_property>
    </wvobject>
+   <wvobject type="logic" fp_name="/taiga_full_simulation/uut/fetch_block/gc_fetch_flush">
+      <obj_property name="ElementShortName">gc_fetch_flush</obj_property>
+      <obj_property name="ObjectShortName">gc_fetch_flush</obj_property>
+   </wvobject>
    <wvobject type="logic" fp_name="/taiga_full_simulation/uut/fetch_block/new_issue">
       <obj_property name="ElementShortName">new_issue</obj_property>
       <obj_property name="ObjectShortName">new_issue</obj_property>
@@ -159,10 +68,6 @@
    <wvobject type="logic" fp_name="/taiga_full_simulation/uut/fetch_block/new_mem_request">
       <obj_property name="ElementShortName">new_mem_request</obj_property>
       <obj_property name="ObjectShortName">new_mem_request</obj_property>
-   </wvobject>
-   <wvobject type="logic" fp_name="/taiga_full_simulation/uut/fetch_block/bt/flush">
-      <obj_property name="ElementShortName">flush</obj_property>
-      <obj_property name="ObjectShortName">flush</obj_property>
    </wvobject>
    <wvobject type="logic" fp_name="/taiga_full_simulation/uut/fetch_block/delayed_flush">
       <obj_property name="ElementShortName">delayed_flush</obj_property>
@@ -176,57 +81,63 @@
       <obj_property name="ElementShortName">mem_valid</obj_property>
       <obj_property name="ObjectShortName">mem_valid</obj_property>
    </wvobject>
-   <wvobject type="logic" fp_name="/taiga_full_simulation/uut/fetch_block/stage2_valid">
-      <obj_property name="ElementShortName">stage2_valid</obj_property>
-      <obj_property name="ObjectShortName">stage2_valid</obj_property>
+   <wvobject type="array" fp_name="/taiga_full_simulation/uut/bp_block/br_results">
+      <obj_property name="ElementShortName">br_results</obj_property>
+      <obj_property name="ObjectShortName">br_results</obj_property>
+      <obj_property name="isExpanded"></obj_property>
    </wvobject>
-   <wvobject type="logic" fp_name="/taiga_full_simulation/uut/bt/use_prediction">
-      <obj_property name="ElementShortName">use_prediction</obj_property>
-      <obj_property name="ObjectShortName">use_prediction</obj_property>
+   <wvobject type="array" fp_name="/taiga_full_simulation/uut/bp_block/if_entry">
+      <obj_property name="ElementShortName">if_entry[1:0]</obj_property>
+      <obj_property name="ObjectShortName">if_entry[1:0]</obj_property>
+      <wvobject type="array" fp_name="/taiga_full_simulation/uut/bp_block/if_entry[1]">
+         <obj_property name="ElementShortName">[1]</obj_property>
+         <obj_property name="ObjectShortName">[1]</obj_property>
+         <obj_property name="isExpanded"></obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/taiga_full_simulation/uut/bp_block/if_entry[0]">
+         <obj_property name="ElementShortName">[0]</obj_property>
+         <obj_property name="ObjectShortName">[0]</obj_property>
+      </wvobject>
    </wvobject>
-   <wvobject type="logic" fp_name="/taiga_full_simulation/uut/ib/full">
-      <obj_property name="ElementShortName">full</obj_property>
-      <obj_property name="ObjectShortName">full</obj_property>
+   <wvobject type="array" fp_name="/taiga_full_simulation/uut/bp_block/ex_entry">
+      <obj_property name="ElementShortName">ex_entry</obj_property>
+      <obj_property name="ObjectShortName">ex_entry</obj_property>
    </wvobject>
-   <wvobject type="logic" fp_name="/taiga_full_simulation/uut/ib/early_full">
-      <obj_property name="ElementShortName">early_full</obj_property>
-      <obj_property name="ObjectShortName">early_full</obj_property>
+   <wvobject type="array" fp_name="/taiga_full_simulation/uut/bp_block/new_jump_addr">
+      <obj_property name="ElementShortName">new_jump_addr[31:0]</obj_property>
+      <obj_property name="ObjectShortName">new_jump_addr[31:0]</obj_property>
    </wvobject>
-   <wvobject type="array" fp_name="/taiga_full_simulation/uut/ib/data_in">
-      <obj_property name="ElementShortName">data_in</obj_property>
-      <obj_property name="ObjectShortName">data_in</obj_property>
+   <wvobject type="array" fp_name="/taiga_full_simulation/uut/bp_block/predicted_pc">
+      <obj_property name="ElementShortName">predicted_pc[1:0][31:0]</obj_property>
+      <obj_property name="ObjectShortName">predicted_pc[1:0][31:0]</obj_property>
+   </wvobject>
+   <wvobject type="array" fp_name="/taiga_full_simulation/uut/bp_block/tag_matches">
+      <obj_property name="ElementShortName">tag_matches[1:0]</obj_property>
+      <obj_property name="ObjectShortName">tag_matches[1:0]</obj_property>
+   </wvobject>
+   <wvobject type="array" fp_name="/taiga_full_simulation/uut/bp_block/replacement_way">
+      <obj_property name="ElementShortName">replacement_way[1:0]</obj_property>
+      <obj_property name="ObjectShortName">replacement_way[1:0]</obj_property>
+   </wvobject>
+   <wvobject type="array" fp_name="/taiga_full_simulation/uut/bp_block/update_way">
+      <obj_property name="ElementShortName">update_way[1:0]</obj_property>
+      <obj_property name="ObjectShortName">update_way[1:0]</obj_property>
+   </wvobject>
+   <wvobject type="array" fp_name="/taiga_full_simulation/uut/bp_block/hit_way">
+      <obj_property name="ElementShortName">hit_way[0:0]</obj_property>
+      <obj_property name="ObjectShortName">hit_way[0:0]</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/taiga_full_simulation/uut/bp_block/tag_match">
+      <obj_property name="ElementShortName">tag_match</obj_property>
+      <obj_property name="ObjectShortName">tag_match</obj_property>
    </wvobject>
    <wvobject fp_name="divider7368" type="divider">
       <obj_property name="label">I Cache</obj_property>
       <obj_property name="DisplayName">label</obj_property>
    </wvobject>
-   <wvobject type="array" fp_name="/taiga_full_simulation/uut/fetch_block/\fetch_sub[1] /stage1_addr">
-      <obj_property name="ElementShortName">stage1_addr[31:0]</obj_property>
-      <obj_property name="ObjectShortName">stage1_addr[31:0]</obj_property>
-   </wvobject>
-   <wvobject type="array" fp_name="/taiga_full_simulation/uut/fetch_block/\fetch_sub[1] /stage2_addr">
-      <obj_property name="ElementShortName">stage2_addr[31:0]</obj_property>
-      <obj_property name="ObjectShortName">stage2_addr[31:0]</obj_property>
-   </wvobject>
-   <wvobject type="array" fp_name="/taiga_full_simulation/uut/fetch_block/\fetch_sub[1] /data_out">
-      <obj_property name="ElementShortName">data_out[31:0]</obj_property>
-      <obj_property name="ObjectShortName">data_out[31:0]</obj_property>
-   </wvobject>
-   <wvobject type="logic" fp_name="/taiga_full_simulation/uut/fetch_block/\fetch_sub[1] /data_valid">
-      <obj_property name="ElementShortName">data_valid</obj_property>
-      <obj_property name="ObjectShortName">data_valid</obj_property>
-   </wvobject>
    <wvobject type="logic" fp_name="/taiga_full_simulation/uut/fetch_block/new_issue">
       <obj_property name="ElementShortName">new_issue</obj_property>
       <obj_property name="ObjectShortName">new_issue</obj_property>
-   </wvobject>
-   <wvobject type="logic" fp_name="/taiga_full_simulation/uut/fetch_block/\fetch_sub[1] /ready">
-      <obj_property name="ElementShortName">ready</obj_property>
-      <obj_property name="ObjectShortName">ready</obj_property>
-   </wvobject>
-   <wvobject type="logic" fp_name="/taiga_full_simulation/uut/fetch_block/\fetch_sub[1] /new_request">
-      <obj_property name="ElementShortName">new_request</obj_property>
-      <obj_property name="ObjectShortName">new_request</obj_property>
    </wvobject>
    <wvobject type="logic" fp_name="/taiga_full_simulation/uut/fetch_block/l1_response/data_valid">
       <obj_property name="ElementShortName">data_valid</obj_property>
@@ -252,22 +163,6 @@
       <obj_property name="ElementShortName">next_state[31:0]</obj_property>
       <obj_property name="ObjectShortName">next_state[31:0]</obj_property>
    </wvobject>
-   <wvobject type="array" fp_name="/taiga_full_simulation/uut/gc_unit_block/clear_shift_count">
-      <obj_property name="ElementShortName">clear_shift_count[31:0]</obj_property>
-      <obj_property name="ObjectShortName">clear_shift_count[31:0]</obj_property>
-   </wvobject>
-   <wvobject type="array" fp_name="/taiga_full_simulation/uut/gc_unit_block/tlb_clear_shift_count">
-      <obj_property name="ElementShortName">tlb_clear_shift_count[31:0]</obj_property>
-      <obj_property name="ObjectShortName">tlb_clear_shift_count[31:0]</obj_property>
-   </wvobject>
-   <wvobject type="logic" fp_name="/taiga_full_simulation/uut/gc_unit_block/gc_ex/new_request">
-      <obj_property name="ElementShortName">new_request</obj_property>
-      <obj_property name="ObjectShortName">new_request</obj_property>
-   </wvobject>
-   <wvobject type="logic" fp_name="/taiga_full_simulation/uut/gc_unit_block/gc_ex/ready">
-      <obj_property name="ElementShortName">ready</obj_property>
-      <obj_property name="ObjectShortName">ready</obj_property>
-   </wvobject>
    <wvobject type="logic" fp_name="/taiga_full_simulation/uut/gc_unit_block/gc_issue_hold">
       <obj_property name="ElementShortName">gc_issue_hold</obj_property>
       <obj_property name="ObjectShortName">gc_issue_hold</obj_property>
@@ -275,10 +170,6 @@
    <wvobject type="logic" fp_name="/taiga_full_simulation/uut/gc_unit_block/gc_issue_flush">
       <obj_property name="ElementShortName">gc_issue_flush</obj_property>
       <obj_property name="ObjectShortName">gc_issue_flush</obj_property>
-   </wvobject>
-   <wvobject type="logic" fp_name="/taiga_full_simulation/uut/gc_unit_block/gc_fetch_hold">
-      <obj_property name="ElementShortName">gc_fetch_hold</obj_property>
-      <obj_property name="ObjectShortName">gc_fetch_hold</obj_property>
    </wvobject>
    <wvobject type="logic" fp_name="/taiga_full_simulation/uut/gc_unit_block/gc_fetch_flush">
       <obj_property name="ElementShortName">gc_fetch_flush</obj_property>
@@ -296,27 +187,18 @@
       <obj_property name="ElementShortName">clk</obj_property>
       <obj_property name="ObjectShortName">clk</obj_property>
    </wvobject>
-   <wvobject type="array" fp_name="/taiga_full_simulation/dec_instruction">
-      <obj_property name="ElementShortName">dec_instruction[31:0]</obj_property>
-      <obj_property name="ObjectShortName">dec_instruction[31:0]</obj_property>
+   <wvobject type="array" fp_name="/taiga_full_simulation/uut/pre_decode_block/fb.instruction">
+      <obj_property name="ElementShortName">.instruction[31:0]</obj_property>
+      <obj_property name="ObjectShortName">.instruction[31:0]</obj_property>
    </wvobject>
-   <wvobject type="array" fp_name="/taiga_full_simulation/uut/dec_pc">
-      <obj_property name="ElementShortName">dec_pc[31:0]</obj_property>
-      <obj_property name="ObjectShortName">dec_pc[31:0]</obj_property>
+   <wvobject type="array" fp_name="/taiga_full_simulation/uut/pre_decode_block/fb.pc">
+      <obj_property name="ElementShortName">.pc[31:0]</obj_property>
+      <obj_property name="ObjectShortName">.pc[31:0]</obj_property>
    </wvobject>
    <wvobject type="array" fp_name="/taiga_full_simulation/ddr_interface/dec_inst_text">
       <obj_property name="ElementShortName">dec_inst_text[0:511]</obj_property>
       <obj_property name="ObjectShortName">dec_inst_text[0:511]</obj_property>
       <obj_property name="Radix">ASCIIRADIX</obj_property>
-   </wvobject>
-   <wvobject type="array" fp_name="/taiga_full_simulation/uut/decode_block/ib/data_out.instruction">
-      <obj_property name="ElementShortName">.instruction[31:0]</obj_property>
-      <obj_property name="ObjectShortName">.instruction[31:0]</obj_property>
-      <obj_property name="Radix">HEXRADIX</obj_property>
-   </wvobject>
-   <wvobject type="logic" fp_name="/taiga_full_simulation/uut/instruction_complete">
-      <obj_property name="ElementShortName">instruction_complete</obj_property>
-      <obj_property name="ObjectShortName">instruction_complete</obj_property>
    </wvobject>
    <wvobject type="logic" fp_name="/taiga_full_simulation/uut/decode_block/issue_valid">
       <obj_property name="ElementShortName">issue_valid</obj_property>
@@ -326,29 +208,17 @@
       <obj_property name="ElementShortName">operands_ready</obj_property>
       <obj_property name="ObjectShortName">operands_ready</obj_property>
    </wvobject>
-   <wvobject type="logic" fp_name="/taiga_full_simulation/uut/decode_block/advance">
-      <obj_property name="ElementShortName">advance</obj_property>
-      <obj_property name="ObjectShortName">advance</obj_property>
-   </wvobject>
    <wvobject type="array" fp_name="/taiga_full_simulation/uut/decode_block/new_request">
-      <obj_property name="ElementShortName">new_request[6:0]</obj_property>
-      <obj_property name="ObjectShortName">new_request[6:0]</obj_property>
+      <obj_property name="ElementShortName">new_request[5:0]</obj_property>
+      <obj_property name="ObjectShortName">new_request[5:0]</obj_property>
    </wvobject>
    <wvobject type="array" fp_name="/taiga_full_simulation/uut/decode_block/issue_ready">
-      <obj_property name="ElementShortName">issue_ready[6:0]</obj_property>
-      <obj_property name="ObjectShortName">issue_ready[6:0]</obj_property>
+      <obj_property name="ElementShortName">issue_ready[5:0]</obj_property>
+      <obj_property name="ObjectShortName">issue_ready[5:0]</obj_property>
    </wvobject>
    <wvobject type="array" fp_name="/taiga_full_simulation/uut/decode_block/issue">
-      <obj_property name="ElementShortName">issue[6:0]</obj_property>
-      <obj_property name="ObjectShortName">issue[6:0]</obj_property>
-   </wvobject>
-   <wvobject type="logic" fp_name="/taiga_full_simulation/uut/write_back_mux/inorder">
-      <obj_property name="ElementShortName">inorder</obj_property>
-      <obj_property name="ObjectShortName">inorder</obj_property>
-   </wvobject>
-   <wvobject type="logic" fp_name="/taiga_full_simulation/uut/bt/flush">
-      <obj_property name="ElementShortName">flush</obj_property>
-      <obj_property name="ObjectShortName">flush</obj_property>
+      <obj_property name="ElementShortName">issue[5:0]</obj_property>
+      <obj_property name="ObjectShortName">issue[5:0]</obj_property>
    </wvobject>
    <wvobject type="logic" fp_name="/taiga_full_simulation/uut/register_file_block/rs1_feedforward">
       <obj_property name="ElementShortName">rs1_feedforward</obj_property>
@@ -375,16 +245,6 @@
       <obj_property name="ObjectShortName">future_rd_addr[4:0]</obj_property>
       <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
    </wvobject>
-   <wvobject type="array" fp_name="/taiga_full_simulation/uut/bt_block/miss_predict_br">
-      <obj_property name="ElementShortName">miss_predict_br[31:0]</obj_property>
-      <obj_property name="ObjectShortName">miss_predict_br[31:0]</obj_property>
-      <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
-   </wvobject>
-   <wvobject type="array" fp_name="/taiga_full_simulation/uut/bt_block/miss_predict_ret">
-      <obj_property name="ElementShortName">miss_predict_ret[31:0]</obj_property>
-      <obj_property name="ObjectShortName">miss_predict_ret[31:0]</obj_property>
-      <obj_property name="Radix">UNSIGNEDDECRADIX</obj_property>
-   </wvobject>
    <wvobject fp_name="divider3002" type="divider">
       <obj_property name="label">Register File</obj_property>
       <obj_property name="DisplayName">label</obj_property>
@@ -393,10 +253,6 @@
       <obj_property name="ElementShortName">sim_register</obj_property>
       <obj_property name="ObjectShortName">sim_register</obj_property>
    </wvobject>
-   <wvobject type="logic" fp_name="/taiga_full_simulation/uut/register_file_block/inorder">
-      <obj_property name="ElementShortName">inorder</obj_property>
-      <obj_property name="ObjectShortName">inorder</obj_property>
-   </wvobject>
    <wvobject type="logic" fp_name="/taiga_full_simulation/uut/register_file_block/inuse_mem/clr">
       <obj_property name="ElementShortName">clr</obj_property>
       <obj_property name="ObjectShortName">clr</obj_property>
@@ -404,10 +260,6 @@
    <wvobject type="logic" fp_name="/taiga_full_simulation/uut/register_file_block/inuse_mem/issued">
       <obj_property name="ElementShortName">issued</obj_property>
       <obj_property name="ObjectShortName">issued</obj_property>
-   </wvobject>
-   <wvobject type="logic" fp_name="/taiga_full_simulation/uut/rf_wb/valid_write">
-      <obj_property name="ElementShortName">valid_write</obj_property>
-      <obj_property name="ObjectShortName">valid_write</obj_property>
    </wvobject>
    <wvobject type="array" fp_name="/taiga_full_simulation/uut/register_file_block/inuse_mem/rs1_addr">
       <obj_property name="ElementShortName">rs1_addr[4:0]</obj_property>
@@ -455,17 +307,17 @@
       <obj_property name="ObjectShortName">dec_inst_text[0:511]</obj_property>
       <obj_property name="Radix">ASCIIRADIX</obj_property>
    </wvobject>
-   <wvobject type="array" fp_name="/taiga_full_simulation/uut/write_back_mux/id_done_next">
-      <obj_property name="ElementShortName">id_done_next[3:0]</obj_property>
-      <obj_property name="ObjectShortName">id_done_next[3:0]</obj_property>
-   </wvobject>
-   <wvobject type="array" fp_name="/taiga_full_simulation/uut/write_back_mux/id_done_r">
-      <obj_property name="ElementShortName">id_done_r[3:0]</obj_property>
-      <obj_property name="ObjectShortName">id_done_r[3:0]</obj_property>
+   <wvobject type="array" fp_name="/taiga_full_simulation/uut/write_back_mux/id_done_new">
+      <obj_property name="ElementShortName">id_done_new[3:0]</obj_property>
+      <obj_property name="ObjectShortName">id_done_new[3:0]</obj_property>
    </wvobject>
    <wvobject type="array" fp_name="/taiga_full_simulation/uut/write_back_mux/id_done">
       <obj_property name="ElementShortName">id_done[3:0]</obj_property>
       <obj_property name="ObjectShortName">id_done[3:0]</obj_property>
+   </wvobject>
+   <wvobject type="array" fp_name="/taiga_full_simulation/uut/write_back_mux/id_done_r">
+      <obj_property name="ElementShortName">id_done_r[3:0]</obj_property>
+      <obj_property name="ObjectShortName">id_done_r[3:0]</obj_property>
    </wvobject>
    <wvobject type="logic" fp_name="/taiga_full_simulation/uut/write_back_mux/ti/id_available">
       <obj_property name="ElementShortName">id_available</obj_property>
@@ -479,33 +331,17 @@
       <obj_property name="ElementShortName">issued</obj_property>
       <obj_property name="ObjectShortName">issued</obj_property>
    </wvobject>
-   <wvobject type="logic" fp_name="/taiga_full_simulation/uut/write_back_mux/first_cycle_completion_abort">
-      <obj_property name="ElementShortName">first_cycle_completion_abort</obj_property>
-      <obj_property name="ObjectShortName">first_cycle_completion_abort</obj_property>
-   </wvobject>
    <wvobject type="array" fp_name="/taiga_full_simulation/uut/write_back_mux/unit_done_next_cycle">
-      <obj_property name="ElementShortName">unit_done_next_cycle[5:0]</obj_property>
-      <obj_property name="ObjectShortName">unit_done_next_cycle[5:0]</obj_property>
+      <obj_property name="ElementShortName">unit_done_next_cycle[3:0]</obj_property>
+      <obj_property name="ObjectShortName">unit_done_next_cycle[3:0]</obj_property>
    </wvobject>
    <wvobject type="array" fp_name="/taiga_full_simulation/uut/write_back_mux/unit_instruction_id">
-      <obj_property name="ElementShortName">unit_instruction_id[5:0][1:0]</obj_property>
-      <obj_property name="ObjectShortName">unit_instruction_id[5:0][1:0]</obj_property>
+      <obj_property name="ElementShortName">unit_instruction_id[3:0][1:0]</obj_property>
+      <obj_property name="ObjectShortName">unit_instruction_id[3:0][1:0]</obj_property>
    </wvobject>
    <wvobject type="array" fp_name="/taiga_full_simulation/uut/write_back_mux/unit_rd">
-      <obj_property name="ElementShortName">unit_rd[5:0][31:0]</obj_property>
-      <obj_property name="ObjectShortName">unit_rd[5:0][31:0]</obj_property>
-   </wvobject>
-   <wvobject type="array" fp_name="/taiga_full_simulation/uut/write_back_mux/accepted">
-      <obj_property name="ElementShortName">accepted[5:0]</obj_property>
-      <obj_property name="ObjectShortName">accepted[5:0]</obj_property>
-   </wvobject>
-   <wvobject type="array" fp_name="/taiga_full_simulation/uut/write_back_mux/instruction_ordering_stack/shift_bits">
-      <obj_property name="ElementShortName">shift_bits[3:0]</obj_property>
-      <obj_property name="ObjectShortName">shift_bits[3:0]</obj_property>
-   </wvobject>
-   <wvobject type="array" fp_name="/taiga_full_simulation/uut/write_back_mux/instruction_ordering_stack/ordering">
-      <obj_property name="ElementShortName">ordering[3:0][1:0]</obj_property>
-      <obj_property name="ObjectShortName">ordering[3:0][1:0]</obj_property>
+      <obj_property name="ElementShortName">unit_rd[3:0][31:0]</obj_property>
+      <obj_property name="ObjectShortName">unit_rd[3:0][31:0]</obj_property>
    </wvobject>
    <wvobject type="array" fp_name="/taiga_full_simulation/uut/write_back_mux/retired_id">
       <obj_property name="ElementShortName">retired_id[1:0]</obj_property>
@@ -518,7 +354,6 @@
    <wvobject type="array" fp_name="/taiga_full_simulation/uut/write_back_mux/retired_instruction_packet">
       <obj_property name="ElementShortName">retired_instruction_packet</obj_property>
       <obj_property name="ObjectShortName">retired_instruction_packet</obj_property>
-      <obj_property name="isExpanded"></obj_property>
    </wvobject>
    <wvobject fp_name="divider3000" type="divider">
       <obj_property name="label">LS Unit</obj_property>
@@ -527,12 +362,6 @@
    <wvobject type="logic" fp_name="/taiga_full_simulation/clk">
       <obj_property name="ElementShortName">clk</obj_property>
       <obj_property name="ObjectShortName">clk</obj_property>
-   </wvobject>
-   <wvobject type="logic" fp_name="/taiga_full_simulation/uut/load_store_unit_block/ls_ex/ready">
-      <obj_property name="DisplayName">label</obj_property>
-      <obj_property name="ElementShortName">ready</obj_property>
-      <obj_property name="ObjectShortName">ready</obj_property>
-      <obj_property name="label">ls_ready</obj_property>
    </wvobject>
    <wvobject type="logic" fp_name="/taiga_full_simulation/uut/load_store_unit_block/ls_input_fifo/fifo/valid">
       <obj_property name="ElementShortName">valid</obj_property>
@@ -550,21 +379,17 @@
       <obj_property name="ElementShortName">full</obj_property>
       <obj_property name="ObjectShortName">full</obj_property>
    </wvobject>
-   <wvobject type="logic" fp_name="/taiga_full_simulation/uut/load_store_unit_block/ls_ex/new_request_dec">
-      <obj_property name="ElementShortName">new_request_dec</obj_property>
-      <obj_property name="ObjectShortName">new_request_dec</obj_property>
-   </wvobject>
    <wvobject type="array" fp_name="/taiga_full_simulation/uut/load_store_unit_block/last_unit">
-      <obj_property name="ElementShortName">last_unit[2:0]</obj_property>
-      <obj_property name="ObjectShortName">last_unit[2:0]</obj_property>
+      <obj_property name="ElementShortName">last_unit[1:0]</obj_property>
+      <obj_property name="ObjectShortName">last_unit[1:0]</obj_property>
    </wvobject>
    <wvobject type="array" fp_name="/taiga_full_simulation/uut/load_store_unit_block/sub_unit_address_match">
-      <obj_property name="ElementShortName">sub_unit_address_match[2:0]</obj_property>
-      <obj_property name="ObjectShortName">sub_unit_address_match[2:0]</obj_property>
+      <obj_property name="ElementShortName">sub_unit_address_match[1:0]</obj_property>
+      <obj_property name="ObjectShortName">sub_unit_address_match[1:0]</obj_property>
    </wvobject>
    <wvobject type="array" fp_name="/taiga_full_simulation/uut/load_store_unit_block/current_unit">
-      <obj_property name="ElementShortName">current_unit[2:0]</obj_property>
-      <obj_property name="ObjectShortName">current_unit[2:0]</obj_property>
+      <obj_property name="ElementShortName">current_unit[1:0]</obj_property>
+      <obj_property name="ObjectShortName">current_unit[1:0]</obj_property>
    </wvobject>
    <wvobject type="logic" fp_name="/taiga_full_simulation/uut/load_store_unit_block/unit_stall">
       <obj_property name="ElementShortName">unit_stall</obj_property>
@@ -574,10 +399,6 @@
       <obj_property name="ElementShortName">issue_request</obj_property>
       <obj_property name="ObjectShortName">issue_request</obj_property>
    </wvobject>
-   <wvobject type="array" fp_name="/taiga_full_simulation/uut/load_store_unit_block/inflight_count">
-      <obj_property name="ElementShortName">inflight_count[1:0]</obj_property>
-      <obj_property name="ObjectShortName">inflight_count[1:0]</obj_property>
-   </wvobject>
    <wvobject type="array" fp_name="/taiga_full_simulation/uut/load_store_unit_block/ls_inputs">
       <obj_property name="ElementShortName">ls_inputs</obj_property>
       <obj_property name="ObjectShortName">ls_inputs</obj_property>
@@ -586,35 +407,27 @@
       <obj_property name="ElementShortName">stage1</obj_property>
       <obj_property name="ObjectShortName">stage1</obj_property>
    </wvobject>
-   <wvobject type="array" fp_name="/taiga_full_simulation/uut/load_store_unit_block/d_inputs">
-      <obj_property name="ElementShortName">d_inputs</obj_property>
-      <obj_property name="ObjectShortName">d_inputs</obj_property>
-   </wvobject>
    <wvobject type="array" fp_name="/taiga_full_simulation/uut/load_store_unit_block/unit_ready">
-      <obj_property name="ElementShortName">unit_ready[2:0]</obj_property>
-      <obj_property name="ObjectShortName">unit_ready[2:0]</obj_property>
+      <obj_property name="ElementShortName">unit_ready[1:0]</obj_property>
+      <obj_property name="ObjectShortName">unit_ready[1:0]</obj_property>
    </wvobject>
    <wvobject type="array" fp_name="/taiga_full_simulation/uut/load_store_unit_block/unit_data_valid">
-      <obj_property name="ElementShortName">unit_data_valid[2:0]</obj_property>
-      <obj_property name="ObjectShortName">unit_data_valid[2:0]</obj_property>
+      <obj_property name="ElementShortName">unit_data_valid[1:0]</obj_property>
+      <obj_property name="ObjectShortName">unit_data_valid[1:0]</obj_property>
       <obj_property name="CustomSignalColor">#00FF00</obj_property>
       <obj_property name="UseCustomSignalColor">true</obj_property>
-   </wvobject>
-   <wvobject type="logic" fp_name="/taiga_full_simulation/uut/load_store_unit_block/\genblk6.d_bram /data_bram/en">
-      <obj_property name="ElementShortName">en</obj_property>
-      <obj_property name="ObjectShortName">en</obj_property>
    </wvobject>
    <wvobject type="logic" fp_name="/taiga_full_simulation/uut/load_store_unit_block/load_complete">
       <obj_property name="ElementShortName">load_complete</obj_property>
       <obj_property name="ObjectShortName">load_complete</obj_property>
    </wvobject>
    <wvobject type="array" fp_name="/taiga_full_simulation/uut/load_store_unit_block/unit_data_valid">
-      <obj_property name="ElementShortName">unit_data_valid[2:0]</obj_property>
-      <obj_property name="ObjectShortName">unit_data_valid[2:0]</obj_property>
+      <obj_property name="ElementShortName">unit_data_valid[1:0]</obj_property>
+      <obj_property name="ObjectShortName">unit_data_valid[1:0]</obj_property>
    </wvobject>
    <wvobject type="array" fp_name="/taiga_full_simulation/uut/load_store_unit_block/unit_data_array">
-      <obj_property name="ElementShortName">unit_data_array[2:0][31:0]</obj_property>
-      <obj_property name="ObjectShortName">unit_data_array[2:0][31:0]</obj_property>
+      <obj_property name="ElementShortName">unit_data_array[1:0][31:0]</obj_property>
+      <obj_property name="ObjectShortName">unit_data_array[1:0][31:0]</obj_property>
    </wvobject>
    <wvobject type="array" fp_name="/taiga_full_simulation/uut/load_store_unit_block/final_load_data">
       <obj_property name="ElementShortName">final_load_data[31:0]</obj_property>
@@ -628,113 +441,13 @@
       <obj_property name="ElementShortName">clk</obj_property>
       <obj_property name="ObjectShortName">clk</obj_property>
    </wvobject>
-   <wvobject type="logic" fp_name="/taiga_full_simulation/uut/load_store_unit_block/\genblk8.data_cache /ls/data_valid">
-      <obj_property name="ElementShortName">data_valid</obj_property>
-      <obj_property name="ObjectShortName">data_valid</obj_property>
-   </wvobject>
-   <wvobject type="logic" fp_name="/taiga_full_simulation/uut/load_store_unit_block/\genblk8.data_cache /ls/ready">
-      <obj_property name="ElementShortName">ready</obj_property>
-      <obj_property name="ObjectShortName">ready</obj_property>
-   </wvobject>
-   <wvobject type="logic" fp_name="/taiga_full_simulation/uut/load_store_unit_block/\genblk8.data_cache /ls/new_request">
-      <obj_property name="ElementShortName">new_request</obj_property>
-      <obj_property name="ObjectShortName">new_request</obj_property>
-   </wvobject>
-   <wvobject type="logic" fp_name="/taiga_full_simulation/uut/load_store_unit_block/wb_fifo/full">
-      <obj_property name="ElementShortName">full</obj_property>
-      <obj_property name="ObjectShortName">full</obj_property>
-   </wvobject>
-   <wvobject type="logic" fp_name="/taiga_full_simulation/uut/load_store_unit_block/\genblk8.data_cache /second_cycle">
-      <obj_property name="ElementShortName">second_cycle</obj_property>
-      <obj_property name="ObjectShortName">second_cycle</obj_property>
-   </wvobject>
-   <wvobject type="logic" fp_name="/taiga_full_simulation/uut/load_store_unit_block/\genblk8.data_cache /request">
-      <obj_property name="ElementShortName">request</obj_property>
-      <obj_property name="ObjectShortName">request</obj_property>
-   </wvobject>
-   <wvobject type="logic" fp_name="/taiga_full_simulation/uut/load_store_unit_block/\genblk8.data_cache /tag_hit">
-      <obj_property name="ElementShortName">tag_hit</obj_property>
-      <obj_property name="ObjectShortName">tag_hit</obj_property>
-   </wvobject>
-   <wvobject type="logic" fp_name="/taiga_full_simulation/uut/load_store_unit_block/\genblk8.data_cache /line_complete">
-      <obj_property name="ElementShortName">line_complete</obj_property>
-      <obj_property name="ObjectShortName">line_complete</obj_property>
-   </wvobject>
-   <wvobject type="logic" fp_name="/taiga_full_simulation/uut/load_store_unit_block/\genblk8.data_cache /read_miss_complete">
-      <obj_property name="ElementShortName">read_miss_complete</obj_property>
-      <obj_property name="ObjectShortName">read_miss_complete</obj_property>
-   </wvobject>
-   <wvobject type="logic" fp_name="/taiga_full_simulation/uut/load_store_unit_block/\genblk8.data_cache /store_complete">
-      <obj_property name="ElementShortName">store_complete</obj_property>
-      <obj_property name="ObjectShortName">store_complete</obj_property>
-   </wvobject>
-   <wvobject type="logic" fp_name="/taiga_full_simulation/uut/load_store_unit_block/\genblk8.data_cache /idle">
-      <obj_property name="ElementShortName">idle</obj_property>
-      <obj_property name="ObjectShortName">idle</obj_property>
-   </wvobject>
    <wvobject type="logic" fp_name="/taiga_full_simulation/uut/load_store_unit_block/load_attributes/valid">
       <obj_property name="ElementShortName">valid</obj_property>
       <obj_property name="ObjectShortName">valid</obj_property>
    </wvobject>
-   <wvobject type="logic" fp_name="/taiga_full_simulation/uut/load_store_unit_block/\genblk8.data_cache /replacement_policy/clk">
-      <obj_property name="ElementShortName">clk</obj_property>
-      <obj_property name="ObjectShortName">clk</obj_property>
-   </wvobject>
-   <wvobject type="logic" fp_name="/taiga_full_simulation/uut/load_store_unit_block/\genblk8.data_cache /replacement_policy/rst">
-      <obj_property name="ElementShortName">rst</obj_property>
-      <obj_property name="ObjectShortName">rst</obj_property>
-   </wvobject>
-   <wvobject type="logic" fp_name="/taiga_full_simulation/uut/load_store_unit_block/\genblk8.data_cache /replacement_policy/en">
-      <obj_property name="ElementShortName">en</obj_property>
-      <obj_property name="ObjectShortName">en</obj_property>
-   </wvobject>
-   <wvobject type="array" fp_name="/taiga_full_simulation/uut/load_store_unit_block/\genblk8.data_cache /replacement_policy/one_hot">
-      <obj_property name="ElementShortName">one_hot[1:0]</obj_property>
-      <obj_property name="ObjectShortName">one_hot[1:0]</obj_property>
-   </wvobject>
-   <wvobject type="array" fp_name="/taiga_full_simulation/uut/load_store_unit_block/\genblk8.data_cache /replacement_policy/C_WIDTH">
-      <obj_property name="ElementShortName">C_WIDTH[31:0]</obj_property>
-      <obj_property name="ObjectShortName">C_WIDTH[31:0]</obj_property>
-   </wvobject>
-   <wvobject type="array" fp_name="/taiga_full_simulation/uut/load_store_unit_block/\genblk8.data_cache /update_way_conv/one_hot">
-      <obj_property name="ElementShortName">one_hot[1:0]</obj_property>
-      <obj_property name="ObjectShortName">one_hot[1:0]</obj_property>
-   </wvobject>
-   <wvobject type="array" fp_name="/taiga_full_simulation/uut/load_store_unit_block/\genblk8.data_cache /update_way_conv/int_out">
-      <obj_property name="ElementShortName">int_out[0:0]</obj_property>
-      <obj_property name="ObjectShortName">int_out[0:0]</obj_property>
-   </wvobject>
-   <wvobject type="array" fp_name="/taiga_full_simulation/uut/load_store_unit_block/\genblk8.data_cache /update_way_conv/C_WIDTH">
-      <obj_property name="ElementShortName">C_WIDTH[31:0]</obj_property>
-      <obj_property name="ObjectShortName">C_WIDTH[31:0]</obj_property>
-   </wvobject>
    <wvobject fp_name="divider2998" type="divider">
       <obj_property name="label">L2</obj_property>
       <obj_property name="DisplayName">label</obj_property>
-   </wvobject>
-   <wvobject type="array" fp_name="/taiga_full_simulation/uut/\genblk1.arb /requests">
-      <obj_property name="ElementShortName">requests[3:0]</obj_property>
-      <obj_property name="ObjectShortName">requests[3:0]</obj_property>
-   </wvobject>
-   <wvobject type="array" fp_name="/taiga_full_simulation/uut/\genblk1.arb /acks">
-      <obj_property name="ElementShortName">acks[3:0]</obj_property>
-      <obj_property name="ObjectShortName">acks[3:0]</obj_property>
-   </wvobject>
-   <wvobject type="logic" fp_name="/taiga_full_simulation/uut/\genblk1.arb /push_ready">
-      <obj_property name="ElementShortName">push_ready</obj_property>
-      <obj_property name="ObjectShortName">push_ready</obj_property>
-   </wvobject>
-   <wvobject type="logic" fp_name="/taiga_full_simulation/uut/\genblk1.arb /request_exists">
-      <obj_property name="ElementShortName">request_exists</obj_property>
-      <obj_property name="ObjectShortName">request_exists</obj_property>
-   </wvobject>
-   <wvobject type="logic" fp_name="/taiga_full_simulation/uut/\genblk1.arb /busy">
-      <obj_property name="ElementShortName">busy</obj_property>
-      <obj_property name="ObjectShortName">busy</obj_property>
-   </wvobject>
-   <wvobject type="array" fp_name="/taiga_full_simulation/uut/\genblk1.arb /l2_requests">
-      <obj_property name="ElementShortName">l2_requests[3:0]</obj_property>
-      <obj_property name="ObjectShortName">l2_requests[3:0]</obj_property>
    </wvobject>
    <wvobject type="array" fp_name="/taiga_full_simulation/l2_arb/\request[0] /request">
       <obj_property name="ElementShortName">request</obj_property>

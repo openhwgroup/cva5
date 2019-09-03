@@ -76,7 +76,7 @@ module write_back(
     endgenerate
 
     always_comb begin
-        foreach(id_done_new[i]) begin
+        for (int i=0; i< MAX_INFLIGHT_COUNT; i++) begin
             id_done_new[i] = 0;
             id_unit_select[i] = 0;
             for (int j=0; j< NUM_WB_UNITS; j++) begin
@@ -104,6 +104,10 @@ module write_back(
 
     assign ti.issue_id = issue_id;
 
+    initial begin
+        foreach(packet_table[i])
+        packet_table[i] = '0;
+    end
     //Inflight Instruction ID table
     //Stores rd_addr and whether rd_addr is zero
     always_ff @ (posedge clk) begin
@@ -150,7 +154,7 @@ module write_back(
     //Register file interaction
     assign rf_wb.rd_addr = retired_instruction_packet.rd_addr;
     assign rf_wb.id = retired_id_r;
-    assign rf_wb.commit = instruction_complete;
+    assign rf_wb.retired = instruction_complete;
     assign rf_wb.rd_nzero = retired_instruction_packet.rd_addr_nzero;
     assign rf_wb.rd_data = rds_by_id[retired_id_r];
 
