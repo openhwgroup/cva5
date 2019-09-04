@@ -17,14 +17,14 @@
    </db_ref_list>
    <zoom_setting>
       <ZoomStartTime time="0fs"></ZoomStartTime>
-      <ZoomEndTime time="656000000001fs"></ZoomEndTime>
-      <Cursor1Time time="338000000000fs"></Cursor1Time>
+      <ZoomEndTime time="25150000000001fs"></ZoomEndTime>
+      <Cursor1Time time="6590859000000fs"></Cursor1Time>
    </zoom_setting>
    <column_width_setting>
       <NameColumnWidth column_width="259"></NameColumnWidth>
-      <ValueColumnWidth column_width="93"></ValueColumnWidth>
+      <ValueColumnWidth column_width="252"></ValueColumnWidth>
    </column_width_setting>
-   <WVObjectSize size="171" />
+   <WVObjectSize size="167" />
    <wvobject type="logic" fp_name="/taiga_full_simulation/clk">
       <obj_property name="ElementShortName">clk</obj_property>
       <obj_property name="ObjectShortName">clk</obj_property>
@@ -80,56 +80,6 @@
    <wvobject type="logic" fp_name="/taiga_full_simulation/uut/fetch_block/mem_valid">
       <obj_property name="ElementShortName">mem_valid</obj_property>
       <obj_property name="ObjectShortName">mem_valid</obj_property>
-   </wvobject>
-   <wvobject type="array" fp_name="/taiga_full_simulation/uut/bp_block/br_results">
-      <obj_property name="ElementShortName">br_results</obj_property>
-      <obj_property name="ObjectShortName">br_results</obj_property>
-      <obj_property name="isExpanded"></obj_property>
-   </wvobject>
-   <wvobject type="array" fp_name="/taiga_full_simulation/uut/bp_block/if_entry">
-      <obj_property name="ElementShortName">if_entry[1:0]</obj_property>
-      <obj_property name="ObjectShortName">if_entry[1:0]</obj_property>
-      <wvobject type="array" fp_name="/taiga_full_simulation/uut/bp_block/if_entry[1]">
-         <obj_property name="ElementShortName">[1]</obj_property>
-         <obj_property name="ObjectShortName">[1]</obj_property>
-         <obj_property name="isExpanded"></obj_property>
-      </wvobject>
-      <wvobject type="array" fp_name="/taiga_full_simulation/uut/bp_block/if_entry[0]">
-         <obj_property name="ElementShortName">[0]</obj_property>
-         <obj_property name="ObjectShortName">[0]</obj_property>
-      </wvobject>
-   </wvobject>
-   <wvobject type="array" fp_name="/taiga_full_simulation/uut/bp_block/ex_entry">
-      <obj_property name="ElementShortName">ex_entry</obj_property>
-      <obj_property name="ObjectShortName">ex_entry</obj_property>
-   </wvobject>
-   <wvobject type="array" fp_name="/taiga_full_simulation/uut/bp_block/new_jump_addr">
-      <obj_property name="ElementShortName">new_jump_addr[31:0]</obj_property>
-      <obj_property name="ObjectShortName">new_jump_addr[31:0]</obj_property>
-   </wvobject>
-   <wvobject type="array" fp_name="/taiga_full_simulation/uut/bp_block/predicted_pc">
-      <obj_property name="ElementShortName">predicted_pc[1:0][31:0]</obj_property>
-      <obj_property name="ObjectShortName">predicted_pc[1:0][31:0]</obj_property>
-   </wvobject>
-   <wvobject type="array" fp_name="/taiga_full_simulation/uut/bp_block/tag_matches">
-      <obj_property name="ElementShortName">tag_matches[1:0]</obj_property>
-      <obj_property name="ObjectShortName">tag_matches[1:0]</obj_property>
-   </wvobject>
-   <wvobject type="array" fp_name="/taiga_full_simulation/uut/bp_block/replacement_way">
-      <obj_property name="ElementShortName">replacement_way[1:0]</obj_property>
-      <obj_property name="ObjectShortName">replacement_way[1:0]</obj_property>
-   </wvobject>
-   <wvobject type="array" fp_name="/taiga_full_simulation/uut/bp_block/update_way">
-      <obj_property name="ElementShortName">update_way[1:0]</obj_property>
-      <obj_property name="ObjectShortName">update_way[1:0]</obj_property>
-   </wvobject>
-   <wvobject type="array" fp_name="/taiga_full_simulation/uut/bp_block/hit_way">
-      <obj_property name="ElementShortName">hit_way[0:0]</obj_property>
-      <obj_property name="ObjectShortName">hit_way[0:0]</obj_property>
-   </wvobject>
-   <wvobject type="logic" fp_name="/taiga_full_simulation/uut/bp_block/tag_match">
-      <obj_property name="ElementShortName">tag_match</obj_property>
-      <obj_property name="ObjectShortName">tag_match</obj_property>
    </wvobject>
    <wvobject fp_name="divider7368" type="divider">
       <obj_property name="label">I Cache</obj_property>
@@ -354,6 +304,55 @@
    <wvobject type="array" fp_name="/taiga_full_simulation/uut/write_back_mux/retired_instruction_packet">
       <obj_property name="ElementShortName">retired_instruction_packet</obj_property>
       <obj_property name="ObjectShortName">retired_instruction_packet</obj_property>
+      <wvobject type="array" fp_name="/taiga_full_simulation/uut/write_back_mux/retired_instruction_packet.rd_addr">
+         <obj_property name="ElementShortName">.rd_addr[4:0]</obj_property>
+         <obj_property name="ObjectShortName">.rd_addr[4:0]</obj_property>
+         <obj_property name="isExpanded"></obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/taiga_full_simulation/uut/write_back_mux/retired_instruction_packet.rd_addr_nzero">
+         <obj_property name="ElementShortName">.rd_addr_nzero</obj_property>
+         <obj_property name="ObjectShortName">.rd_addr_nzero</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/taiga_full_simulation/uut/write_back_mux/retired_instruction_packet.is_store">
+         <obj_property name="ElementShortName">.is_store</obj_property>
+         <obj_property name="ObjectShortName">.is_store</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/taiga_full_simulation/uut/write_back_mux/retired_instruction_packet.rd_addr">
+         <obj_property name="ElementShortName">.rd_addr[4:0]</obj_property>
+         <obj_property name="ObjectShortName">.rd_addr[4:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/taiga_full_simulation/uut/write_back_mux/retired_instruction_packet.rd_addr_nzero">
+         <obj_property name="ElementShortName">.rd_addr_nzero</obj_property>
+         <obj_property name="ObjectShortName">.rd_addr_nzero</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/taiga_full_simulation/uut/write_back_mux/retired_instruction_packet.is_store">
+         <obj_property name="ElementShortName">.is_store</obj_property>
+         <obj_property name="ObjectShortName">.is_store</obj_property>
+      </wvobject>
+   </wvobject>
+   <wvobject fp_name="divider4416" type="divider">
+      <obj_property name="label">Div Unit</obj_property>
+      <obj_property name="DisplayName">label</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/taiga_full_simulation/uut/\genblk5.div_unit_block /computation_complete">
+      <obj_property name="ElementShortName">computation_complete</obj_property>
+      <obj_property name="ObjectShortName">computation_complete</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/taiga_full_simulation/uut/\genblk5.div_unit_block /div_done">
+      <obj_property name="ElementShortName">div_done</obj_property>
+      <obj_property name="ObjectShortName">div_done</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/taiga_full_simulation/uut/\genblk5.div_unit_block /start_algorithm">
+      <obj_property name="ElementShortName">start_algorithm</obj_property>
+      <obj_property name="ObjectShortName">start_algorithm</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/taiga_full_simulation/uut/\genblk5.div_unit_block /in_progress">
+      <obj_property name="ElementShortName">in_progress</obj_property>
+      <obj_property name="ObjectShortName">in_progress</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/taiga_full_simulation/uut/\genblk5.div_unit_block /stage1.reuse_result">
+      <obj_property name="ElementShortName">.reuse_result</obj_property>
+      <obj_property name="ObjectShortName">.reuse_result</obj_property>
    </wvobject>
    <wvobject fp_name="divider3000" type="divider">
       <obj_property name="label">LS Unit</obj_property>

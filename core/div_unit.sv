@@ -118,7 +118,7 @@ module div_unit
     ////////////////////////////////////////////////////
     //Output
     assign wb.rd = wb_div_result;
-    assign wb.done_next_cycle = div_done;
+    assign wb.done = div_done;
     assign wb.id = stage1.instruction_id;
     ////////////////////////////////////////////////////
     //Assertions

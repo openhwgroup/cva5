@@ -34,7 +34,7 @@ module mul_unit(
 
     logic signed [65:0] result;
     logic [1:0] mulh;
-    logic [1:0] done_next_cycle;
+    logic [1:0] done;
     instruction_id_t id [1:0];
 
     logic rs1_signed, rs2_signed;
@@ -63,15 +63,15 @@ module mul_unit(
         id[0] <= issue.instruction_id;
         id[1] <= id[0];
 
-        done_next_cycle[0] <= issue.new_request;
-        done_next_cycle[1] <= done_next_cycle[0];
+        done[0] <= issue.new_request;
+        done[1] <= done[0];
     end
 
     //Issue/write-back handshaking
     ////////////////////////////////////////////////////
     assign issue.ready = 1;
     assign wb.rd = mulh[1] ? result[63:32] : result[31:0];
-    assign wb.done_next_cycle = done_next_cycle[1];
+    assign wb.done = done[1];
     assign wb.id = id[1];
     ////////////////////////////////////////////////////
     //End of Implementation

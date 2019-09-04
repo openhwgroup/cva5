@@ -327,7 +327,7 @@ module load_store_unit (
     end
     assign ls_done = load_complete | exception_complete | store_complete;
 
-    assign wb.done_next_cycle = csr_done | ls_done;
+    assign wb.done = csr_done | ls_done;
     assign wb.id = csr_done ? csr_id : stage2_attr.instruction_id;
     ////////////////////////////////////////////////////
     //End of Implementation

@@ -84,7 +84,7 @@ module alu_unit(
     //Output
     assign issue.ready = 1;
     assign wb.rd = result;
-    assign wb.done_next_cycle = issue.new_request;
+    assign wb.done = issue.new_request;
     assign wb.id = issue.instruction_id;
 
     ////////////////////////////////////////////////////

@@ -46,7 +46,7 @@ module write_back(
 
     //aliases for write-back-interface signals
     instruction_id_t unit_instruction_id [NUM_WB_UNITS-1:0];
-    logic [NUM_WB_UNITS-1:0] unit_done_next_cycle;
+    logic [NUM_WB_UNITS-1:0] unit_done;
     logic [XLEN-1:0] unit_rd [NUM_WB_UNITS-1:0];
     /////
 
@@ -70,7 +70,7 @@ module write_back(
     generate
         for (i=0; i< NUM_WB_UNITS; i++) begin : interface_to_array_g
             assign unit_instruction_id[i] = unit_wb[i].id;
-            assign unit_done_next_cycle[i] = unit_wb[i].done_next_cycle;
+            assign unit_done[i] = unit_wb[i].done;
             assign unit_rd[i] = unit_wb[i].rd;
         end
     endgenerate
@@ -80,7 +80,7 @@ module write_back(
             id_done_new[i] = 0;
             id_unit_select[i] = 0;
             for (int j=0; j< NUM_WB_UNITS; j++) begin
-                if (unit_done_next_cycle[j] && (unit_instruction_id[j] == i[$clog2(MAX_INFLIGHT_COUNT)-1:0])) begin
+                if (unit_done[j] && (unit_instruction_id[j] == i[$clog2(MAX_INFLIGHT_COUNT)-1:0])) begin
                     id_unit_select[i] = j[$clog2(NUM_WB_UNITS)-1:0];
                     id_done_new[i] |= 1;
                 end

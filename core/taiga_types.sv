@@ -28,7 +28,6 @@ package taiga_types;
     parameter ECODE_W = 5;
 
     typedef logic[$clog2(MAX_INFLIGHT_COUNT)-1:0] instruction_id_t;
-    typedef logic[MAX_INFLIGHT_COUNT-1:0] instruction_id_one_hot_t;
     typedef logic[$clog2(NUM_WB_UNITS)-1:0] unit_id_t;
     typedef logic[1:0] branch_predictor_metadata_t;
 
@@ -297,7 +296,7 @@ package taiga_types;
 
     typedef struct packed{
         instruction_id_t id;
-        logic done_next_cycle;
+        logic done;
         logic [XLEN-1:0] rd;
     } unit_writeback_t;
 
@@ -376,7 +375,6 @@ package taiga_types;
         logic load;
         logic store;
         logic load_store_forward;
-        instruction_id_one_hot_t instruction_id_one_hot;
         instruction_id_t instruction_id;
         //exception support
         logic [31:0] pc;
@@ -395,7 +393,6 @@ package taiga_types;
         logic [XLEN-1:0] rs2;
         logic [1:0] op;
         logic reuse_result;
-        instruction_id_one_hot_t instruction_id_one_hot;
         instruction_id_t instruction_id;
     } div_inputs_t;
 
