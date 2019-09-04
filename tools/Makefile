@@ -1,6 +1,7 @@
 
 
 #MAKEFLAGS += --silent
+-include internal.mak
 MAKEFILE_DIR=$(pwd)
 TAIGA_DIR=/home/ematthew/taiga
 
@@ -31,7 +32,7 @@ COMPLIANCE_TARGET=rv32im
 #Benchmark parameters
 #Assumes binaries are in the BENCHMARK_DIR
 ###############################################################
-EMBENCH_DIR=/home/ematthew/Research/RISCV/sfu-rcl/taiga-embench/build/src
+EMBENCH_DIR=/home/ematthew/Research/RISCV/sfu-rcl/taiga-embench
 EMBENCH_BENCHMARKS = \
 aha-mont64 \
 crc32 \
@@ -94,7 +95,7 @@ lint_full:
 
 #Create hw_init files for benchmarks
 $(embench_hw) : %.hw_init : %
-	$(ELF_TO_HW_INIT) $(EMBENCH_DIR)/$</$< $@ $<.sim_init
+	$(ELF_TO_HW_INIT) $(EMBENCH_DIR)/build/src/$</$< $@ $<.sim_init
 
 #Run verilator
 $(embench_logs) : %_full.log : % $(embench_hw)
@@ -102,10 +103,6 @@ $(embench_logs) : %_full.log : % $(embench_hw)
 
 run_embench_verilator: $(embench_logs)
 	cat $^ > embench.log
-
-.PHONY: run_dhrystone_verilator
-run_dhrystone_verilator :
-	$(call verilator_local_mem_test,dhrystone,\"/home/ematthew/Research/RISCV/software/taiga-benchmarks/dhrystone.riscv.hw_init\","/dev/null","/dev/null")
 
 CRUFT= $(EMBENCH_BENCHMARKS) $(embench_hw) $(embench_sim) $(embench_logs) embench.log
 
