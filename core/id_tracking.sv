@@ -84,4 +84,8 @@ module id_tracking
 
     ////////////////////////////////////////////////////
     //Assertions
+    always_ff @ (posedge clk) begin
+        assert (!(~id_available & issued)) else $error("Issued without valid ID!");
+        assert (!(empty & (retired & ~issued))) else $error("Retired without any instruction inflight!");
+    end
 endmodule
