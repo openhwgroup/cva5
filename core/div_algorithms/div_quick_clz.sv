@@ -92,7 +92,7 @@ module div_quick_clz
 
     assign new_R = A1[C_WIDTH] ? A2[C_WIDTH-1:0] : A1[C_WIDTH-1:0];
 
-    assign B_is_zero = (B_CLZ_r == 5'b11111 && ~B_r[0]);
+    assign B_is_zero = (&B_CLZ_r) & ~B_r[0];
 
     always_ff @ (posedge clk) begin
         if (rst)
@@ -104,15 +104,10 @@ module div_quick_clz
     end
 
     always_ff @ (posedge clk) begin
-        if (rst)
-            complete <= 0;
-        else if (ack)
-            complete <= 0;
-        else if ((running & terminate) | (firstCycle & B_is_zero))
-            complete <= 1;
+        complete <= (running & terminate) | (firstCycle & B_is_zero);
     end
 
-    assign terminate = ({firstCycle, R} < {1'b0, B_r});
+    assign terminate = R < B_r;
 
     always_ff @ (posedge clk) begin
         if (firstCycle)
