@@ -110,7 +110,7 @@ module div_quick_naive
             Q <= B_is_zero ? '1 : 0;
             R <= A;
         end
-        else  if (~terminate) begin
+        else  if (~terminate & running) begin
             Q <= new_Q_bit;
             R <= new_R;
         end

@@ -112,7 +112,7 @@ module div_quick_clz
     always_ff @ (posedge clk) begin
         if (firstCycle)
             Q <= B_is_zero ? '1 : '0;
-        else  if (~terminate)
+        else  if (~terminate & running)
             Q <= new_Q_bit;
     end
 
@@ -122,7 +122,7 @@ module div_quick_clz
     always @ (posedge clk) begin
         if (firstCycle)
             R <= A_r;
-        else if (~terminate)
+        else if (~terminate & running)
             R <= new_R;
     end
 
