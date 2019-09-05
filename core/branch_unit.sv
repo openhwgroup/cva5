@@ -179,7 +179,10 @@ module branch_unit(
 
     ////////////////////////////////////////////////////
     //Trace Interface
-    assign tr_branch_misspredict = ~is_return & miss_predict;
-    assign tr_return_misspredict = is_return & miss_predict;
+    generate if (ENABLE_TRACE_INTERFACE) begin
+        assign tr_branch_misspredict = ~is_return & miss_predict;
+        assign tr_return_misspredict = is_return & miss_predict;
+    end
+    endgenerate
 
 endmodule

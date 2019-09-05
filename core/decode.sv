@@ -50,6 +50,7 @@ module decode(
 
         output logic load_store_issue,
 
+        output logic instruction_issued,
         output logic instruction_issued_no_rd,
         output logic instruction_issued_with_rd,
         output logic illegal_instruction,
@@ -97,7 +98,6 @@ module decode(
     logic [NUM_UNITS-1:0] issue_ready;
     logic [NUM_UNITS-1:0] issue;
 
-    logic instruction_issued;
     logic valid_opcode;
 
     //LS-inputs
@@ -432,15 +432,17 @@ module decode(
 
     ////////////////////////////////////////////////////
     //Trace Interface
-    assign tr_operand_stall = (|issue_ready) & issue_valid & ~load_store_operands_ready;
-    assign tr_unit_stall = ~(|issue_ready) & issue_valid & load_store_operands_ready;
-    assign tr_no_id_stall = (|issue_ready) & (fb_valid & ~ti.id_available & ~gc_issue_hold & ~gc_fetch_flush) & load_store_operands_ready;
-    assign tr_no_instruction_stall = ~fb_valid;
-    assign tr_other_stall = fb_valid & ~instruction_issued & ~(tr_operand_stall | tr_unit_stall | tr_no_id_stall | tr_no_instruction_stall) & ~gc_fetch_flush;
+    generate if (ENABLE_TRACE_INTERFACE) begin
+        assign tr_operand_stall = (|issue_ready) & issue_valid & ~load_store_operands_ready;
+        assign tr_unit_stall = ~(|issue_ready) & issue_valid & load_store_operands_ready;
+        assign tr_no_id_stall = (|issue_ready) & (fb_valid & ~ti.id_available & ~gc_issue_hold & ~gc_fetch_flush) & load_store_operands_ready;
+        assign tr_no_instruction_stall = ~fb_valid;
+        assign tr_other_stall = fb_valid & ~instruction_issued & ~(tr_operand_stall | tr_unit_stall | tr_no_id_stall | tr_no_instruction_stall) & ~gc_fetch_flush;
 
-    assign tr_instruction_issued_dec = instruction_issued;
-    assign tr_instruction_pc_dec = fb.pc;
-    assign tr_instruction_data_dec = fb.instruction;
-
+        assign tr_instruction_issued_dec = instruction_issued;
+        assign tr_instruction_pc_dec = fb.pc;
+        assign tr_instruction_data_dec = fb.instruction;
+    end
+    endgenerate
 
 endmodule

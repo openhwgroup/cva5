@@ -109,6 +109,7 @@ module taiga (
     logic illegal_instruction;
     logic instruction_queue_empty;
 
+    logic instruction_issued;
     logic instruction_issued_no_rd;
     logic instruction_issued_with_rd;
     logic instruction_complete;

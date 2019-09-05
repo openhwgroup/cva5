@@ -60,7 +60,10 @@ module pre_decode
 
     logic rs1_link, rd_link, rs1_eq_rd, use_ras;
 
+    logic bypass_condition;
+
     fetch_buffer_packet_t data_in;
+    fetch_buffer_packet_t data_out;
     fifo_interface #(.DATA_WIDTH($bits(fetch_buffer_packet_t))) fb_fifo();
 
     ////////////////////////////////////////////////////
@@ -68,11 +71,29 @@ module pre_decode
     //FIFO
     assign buffer_reset = rst | gc_fetch_flush;
 
-    assign fb_fifo.push = pre_decode_push;
-    assign fb_fifo.pop = pre_decode_pop;
+    assign fb_fifo.push = pre_decode_push & ~bypass_condition;
+    assign fb_fifo.pop = pre_decode_pop & fb_fifo.valid;
     assign fb_fifo.data_in = data_in;
-    assign fb = fb_fifo.data_out;
-    assign fb_valid = fb_fifo.valid;
+    assign data_out = fb_fifo.data_out;
+
+    assign bypass_condition = fb_fifo.empty & (~fb_valid | (fb_valid & pre_decode_pop));
+
+    //Bypass overrides
+    always_ff @ (posedge clk) begin
+        if (pre_decode_push & bypass_condition)
+            fb <= data_in;
+        else if (pre_decode_pop)
+            fb <= data_out;
+    end
+
+    always_ff @ (posedge clk) begin
+        if (buffer_reset)
+            fb_valid <= 0;
+        else if (pre_decode_push)
+            fb_valid <= 1;
+        else if (pre_decode_pop & fb_fifo.empty)
+            fb_valid <= 0;
+    end
 
     taiga_fifo #(
             .DATA_WIDTH($bits(fetch_buffer_packet_t)),

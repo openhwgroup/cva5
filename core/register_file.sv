@@ -28,6 +28,8 @@ module register_file(
         input logic rst,
         input logic inuse_clear,
         input logic gc_supress_writeback,
+
+        input logic instruction_issued,
         register_file_writeback_interface.unit rf_wb,
         register_file_decode_interface.unit rf_decode,
 
@@ -116,8 +118,11 @@ module register_file(
 
     ////////////////////////////////////////////////////
     //Trace Interface
-    assign tr_rs1_forwarding_needed = rs1_inuse & rf_decode.uses_rs1 & ~tr_rs1_and_rs2_forwarding_needed;
-    assign tr_rs2_forwarding_needed = rs2_inuse & rf_decode.uses_rs2 & ~tr_rs1_and_rs2_forwarding_needed;
-    assign tr_rs1_and_rs2_forwarding_needed = (rs1_inuse & rf_decode.uses_rs1) & (rs2_inuse & rf_decode.uses_rs2);
+    generate if (ENABLE_TRACE_INTERFACE) begin
+        assign tr_rs1_forwarding_needed = instruction_issued & rs1_inuse & rf_decode.uses_rs1 & ~tr_rs1_and_rs2_forwarding_needed;
+        assign tr_rs2_forwarding_needed = instruction_issued & rs2_inuse & rf_decode.uses_rs2 & ~tr_rs1_and_rs2_forwarding_needed;
+        assign tr_rs1_and_rs2_forwarding_needed = instruction_issued & (rs1_inuse & rf_decode.uses_rs1) & (rs2_inuse & rf_decode.uses_rs2);
+    end
+    endgenerate
 
 endmodule
