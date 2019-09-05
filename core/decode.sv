@@ -82,7 +82,7 @@ module decode(
 
     logic nop;
 
-    logic  register_in_use_by_load_op [31:0];
+    (* ramstyle = "MLAB, no_rw_check" *) logic  register_in_use_by_load_op [31:0];
 
     logic store_data_in_use_by_load_op;
     logic load_store_forward_possible;

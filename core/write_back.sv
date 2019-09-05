@@ -42,7 +42,7 @@ module write_back(
     //////////////////////////////////////
 
     //Inflight packetscd
-    logic[$bits(inflight_instruction_packet)-1:0] packet_table [MAX_INFLIGHT_COUNT-1:0];
+    (* ramstyle = "MLAB, no_rw_check" *) logic[$bits(inflight_instruction_packet)-1:0] packet_table [MAX_INFLIGHT_COUNT-1:0];
 
     //aliases for write-back-interface signals
     instruction_id_t unit_instruction_id [NUM_WB_UNITS-1:0];

@@ -29,12 +29,12 @@ module ras (
         ras_interface.self ras
         );
 
-    logic[31:0] lut_ram [RAS_DEPTH-1:0];
+    (* ramstyle = "MLAB, no_rw_check" *) logic[31:0] lut_ram [RAS_DEPTH-1:0];
 
     localparam RAS_DEPTH_W = $clog2(RAS_DEPTH);
     logic[RAS_DEPTH_W-1:0] read_index;
     logic[RAS_DEPTH_W-1:0] write_index;
-    logic valid_chain[RAS_DEPTH-1:0];
+    (* ramstyle = "MLAB, no_rw_check" *) logic valid_chain[RAS_DEPTH-1:0];
     logic valid_chain_update;
     ///////////////////////////////////////////////////////
     //For simulation purposes

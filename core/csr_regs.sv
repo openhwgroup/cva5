@@ -80,7 +80,7 @@ module csr_regs (
     logic [1:0] privilege_level, next_privilege_level;
 
     //scratch ram
-    logic[XLEN-1:0] scratch_regs [31:0];//Only 0x1 and 0x3 used by supervisor and machine mode respectively
+    (* ramstyle = "MLAB, no_rw_check" *) logic[XLEN-1:0] scratch_regs [31:0];//Only 0x1 and 0x3 used by supervisor and machine mode respectively
     logic[XLEN-1:0] scratch_out;
 
 
