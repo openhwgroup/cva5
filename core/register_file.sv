@@ -63,12 +63,12 @@ module register_file(
             register[rf_wb.rd_addr] <= rf_wb.rd_data;
     end
 
-    inuse inuse_mem (.*,
-            .clr(inuse_clear),
-            .rs1_addr(rf_decode.rs1_addr),.rs2_addr(rf_decode.rs2_addr), .decode_rd_addr(rf_decode.future_rd_addr),
-            .wb_rd_addr(rf_wb.rd_addr),
+    id_inuse inuse_mem (.*,
+            .rs1_addr(rf_decode.rs1_addr),.rs2_addr(rf_decode.rs2_addr), .issued_rd_addr(rf_decode.future_rd_addr),
             .issued(rf_decode.instruction_issued),
-            .completed(valid_write & in_use_match),
+            .issue_id(rf_decode.id),
+            .retired_id(rf_wb.id),
+            .retired(valid_write),
             .rs1_inuse(rs1_inuse),
             .rs2_inuse(rs2_inuse)
             );
@@ -78,7 +78,6 @@ module register_file(
             in_use_by[rf_decode.future_rd_addr] <= rf_decode.id;
     end
 
-    assign in_use_match = (rf_wb.id == in_use_by[rf_wb.rd_addr]);
     assign rf_wb.rs1_id = in_use_by[rf_decode.rs1_addr];
     assign rf_wb.rs2_id = in_use_by[rf_decode.rs2_addr];
 

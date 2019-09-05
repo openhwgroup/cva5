@@ -90,7 +90,7 @@
 ../core/pre_decode.sv
 ../core/decode.sv  
 
-../core/inuse.sv 
+../core/id_inuse.sv
 ../core/register_file.sv  
 
 ../core/id_tracking.sv
