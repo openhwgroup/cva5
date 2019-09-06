@@ -95,7 +95,6 @@ module taiga (
     logic gc_fetch_flush;
     logic gc_fetch_pc_override;
     logic gc_supress_writeback;
-    logic inuse_clear;
     instruction_id_t oldest_id;
     logic load_store_issue;
     logic [31:0] gc_fetch_pc;

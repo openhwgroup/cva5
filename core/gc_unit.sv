@@ -66,8 +66,6 @@ module gc_unit(
         output logic gc_fetch_pc_override,
         output logic gc_supress_writeback,
 
-        output logic inuse_clear,
-
         output logic [31:0] gc_fetch_pc,
 
         //Write-back to Load-Store Unit
@@ -128,11 +126,10 @@ module gc_unit(
     //     *If in-order mode and inflight queue empty, disable zero cycle write-back (eg. ALU)
     //*Hold fetch during potential fetch exception, when fetch buffer drained, if no other exceptions trigger exception
 
-    typedef enum {RST_STATE, PRE_CLEAR_STATE, CLEAR_STATE, IDLE_STATE, TLB_CLEAR_STATE, IQ_DRAIN, IQ_DISCARD} gc_state;
+    typedef enum {RST_STATE, IDLE_STATE, TLB_CLEAR_STATE, IQ_DRAIN, IQ_DISCARD} gc_state;
     gc_state state;
     gc_state next_state;
 
-    logic clear_done;
     logic tlb_clear_done;
 
     logic i_fence_flush;
@@ -182,8 +179,7 @@ module gc_unit(
     assign gc_fetch_flush = branch_flush | gc_fetch_pc_override;
 
     always_ff @ (posedge clk) begin
-        gc_issue_hold <= issue.new_request || is_csr || processing_csr || (next_state inside {PRE_CLEAR_STATE, CLEAR_STATE, TLB_CLEAR_STATE, IQ_DRAIN, IQ_DISCARD});
-        inuse_clear <= (next_state == CLEAR_STATE);
+        gc_issue_hold <= issue.new_request || is_csr || processing_csr || (next_state inside {TLB_CLEAR_STATE, IQ_DRAIN, IQ_DISCARD});
     end
 
     always_ff @ (posedge clk) begin
@@ -191,7 +187,7 @@ module gc_unit(
     end
 
     always_ff @ (posedge clk) begin
-        gc_supress_writeback <= next_state inside {PRE_CLEAR_STATE, CLEAR_STATE, TLB_CLEAR_STATE, IQ_DISCARD} ? 1 : 0;
+        gc_supress_writeback <= next_state inside {TLB_CLEAR_STATE, IQ_DISCARD} ? 1 : 0;
     end
 
     ////////////////////////////////////////////////////
@@ -206,9 +202,7 @@ module gc_unit(
     always_comb begin
         next_state = state;
         case (state)
-            RST_STATE : next_state = PRE_CLEAR_STATE;
-            PRE_CLEAR_STATE : next_state = CLEAR_STATE;
-            CLEAR_STATE : if (clear_done) next_state = IDLE_STATE;
+            RST_STATE : next_state = IDLE_STATE;
             IDLE_STATE : if (ls_exception_valid) next_state = IQ_DISCARD;
             TLB_CLEAR_STATE : if (tlb_clear_done) next_state = IDLE_STATE;
             IQ_DRAIN : if (ls_exception.id == oldest_id) next_state = IQ_DISCARD;
@@ -217,8 +211,7 @@ module gc_unit(
         endcase
     end
 
-    //Counters for clear and tlb clearing states
-    shift_counter #(.DEPTH(CLEAR_DEPTH)) clear_counter (.*, .start((state == PRE_CLEAR_STATE) && (next_state == CLEAR_STATE)), .done(clear_done));
+    //Counters for tlb clearing states
     shift_counter #(.DEPTH(TLB_CLEAR_DEPTH)) tlb_clear_counter (.*, .start((state == IDLE_STATE) && (next_state == TLB_CLEAR_STATE)), .done(tlb_clear_done));
 
     ////////////////////////////////////////////////////

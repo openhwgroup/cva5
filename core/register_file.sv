@@ -26,7 +26,6 @@ import taiga_types::*;
 module register_file(
         input logic clk,
         input logic rst,
-        input logic inuse_clear,
         input logic gc_supress_writeback,
 
         input logic instruction_issued,
