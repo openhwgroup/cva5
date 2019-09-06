@@ -57,7 +57,7 @@ module branch_predictor (
     cycler #(BRANCH_PREDICTOR_WAYS) replacement_policy (.*, .en(1'b1), .one_hot(replacement_way));
 
     genvar i;
-    generate
+    generate if (USE_BRANCH_PREDICTOR)
     for (i=0; i<BRANCH_PREDICTOR_WAYS; i++) begin : branch_tag_banks
         branch_predictor_ram #(.C_DATA_WIDTH($bits(branch_table_entry_t)), .C_DEPTH(BRANCH_TABLE_ENTRIES))
         tag_bank (.*,
@@ -66,7 +66,7 @@ module branch_predictor (
     end
     endgenerate
 
-    generate
+    generate if (USE_BRANCH_PREDICTOR)
     for (i=0; i<BRANCH_PREDICTOR_WAYS; i++) begin : branch_table_banks
         branch_predictor_ram #(.C_DATA_WIDTH(32), .C_DEPTH(BRANCH_TABLE_ENTRIES))
         addr_table (.*,
@@ -75,7 +75,7 @@ module branch_predictor (
     end
     endgenerate
 
-    generate
+    generate if (USE_BRANCH_PREDICTOR)
     for (i=0; i<BRANCH_PREDICTOR_WAYS; i++) begin : branch_hit_detection
             assign tag_matches[i] = ({if_entry[i].valid, if_entry[i].tag} == {1'b1, bp.if_pc[31:32-BTAG_W]});
     end
