@@ -154,7 +154,7 @@ Set the UART's **slave address** to 0x6000_0000. This is done by Navigating to t
 
 
 ### Adding and Connecting the AXI Interconnect IP Cores:
-The Interconnect is** added after everything else has been setup** to help mitigate some errors that prevent the synthesis of the system.
+The Interconnect is **added after everything else has been setup** to help mitigate some errors that prevent the synthesis of the system.
 
 Add the core AXI Interconnect (Not AXI Smartconnect).
 
