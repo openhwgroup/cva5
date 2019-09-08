@@ -2,7 +2,7 @@
 ../core/taiga_types.sv  
 ../l2_arbiter/l2_config_and_types.sv 
 ../l2_arbiter/l2_interfaces.sv
-
+../l2_arbiter/l2_external_interfaces.sv
 ../local_memory/local_memory_interface.sv 
 ../local_memory/local_mem.sv
 

@@ -34,8 +34,8 @@ module l1_arbiter
         output sc_complete,
         output sc_success,
 
-        l1_arbiter_request_interface.arb l1_request[L1_CONNECTIONS-1:0],
-        l1_arbiter_return_interface.arb l1_response[L1_CONNECTIONS-1:0]
+        l1_arbiter_request_interface.slave l1_request[L1_CONNECTIONS-1:0],
+        l1_arbiter_return_interface.slave l1_response[L1_CONNECTIONS-1:0]
         );
 
     l2_request_t[L1_CONNECTIONS-1:0] l2_requests;
