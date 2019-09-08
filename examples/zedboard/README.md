@@ -153,8 +153,13 @@ Set the UART's **sin and sout** pins to external. This is done by expanding the 
 Set the UART's **slave address** to 0x6000_0000. This is done by Navigating to the Address Editor, finding "S_AXI" under taiga_wrapper_xilinx_0 -> m_axi -> Unmapped Slaves, righting clicking and "Assign Address". Then changing "Offset Address" to 0x6000_0000. Range can stay at 64K.
 
 
+### Autogenerate the HDL Wrapper for this Block Design:
+Under Sources, right click on the design_1.bd file, and select generate HDL Wrapper and let Vivado auto-generate one. 
+
+Set the newly generated as the Top file which is one of the options if you right click on the HDL Wrapper.
+
 ### Adding and Connecting the AXI Interconnect IP Cores:
-The Interconnect is **added after everything else has been setup** to help mitigate some errors that prevent the synthesis of the system.
+The Interconnect is **added after everything else has been setup and the HDL wrapper has been generated** to help mitigate some errors that prevent the synthesis of the system.
 
 Add the core AXI Interconnect (Not AXI Smartconnect).
 
@@ -167,11 +172,6 @@ Connect the **interconnect_aresetn** output from the Processor System Reset to t
 Connect the **m_axi** output from Taiga to the AXI Interconnect's S00_AXI input.
 
 Connect the **M00_AXI** output from the AXI Interconnect to the UART's S_AXI input.
-
-### Autogenerate the HDL Wrapper for this Block Design:
-Under Sources, right click on the design_1.bd file, and select generate HDL Wrapper and let Vivado auto-generate one. 
-
-Set the newly generated as the Top file which is one of the options if you right click on the HDL Wrapper.
 
 ### Sythesize Design:
 From the Flow Navigator, run Generate Bitstream.
