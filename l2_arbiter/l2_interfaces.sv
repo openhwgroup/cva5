@@ -1,5 +1,5 @@
 /*
- * Copyright © 2017, 2019 Eric Matthews,  Lesley Shannon
+ * Copyright © 2017-2019 Eric Matthews,  Lesley Shannon
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,66 +21,6 @@
  */
 
 import l2_config_and_types::*;
-
-interface l2_requester_interface;
-    l2_request_t request;
-    logic request_push;
-    logic request_full;
-
-    logic [31:2] inv_addr;
-    logic inv_valid;
-    logic inv_ack;
-
-    logic con_result;
-    logic con_valid;
-
-    logic [31:0] wr_data;
-    logic wr_data_push;
-    logic data_full;
-
-    logic [31:0] rd_data;
-    logic [L2_SUB_ID_W-1:0] rd_sub_id;
-    logic rd_data_valid;
-    logic rd_data_ack;
-
-    modport master (output request, request_push, input request_full,
-            input inv_addr, inv_valid, output  inv_ack,
-            input con_result, con_valid,
-            output wr_data, wr_data_push, input data_full,
-            input rd_data, rd_sub_id, rd_data_valid, output rd_data_ack);
-
-    modport slave (input request, request_push, output request_full,
-            output inv_addr, inv_valid, input  inv_ack,
-            output con_result, con_valid,
-            input wr_data, wr_data_push, output data_full,
-            output rd_data, rd_sub_id, rd_data_valid, input rd_data_ack);
-endinterface
-
-
-interface l2_memory_interface;
-    l2_mem_request_t request;
-    logic request_pop;
-    logic request_valid;
-
-    logic abort;
-
-    logic [31:0] wr_data;
-    logic wr_data_valid;
-    logic wr_data_read;
-
-    logic [31:0] rd_data;
-    logic  [L2_ID_W-1:0] rd_id;
-    logic rd_data_valid;
-
-    modport master (output request, request_valid, abort, input request_pop,
-            output wr_data, wr_data_valid, input wr_data_read,
-            input rd_data, rd_id, rd_data_valid);
-
-    modport slave (input request, request_valid, abort, output request_pop,
-            input wr_data, wr_data_valid, output wr_data_read,
-            output rd_data, rd_id, rd_data_valid);
-endinterface
-
 
 interface l2_fifo_interface #(parameter DATA_WIDTH = 32);
     logic push;

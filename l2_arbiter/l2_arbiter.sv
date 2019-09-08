@@ -28,7 +28,7 @@ module l2_arbiter (
         input logic rst,
 
         l2_requester_interface.slave request [L2_NUM_PORTS-1:0],
-        l2_memory_interface.slave mem
+        l2_memory_interface.master mem
         );
 
     l2_arbitration_interface arb();
@@ -47,6 +47,8 @@ module l2_arbiter (
 
     l2_fifo_interface #(.DATA_WIDTH(32 + L2_ID_W)) mem_returndata_fifo();
 
+    l2_mem_request_t mem_addr_fifo_data_out;
+    l2_request_t requests_in[L2_NUM_PORTS-1:0];
 
     logic advance;
     l2_request_t arb_request;
@@ -86,13 +88,22 @@ module l2_arbiter (
         for (i=0; i < L2_NUM_PORTS; i++) begin
             //Requester FIFO side
             assign input_fifos[i].push = request[i].request_push;
-            assign input_fifos[i].data_in = request[i].request;
+
+            //Repack input attributes
+            assign requests_in[i].addr = request[i].addr;
+			assign requests_in[i].be = request[i].be;
+			assign requests_in[i].rnw = request[i].rnw;
+			assign requests_in[i].is_amo = request[i].is_amo;
+			assign requests_in[i].amo_type_or_burst_size = request[i].amo_type_or_burst_size;
+			assign requests_in[i].sub_id = request[i].sub_id;
+            assign input_fifos[i].data_in = reqests_in[i];
+
             assign input_fifos[i].pop = input_fifos[i].valid & arb.grantee_v[i] & ~mem_addr_fifo.full;
 
             assign request[i].request_full =  input_fifos[i].full;
 
             //FIFO instantiation
-            l2_fifo #(.DATA_WIDTH($bits(l2_request_t)), .FIFO_DEPTH(L2_INPUT_FIFO_DEPTHS[i]))  input_fifo (.*, .fifo(input_fifos[i]));
+            l2_fifo #(.DATA_WIDTH($bits(l2_request_t)), .FIFO_DEPTH(L2_INPUT_FIFO_DEPTHS))  input_fifo (.*, .fifo(input_fifos[i]));
 
             //Arbiter FIFO side
             assign requests[i] = input_fifos[i].data_out;
@@ -112,7 +123,7 @@ module l2_arbiter (
             assign request[i].data_full =  input_data_fifos[i].full;
 
             //FIFO instantiation
-            l2_fifo #(.DATA_WIDTH(32), .FIFO_DEPTH(L2_INPUT_FIFO_DEPTHS[i])) input_data_fifo (.*, .fifo(input_data_fifos[i]));
+            l2_fifo #(.DATA_WIDTH(32), .FIFO_DEPTH(L2_INPUT_FIFO_DEPTHS)) input_data_fifo (.*, .fifo(input_data_fifos[i]));
 
             //Arbiter FIFO side
             assign input_data_fifos[i].pop = (data_attributes.valid && (current_attr.id == i) && ~mem_data_fifo.full);
@@ -143,7 +154,14 @@ module l2_arbiter (
     assign mem_request.id = {arb.grantee_i, arb_request.sub_id};
 
     assign mem_addr_fifo.data_in = mem_request;
-    assign mem.request = mem_addr_fifo.data_out;
+
+    //unpack memory request attributes
+    assign mem_addr_fifo_data_out = mem_addr_fifo.data_out;
+	assign mem.addr = mem_addr_fifo_data_out.addr;
+	assign mem.rnw = mem_addr_fifo_data_out.rnw;
+	assign mem.be = mem_addr_fifo_data_out.be;
+	assign mem.is_amo = mem_addr_fifo_data_out.is_amo;
+	assign mem.amo_type_or_burst_size = mem_addr_fifo_data_out.amo_type_or_burst_size;
 
     l2_fifo #(.DATA_WIDTH($bits(l2_mem_request_t)), .FIFO_DEPTH(L2_MEM_ADDR_FIFO_DEPTH))  input_fifo (.*, .fifo(mem_addr_fifo));
 
@@ -204,7 +222,7 @@ module l2_arbiter (
             assign request[i].inv_valid = inv_response_fifos[i].valid;
 
             //FIFO instantiation
-            l2_fifo #(.DATA_WIDTH(30), .FIFO_DEPTH(L2_INVALIDATION_FIFO_DEPTHS[i])) inv_response_fifo (.*, .fifo(inv_response_fifos[i]));
+            l2_fifo #(.DATA_WIDTH(30), .FIFO_DEPTH(L2_INVALIDATION_FIFO_DEPTHS)) inv_response_fifo (.*, .fifo(inv_response_fifos[i]));
             //Arbiter side
             assign inv_response_fifos[i].push = reserv_valid & reserv_store  & ~reserv_id_v[i];
             assign inv_response_fifos[i].data_in = requests[i].addr;
@@ -271,7 +289,7 @@ module l2_arbiter (
             assign request[i].rd_data_valid = returndata_fifos[i].valid;
 
             //FIFO instantiation
-            l2_fifo #(.DATA_WIDTH(32 + L2_SUB_ID_W), .FIFO_DEPTH(L2_READ_RETURN_FIFO_DEPTHS[i])) returndata_fifo (.*, .fifo(returndata_fifos[i]));
+            l2_fifo #(.DATA_WIDTH(32 + L2_SUB_ID_W), .FIFO_DEPTH(L2_READ_RETURN_FIFO_DEPTHS)) returndata_fifo (.*, .fifo(returndata_fifos[i]));
             //Arbiter side
             assign returndata_fifos[i].push = return_push[i];
             assign returndata_fifos[i].data_in = {mem_return_data.sub_id, mem_return_data.data};

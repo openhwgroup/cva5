@@ -30,8 +30,8 @@
 ../core/taiga_fifo.sv  
 ../core/shift_counter.sv
 
-../core/intel_byte_enable_ram.sv  
-../core/xilinx_byte_enable_ram.sv  
+../core/intel/intel_byte_enable_ram.sv
+../core/xilinx/xilinx_byte_enable_ram.sv
 ../core/byte_en_BRAM.sv 
 
 ../core/one_hot_to_integer.sv  

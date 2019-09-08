@@ -1,5 +1,5 @@
 /*
- * Copyright © 2017 Eric Matthews,  Lesley Shannon
+ * Copyright © 2017-2019 Eric Matthews,  Lesley Shannon
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -104,7 +104,7 @@ module axi_to_arb
 
 
     //AMO read modify write support ****************************************************
-    assign read_modify_write = l2.request.is_amo && (l2.request.amo_type_or_burst_size != AMO_LR || l2.request.amo_type_or_burst_size != AMO_SC);
+    assign read_modify_write = l2.is_amo && (l2.amo_type_or_burst_size != AMO_LR || l2.amo_type_or_burst_size != AMO_SC);
 
     always_ff @ (posedge clk) begin
         if (rst)
@@ -129,20 +129,20 @@ module axi_to_arb
     always_ff @ (posedge clk) begin
         if (rst)
             read_count <= 0;
-        else if (axi_rvalid && (axi_rid == l2.request.id))
+        else if (axi_rvalid && (axi_rid == l2.id))
             read_count <= read_count + 1;
     end
 
     assign amo_alu_inputs.rs1_load = axi_rdata;
     assign amo_alu_inputs.rs2 = l2.wr_data;
-    assign amo_alu_inputs.op = l2.request.amo_type_or_burst_size;
+    assign amo_alu_inputs.op = l2.amo_type_or_burst_size;
 
     amo_alu amo_unit (.*, .result(amo_result));
 
     //TODO:  assumption that all data caches have same line size, would have to update wrt the burst size to be safe if they have different line lengths
     //also update araddr
     always_ff @ (posedge clk) begin
-        if (axi_rvalid && (read_count == l2.request.addr[DCACHE_SUB_LINE_ADDR_W:0]))
+        if (axi_rvalid && (read_count == l2.addr[DCACHE_SUB_LINE_ADDR_W:0]))
             amo_result_r <= amo_result;
     end
 
@@ -151,12 +151,12 @@ module axi_to_arb
             amo_write_ready <= 0;
         else if (pop)
             amo_write_ready <= 0;
-        else if (l2.request.is_amo && axi_rvalid && read_count == l2.request.addr[DCACHE_SUB_LINE_ADDR_W:0])
+        else if (l2.is_amo && axi_rvalid && read_count == l2.addr[DCACHE_SUB_LINE_ADDR_W:0])
             amo_write_ready <= 1;
     end
     //End AMO
 
-    assign burst_count = l2.request.amo_type_or_burst_size;
+    assign burst_count = l2.amo_type_or_burst_size;
 
     //read constants
     assign axi_arlen = burst_count; //
@@ -165,9 +165,9 @@ module axi_to_arb
     assign axi_arsize = 3'b010;//4 bytes
     assign axi_arcache = 4'b0011; //bufferable cacheable memory
     assign axi_arport = '0;
-    assign axi_arid = l2.request.id;
+    assign axi_arid = l2.id;
 
-    assign axi_araddr ={l2.request.addr[29:DCACHE_SUB_LINE_ADDR_W],  {DCACHE_SUB_LINE_ADDR_W{1'b0}}, 2'b00};
+    assign axi_araddr ={l2.addr[29:DCACHE_SUB_LINE_ADDR_W],  {DCACHE_SUB_LINE_ADDR_W{1'b0}}, 2'b00};
 
     assign write_reference_burst_count = read_modify_write ? 0 : burst_count;
 
@@ -179,11 +179,11 @@ module axi_to_arb
     assign axi_awcache = 4'b0011;//bufferable cacheable memory
     assign axi_awport = '0;
 
-    assign axi_awaddr ={l2.request.addr, 2'b00};
+    assign axi_awaddr ={l2.addr, 2'b00};
 
     assign axi_wdata = read_modify_write ? amo_result_r : l2.wr_data;
 
-    assign axi_wstrb =read_modify_write ? '1 : l2.request.be;
+    assign axi_wstrb =read_modify_write ? '1 : l2.be;
 
 
     //Done when read request sent, or slave ack on write data
@@ -196,7 +196,7 @@ module axi_to_arb
             axi_arvalid <= 0;
         else if (axi_arvalid & axi_arready)
             axi_arvalid <= 0;
-        else if (l2.request_valid & l2.request.rnw & ~address_phase_complete)
+        else if (l2.request_valid & l2.rnw & ~address_phase_complete)
             axi_arvalid <= 1;
     end
 
@@ -204,7 +204,7 @@ module axi_to_arb
     always_ff @ (posedge clk) begin
         if (rst)
             axi_awvalid <= 0;
-        else if (l2.wr_data_valid & l2.request_valid & (~l2.request.rnw | amo_write_ready) & ~write_in_progress)
+        else if (l2.wr_data_valid & l2.request_valid & (~l2.rnw | amo_write_ready) & ~write_in_progress)
             axi_awvalid <= 1;
         else if (axi_awready)
             axi_awvalid <= 0;
@@ -215,7 +215,7 @@ module axi_to_arb
             write_in_progress <= 0;
         else if (axi_bvalid)
             write_in_progress <= 0;
-        else if (l2.wr_data_valid & l2.request_valid & (~l2.request.rnw | amo_write_ready))
+        else if (l2.wr_data_valid & l2.request_valid & (~l2.rnw | amo_write_ready))
             write_in_progress <= 1;
     end
 
@@ -260,3 +260,4 @@ module axi_to_arb
     assign l2.rd_data_valid = axi_rvalid;
 
 endmodule
+

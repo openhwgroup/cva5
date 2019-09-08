@@ -1,5 +1,5 @@
 /*
- * Copyright © 2017 Eric Matthews,  Lesley Shannon
+ * Copyright © 2017-2019 Eric Matthews,  Lesley Shannon
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,8 +34,8 @@ module l1_arbiter
         output sc_complete,
         output sc_success,
 
-        l1_arbiter_request_interface.slave l1_request[L1_CONNECTIONS-1:0],
-        l1_arbiter_return_interface.slave l1_response[L1_CONNECTIONS-1:0]
+        l1_arbiter_request_interface.arb l1_request[L1_CONNECTIONS-1:0],
+        l1_arbiter_return_interface.arb l1_response[L1_CONNECTIONS-1:0]
         );
 
     l2_request_t[L1_CONNECTIONS-1:0] l2_requests;
@@ -156,10 +156,23 @@ module l1_arbiter
     //    endgenerate
 
     always_comb begin
-        l2.request = l2_requests[L1_CONNECTIONS-1];
+        //l2.request = l2_requests[L1_CONNECTIONS-1];
+        l2.addr = l2_requests[L1_CONNECTIONS-1].addr;
+        l2.rnw = l2_requests[L1_CONNECTIONS-1].rnw;
+        l2.be = l2_requests[L1_CONNECTIONS-1].be;
+        l2.is_amo = l2_requests[L1_CONNECTIONS-1].is_amo;
+        l2.amo_type_or_burst_size = l2_requests[L1_CONNECTIONS-1].amo_type_or_burst_size;
+        l2.sub_id = l2_requests[L1_CONNECTIONS-1].sub_id;
         for (int i = L1_CONNECTIONS-2; i >=0; i--) begin
-            if (requests[i])
-                l2.request = l2_requests[i];
+            if (requests[i]) begin
+                //l2.request = l2_requests[i];
+		l2.addr = l2_requests[i].addr;
+                l2.rnw = l2_requests[i].rnw;
+                l2.be = l2_requests[i].be;
+                l2.is_amo = l2_requests[i].is_amo;
+                l2.amo_type_or_burst_size = l2_requests[i].amo_type_or_burst_size;
+                l2.sub_id = l2_requests[i].sub_id;
+			end
         end
     end
 
@@ -173,3 +186,4 @@ module l1_arbiter
 
 
 endmodule
+

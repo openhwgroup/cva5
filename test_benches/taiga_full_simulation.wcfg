@@ -16,15 +16,15 @@
       </db_ref>
    </db_ref_list>
    <zoom_setting>
-      <ZoomStartTime time="0fs"></ZoomStartTime>
-      <ZoomEndTime time="25150000000001fs"></ZoomEndTime>
-      <Cursor1Time time="6590859000000fs"></Cursor1Time>
+      <ZoomStartTime time="3978080000fs"></ZoomStartTime>
+      <ZoomEndTime time="3994700001fs"></ZoomEndTime>
+      <Cursor1Time time="3991800000fs"></Cursor1Time>
    </zoom_setting>
    <column_width_setting>
       <NameColumnWidth column_width="259"></NameColumnWidth>
-      <ValueColumnWidth column_width="252"></ValueColumnWidth>
+      <ValueColumnWidth column_width="248"></ValueColumnWidth>
    </column_width_setting>
-   <WVObjectSize size="167" />
+   <WVObjectSize size="164" />
    <wvobject type="logic" fp_name="/taiga_full_simulation/clk">
       <obj_property name="ElementShortName">clk</obj_property>
       <obj_property name="ObjectShortName">clk</obj_property>
@@ -125,10 +125,6 @@
       <obj_property name="ElementShortName">gc_fetch_flush</obj_property>
       <obj_property name="ObjectShortName">gc_fetch_flush</obj_property>
    </wvobject>
-   <wvobject type="logic" fp_name="/taiga_full_simulation/uut/gc_unit_block/inuse_clear">
-      <obj_property name="ElementShortName">inuse_clear</obj_property>
-      <obj_property name="ObjectShortName">inuse_clear</obj_property>
-   </wvobject>
    <wvobject fp_name="divider7359" type="divider">
       <obj_property name="label">Decode/Issue</obj_property>
       <obj_property name="DisplayName">label</obj_property>
@@ -154,9 +150,21 @@
       <obj_property name="ElementShortName">issue_valid</obj_property>
       <obj_property name="ObjectShortName">issue_valid</obj_property>
    </wvobject>
+   <wvobject type="logic" fp_name="/taiga_full_simulation/uut/decode_block/load_store_operands_ready">
+      <obj_property name="ElementShortName">load_store_operands_ready</obj_property>
+      <obj_property name="ObjectShortName">load_store_operands_ready</obj_property>
+   </wvobject>
    <wvobject type="logic" fp_name="/taiga_full_simulation/uut/decode_block/operands_ready">
       <obj_property name="ElementShortName">operands_ready</obj_property>
       <obj_property name="ObjectShortName">operands_ready</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/taiga_full_simulation/uut/decode_block/load_store_forward_possible">
+      <obj_property name="ElementShortName">load_store_forward_possible</obj_property>
+      <obj_property name="ObjectShortName">load_store_forward_possible</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/taiga_full_simulation/uut/decode_block/instruction_issued">
+      <obj_property name="ElementShortName">instruction_issued</obj_property>
+      <obj_property name="ObjectShortName">instruction_issued</obj_property>
    </wvobject>
    <wvobject type="array" fp_name="/taiga_full_simulation/uut/decode_block/new_request">
       <obj_property name="ElementShortName">new_request[5:0]</obj_property>
@@ -203,10 +211,6 @@
       <obj_property name="ElementShortName">sim_register</obj_property>
       <obj_property name="ObjectShortName">sim_register</obj_property>
    </wvobject>
-   <wvobject type="logic" fp_name="/taiga_full_simulation/uut/register_file_block/inuse_mem/clr">
-      <obj_property name="ElementShortName">clr</obj_property>
-      <obj_property name="ObjectShortName">clr</obj_property>
-   </wvobject>
    <wvobject type="logic" fp_name="/taiga_full_simulation/uut/register_file_block/inuse_mem/issued">
       <obj_property name="ElementShortName">issued</obj_property>
       <obj_property name="ObjectShortName">issued</obj_property>
@@ -219,14 +223,6 @@
       <obj_property name="ElementShortName">rs2_addr[4:0]</obj_property>
       <obj_property name="ObjectShortName">rs2_addr[4:0]</obj_property>
    </wvobject>
-   <wvobject type="array" fp_name="/taiga_full_simulation/uut/register_file_block/inuse_mem/decode_rd_addr">
-      <obj_property name="ElementShortName">decode_rd_addr[4:0]</obj_property>
-      <obj_property name="ObjectShortName">decode_rd_addr[4:0]</obj_property>
-   </wvobject>
-   <wvobject type="array" fp_name="/taiga_full_simulation/uut/register_file_block/inuse_mem/wb_rd_addr">
-      <obj_property name="ElementShortName">wb_rd_addr[4:0]</obj_property>
-      <obj_property name="ObjectShortName">wb_rd_addr[4:0]</obj_property>
-   </wvobject>
    <wvobject type="logic" fp_name="/taiga_full_simulation/uut/register_file_block/inuse_mem/rs1_inuse">
       <obj_property name="ElementShortName">rs1_inuse</obj_property>
       <obj_property name="ObjectShortName">rs1_inuse</obj_property>
@@ -234,10 +230,6 @@
    <wvobject type="logic" fp_name="/taiga_full_simulation/uut/register_file_block/inuse_mem/rs2_inuse">
       <obj_property name="ElementShortName">rs2_inuse</obj_property>
       <obj_property name="ObjectShortName">rs2_inuse</obj_property>
-   </wvobject>
-   <wvobject type="array" fp_name="/taiga_full_simulation/uut/register_file_block/inuse_mem/sim_inuse">
-      <obj_property name="ElementShortName">sim_inuse[31:0]</obj_property>
-      <obj_property name="ObjectShortName">sim_inuse[31:0]</obj_property>
    </wvobject>
    <wvobject type="logic" fp_name="/taiga_full_simulation/uut/register_file_block/in_use_match">
       <obj_property name="ElementShortName">in_use_match</obj_property>
@@ -281,10 +273,6 @@
       <obj_property name="ElementShortName">issued</obj_property>
       <obj_property name="ObjectShortName">issued</obj_property>
    </wvobject>
-   <wvobject type="array" fp_name="/taiga_full_simulation/uut/write_back_mux/unit_done_next_cycle">
-      <obj_property name="ElementShortName">unit_done_next_cycle[3:0]</obj_property>
-      <obj_property name="ObjectShortName">unit_done_next_cycle[3:0]</obj_property>
-   </wvobject>
    <wvobject type="array" fp_name="/taiga_full_simulation/uut/write_back_mux/unit_instruction_id">
       <obj_property name="ElementShortName">unit_instruction_id[3:0][1:0]</obj_property>
       <obj_property name="ObjectShortName">unit_instruction_id[3:0][1:0]</obj_property>
@@ -304,31 +292,6 @@
    <wvobject type="array" fp_name="/taiga_full_simulation/uut/write_back_mux/retired_instruction_packet">
       <obj_property name="ElementShortName">retired_instruction_packet</obj_property>
       <obj_property name="ObjectShortName">retired_instruction_packet</obj_property>
-      <wvobject type="array" fp_name="/taiga_full_simulation/uut/write_back_mux/retired_instruction_packet.rd_addr">
-         <obj_property name="ElementShortName">.rd_addr[4:0]</obj_property>
-         <obj_property name="ObjectShortName">.rd_addr[4:0]</obj_property>
-         <obj_property name="isExpanded"></obj_property>
-      </wvobject>
-      <wvobject type="logic" fp_name="/taiga_full_simulation/uut/write_back_mux/retired_instruction_packet.rd_addr_nzero">
-         <obj_property name="ElementShortName">.rd_addr_nzero</obj_property>
-         <obj_property name="ObjectShortName">.rd_addr_nzero</obj_property>
-      </wvobject>
-      <wvobject type="logic" fp_name="/taiga_full_simulation/uut/write_back_mux/retired_instruction_packet.is_store">
-         <obj_property name="ElementShortName">.is_store</obj_property>
-         <obj_property name="ObjectShortName">.is_store</obj_property>
-      </wvobject>
-      <wvobject type="array" fp_name="/taiga_full_simulation/uut/write_back_mux/retired_instruction_packet.rd_addr">
-         <obj_property name="ElementShortName">.rd_addr[4:0]</obj_property>
-         <obj_property name="ObjectShortName">.rd_addr[4:0]</obj_property>
-      </wvobject>
-      <wvobject type="logic" fp_name="/taiga_full_simulation/uut/write_back_mux/retired_instruction_packet.rd_addr_nzero">
-         <obj_property name="ElementShortName">.rd_addr_nzero</obj_property>
-         <obj_property name="ObjectShortName">.rd_addr_nzero</obj_property>
-      </wvobject>
-      <wvobject type="logic" fp_name="/taiga_full_simulation/uut/write_back_mux/retired_instruction_packet.is_store">
-         <obj_property name="ElementShortName">.is_store</obj_property>
-         <obj_property name="ObjectShortName">.is_store</obj_property>
-      </wvobject>
    </wvobject>
    <wvobject fp_name="divider4416" type="divider">
       <obj_property name="label">Div Unit</obj_property>
