@@ -162,14 +162,14 @@ This was done because Vivado would optimized neccesarry signals away that would 
 
 Connect the **interconnect_aresetn** output from the Processor System Reset to the AXI Interconnect aresetn pins.
 
-Connect the **m_axi* output from Taiga to the AXI Interconnect's S00_AXI input.
+Connect the **m_axi** output from Taiga to the AXI Interconnect's S00_AXI input.
 
-Connect the **M00_AXI* output from the AXI Interconnect to the UART's S_AXI input.
+Connect the **M00_AXI** output from the AXI Interconnect to the UART's S_AXI input.
 
 ### Autogenerate the HDL Wrapper for this Block Design:
 Under Sources, right click on the design_1.bd file, and select generate HDL Wrapper and let Vivado auto-generate one. 
 
-Set the newly generated as the Top file which is one of the options if you write click on the HDL Wrapper.
+Set the newly generated as the Top file which is one of the options if you right click on the HDL Wrapper.
 
 ### Sythesize Design:
 From the Flow Navigator, run Generate Bitstream.
