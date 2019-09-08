@@ -148,7 +148,7 @@ Connect the **instruction_bram and data_bram** output from Taiga to the Local Me
 
 Set the UART's **sin and sout** pins to external. This is done by expanding the UART output by clicking on the "+" Symbol right beside it then rightclicking on the sin and sout pin and selecting the "Make External Option". Change the name of the external port to "sin" and "sout" instead of "sin_0" and "sout_0".
 
-Set the UART's slave address to 0x6000_0000. This is done by Navigating to the Address Editor, finding "S_AXI" under taiga_wrapper_xilinx_0 -> m_axi -> Unmapped Slaves, righting clicking and "Assign Address". Then changing "Offset Address" to 0x6000_0000. Range can stay at 64K.
+Set the UART's **slave address** to 0x6000_0000. This is done by Navigating to the Address Editor, finding "S_AXI" under taiga_wrapper_xilinx_0 -> m_axi -> Unmapped Slaves, righting clicking and "Assign Address". Then changing "Offset Address" to 0x6000_0000. Range can stay at 64K.
 
 
 ### Adding and Connecting the AXI Interconnect IP Cores:
