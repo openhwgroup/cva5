@@ -84,7 +84,7 @@ Here is an example set of inputs for the script:
 
 Building the core on the Zedboard
 -----
-Tested on Vivado 2018.3
+Tested on Vivado 2018.3 on a Linux System
 ### Building Taiga and Local Memory IP Cores
 In Vivado's TCL Console, change its directory to within the cloned Taiga repository:
 
@@ -123,17 +123,89 @@ Add the following IP cores:
     2. local_mem_v1_0
     3. ZYNQ7 Processing System
     4. Processor System Reset
-    4. AXI Interconnect (NOT AXI Smartconnect)
     5. AXI UART16550
+Note: There will be an AXI Interconnect added later on, but it has to be done after all other cores have been connected.
 
-Configure the local_mem IP to use a Preloaded File, by double-cliking on the core and setting "Use Preload File" to 1 and copy the file path to the hw_init file provided.
+Configure the **Local Memory** to use a Preloaded File, by double-cliking on the core and setting "Use Preload File" to 1 and copy the file path to the hw_init file provided.
 Leave "Ram Size" to 64.
 
-Configure the AXI Interconnect to use "Maximize Performance" as its "Optimization Strategy". This requires the interconnect to **not** be a 1-to-1 interconnect even if functionally it only connects the Taiga core to the UART. This can be done by setting either the Number of Slave or Master Interfaces to 2.
+
+Configure the **ZYNQ7 Processing System** to output an FCLK_CLK of 100Mhz. This can be set in the IP's "Clock Configuration" under "PL Fabric Clocks:. Ensure there is at least 1 FCLK enabled and its Requested Frequency is 100Mhz.
+
+###Connecting the IP Cores Together:
+Connect the **FCLK_CLK** output from the ZYNQ to all the cores' clk input, connect it as well to the ZYNQ's M_AXI_GP0_ACLK and the Processor System Reset's slowest_sync_clk. This is done by hovering your mouse over the port until it changes to a pencil symbol then click and drag to the clk ports.
+
+Connect the **FCLK_RESET_N** output from the ZYNQ to the Processor System Reset's ext_reset_in.
+
+Connect the **perpheral_aresetn** output from the Processor System Reset to the AXI Uart's aresetn pins.
+
+
+Connect the **perpheral_areset** output from the Processor System Reset to the Local Memory and Taiga's reset  pins.
+
+Connect the **instruction_bram and data_bram** output from Taiga to the Local Memory's portA and portB inputs, respectively.
+
+
+
+Set the UART's **sin and sout** pins to external. This is done by expanding the UART output by clicking on the "+" Symbol right beside it then rightclicking on the sin and sout pin and selecting the "Make External Option". Change the name of the external port to "sin" and "sout" instead of "sin_0" and "sout_0".
+
+Set the UART's slave address to 0x6000_0000. This is done by Navigating to the Address Editor, finding "S_AXI" under taiga_wrapper_xilinx_0 -> m_axi -> Unmapped Slaves, righting clicking and "Assign Address". Then changing "Offset Address" to 0x6000_0000. Range can stay at 64K.
+
+
+###Adding and Connecting the AXI Interconnect IP Cores:
+The Interconnect is added after everything else has been setup to help mitigate some errors that prevent the synthesis of the system.
+
+Add the core AXI Interconnect (Not AXI Smartconnect).
+
+Configure the **AXI Interconnect** to use "Maximize Performance" as its "Optimization Strategy". This requires the interconnect to **not** be a 1-to-1 interconnect even if functionally it only connects the Taiga core to the UART. This can be done by setting either the Number of Slave or Master Interfaces to 2.
 
 This was done because Vivado would optimized neccesarry signals away that would cause the interconnect to fail to transfer requests from the Taiga to the UART. This is the same reason as to why the AXI Smartconnect is not used.
 
-Configure the ZYNQ7 Processing System to output an FCLK_CLK of 100Mhz. This can be set in the IP's "Clock Configuration" under "PL Fabric Clocks:. Ensure there is at least 1 FCLK enabled and its Requested Frequency is 100Mhz.
+Connect the **interconnect_aresetn** output from the Processor System Reset to the AXI Interconnect aresetn pins.
+
+Connect the **m_axi* output from Taiga to the AXI Interconnect's S00_AXI input.
+
+Connect the **M00_AXI* output from the AXI Interconnect to the UART's S_AXI input.
+
+###Autogenerate the HDL Wrapper for this Block Design:
+Under Sources, right click on the design_1.bd file, and select generate HDL Wrapper and let Vivado auto-generate one. 
+
+Set the newly generated as the Top file which is one of the options if you write click on the HDL Wrapper.
+
+###Sythesize Design:
+From the Flow Navigator, run Generate Bitstream.
+
+###Bringing the Zedboard out of reset:
+This must be done each time to board is turned on or if the processor clocks were changed. If the zedBoard will be programmed through Xilinx SDK and not Vivado, this is not needed.
+
+Find the path to processing system IP core within the Vivado project directory. You are trying to look for ps7_init.tcl It will often look something like:
+
+    <path to Vivado project>/Taiga.srcs/sources_1/bd/design_1/ip/design_1_processing_system7_0_0/ps7_init.tcl
+    
+in the terminal you sourced and launched vivado, open xsdb. Input the follow commands:
+
+    connect
+    target 1
+    rst
+    source <path to Vivado project>/Taiga.srcs/sources_1/bd/design_1/ip/design_1_processing_system7_0_1/ps7_init.tcl
+    ps7_init
+    ps7_post_config
+
+###Connected the UART through a PMOD:
+This project is set to use a serial PMOD connected to JA ports on the zedBoard. Connect the UART PMOD to your PC. Use your software of choice to listen on the apporpriate port with a 115200 Baud Rate.
+
+A simple one to use is "screen" which can be installed on most systems.
+
+Use the command:
+    screen /dev/ttyUSB0 115200
+    
+Note: ttyUSB0 might be different on your setup depending on how you choice to connect the UART. You also might have to run it as root.
+
+This is where the UART output can be seen.
+
+###Program the ZedBoard:
+Program the ZedBoard with the generated bitstream. This can be done from the Flow Navigator, select Hardware Manager. Press the "Auto Connect button".
+
+rightclick on the xc7z020_1 and select "Program Device". Confirm that it is the correct bitstream file, then click program. This will begin running the binnaries loaded onto the local memory. By default, it will be running the Dhrystone benchmarks.
 
 
 [unfinished]
