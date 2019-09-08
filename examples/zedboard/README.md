@@ -82,17 +82,60 @@ Here is an example set of inputs for the script:
 
     python3 taiga_binary_converter.py riscv32-unknown-elf- 0x80000000 65536 dhrystone.riscv  dhrystone.riscv.hw_init  dhrystone.riscv.sim_init
 
+Building the core on the Zedboard
+-----
+Tested on Vivado 2018.3
+### Building Taiga and Local Memory IP Cores
+In Vivado's TCL Console, change its directory to within the cloned Taiga repository:
+
+    cd <path to Taiga repo location>/Taiga
+    
+Build the Taiga  IP Package by calling:
+    
+    source taiga_wrapper_IP.tcl
+    
+Build the Local Memory Package by calling:
+
+    source local_memory_IP.tcl
+
+These commands will create separate Vivado projects, check if the packaging was successful. In the "Package IP" tab, navigate to the "Review and Package", a succesfully built IP core with have a Re-Package IP button at the bottom.
+
+Both a Successful and failed build will create IP core folders(taiga_wrapper_IP and local_memory_IP) within the Taiga directory.
+
+Note: If for some reason, it neccesary to run the scripts again, always delete the the IP core folder of the core that will be rebuilt, as Vivado is unable to overwrite these files otherwise.
 
 
+### Adding Taiga and Local Memory IP Cores to the project
+In either the existing Vivado project or a new Vivado project configured to run on a zedBoard, open the "IP Catalog".
+
+Add the IPs, by right-clicking on the Catalog Window, select "Add Repository..." and direct it to the Taiga Repository.
+
+There should now be a User Repository that contains the cores:
+
+local_mem_v1_0 and taiga_wrapper_xilinx_v1_0
 
 
+### Creating the Hardware Block Diagram and configuring IP Cores:
+Create a new Block Design by selecting "Create Block Design" in Vivado's Flow Navigator.
+Add the following IP cores:
+
+    1. taiga_wrapper_xilinx_v1_0
+    2. local_mem_v1_0
+    3. ZYNQ7 Processing System
+    4. Processor System Reset
+    4. AXI Interconnect (NOT AXI Smartconnect)
+    5. AXI UART16550
+
+Configure the local_mem IP to use a Preloaded File, by double-cliking on the core and setting "Use Preload File" to 1 and copy the file path to the hw_init file provided.
+Leave "Ram Size" to 64.
+
+Configure the AXI Interconnect to use "Maximize Performance" as its "Optimization Strategy". This requires the interconnect to **not** be a 1-to-1 interconnect even if functionally it only connects the Taiga core to the UART. This can be done by setting either the Number of Slave or Master Interfaces to 2.
+
+This was done because Vivado would optimized neccesarry signals away that would cause the interconnect to fail to transfer requests from the Taiga to the UART. This is the same reason as to why the AXI Smartconnect is not used.
+
+Configure the ZYNQ7 Processing System to output an FCLK_CLK of 100Mhz. This can be set in the IP's "Clock Configuration" under "PL Fabric Clocks:. Ensure there is at least 1 FCLK enabled and its Requested Frequency is 100Mhz.
 
 
-
-
-
-
-
-
+[unfinished]
 
 
