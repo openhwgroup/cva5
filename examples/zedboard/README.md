@@ -108,6 +108,8 @@ Note: If for some reason, it neccesary to run the scripts again, always delete t
 ### Adding Taiga and Local Memory IP Cores to the project
 In either the existing Vivado project or a new Vivado project configured to run on a zedBoard, open the "IP Catalog".
 
+If starting a new project make sure to add the .xdc file provided as constraints and choose zedBoard as the project board.
+
 Add the IPs, by right-clicking on the Catalog Window, select "Add Repository..." and direct it to the Taiga Repository.
 
 There should now be a User Repository that contains the cores:
