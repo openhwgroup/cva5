@@ -92,11 +92,11 @@ In Vivado's TCL Console, change its directory to within the cloned Taiga reposit
     
 Build the Taiga  IP Package by calling:
     
-    source taiga_wrapper_IP.tcl
+    source scripts/xilinx/taiga_wrapper_IP.tcl
     
 Build the Local Memory Package by calling:
 
-    source local_memory_IP.tcl
+    source scripts/xilinx/local_memory_IP.tcl
 
 These commands will create separate Vivado projects, check if the packaging was successful. In the "Package IP" tab, navigate to the "Review and Package", a succesfully built IP core with have a Re-Package IP button at the bottom.
 
