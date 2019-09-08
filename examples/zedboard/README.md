@@ -132,7 +132,7 @@ Leave "Ram Size" to 64.
 
 Configure the **ZYNQ7 Processing System** to output an FCLK_CLK of 100Mhz. This can be set in the IP's "Clock Configuration" under "PL Fabric Clocks:. Ensure there is at least 1 FCLK enabled and its Requested Frequency is 100Mhz.
 
-###Connecting the IP Cores Together:
+### Connecting the IP Cores Together:
 Connect the **FCLK_CLK** output from the ZYNQ to all the cores' clk input, connect it as well to the ZYNQ's M_AXI_GP0_ACLK and the Processor System Reset's slowest_sync_clk. This is done by hovering your mouse over the port until it changes to a pencil symbol then click and drag to the clk ports.
 
 Connect the **FCLK_RESET_N** output from the ZYNQ to the Processor System Reset's ext_reset_in.
@@ -151,8 +151,8 @@ Set the UART's **sin and sout** pins to external. This is done by expanding the 
 Set the UART's slave address to 0x6000_0000. This is done by Navigating to the Address Editor, finding "S_AXI" under taiga_wrapper_xilinx_0 -> m_axi -> Unmapped Slaves, righting clicking and "Assign Address". Then changing "Offset Address" to 0x6000_0000. Range can stay at 64K.
 
 
-###Adding and Connecting the AXI Interconnect IP Cores:
-The Interconnect is added after everything else has been setup to help mitigate some errors that prevent the synthesis of the system.
+### Adding and Connecting the AXI Interconnect IP Cores:
+The Interconnect is** added after everything else has been setup** to help mitigate some errors that prevent the synthesis of the system.
 
 Add the core AXI Interconnect (Not AXI Smartconnect).
 
@@ -166,16 +166,18 @@ Connect the **m_axi* output from Taiga to the AXI Interconnect's S00_AXI input.
 
 Connect the **M00_AXI* output from the AXI Interconnect to the UART's S_AXI input.
 
-###Autogenerate the HDL Wrapper for this Block Design:
+### Autogenerate the HDL Wrapper for this Block Design:
 Under Sources, right click on the design_1.bd file, and select generate HDL Wrapper and let Vivado auto-generate one. 
 
 Set the newly generated as the Top file which is one of the options if you write click on the HDL Wrapper.
 
-###Sythesize Design:
+### Sythesize Design:
 From the Flow Navigator, run Generate Bitstream.
 
-###Bringing the Zedboard out of reset:
+### Bringing the Zedboard out of reset:
 This must be done each time to board is turned on or if the processor clocks were changed. If the zedBoard will be programmed through Xilinx SDK and not Vivado, this is not needed.
+
+It must be done **after the synthesis** phase as the required file will be updated then.
 
 Find the path to processing system IP core within the Vivado project directory. You are trying to look for ps7_init.tcl It will often look something like:
 
@@ -190,7 +192,7 @@ in the terminal you sourced and launched vivado, open xsdb. Input the follow com
     ps7_init
     ps7_post_config
 
-###Connected the UART through a PMOD:
+### Connected the UART through a PMOD:
 This project is set to use a serial PMOD connected to JA ports on the zedBoard. Connect the UART PMOD to your PC. Use your software of choice to listen on the apporpriate port with a 115200 Baud Rate.
 
 A simple one to use is "screen" which can be installed on most systems.
@@ -198,11 +200,11 @@ A simple one to use is "screen" which can be installed on most systems.
 Use the command:
     screen /dev/ttyUSB0 115200
     
-Note: ttyUSB0 might be different on your setup depending on how you choice to connect the UART. You also might have to run it as root.
+Note: **ttyUSB0 might be different** on your setup depending on how you choice to connect the UART. You also might have to run it as root.
 
 This is where the UART output can be seen.
 
-###Program the ZedBoard:
+### Program the ZedBoard:
 Program the ZedBoard with the generated bitstream. This can be done from the Flow Navigator, select Hardware Manager. Press the "Auto Connect button".
 
 rightclick on the xc7z020_1 and select "Program Device". Confirm that it is the correct bitstream file, then click program. This will begin running the binnaries loaded onto the local memory. By default, it will be running the Dhrystone benchmarks.
