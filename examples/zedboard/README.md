@@ -96,6 +96,7 @@ Connect the **m_axi** output from Taiga to the AXI Interconnect's S00_AXI input.
 
 Connect the **M00_AXI** output from the AXI Interconnect to the UART's S_AXI input.
 
+
 ### Sythesize Design:
 From the Flow Navigator, run Generate Bitstream.
 
@@ -134,6 +135,7 @@ Program the ZedBoard with the generated bitstream. This can be done from the Flo
 
 rightclick on the xc7z020_1 and select "Program Device". Confirm that it is the correct bitstream file, then click program. This will begin running the binnaries loaded onto the local memory. By default, it will be running the Dhrystone benchmarks.
 
+![Sample Xilinx Wiring](xilinx_wiring_sample.png)
 
 [OLD]Creating a Project for the Zedboard
 ================
