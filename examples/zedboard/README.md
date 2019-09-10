@@ -75,11 +75,11 @@ Under Sources, right click on the design_1.bd file, and select generate HDL Wrap
 Set the newly generated as the Top file which is one of the options if you right click on the HDL Wrapper.
 
 ### Adding and Connecting the AXI Interconnect IP Cores:
-The Interconnect is **added after everything else has been setup and the HDL wrapper has been generated** to help mitigate some errors that prevent the synthesis of the system.
+The Interconnect **must be added after everything else has been setup and the HDL wrapper has been generated** to help mitigate some errors that prevent the synthesis of the system.
 
 Add the core AXI Interconnect (Not AXI Smartconnect).
 
-Configure the **AXI Interconnect** to use "Maximize Performance" as its "Optimization Strategy". This requires the interconnect to **not** be a 1-to-1 interconnect even if functionally it only connects the Taiga core to the UART. This can be done by setting either the Number of Slave or Master Interfaces to 2.
+Configure the AXI Interconnect to use **"Maximize Performance" as its "Optimization Strategy"**. This requires the interconnect to **not** be a 1-to-1 interconnect even if functionally it only connects the Taiga core to the UART. This can be done by setting either the Number of Slave or Master Interfaces to 2.
 
 This was done because Vivado would optimized neccesarry signals away that would cause the interconnect to fail to transfer requests from the Taiga to the UART. This is the same reason as to why the AXI Smartconnect is not used.
 
@@ -131,7 +131,6 @@ This is where the UART output can be seen.
 Program the ZedBoard with the generated bitstream. This can be done from the Flow Navigator, select Hardware Manager. Press the "Auto Connect button".
 
 rightclick on the xc7z020_1 and select "Program Device". Confirm that it is the correct bitstream file, then click program. This will begin running the binnaries loaded onto the local memory. By default, it will be running the Dhrystone benchmarks.
-
 
 
 [OLD]Creating a Project for the Zedboard
