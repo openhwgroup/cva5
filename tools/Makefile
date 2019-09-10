@@ -15,7 +15,9 @@ VERILATOR_DIR=$(TAIGA_DIR)/test_benches/verilator
 TAIGA_SRCS = $(shell cat taiga_compile_order)
 
 VERILATOR_LINT_IGNORE= -Wno-LITENDIAN -Wno-SYMRSVDWORD
-VERILATOR_CFLAGS =  -CFLAGS "-g0 -Os -march=native -pipe -flto -Wl,-flto" -LDFLAGS "-flto"
+VERILATOR_CFLAGS =  -CFLAGS "-g0 -Os -march=native -pipe"
+
+VERILATOR_TRACE_FILE="/data/sim-logs/sim_results.vcd"
 
 AR="gcc-ar"
 RANLIB="gcc-ranlib"
@@ -67,13 +69,15 @@ ELF_TO_HW_INIT ?= python3 $(TAIGA_DIR)/tools/taiga_binary_converter.py $(RISCV_P
 
 define verilator_local_mem_test
 	mkdir -p $1
+	cp $(VERILATOR_DIR)/TaigaTracer.h $1/
+	cp $(VERILATOR_DIR)/TaigaTracer.cc $1/
 	cp $(VERILATOR_DIR)/taiga_local_mem.cc $1/
-	verilator -cc --exe --Mdir $1 $(VERILATOR_LINT_IGNORE) $(VERILATOR_CFLAGS) $(TAIGA_SRCS) \
+	verilator --cc --exe --Mdir $1 $(VERILATOR_LINT_IGNORE) $(VERILATOR_CFLAGS) $(TAIGA_SRCS) \
 		 ../test_benches/verilator/taiga_local_mem.sv --top-module taiga_local_mem taiga_local_mem.cc \
 		-GMEMORY_FILE=$2
 	$(MAKE) -C  $1 -f Vtaiga_local_mem.mk AR="gcc-ar" RANLIB="gcc-ranlib"
 	echo $1 > $@
-	./$1/Vtaiga_local_mem $3 $4 >> $@
+	./$1/Vtaiga_local_mem $3 $4 $(VERILATOR_TRACE_FILE) >> $@
 endef
 
 .PHONY: lint

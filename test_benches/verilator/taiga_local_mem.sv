@@ -77,24 +77,12 @@ module taiga_local_mem # (
         //Used by verilator
         output logic write_uart,
         output logic [7:0] uart_byte,
-        //Trace Interface
-        output logic operand_stall,
-        output logic unit_stall,
-        output logic no_id_stall,
-        output logic no_instruction_stall,
-        output logic other_stall,
 
-        output logic instruction_issued_dec,
+        //Trace Interface
+        output logic instruction_issued,
+        output logic taiga_events [$bits(taiga_trace_events_t)-1:0],
         output logic [31:0] instruction_pc_dec,
         output logic [31:0] instruction_data_dec,
-
-        output logic branch_misspredict,
-        output logic return_misspredict,
-        output logic wb_mux_contention,
-
-        output logic rs1_forwarding_needed,
-        output logic rs2_forwarding_needed,
-        output logic rs1_and_rs2_forwarding_needed,
 
         //L2
         //l2 request
@@ -340,18 +328,14 @@ module taiga_local_mem # (
 
     ////////////////////////////////////////////////////
     //Trace Interface
-    assign operand_stall = tr.operand_stall;
-    assign unit_stall = tr.unit_stall;
-    assign no_id_stall = tr.no_id_stall;
-    assign no_instruction_stall = tr.no_instruction_stall;
-    assign other_stall = tr.other_stall;
-    assign instruction_issued_dec = tr.instruction_issued_dec;
     assign instruction_pc_dec = tr.instruction_pc_dec;
     assign instruction_data_dec = tr.instruction_data_dec;
-    assign branch_misspredict = tr.branch_misspredict;
-    assign return_misspredict = tr.return_misspredict;
-    assign wb_mux_contention = tr.wb_mux_contention;
-    assign rs1_forwarding_needed = tr.rs1_forwarding_needed;
-    assign rs2_forwarding_needed = tr.rs2_forwarding_needed;
-    assign rs1_and_rs2_forwarding_needed = tr.rs1_and_rs2_forwarding_needed;
+    assign instruction_issued = tr.events.instruction_issued_dec;
+    logic [$bits(taiga_trace_events_t)-1:0] taiga_events_packed;
+    assign taiga_events_packed = tr.events;
+    always_comb begin
+        foreach (taiga_events_packed[i])
+            taiga_events[i] = taiga_events_packed[i];
+    end
+
 endmodule

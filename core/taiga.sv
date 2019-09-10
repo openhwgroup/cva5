@@ -209,20 +209,20 @@ module taiga (
     //Trace Interface
     generate if (ENABLE_TRACE_INTERFACE) begin
         always_ff @(posedge clk) begin
-            tr.operand_stall <= tr_operand_stall;
-            tr.unit_stall <= tr_unit_stall;
-            tr.no_id_stall <= tr_no_id_stall;
-            tr.no_instruction_stall <= tr_no_instruction_stall;
-            tr.other_stall <= tr_other_stall;
-            tr.instruction_issued_dec <= tr_instruction_issued_dec;
+            tr.events.operand_stall <= tr_operand_stall;
+            tr.events.unit_stall <= tr_unit_stall;
+            tr.events.no_id_stall <= tr_no_id_stall;
+            tr.events.no_instruction_stall <= tr_no_instruction_stall;
+            tr.events.other_stall <= tr_other_stall;
+            tr.events.instruction_issued_dec <= tr_instruction_issued_dec;
+            tr.events.branch_misspredict <= tr_branch_misspredict;
+            tr.events.return_misspredict <= tr_return_misspredict;
+            tr.events.wb_mux_contention <= tr_wb_mux_contention;
+            tr.events.rs1_forwarding_needed <= tr_rs1_forwarding_needed;
+            tr.events.rs2_forwarding_needed <= tr_rs2_forwarding_needed;
+            tr.events.rs1_and_rs2_forwarding_needed <= tr_rs1_and_rs2_forwarding_needed;
             tr.instruction_pc_dec <= tr_instruction_pc_dec;
             tr.instruction_data_dec <= tr_instruction_data_dec;
-            tr.branch_misspredict <= tr_branch_misspredict;
-            tr.return_misspredict <= tr_return_misspredict;
-            tr.wb_mux_contention <= tr_wb_mux_contention;
-            tr.rs1_forwarding_needed <= tr_rs1_forwarding_needed;
-            tr.rs2_forwarding_needed <= tr_rs2_forwarding_needed;
-            tr.rs1_and_rs2_forwarding_needed <= tr_rs1_and_rs2_forwarding_needed;
         end
     end
     endgenerate

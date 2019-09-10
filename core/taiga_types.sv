@@ -449,15 +449,7 @@ package taiga_types;
         logic no_id_stall;
         logic no_instruction_stall;
         logic other_stall;
-
         logic instruction_issued_dec;
-        logic [31:0] instruction_pc_dec;
-        logic [31:0] instruction_data_dec;
-
-        //Register File
-        logic rs1_forwarding_needed;
-        logic rs2_forwarding_needed;
-        logic rs1_and_rs2_forwarding_needed;
 
         //Branch Unit
         logic branch_misspredict;
@@ -465,6 +457,17 @@ package taiga_types;
 
         //Writeback
         logic wb_mux_contention;
+
+        //Register File
+        logic rs1_forwarding_needed;
+        logic rs2_forwarding_needed;
+        logic rs1_and_rs2_forwarding_needed;
+    } taiga_trace_events_t;
+
+    typedef struct packed {
+        logic [31:0] instruction_pc_dec;
+        logic [31:0] instruction_data_dec;
+        taiga_trace_events_t events;
     } trace_outputs_t;
 
     //Assembly register definitions for simulation purposes
