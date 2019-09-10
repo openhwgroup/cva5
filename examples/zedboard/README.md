@@ -9,7 +9,7 @@ Building the core on the Zedboard
 -----
 Tested on Vivado 2018.3 on a Linux System
 ### Building Taiga and Local Memory IP Cores
-In Vivado's TCL Console, change its directory to within the cloned Taiga repository:
+In Vivado's TCL Console, change its directory to **within the cloned Taiga repository**:
 
     cd <path to Taiga repo location>/Taiga
     
@@ -21,7 +21,7 @@ Build the Local Memory Package by calling:
 
     source scripts/xilinx/local_memory_IP.tcl
 
-These commands will create separate Vivado projects, check if the packaging was successful. In the "Package IP" tab, navigate to the "Review and Package", a succesfully built IP core with have a Re-Package IP button at the bottom.
+These commands will create separate Vivado projects. Check if the packaging was successful, in the "Package IP" tab, navigate to the "Review and Package", a succesfully built IP core with have a Re-Package IP button at the bottom.
 
 Both a Successful and failed build will create IP core folders(taiga_wrapper_IP and local_memory_IP) within the Taiga directory.
 
@@ -29,11 +29,9 @@ Note: If for some reason, it neccesary to run the scripts again, always delete t
 
 
 ### Adding Taiga and Local Memory IP Cores to the project
-In either the existing Vivado project or a new Vivado project configured to run on a zedBoard, open the "IP Catalog".
+In either the existing Vivado project or a new Vivado project configured to run on a zedBoard. If starting a new project make sure to add the .xdc file provided as constraints and choose zedBoard as the project board.
 
-If starting a new project make sure to add the .xdc file provided as constraints and choose zedBoard as the project board.
-
-Add the IPs, by right-clicking on the Catalog Window, select "Add Repository..." and direct it to the Taiga Repository.
+Open the "IP Catalog" and add the IPs, by right-clicking on the Catalog Window, select "Add Repository..." and direct it to the Taiga Repository.
 
 There should now be a User Repository that contains the cores:
 
@@ -51,7 +49,7 @@ Add the following IP cores:
     5. AXI UART16550
 Note: There will be an AXI Interconnect added later on, but it has to be done after all other cores have been connected.
 
-Configure the **Local Memory** to use a Preloaded File, by double-cliking on the core and setting "Use Preload File" to 1 and copy the file path to the hw_init file provided.
+Configure the **Local Memory** to use a Preloaded File, by double-cliking on the core and setting "Use Preload File" to 1 and copy the file path to the .hw_init file provided.
 Leave "Ram Size" to 64.
 
 
@@ -64,12 +62,9 @@ Connect the **FCLK_RESET_N** output from the ZYNQ to the Processor System Reset'
 
 Connect the **perpheral_aresetn** output from the Processor System Reset to the AXI Uart's aresetn pins.
 
-
 Connect the **perpheral_areset** output from the Processor System Reset to the Local Memory and Taiga's reset  pins.
 
 Connect the **instruction_bram and data_bram** output from Taiga to the Local Memory's portA and portB inputs, respectively.
-
-
 
 Set the UART's **sin and sout** pins to external. This is done by expanding the UART output by clicking on the "+" Symbol right beside it then rightclicking on the sin and sout pin and selecting the "Make External Option". Change the name of the external port to "sin" and "sout" instead of "sin_0" and "sout_0".
 
