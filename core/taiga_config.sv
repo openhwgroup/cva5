@@ -165,9 +165,6 @@ package taiga_config;
     parameter MAX_INFLIGHT_COUNT = 4;
     parameter FETCH_BUFFER_DEPTH = 4;
 
-    parameter LS_INPUT_BUFFER_DEPTH = 4;
-    parameter DIV_INPUT_BUFFER_DEPTH = 4;
-
     ////////////////////////////////////////////////////
     //Trace Options
     parameter ENABLE_TRACE_INTERFACE = 1;

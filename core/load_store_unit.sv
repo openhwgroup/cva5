@@ -116,12 +116,12 @@ module load_store_unit (
 
     ////////////////////////////////////////////////////
     //Input FIFO
-    taiga_fifo #(.DATA_WIDTH($bits(load_store_inputs_t)), .FIFO_DEPTH(LS_INPUT_BUFFER_DEPTH), .FIFO_TYPE(NON_MUXED_INPUT_FIFO)
+    taiga_fifo #(.DATA_WIDTH($bits(load_store_inputs_t)), .FIFO_DEPTH(MAX_INFLIGHT_COUNT), .FIFO_TYPE(NON_MUXED_INPUT_FIFO)
         ) ls_input_fifo (.fifo(input_fifo), .*);
 
     assign input_fifo.data_in = ls_inputs;
     assign input_fifo.push = issue.new_request;
-    assign issue.ready = (LS_INPUT_BUFFER_DEPTH >= MAX_INFLIGHT_COUNT) ? 1 : ~input_fifo.full;
+    assign issue.ready = 1;//As FIFO depth is the same as MAX_INFLIGHT_COUNT
     assign input_fifo.pop = issue_request | gc_issue_flush;
     assign stage1 = input_fifo.data_out;
 

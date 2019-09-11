@@ -196,12 +196,9 @@ module decode(
 
     assign issue = {NUM_UNITS{issue_valid}} & unit_operands_ready & issue_ready;
 
-    assign instruction_issued =
-        ((LS_INPUT_BUFFER_DEPTH >= MAX_INFLIGHT_COUNT) &&
-        (DIV_INPUT_BUFFER_DEPTH >= MAX_INFLIGHT_COUNT)) ?
-        (valid_opcode & issue_valid & load_store_operands_ready) :
-        ((|issue_ready) & issue_valid & load_store_operands_ready);
-
+    //If not all units can provide constant ready signals:
+    //((|issue_ready) & issue_valid & load_store_operands_ready);
+    assign instruction_issued = issue_valid & load_store_operands_ready;
     assign instruction_issued_no_rd = instruction_issued & ~uses_rd;
     assign instruction_issued_with_rd = instruction_issued & uses_rd;
 
