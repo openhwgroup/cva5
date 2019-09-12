@@ -122,7 +122,7 @@ module load_store_unit (
     assign input_fifo.data_in = ls_inputs;
     assign input_fifo.push = issue.new_request;
     assign issue.ready = 1;//As FIFO depth is the same as MAX_INFLIGHT_COUNT
-    assign input_fifo.pop = issue_request | gc_issue_flush;
+    assign input_fifo.pop = issue_request;
     assign stage1 = input_fifo.data_out;
 
     ////////////////////////////////////////////////////

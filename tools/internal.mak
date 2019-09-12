@@ -1,6 +1,6 @@
 .PHONY: run_dhrystone_verilator
 run_dhrystone_verilator :
-	$(call verilator_local_mem_test,dhrystone,\"/home/ematthew/Research/RISCV/software/taiga-benchmarks/dhrystone.riscv.hw_init\","/dev/null","/dev/null")
+	$(call verilator_local_mem_test,dhrystone,/home/ematthew/Research/RISCV/software/taiga-benchmarks/dhrystone.riscv.hw_init,"/dev/null","/dev/null")
 
 .PHONY: build_embench
 build_embench :

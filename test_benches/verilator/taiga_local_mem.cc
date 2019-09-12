@@ -6,10 +6,12 @@
 #include "verilated_vcd_c.h"
 #include "TaigaTracer.h"
 
+//#define TRACE_ON
 using namespace std;
 int main(int argc, char **argv) {
     TaigaTracer<Vtaiga_local_mem> *taigaTracer;
     ofstream logFile, sigFile;
+    ifstream programFile;
 
 	// Initialize Verilators variables
 	Verilated::commandArgs(argc, argv);
@@ -25,12 +27,18 @@ int main(int argc, char **argv) {
     }
 
     if (!argv[3]) {
+    	cout << "Missing program file name.\n";
+    	exit(EXIT_FAILURE);
+    }
+
+    if (!argv[4]) {
     	cout << "Missing trace log file name.\n";
     	exit(EXIT_FAILURE);
     }
 
     logFile.open (argv[1]);
     sigFile.open (argv[2]);
+    programFile.open (argv[3]);
 
     if (!logFile.is_open()) {
     	cout << "Failed to open logfile: " << argv[1] << endl;
@@ -40,13 +48,18 @@ int main(int argc, char **argv) {
     	cout << "Failed to open sigFile: " << argv[2] << endl;
     	exit(EXIT_FAILURE);
     }
+    if (!programFile.is_open()) {
+    	cout << "Failed to open programFile: " << argv[3] << endl;
+    	exit(EXIT_FAILURE);
+    }
 
 	// Create an instance of our module under test
-    taigaTracer = new TaigaTracer<Vtaiga_local_mem>;
+    taigaTracer = new TaigaTracer<Vtaiga_local_mem>(programFile);
     taigaTracer->set_log_file(&logFile);
     #ifdef TRACE_ON
-        taigaTracer->start_tracer(argv[3]);
+        taigaTracer->start_tracer(argv[4]);
 	#endif
+	taigaTracer->reset();
 	cout << "--------------------------------------------------------------\n";
 	cout << "   Starting Simulation, logging to: " << argv[1] << "\n";
 	cout << "--------------------------------------------------------------\n";
@@ -70,6 +83,7 @@ int main(int argc, char **argv) {
 
 	logFile.close();
 	sigFile.close();
+    programFile.close();
 
 	delete taigaTracer;
 

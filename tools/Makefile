@@ -15,14 +15,10 @@ VERILATOR_DIR=$(TAIGA_DIR)/test_benches/verilator
 TAIGA_SRCS = $(shell cat taiga_compile_order)
 
 VERILATOR_LINT_IGNORE= -Wno-LITENDIAN -Wno-SYMRSVDWORD
-VERILATOR_CFLAGS =  -CFLAGS "-g0 -Os -march=native -pipe"
+VERILATOR_CFLAGS =  -CFLAGS "-g0 -O3 -march=native -pipe -Wl,-flto" -LDFLAGS "-flto"
 
 VERILATOR_TRACE_FILE="/data/sim-logs/sim_results.vcd"
 
-AR="gcc-ar"
-RANLIB="gcc-ranlib"
-export AR
-export RANLIB
 ###############################################################
 
 #Compiance parameters
@@ -71,13 +67,14 @@ define verilator_local_mem_test
 	mkdir -p $1
 	cp $(VERILATOR_DIR)/TaigaTracer.h $1/
 	cp $(VERILATOR_DIR)/TaigaTracer.cc $1/
+	cp $(VERILATOR_DIR)/SimMem.h $1/
+	cp $(VERILATOR_DIR)/SimMem.cc $1/
 	cp $(VERILATOR_DIR)/taiga_local_mem.cc $1/
 	verilator --cc --exe --Mdir $1 $(VERILATOR_LINT_IGNORE) $(VERILATOR_CFLAGS) $(TAIGA_SRCS) \
-		 ../test_benches/verilator/taiga_local_mem.sv --top-module taiga_local_mem taiga_local_mem.cc \
-		-GMEMORY_FILE=$2
-	$(MAKE) -C  $1 -f Vtaiga_local_mem.mk AR="gcc-ar" RANLIB="gcc-ranlib"
+		 ../test_benches/verilator/taiga_local_mem.sv --top-module taiga_local_mem taiga_local_mem.cc SimMem.cc
+	$(MAKE) -C  $1 -f Vtaiga_local_mem.mk
 	echo $1 > $@
-	./$1/Vtaiga_local_mem $3 $4 $(VERILATOR_TRACE_FILE) >> $@
+	./$1/Vtaiga_local_mem $3 $4 $2 $(VERILATOR_TRACE_FILE) >> $@
 endef
 
 .PHONY: lint
@@ -103,8 +100,7 @@ $(embench_hw) : %.hw_init : %
 
 #Run verilator
 $(embench_logs) : %_full.log : % $(embench_hw)
-	$(call verilator_local_mem_test,$<,\"$(TAIGA_DIR)/tools/$<.hw_init\","/dev/null","/dev/null")
-
+	$(call verilator_local_mem_test,$<,$(TAIGA_DIR)/tools/$<.hw_init,"/dev/null","/dev/null")
 run_embench_verilator: $(embench_logs)
 	cat $^ > embench.log
 
@@ -113,7 +109,7 @@ CRUFT= $(EMBENCH_BENCHMARKS) $(embench_hw) $(embench_sim) $(embench_logs) embenc
 #Called by compliance makefile
 .PHONY: verilator_taiga_compliance_unit_test
 verilator_taiga_compliance_unit_test:
-	$(call verilator_local_mem_test,$(COMPLIANCE_BENCHAMRK),\"$(HW_INIT)\", $(LOG_FILE_NAME), $(SIG_FILE_NAME))
+	$(call verilator_local_mem_test,$(COMPLIANCE_BENCHAMRK),$(HW_INIT), $(LOG_FILE_NAME), $(SIG_FILE_NAME))
 
 .PHONY: verilator_taiga_compliance_tests
 run_compliance_tests_verilator:

@@ -74,13 +74,26 @@ module taiga_local_mem # (
         //        output logic bus_axi_wvalid,
         //        output logic [5:0]bus_axi_wid,
 
+        //Local Memory
+        output logic [29:0] instruction_bram_addr,
+        output logic instruction_bram_en,
+        output logic [3:0] instruction_bram_be,
+        output logic [31:0] instruction_bram_data_in,
+        input logic [31:0] instruction_bram_data_out,
+
+        output logic [29:0] data_bram_addr,
+        output logic data_bram_en,
+        output logic [3:0] data_bram_be,
+        output logic [31:0] data_bram_data_in,
+        input logic [31:0] data_bram_data_out,
+
         //Used by verilator
         output logic write_uart,
         output logic [7:0] uart_byte,
 
         //Trace Interface
         output logic instruction_issued,
-        output logic taiga_events [$bits(taiga_trace_events_t)-1:0],
+        output logic taiga_events [0:$bits(taiga_trace_events_t)-1],
         output logic [31:0] instruction_pc_dec,
         output logic [31:0] instruction_data_dec,
 
@@ -213,20 +226,32 @@ module taiga_local_mem # (
     local_memory_interface data_bram();
 
 
-    byte_en_BRAM #(MEM_LINES, MEMORY_FILE, 1) inst_data_ram (
-            .clk(clk),
-            .addr_a(instruction_bram.addr[$clog2(MEM_LINES)- 1:0]),
-            .en_a(instruction_bram.en),
-            .be_a(instruction_bram.be),
-            .data_in_a(instruction_bram.data_in),
-            .data_out_a(instruction_bram.data_out),
+    assign instruction_bram_addr = instruction_bram.addr;
+    assign instruction_bram_en = instruction_bram.en;
+    assign instruction_bram_be = instruction_bram.be;
+    assign instruction_bram_data_in = instruction_bram.data_in;
+    assign instruction_bram.data_out = instruction_bram_data_out;
 
-            .addr_b(data_bram.addr[$clog2(MEM_LINES)- 1:0]),
-            .en_b(data_bram.en),
-            .be_b(data_bram.be),
-            .data_in_b(data_bram.data_in),
-            .data_out_b(data_bram.data_out)
-        );
+    assign data_bram_addr = data_bram.addr;
+    assign data_bram_en = data_bram.en;
+    assign data_bram_be = data_bram.be;
+    assign data_bram_data_in = data_bram.data_in;
+    assign data_bram.data_out = data_bram_data_out;
+
+    // byte_en_BRAM #(MEM_LINES, MEMORY_FILE, 1) inst_data_ram (
+    //         .clk(clk),
+    //         .addr_a(instruction_bram.addr[$clog2(MEM_LINES)- 1:0]),
+    //         .en_a(instruction_bram.en),
+    //         .be_a(instruction_bram.be),
+    //         .data_in_a(instruction_bram.data_in),
+    //         .data_out_a(instruction_bram.data_out),
+
+    //         .addr_b(data_bram.addr[$clog2(MEM_LINES)- 1:0]),
+    //         .en_b(data_bram.en),
+    //         .be_b(data_bram.be),
+    //         .data_in_b(data_bram.data_in),
+    //         .data_out_b(data_bram.data_out)
+    //     );
 
 
     taiga cpu(.*, .l2(l2[0]));
@@ -334,8 +359,8 @@ module taiga_local_mem # (
     logic [$bits(taiga_trace_events_t)-1:0] taiga_events_packed;
     assign taiga_events_packed = tr.events;
     always_comb begin
-        foreach (taiga_events_packed[i])
-            taiga_events[i] = taiga_events_packed[i];
+        foreach(taiga_events_packed[i])
+            taiga_events[$bits(taiga_trace_events_t)-1-i] = taiga_events_packed[i];
     end
 
 endmodule

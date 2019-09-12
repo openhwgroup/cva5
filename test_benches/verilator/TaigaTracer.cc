@@ -23,6 +23,7 @@
 #include <iostream>
 #include "TaigaTracer.h"
 
+//#define TRACE_ON
 template <class TB>
 bool TaigaTracer<TB>::check_instruction_issued(uint32_t inst) {
     return (tb->instruction_data_dec == inst && tb->instruction_issued);
@@ -60,7 +61,8 @@ bool TaigaTracer<TB>::has_stalled() {
 
 template <class TB>
 void TaigaTracer<TB>::reset_stats() {
-    event_counters = { 0 };
+    for (int i=0; i < numEvents; i++)
+         event_counters[i] = 0;
 }
 
 template <class TB>
@@ -83,11 +85,13 @@ void TaigaTracer<TB>::print_stats() {
 template <class TB>
 void TaigaTracer<TB>::reset() {
     tb->rst = 1;
+	tb->eval();
 
     for (int i=0; i <reset_length; i++)
         tick();
 
     tb->rst = 0;
+    reset_stats();
 }
 template <class TB>
 void TaigaTracer<TB>::set_log_file(std::ofstream* logFile) {
@@ -97,22 +101,41 @@ void TaigaTracer<TB>::set_log_file(std::ofstream* logFile) {
 template <class TB>
 void TaigaTracer<TB>::update_UART() {
 	if (tb->write_uart) {
-		std::cout <<  tb->uart_byte;
+		std::cout <<  tb->uart_byte << std::flush;
 		*logFile << tb->uart_byte;
 	}
 }
 
 template <class TB>
+void TaigaTracer<TB>::update_memory() {
+    tb->instruction_bram_data_out = instruction_r;
+    if (tb->instruction_bram_en)
+        instruction_r = mem->read(tb->instruction_bram_addr);
+
+    tb->data_bram_data_out = data_out_r;
+    if (tb->data_bram_en) {
+        data_out_r = mem->read(tb->data_bram_addr);
+        mem->write(tb->data_bram_addr, tb->data_bram_data_in, tb->data_bram_be);
+    }
+}
+
+template <class TB>
 void TaigaTracer<TB>::tick() {
+		tb->eval();
 		tb->clk = 1;
 		tb->eval();
 		tb->clk = 0;
 		tb->eval();
+
 		cycle_count++;
+
 		update_stats();
-		#ifdef TRACE_ON
-				verilatorWaveformTracer->dump(vluint32_t(cycle_cout));
-		#endif
+		update_UART();
+		update_memory();
+
+        #ifdef TRACE_ON
+            verilatorWaveformTracer->dump(vluint32_t(cycle_count));
+        #endif
 }
 
 template <class TB>
@@ -131,16 +154,17 @@ uint64_t TaigaTracer<TB>::get_cycle_count() {
 }
 
 template <class TB>
-TaigaTracer<TB>::TaigaTracer() {
+TaigaTracer<TB>::TaigaTracer(std::ifstream& programFile) {
 	#ifdef TRACE_ON
 		Verilated::traceEverOn(true);
 	#endif
 
+    mem = new SimMem(programFile, 128);
     tb = new TB;
 
 	tb->clk = 0;
-	tb->eval();
-    reset();
+    instruction_r = mem->read(tb->instruction_bram_addr);
+    data_out_r = 0;
 }
 
 template <class TB>
@@ -149,5 +173,6 @@ TaigaTracer<TB>::~TaigaTracer() {
 		verilatorWaveformTracer->flush();
 		verilatorWaveformTracer->close();
 	#endif
+	delete mem;
 	delete tb;
 }

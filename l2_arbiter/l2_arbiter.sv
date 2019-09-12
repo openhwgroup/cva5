@@ -96,7 +96,7 @@ module l2_arbiter (
 			assign requests_in[i].is_amo = request[i].is_amo;
 			assign requests_in[i].amo_type_or_burst_size = request[i].amo_type_or_burst_size;
 			assign requests_in[i].sub_id = request[i].sub_id;
-            assign input_fifos[i].data_in = reqests_in[i];
+            assign input_fifos[i].data_in = requests_in[i];
 
             assign input_fifos[i].pop = input_fifos[i].valid & arb.grantee_v[i] & ~mem_addr_fifo.full;
 

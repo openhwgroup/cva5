@@ -160,7 +160,7 @@ module taiga_full_simulation ();
     integer output_file;
     integer output_file2;
 
-    assign l2[1].request = 0;
+    //assign l2[1].request = 0;
     assign l2[1].request_push = 0;
     assign l2[1].wr_data_push = 0;
     assign l2[1].inv_ack = l2[1].inv_valid;
@@ -392,7 +392,6 @@ module taiga_full_simulation ();
             $fwrite(output_file, "instruction_issued_dec %d\n",instruction_issued_dec);
             $fwrite(output_file, "branch_misspredict %d\n",branch_misspredict);
             $fwrite(output_file, "return_misspredict %d\n",return_misspredict);
-            $fwrite(output_file, "wb_mux_contention %d\n",wb_mux_contention);
             $fwrite(output_file, "rs1_forwarding_needed %d\n",rs1_forwarding_needed);
             $fwrite(output_file, "rs2_forwarding_needed %d\n",rs2_forwarding_needed);
             $fwrite(output_file, "rs1_OR_rs2_forwarding_needed %d\n",rs1_forwarding_needed + rs2_forwarding_needed);
@@ -416,33 +415,30 @@ module taiga_full_simulation ();
             rs1_and_rs2_forwarding_needed = 0;
             branch_misspredict = 0;
             return_misspredict = 0;
-            wb_mux_contention = 0;
         end
 
-        if (tr.operand_stall)
+        if (tr.events.operand_stall)
             operand_stall <= operand_stall + 1;
-        if (tr.unit_stall)
+        if (tr.events.unit_stall)
             unit_stall <= unit_stall + 1;
-        if (tr.no_id_stall)
+        if (tr.events.no_id_stall)
             no_id_stall <= no_id_stall + 1;
-        if (tr.no_instruction_stall)
+        if (tr.events.no_instruction_stall)
             no_instruction_stall <= no_instruction_stall + 1;
-        if (tr.other_stall)
+        if (tr.events.other_stall)
             other_stall <= other_stall + 1;
-        if (tr.instruction_issued_dec)
+        if (tr.events.instruction_issued_dec)
             instruction_issued_dec <= instruction_issued_dec + 1;
-        if (tr.rs1_forwarding_needed)
+        if (tr.events.rs1_forwarding_needed)
             rs1_forwarding_needed <= rs1_forwarding_needed + 1;
-        if (tr.rs2_forwarding_needed)
+        if (tr.events.rs2_forwarding_needed)
             rs2_forwarding_needed <= rs2_forwarding_needed + 1;
-        if (tr.rs1_and_rs2_forwarding_needed)
+        if (tr.events.rs1_and_rs2_forwarding_needed)
             rs1_and_rs2_forwarding_needed <= rs1_and_rs2_forwarding_needed + 1;
-        if (tr.branch_misspredict)
+        if (tr.events.branch_misspredict)
             branch_misspredict <= branch_misspredict + 1;
-        if (tr.return_misspredict)
+        if (tr.events.return_misspredict)
             return_misspredict <= return_misspredict + 1;
-        if (tr.wb_mux_contention)
-            wb_mux_contention <= wb_mux_contention + 1;
     end
 
 

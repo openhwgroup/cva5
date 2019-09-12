@@ -25,6 +25,9 @@
 #include <stdlib.h>
 #include <iostream>
 #include <iterator>
+#include "SimMem.h"
+
+//#define TRACE_ON
 
 #define COMPLIANCE_SIG_PHASE_NOP 0x00B00013U
 #define ERROR_TERMINATION_NOP 0x00F00013U
@@ -53,14 +56,12 @@ static const int numEvents = arraySize(eventNames);
 template <class TB>
 class TaigaTracer {
 public:
-  TaigaTracer();
+  TaigaTracer(std::ifstream& programFile);
   ~TaigaTracer();
   bool check_instruction_issued(uint32_t inst);
   bool has_terminated();
   bool has_stalled();
   void print_stats();
-  void update_stats();
-  void update_UART();
   void reset_stats();
   void reset();
   void tick();
@@ -69,6 +70,7 @@ public:
   uint64_t get_cycle_count();
 private:
   TB *tb;
+  SimMem *mem;
 #ifdef TRACE_ON
 		VerilatedVcdC	*verilatorWaveformTracer;
 #endif
@@ -78,6 +80,12 @@ private:
   int stall_count = 0;
   uint64_t cycle_count = 0;
   uint64_t event_counters[numEvents];
+
+  void update_stats();
+  void update_UART();
+  void update_memory();
+  uint32_t instruction_r;
+  uint32_t data_out_r;
 };
 
 #include "TaigaTracer.cc"
