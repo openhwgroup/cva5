@@ -62,21 +62,6 @@ embench_sim  = $(addsuffix .sim_init,  $(EMBENCH_BENCHMARKS))
 ELF_TO_HW_INIT ?= python3 $(TAIGA_DIR)/tools/taiga_binary_converter.py $(RISCV_PREFIX) 0x80000000 131072
 ###############################################################
 
-
-define verilator_local_mem_test
-	mkdir -p $1
-	cp $(VERILATOR_DIR)/TaigaTracer.h $1/
-	cp $(VERILATOR_DIR)/TaigaTracer.cc $1/
-	cp $(VERILATOR_DIR)/SimMem.h $1/
-	cp $(VERILATOR_DIR)/SimMem.cc $1/
-	cp $(VERILATOR_DIR)/taiga_local_mem.cc $1/
-	verilator --cc --exe --Mdir $1 $(VERILATOR_LINT_IGNORE) $(VERILATOR_CFLAGS) $(TAIGA_SRCS) \
-		 ../test_benches/verilator/taiga_local_mem.sv --top-module taiga_local_mem taiga_local_mem.cc SimMem.cc
-	$(MAKE) -C  $1 -f Vtaiga_local_mem.mk
-	echo $1 > $@
-	./$1/Vtaiga_local_mem $3 $4 $2 $(VERILATOR_TRACE_FILE) >> $@
-endef
-
 .PHONY: lint
 lint: 
 	verilator -cc $(TAIGA_SRCS) \
@@ -91,6 +76,16 @@ lint_full:
 	--top-module taiga_local_mem \
 	--lint-only -Wall
 
+.PHONY: build_embench
+build_embench :
+	cd $(EMBENCH_DIR);\
+	rm -rf build;\
+	mkdir build;\
+	cd build;\
+	../configure --host=riscv32-unknown-elf --with-chip=speed-test --with-board=taiga-sim;\
+	make
+
+
 #Benchmarks already built
 .PHONY : $(EMBENCH_BENCHMARKS)
 
@@ -98,9 +93,22 @@ lint_full:
 $(embench_hw) : %.hw_init : %
 	$(ELF_TO_HW_INIT) $(EMBENCH_DIR)/build/src/$</$< $@ $<.sim_init
 
+build_taiga_sim:
+	mkdir -p verilator_local_mem_test
+	cp $(VERILATOR_DIR)/TaigaTracer.h verilator_local_mem_test/
+	cp $(VERILATOR_DIR)/TaigaTracer.cc verilator_local_mem_test/
+	cp $(VERILATOR_DIR)/SimMem.h verilator_local_mem_test/
+	cp $(VERILATOR_DIR)/SimMem.cc verilator_local_mem_test/
+	cp $(VERILATOR_DIR)/taiga_local_mem.cc verilator_local_mem_test/
+	verilator --cc --exe --Mdir verilator_local_mem_test $(VERILATOR_LINT_IGNORE) $(VERILATOR_CFLAGS) $(TAIGA_SRCS) \
+		 ../test_benches/verilator/taiga_local_mem.sv --top-module taiga_local_mem taiga_local_mem.cc SimMem.cc
+	$(MAKE) -C  verilator_local_mem_test -f Vtaiga_local_mem.mk
+
 #Run verilator
 $(embench_logs) : %_full.log : % $(embench_hw)
-	$(call verilator_local_mem_test,$<,$(TAIGA_DIR)/tools/$<.hw_init,"/dev/null","/dev/null")
+	@echo $< > $@
+	./verilator_local_mem_test/Vtaiga_local_mem "/dev/null" "/dev/null" $(TAIGA_DIR)/tools/$<.hw_init $(VERILATOR_TRACE_FILE) >> $@
+
 run_embench_verilator: $(embench_logs)
 	cat $^ > embench.log
 
@@ -109,12 +117,16 @@ CRUFT= $(EMBENCH_BENCHMARKS) $(embench_hw) $(embench_sim) $(embench_logs) embenc
 #Called by compliance makefile
 .PHONY: verilator_taiga_compliance_unit_test
 verilator_taiga_compliance_unit_test:
-	$(call verilator_local_mem_test,$(COMPLIANCE_BENCHAMRK),$(HW_INIT), $(LOG_FILE_NAME), $(SIG_FILE_NAME))
+	./verilator_local_mem_test/Vtaiga_local_mem $(LOG_FILE_NAME) $(SIG_FILE_NAME) $(HW_INIT) $(VERILATOR_TRACE_FILE) >> $@
 
 .PHONY: verilator_taiga_compliance_tests
 run_compliance_tests_verilator:
 	$(MAKE) -C $(COMPLIANCE_DIR) clean
 	$(MAKE) -C $(COMPLIANCE_DIR) RISCV_TARGET=taiga RISCV_DEVICE=$(COMPLIANCE_TARGET) RISCV_PREFIX=$(RISCV_PREFIX) TAIGA_ROOT=$(TAIGA_DIR)/tools
+
+.PHONY: run_dhrystone_verilator
+run_dhrystone_verilator :
+	./verilator_local_mem_test/Vtaiga_local_mem "/dev/null" "/dev/null" /home/ematthew/Research/RISCV/software/taiga-benchmarks/dhrystone.riscv.hw_init $(VERILATOR_TRACE_FILE) >> $@
 
 clean:
 	rm -rf $(CRUFT)
