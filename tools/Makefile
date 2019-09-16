@@ -15,7 +15,7 @@ VERILATOR_DIR=$(TAIGA_DIR)/test_benches/verilator
 TAIGA_SRCS = $(shell cat taiga_compile_order)
 
 VERILATOR_LINT_IGNORE= -Wno-LITENDIAN -Wno-SYMRSVDWORD
-VERILATOR_CFLAGS =  -CFLAGS "-g0 -O3 -march=native -pipe -Wl,-flto" -LDFLAGS "-flto"
+VERILATOR_CFLAGS =  -CFLAGS "-g0 -O3 -march=native"
 
 VERILATOR_TRACE_FILE="/data/sim-logs/sim_results.vcd"
 
