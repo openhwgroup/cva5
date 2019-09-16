@@ -40,6 +40,11 @@ module dcache(
         ls_sub_unit_interface.sub_unit ls
         );
 
+    localparam DCACHE_SIZE_IN_WORDS = DCACHE_LINES*DCACHE_LINE_W*DCACHE_WAYS;
+
+    logic [$clog2(DCACHE_SIZE_IN_WORDS)-1:0] data_bank_addr_a;
+    logic [$clog2(DCACHE_SIZE_IN_WORDS)-1:0] data_bank_addr_b;
+
     logic tag_hit;
     logic [DCACHE_WAYS-1:0] tag_hit_way;
 
@@ -94,12 +99,11 @@ module dcache(
 
     logic store_complete;
     amo_alu_inputs_t amo_alu_inputs;
+    ////////////////////////////////////////////////////
+    //Implementation
 
-    const bit[DCACHE_SUB_LINE_ADDR_W-1:0] SUBLINE_PADDING= '0;
-
-    /*************************************
-     * 2nd cycle signals
-     *************************************/
+    ////////////////////////////////////////////////////
+    //2nd Cycle Control Signals
     always_ff @ (posedge clk) begin
         if (ls.new_request) begin
             stage2_addr <= ls_inputs.addr;
@@ -112,25 +116,16 @@ module dcache(
         end
     end
 
-    /*************************************
-     * General Control Logic
-     *************************************/
-    //LR and AMO ops are forced misses (if there is a tag hit they will reuse the same way however)
-    //Signal is valid only for a single cycle, RAM enables are used to hold outputs in case of pipeline stalls
+    ////////////////////////////////////////////////////
+    //General Control Logic
+    //LR and AMO ops are forced misses (if there is a tag hit they will reuse the same way)
+    //Signal is valid for a single cycle, RAM enables are used to hold outputs in case of pipeline stalls
     always_ff @ (posedge clk) begin
-        if (rst)
-            read_hit_allowed <= 0;
-        else
-            read_hit_allowed <= ls.new_request & ls_inputs.load & dcache_on & ~(amo.is_lr | amo.is_amo);
+        read_hit_allowed <= ls.new_request & ls_inputs.load & dcache_on & ~(amo.is_lr | amo.is_amo);
+        read_hit_data_valid <= read_hit_allowed;
+        second_cycle <= ls.new_request;
+        tag_update <= second_cycle & dcache_on & stage2_load & ~tag_hit;//Cache enabled, read miss
     end
-
-    always_ff @ (posedge clk) begin
-        if (rst)
-            read_hit_data_valid <= 0;
-        else
-            read_hit_data_valid <= read_hit_allowed;
-    end
-
 
     //LR reservation, cleared on exceptions
     always_ff @ (posedge clk) begin
@@ -142,25 +137,8 @@ module dcache(
             reservation <= 0;
     end
 
-    always_ff @ (posedge clk) begin
-        if (rst)
-            second_cycle <= 0;
-        else
-            second_cycle <= ls.new_request;
-    end
-
-    always_ff @ (posedge clk) begin
-        if (rst)
-            tag_update <= 0;
-        else if (second_cycle)
-            tag_update <= dcache_on & stage2_load & ~tag_hit;        //Cache enabled, read miss
-        else
-            tag_update <= 0;
-    end
-
-    /*************************************
-     * L1 Arbiter Interface
-     *************************************/
+    ////////////////////////////////////////////////////
+    //L1 Arbiter Interface
     assign l1_request.addr = {stage2_addr[31:2], 2'b0} ;//Memory interface aligns request to burst size (done there to support AMO line-read word-write)
     assign l1_request.data = stage2_data;
     assign l1_request.rnw = stage2_load;
@@ -187,10 +165,8 @@ module dcache(
     end
     assign l1_request.request = request | (second_cycle & (~(tag_hit & read_hit_allowed) | ~dcache_on));
 
-    /*************************************
-     * Cache Components
-     *************************************/
-    //Free running one hot cycler.
+    ////////////////////////////////////////////////////
+    //Replacement policy (free runing one-hot cycler, i.e. pseudo random)
     cycler #(DCACHE_WAYS) replacement_policy (.*, .en(1'b1), .one_hot(replacement_way));
 
     //One-hot tag hit / update logic to binary int
@@ -208,7 +184,7 @@ module dcache(
         end
     end
 
-
+    ////////////////////////////////////////////////////
     //Tag banks
     dtag_banks dcache_tag_banks (.*,
             .stage1_addr(ls_inputs.addr),
@@ -222,10 +198,8 @@ module dcache(
             .extern_inv_complete(l1_response.inv_ack)
         );
 
-
-    assign write_hit_be = stage2_be & {4{tag_hit}};
-
-    //AMO op processing on incoming data
+    ////////////////////////////////////////////////////
+    //AMO logic
     always_ff @ (posedge clk) begin
         amo_rs2 <= stage2_data;
     end
@@ -247,16 +221,23 @@ module dcache(
             new_line_data = l1_response.data;
     end
 
-
     assign sc_write_index = stage2_addr[DCACHE_SUB_LINE_ADDR_W+1:2];
-    assign update_word_index = stage2_amo.is_sc ? sc_write_index : word_count;
-    ////////////////////////////////////////////////////////
 
+
+    ////////////////////////////////////////////////////
     //Data Bank(s)
-    ddata_bank #(DCACHE_LINES*DCACHE_LINE_W*DCACHE_WAYS) data_bank (
+    //Tag bank selection done with upper address bits
+    //On miss, word index in line provided by: update_word_index
+    assign write_hit_be = stage2_be & {4{tag_hit}};
+    assign update_word_index = stage2_amo.is_sc ? sc_write_index : word_count;
+
+    assign data_bank_addr_a = {tag_hit_way_int, stage2_addr[DCACHE_LINE_ADDR_W+DCACHE_SUB_LINE_ADDR_W+2-1:2]};
+    assign data_bank_addr_b = {tag_update_way_int, stage2_addr[DCACHE_LINE_ADDR_W+DCACHE_SUB_LINE_ADDR_W+2-1:DCACHE_SUB_LINE_ADDR_W+2], update_word_index};
+
+    ddata_bank #(.LINES(DCACHE_SIZE_IN_WORDS)) data_bank (
             .clk(clk),
-            .addr_a({tag_hit_way_int, stage2_addr[DCACHE_LINE_ADDR_W+DCACHE_SUB_LINE_ADDR_W+2-1:2]}),
-            .addr_b({tag_update_way_int, stage2_addr[DCACHE_LINE_ADDR_W+DCACHE_SUB_LINE_ADDR_W+2-1:DCACHE_SUB_LINE_ADDR_W+2], update_word_index}),
+            .addr_a(data_bank_addr_a),
+            .addr_b(data_bank_addr_b),
             .en_a(second_cycle),
             .en_b(l1_response.data_valid | (sc_complete & sc_success)),
             .be_a(write_hit_be),
@@ -265,10 +246,8 @@ module dcache(
             .data_out_a(dbank_data_out)
         );
 
-
-    /*************************************
-     * Output Muxing
-     *************************************/
+    ////////////////////////////////////////////////////
+    //Output
     always_ff @ (posedge clk) begin
         if (l1_response.data_valid & is_target_word)
             miss_data <= l1_response.data;
@@ -280,18 +259,10 @@ module dcache(
 
     assign data_out = miss_data | ({32{read_hit_data_valid}} & dbank_data_out);
 
-    /*************************************
-     * Pipeline Advancement
-     *************************************/
+    ////////////////////////////////////////////////////
+    //Pipeline Advancement
     assign line_complete = (l1_response.data_valid && (word_count == (DCACHE_LINE_W-1))); //covers load, LR, AMO
     assign store_complete = l1_request.ack & stage2_store & ~stage2_amo.is_sc;
-
-    always_ff @ (posedge clk) begin
-        if (rst)
-            ls.data_valid <= 0;
-        else
-            ls.data_valid <= ((l1_response.data_valid & is_target_word) | (read_hit_allowed & tag_hit) | sc_complete);
-    end
 
     //read miss complete includes store conditional complete
     always_ff @ (posedge clk) begin
@@ -299,6 +270,13 @@ module dcache(
             read_miss_complete <= 0;
         else
             read_miss_complete <= line_complete | sc_complete;
+    end
+
+    always_ff @ (posedge clk) begin
+        if (rst)
+            ls.data_valid <= 0;
+        else
+            ls.data_valid <= ((l1_response.data_valid & is_target_word) | (read_hit_allowed & tag_hit) | sc_complete);
     end
 
     assign ls.ready = (read_hit_allowed & tag_hit) | store_complete | (read_miss_complete) | idle;
