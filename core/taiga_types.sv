@@ -450,6 +450,9 @@ package taiga_types;
         logic no_instruction_stall;
         logic other_stall;
         logic instruction_issued_dec;
+        logic branch_operand_stall;
+        logic alu_operand_stall;
+        logic ls_operand_stall;
 
         //Branch Unit
         logic branch_misspredict;

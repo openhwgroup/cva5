@@ -61,6 +61,9 @@ module decode(
         output logic tr_no_id_stall,
         output logic tr_no_instruction_stall,
         output logic tr_other_stall,
+        output logic tr_branch_operand_stall,
+        output logic tr_alu_operand_stall,
+        output logic tr_ls_operand_stall,
 
         output logic tr_instruction_issued_dec,
         output logic [31:0] tr_instruction_pc_dec,
@@ -435,6 +438,9 @@ module decode(
         assign tr_no_id_stall = (|issue_ready) & (fb_valid & ~ti.id_available & ~gc_issue_hold & ~gc_fetch_flush) & load_store_operands_ready;
         assign tr_no_instruction_stall = ~fb_valid;
         assign tr_other_stall = fb_valid & ~instruction_issued & ~(tr_operand_stall | tr_unit_stall | tr_no_id_stall | tr_no_instruction_stall) & ~gc_fetch_flush;
+        assign tr_branch_operand_stall = tr_operand_stall & new_request[BRANCH_UNIT_ID];
+        assign tr_alu_operand_stall = tr_operand_stall & new_request[ALU_UNIT_WB_ID] & ~new_request[BRANCH_UNIT_ID];
+        assign tr_ls_operand_stall = tr_operand_stall & new_request[LS_UNIT_WB_ID];
 
         assign tr_instruction_issued_dec = instruction_issued;
         assign tr_instruction_pc_dec = fb.pc;
