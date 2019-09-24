@@ -112,10 +112,11 @@ interface register_file_decode_interface;
     logic uses_rs2;
     logic rs1_conflict;
     logic rs2_conflict;
+    instruction_id_t rs2_id;
     logic instruction_issued;
 
-    modport decode (output future_rd_addr, rs1_addr, rs2_addr, instruction_issued, id, uses_rs1, uses_rs2, input rs1_conflict, rs2_conflict, rs1_data, rs2_data);
-    modport unit (input future_rd_addr, rs1_addr, rs2_addr, instruction_issued, id, uses_rs1, uses_rs2, output rs1_conflict, rs2_conflict, rs1_data, rs2_data);
+    modport decode (output future_rd_addr, rs1_addr, rs2_addr, instruction_issued, id, uses_rs1, uses_rs2, input rs1_conflict, rs2_conflict, rs1_data, rs2_data, rs2_id);
+    modport unit (input future_rd_addr, rs1_addr, rs2_addr, instruction_issued, id, uses_rs1, uses_rs2, output rs1_conflict, rs2_conflict, rs1_data, rs2_data, rs2_id);
 endinterface
 
 

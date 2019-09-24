@@ -114,6 +114,13 @@ module taiga (
     logic instruction_complete;
     logic gc_flush_required;
 
+    //LS
+    instruction_id_t store_id;
+    instruction_id_t store_done_id;
+    logic store_complete;
+    logic [31:0] wb_buffer_data;
+    logic wb_buffer_data_valid;
+
     //Trace Interface Signals
     logic tr_operand_stall;
     logic tr_unit_stall;
@@ -128,6 +135,7 @@ module taiga (
     logic [31:0] tr_instruction_pc_dec;
     logic [31:0] tr_instruction_data_dec;
 
+    logic tr_branch_correct;
     logic tr_branch_misspredict;
     logic tr_return_misspredict;
     logic tr_wb_mux_contention;
@@ -221,6 +229,7 @@ module taiga (
             tr.events.branch_operand_stall <= tr_branch_operand_stall;
             tr.events.alu_operand_stall <= tr_alu_operand_stall;
             tr.events.ls_operand_stall <= tr_ls_operand_stall;
+            tr.events.branch_correct <= tr_branch_correct;
             tr.events.branch_misspredict <= tr_branch_misspredict;
             tr.events.return_misspredict <= tr_return_misspredict;
             tr.events.wb_mux_contention <= tr_wb_mux_contention;

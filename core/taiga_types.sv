@@ -375,6 +375,7 @@ package taiga_types;
         logic load;
         logic store;
         logic load_store_forward;
+        instruction_id_t store_forward_id;
         instruction_id_t instruction_id;
         //exception support
         logic [31:0] pc;
@@ -455,6 +456,7 @@ package taiga_types;
         logic ls_operand_stall;
 
         //Branch Unit
+        logic branch_correct;
         logic branch_misspredict;
         logic return_misspredict;
 

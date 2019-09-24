@@ -36,6 +36,13 @@ module write_back(
         output logic instruction_queue_empty,
         output instruction_id_t oldest_id,
 
+        input instruction_id_t store_id,
+        input instruction_id_t store_done_id,
+        input logic store_complete,
+        output logic [31:0] wb_buffer_data,
+        output logic wb_buffer_data_valid,
+
+
         //Trace signals
         output logic tr_wb_mux_contention
         );
@@ -85,6 +92,8 @@ module write_back(
                     id_done_new[i] |= 1;
                 end
             end
+            if (store_complete && store_done_id == i[$clog2(MAX_INFLIGHT_COUNT)-1:0])
+                id_done_new[i] |= 1;
         end
     end
 
@@ -97,6 +106,9 @@ module write_back(
             end
         end
     endgenerate
+
+    assign wb_buffer_data = rds_by_id[store_id];
+    assign wb_buffer_data_valid = id_done_r[store_id];
 
     //ID tracking
     id_tracking id_fifos (.*, .issued(ti.issued), .retired(retired), .id_available(ti.id_available),

@@ -34,6 +34,7 @@ module branch_unit(
         output branch_flush,
 
         //Trace signals
+        output logic tr_branch_correct,
         output logic tr_branch_misspredict,
         output logic tr_return_misspredict
         );
@@ -180,7 +181,8 @@ module branch_unit(
     ////////////////////////////////////////////////////
     //Trace Interface
     generate if (ENABLE_TRACE_INTERFACE) begin
-        assign tr_branch_misspredict = ~is_return & miss_predict;
+        assign tr_branch_correct = ~jump_ex & branch_issued_r & ~miss_predict;
+        assign tr_branch_misspredict = ~jump_ex & miss_predict;
         assign tr_return_misspredict = is_return & miss_predict;
     end
     endgenerate

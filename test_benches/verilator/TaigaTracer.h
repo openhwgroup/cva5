@@ -46,6 +46,7 @@ static const char * const eventNames[] = {
     "branch_operand_stall",
     "alu_operand_stall",
     "ls_operand_stall",
+    "branch_correct",
     "branch_misspredict",
     "return_misspredict",
     "wb_mux_contention",

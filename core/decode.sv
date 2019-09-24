@@ -189,7 +189,7 @@ module decode(
     assign issue_valid = fb_valid & ti.id_available & ~gc_issue_hold & ~gc_fetch_flush;
 
     assign operands_ready = ~rf_decode.rs1_conflict & ~rf_decode.rs2_conflict;
-    assign load_store_operands_ready = ~rf_decode.rs1_conflict & (~rf_decode.rs2_conflict | (rf_decode.rs2_conflict & load_store_forward_possible));
+    assign load_store_operands_ready = ~rf_decode.rs1_conflict & (~rf_decode.rs2_conflict | (rf_decode.rs2_conflict & (opcode_trim == STORE_T)));
 
     //All units share the same operand ready logic except load-store which has an internal forwarding path
     always_comb begin
@@ -267,30 +267,8 @@ module decode(
     assign ls_inputs.load = is_load;
     assign ls_inputs.store = is_store;
     assign ls_inputs.load_store_forward = rf_decode.rs2_conflict;
+    assign ls_inputs.store_forward_id = rf_decode.rs2_id;
     assign ls_inputs.instruction_id = ti.issue_id;
-
-    //Last store RD tracking for Load-Store data forwarding
-    logic [4:0] last_load_rd;
-    logic basic_load;
-
-    assign basic_load = (opcode_trim == LOAD_T);
-    always_ff @ (posedge clk) begin
-        if (issue[LS_UNIT_WB_ID] & basic_load)
-            last_load_rd <= future_rd_addr;
-    end
-
-    initial begin
-        foreach(register_in_use_by_load_op[i])
-            register_in_use_by_load_op[i] = 0;
-    end
-
-    always_ff @ (posedge clk) begin
-       if (instruction_issued_with_rd & ~rd_zero)
-           register_in_use_by_load_op[future_rd_addr] <= new_request[LS_UNIT_WB_ID] & basic_load;
-    end
-
-    assign store_data_in_use_by_load_op = register_in_use_by_load_op[rs2_addr];
-    assign load_store_forward_possible = (opcode_trim == STORE_T) && store_data_in_use_by_load_op && (last_load_rd == rs2_addr);
 
     ////////////////////////////////////////////////////
     //Branch unit inputs

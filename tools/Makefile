@@ -57,6 +57,8 @@ embench_hw  = $(addsuffix .hw_init,  $(EMBENCH_BENCHMARKS))
 embench_sim  = $(addsuffix .sim_init,  $(EMBENCH_BENCHMARKS))
 ###############################################################
 
+COREMARK_DIR=/home/ematthew/Research/RISCV/software/coremark
+
 #Binary to Verilog HW init file
 ###############################################################
 ELF_TO_HW_INIT ?= python3 $(TAIGA_DIR)/tools/taiga_binary_converter.py $(RISCV_PREFIX) 0x80000000 131072
@@ -84,6 +86,17 @@ build_embench :
 	cd build;\
 	../configure --host=riscv32-unknown-elf --with-chip=speed-test --with-board=taiga-sim;\
 	make
+
+
+.PHONY: build_coremark
+build_coremark:
+	$(MAKE) -C  $(COREMARK_DIR) compile PORT_DIR=taiga-sim ITERATIONS=5000
+	cd $(MAKEFILE_DIR);
+	$(ELF_TO_HW_INIT) $(COREMARK_DIR)/coremark.bin coremark.hw_init coremark.sim_init
+
+.PHONY: run_coremark_verilator
+run_coremark_verilator :
+	./verilator_local_mem_test/Vtaiga_local_mem "/dev/null" "/dev/null" $(TAIGA_DIR)/tools/coremark.hw_init $(VERILATOR_TRACE_FILE) >> $@
 
 
 #Benchmarks already built
@@ -126,7 +139,7 @@ run_compliance_tests_verilator:
 
 .PHONY: run_dhrystone_verilator
 run_dhrystone_verilator :
-	./verilator_local_mem_test/Vtaiga_local_mem "/dev/null" "/dev/null" /home/ematthew/Research/RISCV/software/taiga-benchmarks/dhrystone.riscv.hw_init $(VERILATOR_TRACE_FILE) >> $@
+	./verilator_local_mem_test/Vtaiga_local_mem "/dev/null" "/dev/null" /home/ematthew/Research/RISCV/software/taiga-benchmarks/dhrystone.riscv.hw_init $(VERILATOR_TRACE_FILE) > $@
 
 clean:
 	rm -rf $(CRUFT)

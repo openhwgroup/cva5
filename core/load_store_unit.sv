@@ -46,6 +46,12 @@ module load_store_unit (
 
         local_memory_interface.master data_bram,
 
+        output instruction_id_t store_id,
+        output instruction_id_t store_done_id,
+        output logic store_complete,
+        input logic [31:0] wb_buffer_data,
+        input logic wb_buffer_data_valid,
+
         input logic[31:0] csr_rd,
         input instruction_id_t csr_id,
         input logic csr_done,
@@ -72,10 +78,9 @@ module load_store_unit (
     ls_sub_unit_interface #(.BASE_ADDR(MEMORY_ADDR_L), .UPPER_BOUND(MEMORY_ADDR_H), .BIT_CHECK(BUS_BIT_CHECK)) cache();
 
     logic units_ready;
-    logic store_bypass_stall;
+    logic store_ready;
     logic issue_request;
     logic load_complete;
-    logic store_complete;
 
     logic [31:0] virtual_address;
     logic [3:0] be;
@@ -139,12 +144,17 @@ module load_store_unit (
     //Primary Control Signals
     assign units_ready = &unit_ready;
     assign load_complete = |unit_data_valid;
-    assign store_complete = stage2_attr.is_store & load_attributes.valid;
+
+    always_ff @ (posedge clk) begin
+        store_done_id <= stage1.instruction_id;
+        store_complete <= stage1.store & issue_request;
+    end
+    assign store_id = stage1.store_forward_id;
 
     //When switching units, ensure no outstanding loads so that there can be no timing collisions with results
     assign unit_stall = (current_unit != last_unit) && ~load_attributes.empty;
-    assign store_bypass_stall = stage1.store & stage1.load_store_forward & ~load_attributes.empty;
-    assign issue_request = input_fifo.valid & units_ready & ~unit_stall & ~unaligned_addr & ~store_bypass_stall;
+    assign store_ready = stage1.store & ((stage1.load_store_forward & wb_buffer_data_valid) | ~stage1.load_store_forward);
+    assign issue_request = input_fifo.valid & units_ready & ~unit_stall & ~unaligned_addr & (~stage1.store | store_ready);
 
     ////////////////////////////////////////////////////
     //TLB interface
@@ -205,7 +215,7 @@ module load_store_unit (
     assign shared_inputs.be = be;
     assign shared_inputs.fn3 = stage1.fn3;
 
-    assign stage1_raw_data =  stage1.load_store_forward ?  previous_load : stage1.rs2;
+    assign stage1_raw_data = stage1.load_store_forward ?  wb_buffer_data : stage1.rs2;
 
     //Input: ABCD
     //Assuming aligned requests,
@@ -232,8 +242,8 @@ module load_store_unit (
 
     assign load_attributes.data_in = load_attributes_in;
 
-    assign load_attributes.push = issue_request;
-    assign load_attributes.pop = load_complete | store_complete;
+    assign load_attributes.push = issue_request & stage1.load;
+    assign load_attributes.pop = load_complete;
 
     assign stage2_attr  = load_attributes.data_out;
 
@@ -325,7 +335,7 @@ module load_store_unit (
     always_ff @ (posedge clk) begin
         exception_complete <= (input_fifo.valid & ls_exception_valid & stage1.load);
     end
-    assign ls_done = load_complete | exception_complete | store_complete;
+    assign ls_done = load_complete | exception_complete;
 
     assign wb.done = csr_done | ls_done;
     assign wb.id = csr_done ? csr_id : stage2_attr.instruction_id;

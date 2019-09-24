@@ -16,15 +16,15 @@
       </db_ref>
    </db_ref_list>
    <zoom_setting>
-      <ZoomStartTime time="3978080000fs"></ZoomStartTime>
-      <ZoomEndTime time="3994700001fs"></ZoomEndTime>
-      <Cursor1Time time="3991800000fs"></Cursor1Time>
+      <ZoomStartTime time="0fs"></ZoomStartTime>
+      <ZoomEndTime time="511000001fs"></ZoomEndTime>
+      <Cursor1Time time="333000000fs"></Cursor1Time>
    </zoom_setting>
    <column_width_setting>
       <NameColumnWidth column_width="259"></NameColumnWidth>
-      <ValueColumnWidth column_width="248"></ValueColumnWidth>
+      <ValueColumnWidth column_width="244"></ValueColumnWidth>
    </column_width_setting>
-   <WVObjectSize size="164" />
+   <WVObjectSize size="160" />
    <wvobject type="logic" fp_name="/taiga_full_simulation/clk">
       <obj_property name="ElementShortName">clk</obj_property>
       <obj_property name="ObjectShortName">clk</obj_property>
@@ -207,33 +207,25 @@
       <obj_property name="label">Register File</obj_property>
       <obj_property name="DisplayName">label</obj_property>
    </wvobject>
+   <wvobject type="logic" fp_name="/taiga_full_simulation/uut/register_file_block/register_inuse_tracking/clr">
+      <obj_property name="ElementShortName">clr</obj_property>
+      <obj_property name="ObjectShortName">clr</obj_property>
+   </wvobject>
    <wvobject type="array" fp_name="/taiga_full_simulation/uut/register_file_block/sim_register">
       <obj_property name="ElementShortName">sim_register</obj_property>
       <obj_property name="ObjectShortName">sim_register</obj_property>
    </wvobject>
-   <wvobject type="logic" fp_name="/taiga_full_simulation/uut/register_file_block/inuse_mem/issued">
-      <obj_property name="ElementShortName">issued</obj_property>
-      <obj_property name="ObjectShortName">issued</obj_property>
+   <wvobject type="array" fp_name="/taiga_full_simulation/uut/register_file_block/register_inuse_tracking/reg_inuse_A">
+      <obj_property name="ElementShortName">reg_inuse_A[31:0]</obj_property>
+      <obj_property name="ObjectShortName">reg_inuse_A[31:0]</obj_property>
    </wvobject>
-   <wvobject type="array" fp_name="/taiga_full_simulation/uut/register_file_block/inuse_mem/rs1_addr">
-      <obj_property name="ElementShortName">rs1_addr[4:0]</obj_property>
-      <obj_property name="ObjectShortName">rs1_addr[4:0]</obj_property>
+   <wvobject type="array" fp_name="/taiga_full_simulation/uut/register_file_block/register_inuse_tracking/reg_inuse_B">
+      <obj_property name="ElementShortName">reg_inuse_B[31:0]</obj_property>
+      <obj_property name="ObjectShortName">reg_inuse_B[31:0]</obj_property>
    </wvobject>
-   <wvobject type="array" fp_name="/taiga_full_simulation/uut/register_file_block/inuse_mem/rs2_addr">
-      <obj_property name="ElementShortName">rs2_addr[4:0]</obj_property>
-      <obj_property name="ObjectShortName">rs2_addr[4:0]</obj_property>
-   </wvobject>
-   <wvobject type="logic" fp_name="/taiga_full_simulation/uut/register_file_block/inuse_mem/rs1_inuse">
-      <obj_property name="ElementShortName">rs1_inuse</obj_property>
-      <obj_property name="ObjectShortName">rs1_inuse</obj_property>
-   </wvobject>
-   <wvobject type="logic" fp_name="/taiga_full_simulation/uut/register_file_block/inuse_mem/rs2_inuse">
-      <obj_property name="ElementShortName">rs2_inuse</obj_property>
-      <obj_property name="ObjectShortName">rs2_inuse</obj_property>
-   </wvobject>
-   <wvobject type="logic" fp_name="/taiga_full_simulation/uut/register_file_block/in_use_match">
-      <obj_property name="ElementShortName">in_use_match</obj_property>
-      <obj_property name="ObjectShortName">in_use_match</obj_property>
+   <wvobject type="array" fp_name="/taiga_full_simulation/uut/register_file_block/register_inuse_tracking/sim_inuse">
+      <obj_property name="ElementShortName">sim_inuse[31:0]</obj_property>
+      <obj_property name="ObjectShortName">sim_inuse[31:0]</obj_property>
    </wvobject>
    <wvobject type="array" fp_name="/taiga_full_simulation/uut/register_file_block/in_use_by">
       <obj_property name="ElementShortName">in_use_by[31:0][1:0]</obj_property>
@@ -411,10 +403,6 @@
       <obj_property name="label">L2</obj_property>
       <obj_property name="DisplayName">label</obj_property>
    </wvobject>
-   <wvobject type="array" fp_name="/taiga_full_simulation/l2_arb/\request[0] /request">
-      <obj_property name="ElementShortName">request</obj_property>
-      <obj_property name="ObjectShortName">request</obj_property>
-   </wvobject>
    <wvobject type="logic" fp_name="/taiga_full_simulation/l2_arb/\request[0] /request_push">
       <obj_property name="ElementShortName">request_push</obj_property>
       <obj_property name="ObjectShortName">request_push</obj_property>
@@ -494,10 +482,6 @@
    <wvobject type="logic" fp_name="/taiga_full_simulation/l2_arb/\request[0] /rd_data_ack">
       <obj_property name="ElementShortName">rd_data_ack</obj_property>
       <obj_property name="ObjectShortName">rd_data_ack</obj_property>
-   </wvobject>
-   <wvobject type="array" fp_name="/taiga_full_simulation/l2_arb/mem/request">
-      <obj_property name="ElementShortName">request</obj_property>
-      <obj_property name="ObjectShortName">request</obj_property>
    </wvobject>
    <wvobject type="logic" fp_name="/taiga_full_simulation/l2_arb/mem/request_pop">
       <obj_property name="ElementShortName">request_pop</obj_property>
