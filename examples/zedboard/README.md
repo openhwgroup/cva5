@@ -133,7 +133,7 @@ Program the ZedBoard with the generated bitstream. This can be done from the Flo
 rightclick on the xc7z020_1 and select "Program Device". Confirm that it is the correct bitstream file, then click program. This will begin running the binnaries loaded onto the local memory. By default, it will be running the Dhrystone benchmarks.
 
 
-[OLD]Creating a Project for the Zedboard
+Simulating the Core
 ================
 
 
