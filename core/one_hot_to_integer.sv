@@ -1,5 +1,5 @@
 /*
- * Copyright © 2017, 2018 Eric Matthews,  Lesley Shannon
+ * Copyright © 2017-2019 Eric Matthews,  Lesley Shannon
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,25 +23,33 @@
 //This module requires the input always be encoded as a one-hot signal
 //as all possible conditions are ORed together
 module one_hot_to_integer
-        #(
+    #(
         parameter C_WIDTH = 6
         )
         (
-        input logic clk,//for assertion
+        //clk and rst for assertion purposes
+        input logic clk,
+        input logic rst,
         input logic [C_WIDTH-1:0] one_hot,
-        output logic [$clog2(C_WIDTH)-1:0] int_out
+        output logic [(C_WIDTH == 1) ? 0 : ($clog2(C_WIDTH)-1) : 0] int_out
         );
-
-    always_comb begin
-        int_out = 0;
-        foreach (one_hot[i])
-            if (one_hot[i]) int_out |= i[$clog2(C_WIDTH)-1:0];
+    ////////////////////////////////////////////////////
+    //Implementation
+    generate if (C_WIDTH == 1)
+        assign int_out[0] = 0;
+    else begin
+        always_comb begin
+            int_out = 0;
+            foreach (one_hot[i])
+                if (one_hot[i]) int_out |= i[$clog2(C_WIDTH)-1:0];
+        end
     end
+    endgenerate
+
     ////////////////////////////////////////////////////
     //Assertions
-    //always_ff @ (posedge clk) begin
-    //    assert ((one_hot & (one_hot -1)) == 0) else $error("One-hot signal has multiple bits set!");
-    //end
-
+    always_ff @ (posedge clk) begin
+        assert (rst || (~rst && $onehot0(one_hot))) else $error("One-hot signal has multiple bits set!");
+    end
 
 endmodule
