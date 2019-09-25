@@ -73,7 +73,9 @@ module fetch(
     logic [31:0] next_pc;
     logic [31:0] if_pc;
 
-    logic[$clog2(FETCH_BUFFER_DEPTH+1)-1:0] inflight_count;
+    localparam LOG2_FETCH_BUFFER_DEPTH = $clog2(FETCH_BUFFER_DEPTH);
+
+    logic [LOG2_FETCH_BUFFER_DEPTH:0] inflight_count;
     logic space_in_inst_buffer;
     logic mem_ready;
     logic new_mem_request;
@@ -143,21 +145,11 @@ module fetch(
 
     always_ff @(posedge clk) begin
         if (rst | gc_fetch_flush)
-            inflight_count <= 0;
-        else if (mem_ready  & ~pre_decode_pop)
-            inflight_count <= inflight_count + 1;
-        else if (~mem_ready &  pre_decode_pop)
-            inflight_count <= inflight_count - 1;
+            inflight_count <= '1;
+        else
+            inflight_count <= inflight_count - (LOG2_FETCH_BUFFER_DEPTH+1)'(mem_ready) + (LOG2_FETCH_BUFFER_DEPTH+1)'(pre_decode_pop);
     end
-
-    always_ff @(posedge clk) begin
-        if (rst | gc_fetch_flush)
-            space_in_inst_buffer <= 1;
-        else if (mem_ready  & ~pre_decode_pop)
-            space_in_inst_buffer <= inflight_count < (FETCH_BUFFER_DEPTH-1);
-        else if (~mem_ready &  pre_decode_pop)
-            space_in_inst_buffer <= 1;
-    end
+    assign space_in_inst_buffer = inflight_count[LOG2_FETCH_BUFFER_DEPTH];
 
 //assign space_in_inst_buffer = inflight_count < FETCH_BUFFER_DEPTH;
     assign mem_ready = tlb.complete & space_in_inst_buffer & units_ready;
