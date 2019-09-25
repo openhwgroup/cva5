@@ -253,11 +253,9 @@ module dcache(
             miss_data <= l1_response.data;
         else if (sc_complete)
             miss_data <= {31'b0, sc_success};
-        else
-            miss_data <= 0;
     end
 
-    assign data_out = miss_data | ({32{read_hit_data_valid}} & dbank_data_out);
+    assign data_out = read_hit_data_valid ? dbank_data_out : miss_data;
 
     ////////////////////////////////////////////////////
     //Pipeline Advancement

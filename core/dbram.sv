@@ -40,7 +40,7 @@ module dbram(
     assign data_bram.en = ls.new_request;
     assign data_bram.be = ls_inputs.be;
     assign data_bram.data_in = ls_inputs.data_in;
-    assign data_out = data_bram.data_out & {32{ls.data_valid}};
+    assign data_out = data_bram.data_out;
 
     always_ff @ (posedge clk) begin
         if (rst)

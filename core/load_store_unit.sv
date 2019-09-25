@@ -63,7 +63,7 @@ module load_store_unit (
         );
 
     localparam NUM_SUB_UNITS = USE_D_SCRATCH_MEM+USE_BUS+USE_DCACHE;
-    localparam NUM_SUB_UNITS_W = $clog2(NUM_SUB_UNITS);
+    localparam NUM_SUB_UNITS_W = (NUM_SUB_UNITS == 1) ? 1 : $clog2(NUM_SUB_UNITS);
 
     localparam BRAM_ID = 0;
     localparam BUS_ID = USE_D_SCRATCH_MEM;
@@ -89,7 +89,6 @@ module load_store_unit (
     logic [31:0] aligned_load_data;
     logic [31:0] final_load_data;
 
-    logic [31:0] previous_load;
     logic [31:0] stage1_raw_data;
 
     logic [31:0] unit_data_array [NUM_SUB_UNITS-1:0];
@@ -107,7 +106,7 @@ module load_store_unit (
         logic [2:0] fn3;
         logic [1:0] byte_addr;
         instruction_id_t instruction_id;
-        logic is_store;
+        logic [0:0] subunit_id;
     } load_attributes_t;
     load_attributes_t  load_attributes_in, stage2_attr;
     load_store_inputs_t  stage1;
@@ -134,9 +133,7 @@ module load_store_unit (
     //Unit tracking
     assign current_unit = sub_unit_address_match;
     always_ff @ (posedge clk) begin
-        if (rst)
-            last_unit <= 0;
-        else if (load_attributes.push)
+        if (load_attributes.push)
             last_unit <= sub_unit_address_match;
     end
 
@@ -152,7 +149,7 @@ module load_store_unit (
     assign store_id = stage1.store_forward_id;
 
     //When switching units, ensure no outstanding loads so that there can be no timing collisions with results
-    assign unit_stall = (current_unit != last_unit) && ~load_attributes.empty;
+    assign unit_stall = (current_unit != last_unit) && load_attributes.valid;
     assign store_ready = stage1.store & ((stage1.load_store_forward & wb_buffer_data_valid) | ~stage1.load_store_forward);
     assign issue_request = input_fifo.valid & units_ready & ~unit_stall & ~unaligned_addr & (~stage1.store | store_ready);
 
@@ -233,19 +230,19 @@ module load_store_unit (
 
     ////////////////////////////////////////////////////
     //Load attributes FIFO
+    one_hot_to_integer #(NUM_SUB_UNITS) hit_way_conv (.*, .one_hot(sub_unit_address_match), .int_out(load_attributes_in.subunit_id));
     taiga_fifo #(.DATA_WIDTH($bits(load_attributes_t)), .FIFO_DEPTH(ATTRIBUTES_DEPTH), .FIFO_TYPE(LUTRAM_FIFO)
         ) attributes_fifo (.fifo(load_attributes), .*);
     assign load_attributes_in.fn3 = stage1.fn3;
     assign load_attributes_in.byte_addr = virtual_address[1:0];
     assign load_attributes_in.instruction_id = stage1.instruction_id;
-    assign load_attributes_in.is_store = stage1.store;
 
     assign load_attributes.data_in = load_attributes_in;
 
     assign load_attributes.push = issue_request & stage1.load;
     assign load_attributes.pop = load_complete;
 
-    assign stage2_attr  = load_attributes.data_out;
+    assign stage2_attr = load_attributes.data_out;
 
     ////////////////////////////////////////////////////
     //Unit Instantiation
@@ -290,13 +287,7 @@ module load_store_unit (
 
     ////////////////////////////////////////////////////
     //Output Muxing
-
-    //unit mux
-    always_comb begin
-        unit_muxed_load_data = 0;
-        foreach (unit_data_array[i])
-            unit_muxed_load_data |= unit_data_array[i];
-    end
+    assign unit_muxed_load_data = unit_data_array[stage2_attr.subunit_id];
 
     //Byte/halfword select: assumes aligned operations
     always_comb begin
@@ -321,14 +312,9 @@ module load_store_unit (
         endcase
     end
 
-    always_ff @ (posedge clk) begin
-        if (load_complete)
-            previous_load <= final_load_data;
-    end
-
     ////////////////////////////////////////////////////
     //Output bank
-    assign wb.rd = csr_rd | final_load_data;
+    assign wb.rd = ls_done ? final_load_data : csr_rd;
 
     logic exception_complete;
     logic ls_done;

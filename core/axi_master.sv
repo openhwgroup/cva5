@@ -74,10 +74,8 @@ module axi_master
     always_ff @ (posedge clk) begin
         if (rst)
             ls.data_valid <= 0;
-        else if (m_axi.rvalid)
-            ls.data_valid <= 1;
         else
-            ls.data_valid <= 0;
+            ls.data_valid <= m_axi.rvalid;
     end
 
     //read channel
@@ -93,8 +91,6 @@ module axi_master
     always_ff @ (posedge clk) begin
         if (m_axi.rvalid)
             data_out <= m_axi.rdata;
-        else
-            data_out <= 0;
     end
 
     //write channel
