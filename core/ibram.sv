@@ -40,7 +40,7 @@ module ibram(
     assign fetch_sub.data_out =  instruction_bram.data_out;
 
     always_ff @ (posedge clk) begin
-        if (rst)
+        if (rst | fetch_sub.flush)
             fetch_sub.data_valid <= 0;
         else
             fetch_sub.data_valid <= fetch_sub.new_request;

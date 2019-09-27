@@ -74,14 +74,12 @@ module fetch(
     logic units_data_valid;
 
     logic [31:0] next_pc;
-    logic [31:0] if_pc;
-    logic update_pc;
+    logic [31:0] pc;
 
     logic flush_or_rst;
     logic [FETCH_BUFFER_DEPTH_W:0] inflight_count;
     fifo_interface #(.DATA_WIDTH(NUM_SUB_UNITS_W)) next_unit();
     logic space_in_inst_buffer;
-    logic mem_ready;
     logic new_mem_request;
 
     //Cache related
@@ -89,55 +87,43 @@ module fetch(
     logic [31:0] stage2_phys_address;
     logic stage2_valid;
 
+    genvar i;
     ////////////////////////////////////////////////////
     //Implementation
-    genvar i;
-    generate
-        for(i=0; i < NUM_SUB_UNITS; i++) begin
-            assign unit_ready[i] = fetch_sub[i].ready;
-            assign unit_data_valid[i] = fetch_sub[i].data_valid;
-        end
-    endgenerate
-    assign units_ready = &unit_ready;
-    assign units_data_valid = |unit_data_valid;
-
-
-
     ////////////////////////////////////////////////////
     //Fetch PC
     always_ff @(posedge clk) begin
         if (rst)
-            if_pc <= RESET_VEC;
-        else if (update_pc)
-            if_pc <= {next_pc[31:2], 2'b0};
+            pc <= RESET_VEC;
+        else if (new_mem_request | gc_fetch_flush)
+            pc <= {next_pc[31:2], 2'b0};
     end
 
     always_comb begin
-        if (gc_fetch_pc_override)
-            next_pc = gc_fetch_pc;
-        else if (branch_flush)
+        if (branch_flush)
             next_pc = bp.branch_flush_pc;
+        else if (gc_fetch_pc_override)
+            next_pc = gc_fetch_pc;
         else if (bp.use_prediction)
             next_pc = (bp.use_ras & ras.valid) ? ras.addr : bp.predicted_pc;
         else
-            next_pc = if_pc + 4;
+            next_pc = pc + 4;
     end
 
-    assign bp.new_mem_request = update_pc;
+    assign bp.new_mem_request = new_mem_request | gc_fetch_flush;
     assign bp.next_pc = next_pc;
 
-    assign bp.if_pc = if_pc;
+    assign bp.if_pc = pc;
 
     ////////////////////////////////////////////////////
     //TLB
-    assign tlb.virtual_address = if_pc;
+    assign tlb.virtual_address = pc;
     assign tlb.execute = 1;
     assign tlb.rnw = 0;
 
     always_ff @(posedge clk) begin
-        if (new_mem_request) begin
+        if (new_mem_request)
             stage2_phys_address <= tlb.physical_address;
-        end
     end
 
     //////////////////////////////////////////////
@@ -148,75 +134,78 @@ module fetch(
         if (flush_or_rst)
             inflight_count <= '1;
         else
-            inflight_count <= inflight_count - (FETCH_BUFFER_DEPTH_W+1)'(mem_ready) + (FETCH_BUFFER_DEPTH_W+1)'(pre_decode_pop);
+            inflight_count <= inflight_count - (FETCH_BUFFER_DEPTH_W+1)'(new_mem_request) + (FETCH_BUFFER_DEPTH_W+1)'(pre_decode_pop);
     end
-    assign space_in_inst_buffer = inflight_count[FETCH_BUFFER_DEPTH_W];
 
-    assign mem_ready = tlb.complete & space_in_inst_buffer & units_ready;
-    assign new_mem_request = mem_ready & (~gc_fetch_flush);
-    assign update_pc = mem_ready | gc_fetch_flush;
+    assign space_in_inst_buffer = inflight_count[FETCH_BUFFER_DEPTH_W];
+    assign new_mem_request = tlb.complete & space_in_inst_buffer & units_ready;
 
     //////////////////////////////////////////////
     //Subunit Tracking
-    assign next_unit.push = mem_ready;
+    assign next_unit.push = new_mem_request;
     assign next_unit.pop = units_data_valid;
     one_hot_to_integer #(NUM_SUB_UNITS) hit_way_conv (.*, .one_hot(sub_unit_address_match), .int_out(next_unit.data_in));
     taiga_fifo #(.DATA_WIDTH(NUM_SUB_UNITS_W), .FIFO_DEPTH(NEXT_ID_DEPTH), .FIFO_TYPE(LUTRAM_FIFO))
         attributes_fifo (.fifo(next_unit), .rst(flush_or_rst), .*);
 
     ////////////////////////////////////////////////////
-    //Memory interfaces
-    generate if (USE_I_SCRATCH_MEM) begin
-            ibram i_bram (.*, .fetch_sub(fetch_sub[BRAM_ID]));
-            assign sub_unit_address_match[BRAM_ID] = (tlb.physical_address[31:32-SCRATCH_BIT_CHECK] == SCRATCH_ADDR_L[31:32-SCRATCH_BIT_CHECK]);
-            assign fetch_sub[BRAM_ID].new_request = new_mem_request & (USE_ICACHE ? ~sub_unit_address_match[ICACHE_ID] : 1'b1);//Pass invalid address fetches through scratchmem
-            assign fetch_sub[BRAM_ID].stage1_addr = tlb.physical_address;
-            assign fetch_sub[BRAM_ID].stage2_addr = stage2_phys_address;
-            assign unit_data_array[BRAM_ID] = fetch_sub[BRAM_ID].data_out;
+    //Subunit Interfaces
+    generate
+        for (i = 0; i < NUM_SUB_UNITS; i++) begin
+            assign unit_ready[i] = fetch_sub[i].ready;
+            assign unit_data_valid[i] = fetch_sub[i].data_valid;
+            assign fetch_sub[i].new_request = new_mem_request & sub_unit_address_match[i];
+            assign fetch_sub[i].stage1_addr = tlb.physical_address;
+            assign fetch_sub[i].stage2_addr = stage2_phys_address;
+            assign fetch_sub[i].flush = gc_fetch_flush;
+            assign unit_data_array[i] = fetch_sub[i].data_out;
         end
     endgenerate
+    assign units_ready = &unit_ready;
+    assign units_data_valid = |unit_data_valid;
+
+    generate if (USE_I_SCRATCH_MEM) begin
+        ibram i_bram (.*, .fetch_sub(fetch_sub[BRAM_ID]));
+        assign sub_unit_address_match[BRAM_ID] = USE_ICACHE ? ~sub_unit_address_match[ICACHE_ID] : 1'b1;
+    end
+    endgenerate
     generate if (USE_ICACHE) begin
-            icache i_cache (.*, .fetch_sub(fetch_sub[ICACHE_ID]));
-            assign sub_unit_address_match[ICACHE_ID] = tlb.physical_address[31:32-MEMORY_BIT_CHECK] == MEMORY_ADDR_L[31:32-MEMORY_BIT_CHECK];
-            assign fetch_sub[ICACHE_ID].new_request = new_mem_request & sub_unit_address_match[ICACHE_ID];
-            assign fetch_sub[ICACHE_ID].stage1_addr = tlb.physical_address;
-            assign fetch_sub[ICACHE_ID].stage2_addr = stage2_phys_address;
-            assign unit_data_array[ICACHE_ID] = fetch_sub[ICACHE_ID].data_out;
+        icache i_cache (.*, .fetch_sub(fetch_sub[ICACHE_ID]));
+        assign sub_unit_address_match[ICACHE_ID] = tlb.physical_address[31:32-MEMORY_BIT_CHECK] == MEMORY_ADDR_L[31:32-MEMORY_BIT_CHECK];
 
-            always_ff @(posedge clk) begin
-                if(flush_or_rst)
-                    stage2_valid <= 0;
-                else if (mem_ready)
-                    stage2_valid <= 1;
-                else if (pre_decode_push)
-                    stage2_valid <= 0;
-            end
-
-            always_ff @(posedge clk) begin
-                if (new_mem_request) begin
-                    last_sub_unit_id <= sub_unit_address_match;
-                end
-            end
-            //TODO potentially move support into cache so that we're not stalled on a request we no longer need due to a flush
-            //If the cache is processing a miss when a flush occurs we need to discard the result once complete
-            always_ff @(posedge clk) begin
-                if (rst)
-                    delayed_flush <= 0;
-                else if (gc_fetch_flush & stage2_valid & last_sub_unit_id[ICACHE_ID] & ~fetch_sub[ICACHE_ID].data_valid)//& ~fetch_sub[ICACHE_ID].ready
-                    delayed_flush <= 1;
-                else if (fetch_sub[ICACHE_ID].data_valid)
-                    delayed_flush <= 0;
-            end
-        end else begin
-            assign delayed_flush = 0;
+        always_ff @(posedge clk) begin
+            if(flush_or_rst)
+                stage2_valid <= 0;
+            else if (new_mem_request)
+                stage2_valid <= 1;
+            else if (pre_decode_push)
+                stage2_valid <= 0;
         end
+
+        always_ff @(posedge clk) begin
+            if (new_mem_request)
+                last_sub_unit_id <= sub_unit_address_match;
+        end
+        //TODO potentially move support into cache so that we're not stalled on a request we no longer need due to a flush
+        //If the cache is processing a miss when a flush occurs we need to discard the result once complete
+        always_ff @(posedge clk) begin
+            if (rst)
+                delayed_flush <= 0;
+            else if (gc_fetch_flush & stage2_valid & last_sub_unit_id[ICACHE_ID] & ~fetch_sub[ICACHE_ID].data_valid)//& ~fetch_sub[ICACHE_ID].ready
+                delayed_flush <= 1;
+            else if (fetch_sub[ICACHE_ID].data_valid)
+                delayed_flush <= 0;
+        end
+    end else begin
+        assign delayed_flush = 0;
+    end
     endgenerate
 
     ////////////////////////////////////////////////////
     //Pre-Decode Output
     assign pre_decode_instruction = unit_data_array[next_unit.data_out];
     assign pre_decode_pc = stage2_phys_address;
-    assign pre_decode_push = ~(gc_fetch_flush | delayed_flush) & units_data_valid;
+    assign pre_decode_push = (~delayed_flush) & units_data_valid;//FIFO is cleared on gc_fetch_flush
 
     always_ff @(posedge clk) begin
         if (new_mem_request) begin

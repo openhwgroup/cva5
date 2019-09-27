@@ -233,8 +233,9 @@ interface fetch_sub_unit_interface;
     logic data_valid;
     logic ready;
     logic new_request;
+    logic flush;
 
-    modport sub_unit (input stage1_addr, stage2_addr,  new_request, output data_out, data_valid, ready);
-    modport fetch (output stage1_addr, stage2_addr,  new_request, input data_out, data_valid, ready);
+    modport sub_unit (input stage1_addr, stage2_addr,  new_request, flush, output data_out, data_valid, ready);
+    modport fetch (output stage1_addr, stage2_addr,  new_request, flush, input data_out, data_valid, ready);
 
 endinterface

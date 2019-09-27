@@ -59,7 +59,7 @@ module icache(
      *************************************/
 
     always_ff @ (posedge clk) begin
-        if (rst)
+        if (rst | fetch_sub.flush)
             second_cycle <= 0;
         else
             second_cycle <= fetch_sub.new_request;
@@ -190,7 +190,7 @@ module icache(
     always_ff @ (posedge clk) begin
         if (rst)
             idle <= 1;
-        else if (fetch_sub.new_request)
+        else if (fetch_sub.new_request & ~fetch_sub.flush)
             idle <= 0;
         else if (memory_complete | tag_hit) //read miss OR write through complete
             idle <= 1;
