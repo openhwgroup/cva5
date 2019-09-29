@@ -120,8 +120,8 @@ module load_store_unit (
 
     ////////////////////////////////////////////////////
     //Input FIFO
-    taiga_fifo #(.DATA_WIDTH($bits(load_store_inputs_t)), .FIFO_DEPTH(MAX_INFLIGHT_COUNT), .FIFO_TYPE(NON_MUXED_INPUT_FIFO)
-        ) ls_input_fifo (.fifo(input_fifo), .*);
+    taiga_fifo #(.DATA_WIDTH($bits(load_store_inputs_t)), .FIFO_DEPTH(MAX_INFLIGHT_COUNT))
+        ls_input_fifo (.fifo(input_fifo), .*);
 
     assign input_fifo.data_in = ls_inputs;
     assign input_fifo.push = issue.new_request;
@@ -231,8 +231,8 @@ module load_store_unit (
     ////////////////////////////////////////////////////
     //Load attributes FIFO
     one_hot_to_integer #(NUM_SUB_UNITS) hit_way_conv (.*, .one_hot(sub_unit_address_match), .int_out(load_attributes_in.subunit_id));
-    taiga_fifo #(.DATA_WIDTH($bits(load_attributes_t)), .FIFO_DEPTH(ATTRIBUTES_DEPTH), .FIFO_TYPE(LUTRAM_FIFO)
-        ) attributes_fifo (.fifo(load_attributes), .*);
+    taiga_fifo #(.DATA_WIDTH($bits(load_attributes_t)), .FIFO_DEPTH(ATTRIBUTES_DEPTH))
+        attributes_fifo (.fifo(load_attributes), .*);
     assign load_attributes_in.fn3 = stage1.fn3;
     assign load_attributes_in.byte_addr = virtual_address[1:0];
     assign load_attributes_in.instruction_id = stage1.instruction_id;

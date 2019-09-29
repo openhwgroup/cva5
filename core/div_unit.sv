@@ -66,8 +66,8 @@ module div_unit
 
     ////////////////////////////////////////////////////
     //Input FIFO
-    taiga_fifo #(.DATA_WIDTH($bits(div_inputs_t)), .FIFO_DEPTH(MAX_INFLIGHT_COUNT), .FIFO_TYPE(NON_MUXED_INPUT_FIFO)
-        ) div_input_fifo (.fifo(input_fifo), .*);
+    taiga_fifo #(.DATA_WIDTH($bits(div_inputs_t)), .FIFO_DEPTH(MAX_INFLIGHT_COUNT))
+        div_input_fifo (.fifo(input_fifo), .*);
 
     assign input_fifo.data_in = div_inputs;
     assign input_fifo.push = issue.new_request;

@@ -60,7 +60,7 @@ module pre_decode
 
     logic rs1_link, rd_link, rs1_eq_rd, use_ras;
 
-    logic bypass_condition;
+    logic push_to_reg;
 
     fetch_buffer_packet_t data_in;
     fetch_buffer_packet_t data_out;
@@ -71,16 +71,18 @@ module pre_decode
     //FIFO
     assign buffer_reset = rst | gc_fetch_flush;
 
-    assign fb_fifo.push = pre_decode_push & ~bypass_condition;
+    assign fb_fifo.push = pre_decode_push & ((fb_valid & ~pre_decode_pop) | fb_fifo.valid);
     assign fb_fifo.pop = pre_decode_pop & fb_fifo.valid;
     assign fb_fifo.data_in = data_in;
     assign data_out = fb_fifo.data_out;
 
-    assign bypass_condition = fb_fifo.empty & (~fb_valid | (fb_valid & pre_decode_pop));
+    assign push_to_reg = pre_decode_push &
+    ((~fb_fifo.valid & fb_valid & pre_decode_pop) | (~fb_fifo.valid & ~fb_valid));
+
 
     //Bypass overrides
     always_ff @ (posedge clk) begin
-        if (pre_decode_push & bypass_condition)
+        if (push_to_reg)
             fb <= data_in;
         else if (pre_decode_pop)
             fb <= data_out;
@@ -91,14 +93,13 @@ module pre_decode
             fb_valid <= 0;
         else if (pre_decode_push)
             fb_valid <= 1;
-        else if (pre_decode_pop & fb_fifo.empty)
+        else if (pre_decode_pop & ~fb_fifo.valid)
             fb_valid <= 0;
     end
 
     taiga_fifo #(
             .DATA_WIDTH($bits(fetch_buffer_packet_t)),
-            .FIFO_DEPTH(FETCH_BUFFER_DEPTH),
-            .FIFO_TYPE(LUTRAM_FIFO)
+            .FIFO_DEPTH(FETCH_BUFFER_DEPTH)
         ) fb_fifo_block (.fifo(fb_fifo), .rst(buffer_reset), .*);
 
     ////////////////////////////////////////////////////
@@ -208,8 +209,5 @@ module pre_decode
 
     ////////////////////////////////////////////////////
     //Assertions
-    always_ff @ (posedge clk) begin
-        assert (!(~rst & gc_fetch_flush & (pre_decode_push | pre_decode_pop))) else $error("fb push/pop during flush");
-    end
 
 endmodule
