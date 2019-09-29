@@ -211,7 +211,7 @@ generate if (ENABLE_M_MODE) begin
     assign interrupt_privilege_level = interrupt_delegated ? SUPERVISOR_PRIVILEGE : MACHINE_PRIVILEGE;
 
     always_comb begin
-        unique if(mret | sret)
+        if(mret | sret)
             next_privilege_level = trap_return_privilege_level;
         else if (interrupt)
             next_privilege_level = interrupt_privilege_level;
@@ -249,7 +249,7 @@ generate if (ENABLE_M_MODE) begin
     //return from trap
     always_comb begin
         mstatus_return = mstatus;
-        unique if (sret) begin
+        if (sret) begin
             mstatus_return.sie = mstatus_return.spie;
             mstatus_return.spie = 1;
             mstatus_return.spp = 0;
@@ -265,7 +265,7 @@ generate if (ENABLE_M_MODE) begin
     assign mstatus_mask = mwrite_decoder[MSTATUS[5:0]] ? mstatus_mmask : mstatus_smask;
 
     always_comb begin
-        unique if (mwrite_decoder[MSTATUS[5:0]] | swrite_decoder[SSTATUS[5:0]])
+        if (mwrite_decoder[MSTATUS[5:0]] | swrite_decoder[SSTATUS[5:0]])
             mstatus_new = updated_csr & mstatus_mask;
         else if (interrupt | gc_exception.valid)
             mstatus_new = mstatus_exception;

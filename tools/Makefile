@@ -113,7 +113,7 @@ build_taiga_sim:
 	cp $(VERILATOR_DIR)/SimMem.h verilator_local_mem_test/
 	cp $(VERILATOR_DIR)/SimMem.cc verilator_local_mem_test/
 	cp $(VERILATOR_DIR)/taiga_local_mem.cc verilator_local_mem_test/
-	verilator --cc --exe --Mdir verilator_local_mem_test $(VERILATOR_LINT_IGNORE) $(VERILATOR_CFLAGS) $(TAIGA_SRCS) \
+	verilator --cc --exe --Mdir verilator_local_mem_test --assert $(VERILATOR_LINT_IGNORE) $(VERILATOR_CFLAGS) $(TAIGA_SRCS) \
 		 ../test_benches/verilator/taiga_local_mem.sv --top-module taiga_local_mem taiga_local_mem.cc SimMem.cc
 	$(MAKE) -C  verilator_local_mem_test -f Vtaiga_local_mem.mk
 

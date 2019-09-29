@@ -6,10 +6,17 @@
 #include "verilated_vcd_c.h"
 #include "TaigaTracer.h"
 
+TaigaTracer<Vtaiga_local_mem> *taigaTracer;
+
+//For time index on assertions
+ double sc_time_stamp () {
+            return taigaTracer->get_cycle_count();
+}
+
 //#define TRACE_ON
 using namespace std;
 int main(int argc, char **argv) {
-    TaigaTracer<Vtaiga_local_mem> *taigaTracer;
+
     ofstream logFile, sigFile;
     ifstream programFile;
 
