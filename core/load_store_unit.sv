@@ -46,7 +46,7 @@ module load_store_unit (
         wishbone_interface.master m_wishbone,
 
         local_memory_interface.master data_bram,
-
+        input instruction_id_t oldest_id,
         output instruction_id_t store_id,
         output instruction_id_t store_done_id,
         output logic store_complete,
@@ -152,7 +152,7 @@ module load_store_unit (
 
     //When switching units, ensure no outstanding loads so that there can be no timing collisions with results
     assign unit_stall = (current_unit != last_unit) && load_attributes.valid;
-    assign store_ready = stage1.store & ((stage1.load_store_forward & wb_buffer_data_valid) | ~stage1.load_store_forward);
+    assign store_ready = stage1.store & ((stage1.load_store_forward & (wb_buffer_data_valid | oldest_id == stage1.instruction_id)) | ~stage1.load_store_forward);
     assign issue_request = input_fifo.valid & units_ready & ~unit_stall & ~unaligned_addr & (~stage1.store | store_ready);
 
     ////////////////////////////////////////////////////
@@ -214,7 +214,7 @@ module load_store_unit (
     assign shared_inputs.be = be;
     assign shared_inputs.fn3 = stage1.fn3;
 
-    assign stage1_raw_data = stage1.load_store_forward ?  wb_buffer_data : stage1.rs2;
+    assign stage1_raw_data = stage1.load_store_forward ? wb_buffer_data : stage1.rs2;
 
     //Input: ABCD
     //Assuming aligned requests,
