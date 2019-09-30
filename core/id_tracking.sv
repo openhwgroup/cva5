@@ -35,49 +35,34 @@ module id_tracking
         output logic empty
         );
     //////////////////////////////////////////
-    localparam INUSE_COUNTER_W = $clog2(MAX_INFLIGHT_COUNT+1);
-
-    logic [INUSE_COUNTER_W-1:0] inuse_index;
-    instruction_id_t inuse_ids [MAX_INFLIGHT_COUNT-1:0];
-
-    genvar i;
+    localparam LOG2_MAX_INFLIGHT_COUNT = $clog2(MAX_INFLIGHT_COUNT);
+    logic [LOG2_MAX_INFLIGHT_COUNT:0] inflight_count;
     ////////////////////////////////////////////////////
     //Implementation
-
-    //Initial ordering, FIFO has no reset, as ID ordering is arbitrary
-    initial begin
-        for (int i=0; i<MAX_INFLIGHT_COUNT; i++) begin
-            inuse_ids[i] = i[$clog2(MAX_INFLIGHT_COUNT)-1:0];
-        end
+    always_ff @ (posedge clk) begin
+        if (rst)
+            oldest_id <= 0;
+        else
+            oldest_id <= oldest_id + LOG2_MAX_INFLIGHT_COUNT'(retired);
+    end
+    always_ff @ (posedge clk) begin
+        if (rst)
+            next_id <= 0;
+        else
+            next_id <= next_id + LOG2_MAX_INFLIGHT_COUNT'(issued);
     end
 
     //Upper bit is id_available
     always_ff @ (posedge clk) begin
         if (rst)
-            inuse_index <= '1;
+            inflight_count <= '1;
         else
-            inuse_index <= inuse_index + INUSE_COUNTER_W'(retired) - INUSE_COUNTER_W'(issued);
+            inflight_count <= inflight_count + (LOG2_MAX_INFLIGHT_COUNT+1)'(retired) - (LOG2_MAX_INFLIGHT_COUNT+1)'(issued);
     end
 
-    assign empty = &inuse_index;//all ones
-    assign id_available = inuse_index[INUSE_COUNTER_W-1];
+    assign empty = &inflight_count;//all ones
+    assign id_available = inflight_count[LOG2_MAX_INFLIGHT_COUNT];
 
-    assign next_id = inuse_ids[inuse_index[INUSE_COUNTER_W-2:0]];
-    assign oldest_id = inuse_ids[MAX_INFLIGHT_COUNT-1];
-
-    always_ff @ (posedge clk) begin
-        if (retired)
-            inuse_ids[0] <= inuse_ids[MAX_INFLIGHT_COUNT-1];
-    end
-
-    generate
-    for (i=1 ; i < MAX_INFLIGHT_COUNT; i++) begin
-        always_ff @ (posedge clk) begin
-            if (retired)
-                inuse_ids[i] <= inuse_ids[i-1];
-        end
-    end
-    endgenerate
     ////////////////////////////////////////////////////
     //End of Implementation
     ////////////////////////////////////////////////////
@@ -85,7 +70,7 @@ module id_tracking
     ////////////////////////////////////////////////////
     //Assertions
     always_ff @ (posedge clk) begin
-        assert (!(~id_available & issued)) else $error("Issued without valid ID!");
-        assert (!(empty & (retired & ~issued))) else $error("Retired without any instruction inflight!");
+        assert (rst | !(~rst & ~id_available & issued)) else $error("Issued without valid ID!");
+        assert (rst | !(~rst & empty & (retired & ~issued))) else $error("Retired without any instruction inflight!");
     end
 endmodule
