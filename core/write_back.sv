@@ -88,10 +88,9 @@ module write_back(
         for (int i=0; i< MAX_INFLIGHT_COUNT; i++) begin
             id_done_new[i] = 0;
             id_unit_select[i] = 0;
-            //TODO: Could be unique if, if unrolled
             for (int j=0; j< NUM_WB_UNITS; j++) begin
                 if (unit_done[j] && (unit_instruction_id[j] == i[$clog2(MAX_INFLIGHT_COUNT)-1:0])) begin
-                    id_unit_select[i] = j[$clog2(NUM_WB_UNITS)-1:0];
+                    id_unit_select[i] |= j[$clog2(NUM_WB_UNITS)-1:0];//No collisions can occur
                     id_done_new[i] |= 1;
                 end
             end
