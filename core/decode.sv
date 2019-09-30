@@ -297,7 +297,7 @@ module decode(
     assign environment_op = (opcode_trim == SYSTEM_T) && (fn3 == 0);
 
     always_ff @(posedge clk) begin
-        if (issue[GC_UNIT_ID]) begin
+        if (unit_issue[GC_UNIT_ID].possible_issue) begin
             gc_inputs.pc <= fb.pc;
             gc_inputs.instruction <= fb.instruction;
             gc_inputs.rs1 <= rf_decode.rs1_data;
@@ -376,7 +376,7 @@ module decode(
     //Unit EX signals
     generate
         for(i = 0; i < NUM_UNITS; i++) begin
-            assign unit_issue[i].possible_issue = new_request[i] & ti.id_available;
+            assign unit_issue[i].possible_issue = new_request[i] & unit_operands_ready[i] & fb_valid & ti.id_available & ~gc_issue_hold ;
             assign unit_issue[i].new_request = issue[i];
             assign unit_issue[i].instruction_id = ti.issue_id;
             always_ff @(posedge clk) begin

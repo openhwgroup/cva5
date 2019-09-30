@@ -40,14 +40,16 @@ module taiga_fifo #(parameter DATA_WIDTH = 70, parameter FIFO_DEPTH = 4)
     logic [LOG2_FIFO_DEPTH-1:0] write_index;
     logic [LOG2_FIFO_DEPTH-1:0] read_index;
     logic [LOG2_FIFO_DEPTH:0] inflight_count;
+    logic supressed_push;
 
     ////////////////////////////////////////////////////
     //Implementation
+    assign supressed_push = fifo.push & ~fifo.supress_push;
     generate if (FIFO_DEPTH == 1) begin
         always_ff @ (posedge clk) begin
             if (rst)
                 fifo.valid <= 0;
-            else if (fifo.push)
+            else if (supressed_push)
                 fifo.valid <= 1;
             else if (fifo.pop)
                 fifo.valid <= 0;
@@ -66,7 +68,7 @@ module taiga_fifo #(parameter DATA_WIDTH = 70, parameter FIFO_DEPTH = 4)
             if (rst)
                 inflight_count <= 0;
             else
-                inflight_count <= inflight_count + (LOG2_FIFO_DEPTH+1)'(fifo.pop) - (LOG2_FIFO_DEPTH+1)'(fifo.push);
+                inflight_count <= inflight_count + (LOG2_FIFO_DEPTH+1)'(fifo.pop) - (LOG2_FIFO_DEPTH+1)'(supressed_push);
         end
 
         assign fifo.valid = inflight_count[LOG2_FIFO_DEPTH];
@@ -79,7 +81,7 @@ module taiga_fifo #(parameter DATA_WIDTH = 70, parameter FIFO_DEPTH = 4)
             end
             else begin
                 read_index <= read_index + LOG2_FIFO_DEPTH'(fifo.pop);
-                write_index <= write_index + LOG2_FIFO_DEPTH'(fifo.push);
+                write_index <= write_index + LOG2_FIFO_DEPTH'(supressed_push);
             end
         end
 
@@ -94,7 +96,7 @@ module taiga_fifo #(parameter DATA_WIDTH = 70, parameter FIFO_DEPTH = 4)
     ////////////////////////////////////////////////////
     //Assertions
     always_ff @ (posedge clk) begin
-        assert (!(~rst & fifo.full & fifo.push & ~fifo.pop)) else $error("overflow");
+        assert (!(~rst & fifo.full & supressed_push & ~fifo.pop)) else $error("overflow");
         assert (!(~rst & ~fifo.valid & fifo.pop)) else $error("underflow");
     end
 endmodule

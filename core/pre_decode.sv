@@ -70,6 +70,7 @@ module pre_decode
     //implementation
     //FIFO
     assign buffer_reset = rst | gc_fetch_flush;
+    assign fb_fifo.supress_push = 0;//Covered by reseting on gc_fetch_flush
 
     assign fb_fifo.push = pre_decode_push & ((fb_valid & ~pre_decode_pop) | fb_fifo.valid);
     assign fb_fifo.pop = pre_decode_pop & fb_fifo.valid;

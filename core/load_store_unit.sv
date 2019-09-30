@@ -33,6 +33,7 @@ module load_store_unit (
         input logic clear_reservation,
         tlb_interface.mem tlb,
 
+        input logic gc_fetch_flush,
         input logic gc_issue_flush,
 
         l1_arbiter_request_interface.master l1_request,
@@ -125,6 +126,7 @@ module load_store_unit (
 
     assign input_fifo.data_in = ls_inputs;
     assign input_fifo.push = issue.new_request;
+    assign input_fifo.supress_push = gc_fetch_flush;
     assign issue.ready = 1;//As FIFO depth is the same as MAX_INFLIGHT_COUNT
     assign input_fifo.pop = issue_request;
     assign stage1 = input_fifo.data_out;
@@ -241,6 +243,7 @@ module load_store_unit (
 
     assign load_attributes.push = issue_request & stage1.load;
     assign load_attributes.pop = load_complete;
+    assign load_attributes.supress_push = 0;
 
     assign stage2_attr = load_attributes.data_out;
 

@@ -28,6 +28,8 @@ module div_unit
         input logic clk,
         input logic rst,
 
+        input logic gc_fetch_flush,
+
         input div_inputs_t div_inputs,
         unit_issue_interface.unit issue,
         output unit_writeback_t wb
@@ -71,6 +73,7 @@ module div_unit
 
     assign input_fifo.data_in = div_inputs;
     assign input_fifo.push = issue.new_request;
+    assign input_fifo.supress_push = gc_fetch_flush;
     assign issue.ready = 1;//As FIFO depth is the same as MAX_INFLIGHT_COUNT
     assign input_fifo.pop = div_done;
     assign stage1 = input_fifo.data_out;

@@ -27,6 +27,7 @@ module write_back(
         input logic clk,
         input logic rst,
 
+        input logic gc_fetch_flush,
         input logic instruction_issued_with_rd,
 
         input unit_writeback_t unit_wb[NUM_WB_UNITS-1:0],
@@ -66,6 +67,7 @@ module write_back(
 
     logic [MAX_INFLIGHT_COUNT-1:0] id_done;
     logic [MAX_INFLIGHT_COUNT-1:0] id_done_new;
+    logic [MAX_INFLIGHT_COUNT-1:0] alu_id_done_aborted;
     logic [MAX_INFLIGHT_COUNT-1:0] id_done_r;
 
     logic retired, retired_r;
@@ -86,6 +88,7 @@ module write_back(
         for (int i=0; i< MAX_INFLIGHT_COUNT; i++) begin
             id_done_new[i] = 0;
             id_unit_select[i] = 0;
+            //TODO: Could be unique if, if unrolled
             for (int j=0; j< NUM_WB_UNITS; j++) begin
                 if (unit_done[j] && (unit_instruction_id[j] == i[$clog2(MAX_INFLIGHT_COUNT)-1:0])) begin
                     id_unit_select[i] = j[$clog2(NUM_WB_UNITS)-1:0];
@@ -144,7 +147,12 @@ module write_back(
         id_retired_last_cycle_r <= id_retired_last_cycle;
     end
 
-    assign  id_done = (id_done_r & ~id_retired_last_cycle_r) | id_done_new;
+    always_comb begin
+        alu_id_done_aborted = 0;
+        alu_id_done_aborted[unit_instruction_id[ALU_UNIT_WB_ID]] = unit_done[ALU_UNIT_WB_ID] & gc_fetch_flush;
+    end
+
+    assign id_done = (id_done_r & ~id_retired_last_cycle_r) | (id_done_new & ~alu_id_done_aborted);
 
     always_ff @ (posedge clk) begin
         if (rst)

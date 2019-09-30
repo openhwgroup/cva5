@@ -120,7 +120,7 @@ module branch_unit(
     assign jump_pc_dec = jump_base + pc_offset;
 
     always_ff @(posedge clk) begin
-        if (issue.new_request) begin
+        if (issue.possible_issue) begin
             fn3_ex <= branch_inputs.fn3;
             result_ex <= result;
             jump_ex <= (branch_inputs.jal | branch_inputs.jalr);
@@ -130,7 +130,7 @@ module branch_unit(
     //Predictor support
     ////////////////////////////////////////////////////
     always_ff @(posedge clk) begin
-        if (issue.new_request) begin
+        if (issue.possible_issue) begin
             pc_ex <= branch_inputs.dec_pc;
             jump_pc <= {jump_pc_dec[31:1], 1'b0};
             njump_pc <= branch_inputs.dec_pc + 4;

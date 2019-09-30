@@ -160,9 +160,10 @@ interface fifo_interface #(parameter DATA_WIDTH = 42);//#(parameter type data_ty
     logic [DATA_WIDTH-1:0] data_out;
     logic valid;
     logic full;
-    modport enqueue (input full, output data_in, push);
+    logic supress_push;
+    modport enqueue (input full, output data_in, push, supress_push);
     modport dequeue (input valid, data_out, output pop);
-    modport structure(input push, pop, data_in, output data_out, valid, full);
+    modport structure(input push, pop, data_in, supress_push, output data_out, valid, full);
 endinterface
 
 interface mmu_interface;
