@@ -54,6 +54,7 @@ module div_algorithm
             QUICK_NAIVE : div_quick_naive #(XLEN) div (.*);
             QUICK_CLZ : div_quick_clz #(XLEN) div (.*);
             QUICK_CLZ_MK2 : div_quick_clz_mk2 #(XLEN) div (.*);
+            QUICK_RADIX_4 : div_quick_radix_4 #(XLEN) div (.*);
             default : $error("invalid div selection");
         endcase
     endgenerate
