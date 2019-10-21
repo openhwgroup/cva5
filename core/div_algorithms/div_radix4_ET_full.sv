@@ -18,10 +18,11 @@
  *
  * Author(s):
  *             Eric Matthews <ematthew@sfu.ca>
+ *             Alec Lu <alec_lu@sfu.ca>
  */
  
 
-module div_quick_radix_4
+module div_radix4_ET_full
     #(
         parameter C_WIDTH = 32
     )(
