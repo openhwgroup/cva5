@@ -39,7 +39,7 @@ module decode(
         output branch_inputs_t branch_inputs,
         output gc_inputs_t gc_inputs,
         output mul_inputs_t mul_inputs,
-        output  div_inputs_t div_inputs,
+        output div_inputs_t div_inputs,
 
         unit_issue_interface.decode unit_issue [NUM_UNITS-1:0],
 

@@ -55,6 +55,7 @@ package taiga_config;
         RADIX_2_EARLY_TERMINATE_FULL,
         RADIX_4,
         RADIX_4_EARLY_TERMINATE,
+        RADIX_4_EARLY_TERMINATE_FULL,
         RADIX_8,
         RADIX_8_EARLY_TERMINATE,
         RADIX_16,
