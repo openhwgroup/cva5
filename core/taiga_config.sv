@@ -55,14 +55,16 @@ package taiga_config;
         RADIX_2_EARLY_TERMINATE_FULL,
         RADIX_4,
         RADIX_4_EARLY_TERMINATE,
+        RADIX_4_EARLY_TERMINATE_FULL,
         RADIX_8,
         RADIX_8_EARLY_TERMINATE,
         RADIX_16,
         QUICK_NAIVE,
         QUICK_CLZ,
-        QUICK_CLZ_MK2
+        QUICK_CLZ_MK2,
+        QUICK_RADIX_4
     } div_type;
-    parameter div_type DIV_ALGORITHM = QUICK_CLZ;
+    parameter div_type DIV_ALGORITHM = QUICK_RADIX_4;
 
     //Enable Atomic extension (cache operations only)
     parameter USE_AMO = 0;

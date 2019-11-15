@@ -35,10 +35,10 @@ module div_unit_tb ();
     //DUT Regs and Wires
     logic                       clk;
     logic                       rst;
-    func_unit_ex_interface      div_ex();
-    unit_writeback_interface    div_wb();
+    logic                       gc_fetch_flush;
+    unit_issue_interface        issue();
+    unit_writeback_t            wb;
     div_inputs_t                div_inputs;
-
     //Internal Regs and Wires
     integer         test_number;
     //Input 
@@ -49,10 +49,10 @@ module div_unit_tb ();
     integer         result_rand; 
     logic [ 1: 0]   op_rand;
     logic           reuse_rand;
+    logic           accept;
     //Result
     div_result_t    result_queue[$];
     div_result_t    temp_result;
-
     //Latency
     parameter       MAX_RESPONSE_LATENCY = 32'hF;
     logic           wb_done;
@@ -81,49 +81,49 @@ module div_unit_tb ();
         genRandLatency = $random & MAX_RESPONSE_LATENCY;  
     endfunction
 
-    always_ff @(posedge clk) begin
-        if (rst) begin
-            wb_done_acc      <= 32'h1;
-            firstPop         <= 1'b1;
-            response_latency <= 32'hFFFFFFFF;
-        end else begin
-            if (div_wb.done_next_cycle) begin
-                wb_done_acc <= wb_done_acc + 1;
-            end else begin
-                wb_done_acc <= 32'h1;
-            end 
-            
-            if (firstPop | div_wb.accepted) begin
-                response_latency <= latency_queue.pop_front();
-                firstPop <= 1'b0;
-            end else begin
-                response_latency <= response_latency; 
-            end             
-        end 
-    end
-    
     //With Latency
-    //assign wb_done = div_wb.done_next_cycle & (wb_done_acc >= response_latency);
-    //Without Latency
-    assign wb_done = div_wb.done_next_cycle;
+    //always_ff @(posedge clk) begin
+    //    if (rst) begin
+    //        wb_done_acc      <= 32'h1;
+    //        firstPop         <= 1'b1;
+    //        response_latency <= 32'hFFFFFFFF;
+    //    end else begin
+    //        if (wb.done) begin
+    //            wb_done_acc <= wb_done_acc + 1;
+    //        end else begin
+    //            wb_done_acc <= 32'h1;
+    //        end 
+            
+    //        if (firstPop | accept) begin
+    //            response_latency <= latency_queue.pop_front();
+    //            firstPop <= 1'b0;
+    //        end else begin
+    //            response_latency <= response_latency; 
+    //        end             
+    //    end 
+    //end
+    //always_ff @(posedge clk) begin
+    //    if (rst)
+    //       accept <= 0;
+    //    else
+    //       accept <= wb_done;
+    //end
+    //assign wb_done = wb.done & (wb_done_acc >= response_latency);
 
-    always_ff @(posedge clk) begin
-        if (rst)
-           div_wb.accepted <= 0;
-        else
-           div_wb.accepted <= wb_done;
-    end
+    //Without Latency
+    assign wb_done = wb.done;
+    assign accept = wb_done; 
 
     //Output checker
     always_ff @(posedge clk) begin
         if (rst)
             test_number <= 1;
-        if (div_wb.accepted) begin
+        if (accept) begin
             test_number <= test_number + 1;
             temp_result = result_queue.pop_front();
-            assert (div_wb.rd == temp_result.expected_result)
+            assert (wb.rd == temp_result.expected_result)
                 else $error("Incorrect result on test number %d. (%h, should be: %h)\n\t Input: rs1: %d, rs2: %d, op: %b, reuse_result: %b", 
-                    test_number, div_wb.rd, temp_result.expected_result,
+                    test_number, wb.rd, temp_result.expected_result,
                     temp_result.module_input.rs1, temp_result.module_input.rs2, 
                     temp_result.module_input.op, temp_result.module_input.reuse_result);
         end
@@ -131,15 +131,16 @@ module div_unit_tb ();
 
     //Driver
     task test_div (input integer a, b, result, latency, logic[1:0] op, logic reuse);
-        wait (~clk & div_ex.ready);
+        wait (~clk & issue.ready);
         div_inputs.rs1 = a;
         div_inputs.rs2 = b;
         div_inputs.op = op;
         div_inputs.reuse_result = reuse;
+        div_inputs.instruction_id = 0; //dont care
         result_queue.push_back({div_inputs, result});
         latency_queue.push_back(latency);
-        div_ex.new_request_dec = 1; #2
-        div_ex.new_request_dec = 0;
+        issue.new_request = 1; #2
+        issue.new_request = 0;
      endtask
 
     //Generator + Transaction
@@ -192,19 +193,19 @@ module div_unit_tb ();
     begin
         clk = 0;
         rst = 1;
+        gc_fetch_flush = 0;
         div_inputs.rs1 = 0;
         div_inputs.rs2 = 0;
         div_inputs.op = 0;
         div_inputs.reuse_result = 0;
-        div_ex.new_request_dec = 0;
-        div_wb.accepted = 0;
+        issue.new_request = 0;
 
         reset();
         
-        //Randomized Test (operation + latency)
-        for (int i=0; i < 5000; i = i+1) begin
-            test_gen();
-        end 
+//        //Randomized Test (operation + latency)
+//        for (int i=0; i < 5000; i = i+1) begin
+//            test_gen();
+//        end 
 
         for (int i=0; i < 6; i = i+5) begin
             //Div test
@@ -274,7 +275,7 @@ module div_unit_tb ();
         end 
         
         wait (result_queue.size() == 0);
-        wait (latency_queue.size() == 0);
+        //wait (latency_queue.size() == 0);
         #200;
         if (result_queue.size() == 0) begin
             // $display("queue size: %d", result_queue.size());
@@ -291,6 +292,7 @@ module div_unit_tb ();
                 QUICK_NAIVE : $display("QUICK_NAIVE");
                 QUICK_CLZ : $display("QUICK_CLZ");
                 QUICK_CLZ_MK2 : $display("QUICK_CLZ_MK2");
+                QUICK_RADIX_4 : $display("QUCIK_RADIX_4");
                 default : $error("invalid div selection");
             endcase
             $display("Div Unit Test -------------------- Passed");

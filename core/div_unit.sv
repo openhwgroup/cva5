@@ -74,7 +74,7 @@ module div_unit
     assign input_fifo.data_in = div_inputs;
     assign input_fifo.push = issue.new_request;
     assign input_fifo.supress_push = gc_fetch_flush;
-    assign issue.ready = 1;//As FIFO depth is the same as MAX_INFLIGHT_COUNT
+    assign issue.ready = ~input_fifo.full; //1; //As FIFO depth is the same as MAX_INFLIGHT_COUNT
     assign input_fifo.pop = div_done;
     assign stage1 = input_fifo.data_out;
 
