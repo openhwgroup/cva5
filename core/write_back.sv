@@ -87,20 +87,24 @@ module write_back(
     always_comb begin
         for (int i=0; i< MAX_INFLIGHT_COUNT; i++) begin
             id_done_new[i] = 0;
-            id_unit_select[i] = 0;
             for (int j=0; j< NUM_WB_UNITS; j++) begin
-                if (unit_done[j] && (unit_instruction_id[j] == i[$clog2(MAX_INFLIGHT_COUNT)-1:0])) begin
-                    id_unit_select[i] |= j[$clog2(NUM_WB_UNITS)-1:0];//No collisions can occur
+                if (unit_done[j] && (unit_instruction_id[j] == i[$clog2(MAX_INFLIGHT_COUNT)-1:0]))
                     id_done_new[i] |= 1;
-                end
             end
-            if (store_complete && store_done_id == i[$clog2(MAX_INFLIGHT_COUNT)-1:0])
+            if (store_complete && (store_done_id == i[$clog2(MAX_INFLIGHT_COUNT)-1:0]))
                 id_done_new[i] |= 1;
         end
     end
 
     generate
-        for (i=0; i< MAX_INFLIGHT_COUNT; i++) begin
+         for (i=0; i< MAX_INFLIGHT_COUNT; i++) begin
+             always_ff @ (posedge clk) begin
+                 if (rst | (retired && retired_id == i))
+                     id_unit_select[i] = 0;
+                 else if (ti.issued && issue_id == i)
+                     id_unit_select[i] = ti.issue_unit_id;
+             end
+
             assign rds_by_id_next[i] = unit_rd[id_unit_select[i]];
             always_ff @ (posedge clk) begin
                 if (id_done_new[i])

@@ -148,9 +148,10 @@ interface tracking_interface;
     
     inflight_instruction_packet inflight_packet;
     logic issued;
+    logic [WB_UNITS_WIDTH-1:0] issue_unit_id;
 
-    modport decode (input issue_id, id_available, output inflight_packet, issued);
-    modport wb (output issue_id, id_available, input inflight_packet, issued);
+    modport decode (input issue_id, id_available, output inflight_packet, issued, issue_unit_id);
+    modport wb (output issue_id, id_available, input inflight_packet, issued, issue_unit_id);
 endinterface
 
 interface fifo_interface #(parameter DATA_WIDTH = 42);//#(parameter type data_type = logic[31:0]);

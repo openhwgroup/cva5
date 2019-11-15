@@ -97,6 +97,7 @@ module decode(
     logic mult_div_op;
 
     logic [NUM_WB_UNITS-1:0] new_request_for_id_gen;
+    logic [WB_UNITS_WIDTH-1:0] new_request_for_id_gen_int;
     logic [NUM_UNITS-1:0] new_request;
     logic [NUM_UNITS-1:0] issue_ready;
     logic [NUM_UNITS-1:0] issue;
@@ -149,14 +150,18 @@ module decode(
     //Tracking Interface
     always_comb begin
         new_request_for_id_gen = new_request[NUM_WB_UNITS-1:0];
-        new_request_for_id_gen[LS_UNIT_WB_ID] |= new_request[GC_UNIT_ID];
+        new_request_for_id_gen[LS_UNIT_WB_ID] |= (new_request[GC_UNIT_ID] & is_csr);
+        new_request_for_id_gen_int = 0;
+            foreach (new_request_for_id_gen[i])
+                if (new_request_for_id_gen[i]) new_request_for_id_gen_int |= i[WB_UNITS_WIDTH-1:0];
     end
 
     assign ti.inflight_packet.rd_addr = future_rd_addr;
     assign ti.inflight_packet.rd_addr_nzero = ~rd_zero;
     assign ti.inflight_packet.is_store = is_store;
     assign ti.issued = instruction_issued & (uses_rd | new_request[LS_UNIT_WB_ID]);
-
+    assign ti.issue_unit_id = new_request_for_id_gen_int;
+    //one_hot_to_integer #(NUM_WB_UNITS) unit_id_gen (.*, .one_hot(new_request[NUM_WB_UNITS-1:0]), .int_out(new_request_for_id_gen_int));
     ////////////////////////////////////////////////////
     //Unit Determination
     assign mult_div_op = fb.instruction[25];
@@ -292,9 +297,11 @@ module decode(
     logic sfence;
     logic ifence;
     logic environment_op;
+    logic is_csr;
     assign sfence = fb.instruction[25];
     assign ifence =  (opcode_trim == FENCE_T) && fn3[0];
     assign environment_op = (opcode_trim == SYSTEM_T) && (fn3 == 0);
+    assign is_csr = (opcode_trim == SYSTEM_T) && (fn3 != 0);
 
     always_ff @(posedge clk) begin
         if (unit_issue[GC_UNIT_ID].possible_issue) begin
@@ -304,7 +311,7 @@ module decode(
             gc_inputs.rs2 <= rf_decode.rs2_data;
             gc_inputs.rd_is_zero <= rd_zero;
             gc_inputs.is_fence <= (opcode_trim == FENCE_T) && ~fn3[0];
-            gc_inputs.is_csr <= (opcode_trim == SYSTEM_T) && (fn3 != 0);
+            gc_inputs.is_csr <= is_csr;
         end
         gc_inputs.is_ecall <= issue[GC_UNIT_ID] && environment_op && (fb.instruction[21:20] == 0);
         gc_inputs.is_ebreak <= issue[GC_UNIT_ID] && environment_op && (fb.instruction[21:20] == 2'b01);
