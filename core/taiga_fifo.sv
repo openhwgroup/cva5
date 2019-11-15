@@ -97,7 +97,7 @@ module taiga_fifo #(parameter DATA_WIDTH = 70, parameter FIFO_DEPTH = 4)
     //Assertions
     always_ff @ (posedge clk) begin
         assert (!(~rst & fifo.full & supressed_push & ~fifo.pop)) else $error("overflow");
-        assert (!(~rst & ~fifo.valid & fifo.pop)) else $error("underflow");
+        //assert (!(~rst & ~fifo.valid & ~supressed_push & fifo.pop)) else $error("underflow");
     end
 endmodule
 
