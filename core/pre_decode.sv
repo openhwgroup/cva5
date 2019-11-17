@@ -56,7 +56,6 @@ module pre_decode
 
     logic csr_imm_op;
     logic sys_op;
-    logic jal_jalr_x0;
 
     logic rs1_link, rd_link, rs1_eq_rd, use_ras;
 
@@ -120,7 +119,6 @@ module pre_decode
     assign csr_imm_op = (opcode_trimmed == SYSTEM_T) && fn3[2];
     assign sys_op =  (opcode_trimmed == SYSTEM_T) && (fn3 == 0);
 
-    assign jal_jalr_x0 = (opcode_trimmed inside {JAL_T, JALR_T}) && (rd_addr == 0);
 
     ////////////////////////////////////////////////////
     //RAS Support
@@ -135,7 +133,7 @@ module pre_decode
     //Register File Support
     assign data_in.uses_rs1 = !(opcode_trimmed inside {LUI_T, AUIPC_T, JAL_T, FENCE_T} || csr_imm_op || sys_op);
     assign data_in.uses_rs2 = opcode_trimmed inside {BRANCH_T, STORE_T, ARITH_T, AMO_T};
-    assign data_in.uses_rd = !(opcode_trimmed inside {BRANCH_T, STORE_T, FENCE_T} || sys_op || jal_jalr_x0);
+    assign data_in.uses_rd = !(opcode_trimmed inside {BRANCH_T, STORE_T, FENCE_T} || sys_op);
     assign data_in.rd_zero = (rd_addr == 0);
 
     ////////////////////////////////////////////////////
@@ -182,13 +180,10 @@ module pre_decode
         data_in.alu_op = opcode[2] ? ALU_ADD_SUB : data_in.alu_op;
     end
 
-    logic non_zero_jal_jalr;
     logic non_mul_div_arith_op;
-    assign non_zero_jal_jalr = (opcode_trimmed inside {JAL_T, JALR_T} && (rd_addr != 0));
     assign non_mul_div_arith_op = ((opcode_trimmed == ARITH_T) && ~pre_decode_instruction[25]);//pre_decode_instruction[25] denotes multiply/divide instructions
-    assign data_in.alu_request = non_mul_div_arith_op || (opcode_trimmed inside {ARITH_IMM_T, AUIPC_T, LUI_T} || non_zero_jal_jalr);
-
-    always_comb begin
+    assign data_in.alu_request = non_mul_div_arith_op || (opcode_trimmed inside {ARITH_IMM_T, AUIPC_T, LUI_T, JAL_T, JALR_T});
+   always_comb begin
         if (opcode_trimmed inside {ARITH_T, ARITH_IMM_T})
             data_in.alu_rs1_sel = ALU_RS1_RF;
         else if (opcode_trimmed inside {JAL_T, JALR_T, AUIPC_T})//AUIPC JAL JALR
@@ -202,7 +197,7 @@ module pre_decode
             data_in.alu_rs2_sel = ALU_RS2_LUI_AUIPC;
         else if (opcode_trimmed == ARITH_IMM_T) //ARITH_IMM
             data_in.alu_rs2_sel = ALU_RS2_ARITH_IMM;
-        else if (non_zero_jal_jalr) //JAL JALR
+        else if (opcode_trimmed inside {JAL_T, JALR_T} ) //JAL JALR
             data_in.alu_rs2_sel = ALU_RS2_JAL_JALR;
         else
             data_in.alu_rs2_sel = ALU_RS2_RF;
