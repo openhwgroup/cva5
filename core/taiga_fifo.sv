@@ -36,7 +36,8 @@ module taiga_fifo #(parameter DATA_WIDTH = 70, parameter FIFO_DEPTH = 4)
         );
 
     localparam LOG2_FIFO_DEPTH = $clog2(FIFO_DEPTH);
-    (* ramstyle = "MLAB, no_rw_check" *) logic[DATA_WIDTH-1:0] lut_ram[FIFO_DEPTH-1:0];
+    //Force FIFO depth to next power of 2
+    (* ramstyle = "MLAB, no_rw_check" *) logic[DATA_WIDTH-1:0] lut_ram[(2**LOG2_FIFO_DEPTH)-1:0];
     logic [LOG2_FIFO_DEPTH-1:0] write_index;
     logic [LOG2_FIFO_DEPTH-1:0] read_index;
     logic [LOG2_FIFO_DEPTH:0] inflight_count;
