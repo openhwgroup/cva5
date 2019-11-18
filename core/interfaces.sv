@@ -238,3 +238,19 @@ interface fetch_sub_unit_interface;
     modport fetch (output stage1_addr, stage2_addr,  new_request, flush, input data_out, data_valid, ready);
 
 endinterface
+
+//request and ack are single cycle pulses
+//request should be high when the instruction is issued
+//data_valid is held high until an ack is received
+interface post_issue_forwarding_interface;
+    logic request;
+    instruction_id_t id;
+    logic ack;
+
+    logic [31:0] data;
+    logic data_valid;
+
+    modport unit (input data, data_valid, output request, id, ack);
+    modport wb (output data, data_valid, input request, id, ack);
+endinterface
+

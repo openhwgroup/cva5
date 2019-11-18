@@ -37,12 +37,9 @@ module write_back(
         output logic instruction_queue_empty,
         output instruction_id_t oldest_id,
 
-        input instruction_id_t store_id,
         input instruction_id_t store_done_id,
         input logic store_complete,
-        output logic [31:0] wb_buffer_data,
-        output logic wb_buffer_data_valid,
-
+        post_issue_forwarding_interface.wb store_forwarding,
 
         //Trace signals
         output logic tr_wb_mux_contention
@@ -65,6 +62,7 @@ module write_back(
     instruction_id_t issue_id, retired_id, retired_id_r;
     inflight_instruction_packet retired_instruction_packet;
 
+    logic [MAX_INFLIGHT_COUNT-1:0] id_inuse;
     logic [MAX_INFLIGHT_COUNT-1:0] id_done;
     logic [MAX_INFLIGHT_COUNT-1:0] id_done_new;
     logic [MAX_INFLIGHT_COUNT-1:0] alu_id_done_aborted;
@@ -84,6 +82,8 @@ module write_back(
         end
     endgenerate
 
+    ////////////////////////////////////////////////////
+    //ID done determination
     always_comb begin
         for (int i=0; i< MAX_INFLIGHT_COUNT; i++) begin
             id_done_new[i] = 0;
@@ -97,13 +97,16 @@ module write_back(
     end
 
     generate
-         for (i=0; i< MAX_INFLIGHT_COUNT; i++) begin
-             always_ff @ (posedge clk) begin
-                 if (rst | (retired && retired_id == i))
-                     id_unit_select[i] = 0;
-                 else if (ti.issued && issue_id == i)
-                     id_unit_select[i] = ti.issue_unit_id;
-             end
+        for (i=0; i< MAX_INFLIGHT_COUNT; i++) begin
+            always_ff @ (posedge clk) begin
+                if (rst | (retired && retired_id == i)) begin
+                     id_unit_select[i] <= 0;
+                     id_inuse[i] <= 0;
+                end else if (ti.issued && issue_id == i) begin
+                     id_unit_select[i] <= ti.issue_unit_id;
+                     id_inuse[i] <= 1;
+                end
+            end
 
             assign rds_by_id_next[i] = unit_rd[id_unit_select[i]];
             always_ff @ (posedge clk) begin
@@ -113,8 +116,9 @@ module write_back(
         end
     endgenerate
 
-    assign wb_buffer_data = rds_by_id[store_id];
-    assign wb_buffer_data_valid = id_done_r[store_id];
+    //result writeback either pending or complete
+    assign store_forwarding.data_valid = id_done_r[store_forwarding.id] | ~id_inuse[store_forwarding.id];
+    assign store_forwarding.data = rds_by_id[store_forwarding.id];
 
     //ID tracking
     id_tracking id_fifos (.*, .issued(ti.issued), .retired(retired), .id_available(ti.id_available),

@@ -115,11 +115,9 @@ module taiga (
     logic gc_flush_required;
 
     //LS
-    instruction_id_t store_id;
     instruction_id_t store_done_id;
     logic store_complete;
-    logic [31:0] wb_buffer_data;
-    logic wb_buffer_data_valid;
+    post_issue_forwarding_interface store_forwarding();
 
     //Trace Interface Signals
     logic tr_operand_stall;
