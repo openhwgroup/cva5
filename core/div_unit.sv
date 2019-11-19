@@ -35,53 +35,87 @@ module div_unit
         output unit_writeback_t wb
     );
 
-    logic computation_complete;
-    logic div_done;
-
-    logic [31:0] quotient;
-    logic [31:0] remainder;
-
     logic signed_divop;
-    logic quotient_signed;
-    logic remainder_signed;
-    logic dividend_signed;
-    logic divisor_signed;
+    logic negate_quotient;
+    logic negate_remainder;
+    logic negate_dividend;
+    logic negate_divisor;
+
+    logic [31:0] unsigned_dividend;
+    logic [31:0] unsigned_divisor;
+    logic remainder_op;
+
+    typedef struct packed{
+        logic [XLEN-1:0] unsigned_dividend;
+        logic [XLEN-1:0] unsigned_divisor;
+        logic remainder_op;
+        logic negate_quotient;
+        logic negate_remainder;
+        logic reuse_result;
+        instruction_id_t instruction_id;
+    } div_fifo_inputs_t;
+
+    div_fifo_inputs_t fifo_inputs;
+    div_fifo_inputs_t div_op;
 
     logic start_algorithm;
     logic in_progress;
+    logic computation_complete;
+    logic div_done;
 
-    logic [31:0] complementerA;
-    logic [31:0] complementerB;
+    logic [31:0] unsigned_quotient;
+    logic [31:0] unsigned_remainder;
 
-    logic [31:0] result_input;
-    logic negateResult;
     logic divisor_zero;
+    logic negate_result;
 
-    logic [31:0] wb_div_result;
-
-    div_inputs_t stage1;
-
-    fifo_interface #(.DATA_WIDTH($bits(div_inputs_t))) input_fifo();
+    fifo_interface #(.DATA_WIDTH($bits(div_fifo_inputs_t))) input_fifo();
     fifo_interface #(.DATA_WIDTH(XLEN)) wb_fifo();
     ////////////////////////////////////////////////////
     //Implementation
+    function logic [31:0] negate_if  (input logic [31:0] a, logic b);
+        return ({32{b}} ^ a) + 32'(b);
+    endfunction
+
+    ////////////////////////////////////////////////////
+    //Input and output sign determination
+    assign signed_divop = ~div_inputs.op[0];
+
+    assign negate_dividend = signed_divop & div_inputs.rs1[31];
+    assign negate_divisor = signed_divop & div_inputs.rs2[31];
+
+    assign negate_quotient = signed_divop & (div_inputs.rs1[31] ^ div_inputs.rs2[31]);
+    assign negate_remainder = signed_divop & (div_inputs.rs1[31]);
+
+    ////////////////////////////////////////////////////
+    //Input Processing
+    assign unsigned_dividend = negate_if (div_inputs.rs1, negate_dividend);
+    assign unsigned_divisor = negate_if (div_inputs.rs2, negate_divisor);
+
+    assign fifo_inputs.unsigned_dividend = unsigned_dividend;
+    assign fifo_inputs.unsigned_divisor = unsigned_divisor;
+    assign fifo_inputs.remainder_op = div_inputs.op[1];
+    assign fifo_inputs.negate_quotient = negate_quotient;
+    assign fifo_inputs.negate_remainder = negate_remainder;
+    assign fifo_inputs.reuse_result = div_inputs.reuse_result;
+    assign fifo_inputs.instruction_id = issue.instruction_id;
 
     ////////////////////////////////////////////////////
     //Input FIFO
-    taiga_fifo #(.DATA_WIDTH($bits(div_inputs_t)), .FIFO_DEPTH(MAX_INFLIGHT_COUNT))
+    taiga_fifo #(.DATA_WIDTH($bits(div_fifo_inputs_t)), .FIFO_DEPTH(MAX_INFLIGHT_COUNT))
         div_input_fifo (.fifo(input_fifo), .*);
 
-    assign input_fifo.data_in = div_inputs;
+    assign input_fifo.data_in = fifo_inputs;
     assign input_fifo.push = issue.new_request;
     assign input_fifo.supress_push = gc_fetch_flush;
-    assign issue.ready = ~input_fifo.full; //1; //As FIFO depth is the same as MAX_INFLIGHT_COUNT
+    assign issue.ready = 1; //As FIFO depth is the same as MAX_INFLIGHT_COUNT
     assign input_fifo.pop = div_done;
-    assign stage1 = input_fifo.data_out;
+    assign div_op = input_fifo.data_out;
 
     ////////////////////////////////////////////////////
     //Control Signals
-    assign start_algorithm = input_fifo.valid & (~in_progress) & ~stage1.reuse_result;
-    assign div_done = computation_complete | (input_fifo.valid & stage1.reuse_result);
+    assign start_algorithm = input_fifo.valid & (~in_progress) & ~div_op.reuse_result;
+    assign div_done = computation_complete | (input_fifo.valid & div_op.reuse_result);
 
     //If more than one cycle, set in_progress so that multiple start_algorithm signals are not sent to the div unit.
     always_ff @(posedge clk) begin
@@ -94,35 +128,15 @@ module div_unit
     end
 
     ////////////////////////////////////////////////////
-    //Input and output sign determination
-    assign signed_divop = ~stage1.op[0];
-
-    assign dividend_signed = signed_divop & stage1.rs1[31];
-    assign divisor_signed = signed_divop & stage1.rs2[31];
-
-    assign quotient_signed = signed_divop & (stage1.rs1[31] ^ stage1.rs2[31]);
-    assign remainder_signed = signed_divop & (stage1.rs1[31]);
-
-    ////////////////////////////////////////////////////
-    //Input Processing
-    assign complementerA = ({32{dividend_signed}} ^ stage1.rs1) + 32'(dividend_signed);
-    assign complementerB = ({32{divisor_signed}} ^ stage1.rs2) + 32'(divisor_signed);
-
-    ////////////////////////////////////////////////////
-    //Output muxing
-    assign negateResult = stage1.op[1] ? remainder_signed : (~divisor_zero & quotient_signed);
-    assign result_input = stage1.op[1] ? remainder : quotient;
-    assign wb_div_result = ({32{negateResult}} ^ result_input) + 32'(negateResult);
-
-    ////////////////////////////////////////////////////
     //Div core
-    div_algorithm #(XLEN) div (.*, .start(start_algorithm), .A(complementerA), .B(complementerB), .Q(quotient), .R(remainder), .complete(computation_complete), .ack(computation_complete), .B_is_zero(divisor_zero));
+    div_algorithm #(XLEN) div (.*, .start(start_algorithm), .A(div_op.unsigned_dividend), .B(div_op.unsigned_divisor), .Q(unsigned_quotient), .R(unsigned_remainder), .complete(computation_complete), .ack(computation_complete), .B_is_zero(divisor_zero));
 
     ////////////////////////////////////////////////////
     //Output
-    assign wb.rd = wb_div_result;
+    assign negate_result = div_op.remainder_op ? div_op.negate_remainder : (~divisor_zero & div_op.negate_quotient);
+    assign wb.rd = negate_if (div_op.remainder_op ? unsigned_remainder : unsigned_quotient, negate_result);
     assign wb.done = div_done;
-    assign wb.id = stage1.instruction_id;
+    assign wb.id = div_op.instruction_id;
     ////////////////////////////////////////////////////
     //Assertions
 
