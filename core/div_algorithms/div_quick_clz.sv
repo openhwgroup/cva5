@@ -69,11 +69,8 @@ module div_quick_clz
     clz clz_b (.clz_input(B), .clz(B_CLZ));
 
     always_ff @ (posedge clk) begin
-        firstCycle <= start;
         B_CLZ_r <= B_CLZ;
-        A_r <= A;
-        B_r <= B;
-        shiftedB <= B_r << B_CLZ_r;
+        shiftedB <= B << B_CLZ;
     end
 
     assign CLZ_delta = B_CLZ_r - R_CLZ;
@@ -92,25 +89,25 @@ module div_quick_clz
 
     assign new_R = A1[C_WIDTH] ? A2[C_WIDTH-1:0] : A1[C_WIDTH-1:0];
 
-    assign B_is_zero = (&B_CLZ_r) & ~B_r[0];
+    assign B_is_zero = (&B_CLZ) & ~B[0];
 
     always_ff @ (posedge clk) begin
         if (rst)
             running <= 0;
-        else if (firstCycle & ~B_is_zero)
+        else if (start & ~B_is_zero)
             running <= 1;
         else if (terminate)
             running <= 0;
     end
 
     always_ff @ (posedge clk) begin
-        complete <= (running & terminate) | (firstCycle & B_is_zero);
+        complete <= (running & terminate) | (start & B_is_zero);
     end
 
-    assign terminate = R < B_r;
+    assign terminate = R < B;
 
     always_ff @ (posedge clk) begin
-        if (firstCycle)
+        if (start)
             Q <= B_is_zero ? '1 : '0;
         else  if (~terminate & running)
             Q <= new_Q_bit;
@@ -120,8 +117,8 @@ module div_quick_clz
         R = 0;
     end
     always @ (posedge clk) begin
-        if (firstCycle)
-            R <= A_r;
+        if (start)
+            R <= A;
         else if (~terminate & running)
             R <= new_R;
     end
