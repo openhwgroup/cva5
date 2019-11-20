@@ -64,7 +64,7 @@ package taiga_config;
         QUICK_CLZ_MK2,
         QUICK_RADIX_4
     } div_type;
-    parameter div_type DIV_ALGORITHM = QUICK_CLZ;
+    parameter div_type DIV_ALGORITHM = RADIX_2;
 
     //Enable Atomic extension (cache operations only)
     parameter USE_AMO = 0;

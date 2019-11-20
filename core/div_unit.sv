@@ -58,15 +58,10 @@ module div_unit
     div_fifo_inputs_t fifo_inputs;
     div_fifo_inputs_t div_op;
 
-    logic start_algorithm;
+    unsigned_division_interface #(.DATA_WIDTH(32)) div_core();
+
     logic in_progress;
-    logic computation_complete;
     logic div_done;
-
-    logic [31:0] unsigned_quotient;
-    logic [31:0] unsigned_remainder;
-
-    logic divisor_zero;
     logic negate_result;
 
     fifo_interface #(.DATA_WIDTH($bits(div_fifo_inputs_t))) input_fifo();
@@ -114,27 +109,29 @@ module div_unit
 
     ////////////////////////////////////////////////////
     //Control Signals
-    assign start_algorithm = input_fifo.valid & (~in_progress) & ~div_op.reuse_result;
-    assign div_done = computation_complete | (input_fifo.valid & div_op.reuse_result);
+    assign div_core.start = input_fifo.valid & (~in_progress) & ~div_op.reuse_result;
+    assign div_done = div_core.done | (input_fifo.valid & div_op.reuse_result);
 
-    //If more than one cycle, set in_progress so that multiple start_algorithm signals are not sent to the div unit.
+    //If more than one cycle, set in_progress so that multiple div.start signals are not sent to the div unit.
     always_ff @(posedge clk) begin
         if (rst)
             in_progress <= 0;
-        else if (start_algorithm)
+        else if (div_core.start)
             in_progress <= 1;
-        else if (computation_complete)
+        else if (div_core.done)
             in_progress <= 0;
     end
 
     ////////////////////////////////////////////////////
     //Div core
-    div_algorithm #(XLEN) div (.*, .start(start_algorithm), .A(div_op.unsigned_dividend), .B(div_op.unsigned_divisor), .Q(unsigned_quotient), .R(unsigned_remainder), .complete(computation_complete), .ack(computation_complete), .B_is_zero(divisor_zero));
+    assign div_core.dividend = div_op.unsigned_dividend;
+    assign div_core.divisor = div_op.unsigned_divisor;
+    div_algorithm divider_block (.*, .div(div_core));
 
     ////////////////////////////////////////////////////
     //Output
-    assign negate_result = div_op.remainder_op ? div_op.negate_remainder : (~divisor_zero & div_op.negate_quotient);
-    assign wb.rd = negate_if (div_op.remainder_op ? unsigned_remainder : unsigned_quotient, negate_result);
+    assign negate_result = div_op.remainder_op ? div_op.negate_remainder : (~div_core.divisor_is_zero & div_op.negate_quotient);
+    assign wb.rd = negate_if (div_op.remainder_op ? div_core.remainder : div_core.quotient, negate_result);
     assign wb.done = div_done;
     assign wb.id = div_op.instruction_id;
     ////////////////////////////////////////////////////

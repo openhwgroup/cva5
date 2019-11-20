@@ -239,6 +239,19 @@ interface fetch_sub_unit_interface;
 
 endinterface
 
+//start and done are cycle cycle pulses
+interface unsigned_division_interface #(parameter DATA_WIDTH = 32);
+    logic start;
+    logic [DATA_WIDTH-1:0] dividend;
+    logic [DATA_WIDTH-1:0] divisor;
+    logic [DATA_WIDTH-1:0] remainder;
+    logic [DATA_WIDTH-1:0] quotient;
+    logic done;
+    logic divisor_is_zero;
+    modport requester (input remainder, quotient, done, divisor_is_zero, output dividend, divisor, start);
+    modport divider (output remainder, quotient, done, divisor_is_zero, input dividend, divisor, start);
+endinterface
+
 //request and ack are single cycle pulses
 //request should be high when the instruction is issued
 //data_valid is held high until an ack is received

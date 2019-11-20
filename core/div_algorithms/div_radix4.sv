@@ -1,5 +1,5 @@
 /*
- * Copyright © 2017 Eric Matthews,  Lesley Shannon
+ * Copyright © 2017-2019 Eric Matthews,  Lesley Shannon
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,97 +18,85 @@
  *
  * Author(s):
  *             Eric Matthews <ematthew@sfu.ca>
+  *             Alec Lu <alec_lu@sfu.ca>
  */
  
 
 module div_radix4
-    #(
-        parameter C_WIDTH = 32
-    )(
+        (
         input logic clk,
         input logic rst,
-        input logic start,
-        input logic ack,
-        input logic [C_WIDTH-1:0] A,
-        input logic [C_WIDTH-1:0] B,
-        output logic [C_WIDTH-1:0] Q,
-        output logic [C_WIDTH-1:0] R,
-        output logic complete,
-        output logic B_is_zero
-    );
+        unsigned_division_interface.divider div
+        );
     
     logic terminate;
-    logic [C_WIDTH/2-1:0] shift_count;
+    logic [div.DATA_WIDTH/2-1:0] shift_count;
     
-    logic [C_WIDTH+1:0] PR;
+    logic [div.DATA_WIDTH+1:0] PR;
     logic [2:0] new_PR_sign;
-    logic [C_WIDTH+2:0] new_PR_1;
-    logic [C_WIDTH+2:0] new_PR_2;
-    logic [C_WIDTH+2:0] new_PR_3;
-    logic [C_WIDTH+1:0] B_1;
-    logic [C_WIDTH+1:0] B_2;
-    logic [C_WIDTH+1:0] B_3;
+    logic [div.DATA_WIDTH+2:0] new_PR_1;
+    logic [div.DATA_WIDTH+2:0] new_PR_2;
+    logic [div.DATA_WIDTH+2:0] new_PR_3;
+    logic [div.DATA_WIDTH+1:0] B_1;
+    logic [div.DATA_WIDTH+1:0] B_2;
+    logic [div.DATA_WIDTH+1:0] B_3;
     
     //implementation
     ////////////////////////////////////////////////////
     assign new_PR_1 = {1'b0, PR} - {1'b0, B_1};
     assign new_PR_2 = {1'b0, PR} - {1'b0, B_2};
     assign new_PR_3 = {1'b0, PR} - {1'b0, B_3};
-    assign new_PR_sign = {new_PR_3[C_WIDTH+2], new_PR_2[C_WIDTH+2], new_PR_1[C_WIDTH+2]};
+    assign new_PR_sign = {new_PR_3[div.DATA_WIDTH+2], new_PR_2[div.DATA_WIDTH+2], new_PR_1[div.DATA_WIDTH+2]};
     
     //Shift reg for
     always_ff @ (posedge clk) begin
-        shift_count <= {shift_count[14:0], start};
+        shift_count <= {shift_count[14:0], div.start};
     end
     
     always_ff @ (posedge clk) begin
-        if (start) begin
-            PR <= {{(C_WIDTH-1){1'b0}}, A[C_WIDTH-1:C_WIDTH-2]};
-            Q <= {A[C_WIDTH-3:0], 2'b00};
+        if (div.start) begin
+            PR <= {{(div.DATA_WIDTH){1'b0}}, div.dividend[div.DATA_WIDTH-1:div.DATA_WIDTH-2]};
+            div.quotient <= {div.dividend[div.DATA_WIDTH-3:0], 2'b00};
 
-            B_1 <= {2'b0, B};           //1xB
-            B_2 <= {1'b0, B, 1'b0};     //2xB
-            B_3 <= {1'b0, B, 1'b0} + B; //3xB
+            B_1 <= {2'b0, div.divisor};           //1xB
+            B_2 <= {1'b0, div.divisor, 1'b0};     //2xB
+            B_3 <= {1'b0, div.divisor, 1'b0} + {2'b0, div.divisor}; //3xB
         end else if (~terminate) begin
-            casex (new_PR_sign)
+            case (new_PR_sign)
                 3'b111 : begin
-                    PR <= {PR[C_WIDTH-1:0], Q[C_WIDTH-1:C_WIDTH-2]};
-                    Q <= {Q[C_WIDTH-3:0], 2'b00};
+                    PR <= {PR[div.DATA_WIDTH-1:0], div.quotient[div.DATA_WIDTH-1:div.DATA_WIDTH-2]};
+                    div.quotient <= {div.quotient[div.DATA_WIDTH-3:0], 2'b00};
                 end
                 3'b110 : begin
-                    PR <= {new_PR_1[C_WIDTH-1:0], Q[C_WIDTH-1:C_WIDTH-2]};
-                    Q <= {Q[C_WIDTH-3:0], 2'b01};
+                    PR <= {new_PR_1[div.DATA_WIDTH-1:0], div.quotient[div.DATA_WIDTH-1:div.DATA_WIDTH-2]};
+                    div.quotient <= {div.quotient[div.DATA_WIDTH-3:0], 2'b01};
                 end
                 3'b100 : begin
-                    PR <= {new_PR_2[C_WIDTH-1:0], Q[C_WIDTH-1:C_WIDTH-2]};
-                    Q <= {Q[C_WIDTH-3:0], 2'b10};
+                    PR <= {new_PR_2[div.DATA_WIDTH-1:0], div.quotient[div.DATA_WIDTH-1:div.DATA_WIDTH-2]};
+                    div.quotient <= {div.quotient[div.DATA_WIDTH-3:0], 2'b10};
                 end
-                3'b000 : begin
-                    PR <= {new_PR_3[C_WIDTH-1:0], Q[C_WIDTH-1:C_WIDTH-2]};
-                    Q <= {Q[C_WIDTH-3:0], 2'b11};
+                default: begin //3'b000 : begin
+                    PR <= {new_PR_3[div.DATA_WIDTH-1:0], div.quotient[div.DATA_WIDTH-1:div.DATA_WIDTH-2]};
+                    div.quotient <= {div.quotient[div.DATA_WIDTH-3:0], 2'b11};
                 end
-                default begin
-                    PR <= 'x;
-                    Q <= 'x;
-                end 
             endcase
         end
     end
     
-    assign R = PR[C_WIDTH+1:2];
+    assign div.remainder = PR[div.DATA_WIDTH+1:2];
 
     always_ff @ (posedge clk) begin
-        if (start)
-            B_is_zero <= ~B[0];
+        if (div.start)
+            div.divisor_is_zero <= ~div.divisor[0];
         else  if (~terminate)
-            B_is_zero <= B_is_zero & ~(|new_PR_sign);
+            div.divisor_is_zero <= div.divisor_is_zero & ~(|new_PR_sign);
     end
 
     always_ff @ (posedge clk) begin
         if (rst)
             terminate <= 0;
         else begin
-            if (start)
+            if (div.start)
                 terminate <= 0;
             if (shift_count[15])
                 terminate <= 1;
@@ -117,12 +105,12 @@ module div_radix4
     
     always_ff @ (posedge clk) begin
         if (rst)
-            complete <= 0;
+            div.done <= 0;
         else begin
             if (shift_count[15])            
-                complete <= 1;
-            else if (ack)
-                complete <= 0;
+                div.done <= 1;
+            else if (div.done)
+                div.done <= 0;
         end
     end
 

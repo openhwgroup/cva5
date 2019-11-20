@@ -394,7 +394,6 @@ package taiga_types;
         logic [XLEN-1:0] rs2;
         logic [1:0] op;
         logic reuse_result;
-        instruction_id_t instruction_id;
     } div_inputs_t;
 
     typedef struct packed{
@@ -454,6 +453,7 @@ package taiga_types;
         logic branch_operand_stall;
         logic alu_operand_stall;
         logic ls_operand_stall;
+        logic div_operand_stall;
 
         //Branch Unit
         logic branch_correct;

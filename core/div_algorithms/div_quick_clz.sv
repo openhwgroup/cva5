@@ -1,5 +1,5 @@
 /*
- * Copyright © 2017 Eric Matthews,  Lesley Shannon
+ * Copyright © 2017-2019 Eric Matthews,  Lesley Shannon
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,104 +23,106 @@
 
 
 module div_quick_clz
-    #(
-        parameter C_WIDTH = 32
-    )(
+    (
         input logic clk,
         input logic rst,
-        input logic start,
-        input logic ack,
-        input logic [C_WIDTH-1:0] A,
-        input logic [C_WIDTH-1:0] B,
-        output logic [C_WIDTH-1:0] Q,
-        output logic [C_WIDTH-1:0] R,
-        output logic complete,
-        output logic B_is_zero
+        unsigned_division_interface.divider div
     );
 
     logic running;
     logic terminate;
 
-    logic [C_WIDTH-1:0] A_r;
-    logic [C_WIDTH:0] A1;
-    logic [C_WIDTH-1:0] A2;
+    logic [div.DATA_WIDTH-1:0] normalized_divisor;
 
-    logic [C_WIDTH-1:0] new_R;
-    logic [C_WIDTH-1:0] new_Q_bit;
+    logic overflow;
+    logic [div.DATA_WIDTH-1:0] subtraction1;
+    logic [div.DATA_WIDTH-1:0] subtraction2;
 
-    logic [C_WIDTH-1:0] Q_bit1;
-    logic [C_WIDTH-1:0] Q_bit2;
+    logic [div.DATA_WIDTH-1:0] new_remainder;
+    logic [div.DATA_WIDTH-1:0] new_quotient;
 
-    logic [C_WIDTH-1:0] B1;
-    logic [C_WIDTH-1:0] B2;
-    logic [C_WIDTH-1:0] B_r;
+    logic [div.DATA_WIDTH-1:0] new_Q_bit1;
+    logic [div.DATA_WIDTH-1:0] new_Q_bit2;
 
-    localparam CLZ_W = $clog2(C_WIDTH);
-    logic [CLZ_W-1:0] R_CLZ;
-    logic [CLZ_W-1:0] B_CLZ;
-    logic [CLZ_W-1:0] B_CLZ_r;
+    logic [div.DATA_WIDTH-1:0] test_multiple1;
+    logic [div.DATA_WIDTH-1:0] test_multiple2;
+
+    localparam CLZ_W = $clog2(div.DATA_WIDTH);
+    logic [CLZ_W-1:0] remainder_CLZ;
+    logic [CLZ_W-1:0] divisor_CLZ;
+    logic [CLZ_W-1:0] divisor_CLZ_r;
     logic [CLZ_W-1:0] CLZ_delta;
+    ////////////////////////////////////////////////////
+    //Implementation
+    clz remainder_clz_block (.clz_input(div.remainder), .clz(remainder_CLZ));
+    clz divisor_clz_block (.clz_input(div.divisor), .clz(divisor_CLZ));
 
-    logic firstCycle;
-    logic [C_WIDTH-1:0] shiftedB;
-    //////////////////////////////////////////
-
-    clz clz_r (.clz_input(R), .clz(R_CLZ));
-    clz clz_b (.clz_input(B), .clz(B_CLZ));
-
-    always_ff @ (posedge clk) begin
-        B_CLZ_r <= B_CLZ;
-        shiftedB <= B << B_CLZ;
-    end
-
-    assign CLZ_delta = B_CLZ_r - R_CLZ;
-
-    always_comb begin
-        Q_bit1 = 0;
-        Q_bit1[CLZ_delta] = 1;
-    end
-    assign Q_bit2 = {1'b0, Q_bit1[C_WIDTH-1:1]};
-    assign new_Q_bit = Q | (A1[C_WIDTH] ?  Q_bit2 : Q_bit1);
-
-    assign B1 = shiftedB >> R_CLZ;
-    assign A1 = R - B1;
-    assign B2 = {1'b0, B1[C_WIDTH-1:1]};
-    assign A2 = R - B2;
-
-    assign new_R = A1[C_WIDTH] ? A2[C_WIDTH-1:0] : A1[C_WIDTH-1:0];
-
-    assign B_is_zero = (&B_CLZ) & ~B[0];
+    ////////////////////////////////////////////////////
+    //Control Signals
+    assign div.divisor_is_zero = (&divisor_CLZ) & ~div.divisor[0];
 
     always_ff @ (posedge clk) begin
         if (rst)
             running <= 0;
-        else if (start & ~B_is_zero)
+        else if (div.start & ~div.divisor_is_zero)
             running <= 1;
         else if (terminate)
             running <= 0;
     end
 
     always_ff @ (posedge clk) begin
-        complete <= (running & terminate) | (start & B_is_zero);
+        div.done <= (running & terminate) | (div.start & div.divisor_is_zero);
     end
 
-    assign terminate = R < B;
+    assign terminate = div.remainder < div.divisor;
 
+    ////////////////////////////////////////////////////
+    //Divisor Pre-processing
     always_ff @ (posedge clk) begin
-        if (start)
-            Q <= B_is_zero ? '1 : '0;
-        else  if (~terminate & running)
-            Q <= new_Q_bit;
+        divisor_CLZ_r <= divisor_CLZ;
+        normalized_divisor <= div.divisor << divisor_CLZ;
     end
+
+    ////////////////////////////////////////////////////
+    //Remainder Determination
+    assign test_multiple1 = normalized_divisor >> remainder_CLZ;
+    assign {overflow, subtraction1} = div.remainder - test_multiple1;
+
+    assign test_multiple2 = test_multiple1 >> 1;
+    assign subtraction2 = div.remainder - test_multiple2;
+
+    assign new_remainder = overflow ? subtraction2 : subtraction1;
 
     initial begin
-        R = 0;
+        div.remainder = 0;
     end
     always @ (posedge clk) begin
-        if (start)
-            R <= A;
+        if (div.start)
+            div.remainder <= div.dividend;
         else if (~terminate & running)
-            R <= new_R;
+            div.remainder <= new_remainder;
     end
 
+    ////////////////////////////////////////////////////
+    //Quotient Determination
+    assign CLZ_delta = divisor_CLZ_r - remainder_CLZ;
+    always_comb begin
+        new_Q_bit1 = 0;
+        new_Q_bit1[CLZ_delta] = 1;
+    end
+    assign new_Q_bit2 = new_Q_bit1 >> 1;
+    assign new_quotient = div.quotient | (overflow ?  new_Q_bit2 : new_Q_bit1);
+
+    always_ff @ (posedge clk) begin
+        if (div.start)
+            div.quotient <= div.divisor_is_zero ? '1 : '0;
+        else if (~terminate & running)
+            div.quotient <= new_quotient;
+    end
+    ////////////////////////////////////////////////////
+    //End of Implementation
+    ////////////////////////////////////////////////////
+
+    ////////////////////////////////////////////////////
+    //Assertions
 endmodule

@@ -128,6 +128,7 @@ module taiga (
     logic tr_branch_operand_stall;
     logic tr_alu_operand_stall;
     logic tr_ls_operand_stall;
+    logic tr_div_operand_stall;
 
     logic tr_instruction_issued_dec;
     logic [31:0] tr_instruction_pc_dec;
@@ -227,6 +228,7 @@ module taiga (
             tr.events.branch_operand_stall <= tr_branch_operand_stall;
             tr.events.alu_operand_stall <= tr_alu_operand_stall;
             tr.events.ls_operand_stall <= tr_ls_operand_stall;
+            tr.events.div_operand_stall <= tr_div_operand_stall;
             tr.events.branch_correct <= tr_branch_correct;
             tr.events.branch_misspredict <= tr_branch_misspredict;
             tr.events.return_misspredict <= tr_return_misspredict;

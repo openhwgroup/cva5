@@ -64,6 +64,7 @@ module decode(
         output logic tr_branch_operand_stall,
         output logic tr_alu_operand_stall,
         output logic tr_ls_operand_stall,
+        output logic tr_div_operand_stall,
 
         output logic tr_instruction_issued_dec,
         output logic [31:0] tr_instruction_pc_dec,
@@ -374,7 +375,6 @@ module decode(
             assign div_inputs.rs2 = rf_decode.rs2_data;
             assign div_inputs.op = fn3[1:0];
             assign div_inputs.reuse_result = prev_div_result_valid_r & current_op_resuses_rs1_rs2;
-            assign div_inputs.instruction_id = ti.issue_id;
         end
     endgenerate
 
@@ -426,6 +426,7 @@ module decode(
         assign tr_branch_operand_stall = tr_operand_stall & new_request[BRANCH_UNIT_ID];
         assign tr_alu_operand_stall = tr_operand_stall & new_request[ALU_UNIT_WB_ID] & ~new_request[BRANCH_UNIT_ID];
         assign tr_ls_operand_stall = tr_operand_stall & new_request[LS_UNIT_WB_ID];
+        assign tr_div_operand_stall = tr_operand_stall & new_request[DIV_UNIT_WB_ID];
 
         assign tr_instruction_issued_dec = instruction_issued;
         assign tr_instruction_pc_dec = fb.pc;
