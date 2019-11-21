@@ -76,6 +76,9 @@ module branch_unit(
 
     //implementation
     ////////////////////////////////////////////////////
+    //Only stall condition is if the following instruction is not valid for pc comparisons.
+    //If the next instruction isn't valid, no instruction can be issued anyways, so it
+    //is safe to hardcode this to one.
     assign issue.ready = 1;
 
     //Branch new request is held if the following instruction hasn't arrived at decode/issue yet
@@ -167,8 +170,10 @@ module branch_unit(
     ////////////////////////////////////////////////////
     generate if (USE_BRANCH_PREDICTOR) begin
             always_ff @(posedge clk) begin
-                is_call <= branch_inputs.is_call;
-                is_return <= branch_inputs.is_return;
+                if (instruction_is_completing | ~branch_issued_r) begin
+                    is_call <= branch_inputs.is_call;
+                    is_return <= branch_inputs.is_return;
+                end
             end
 
             assign ras.push = instruction_is_completing & is_call;
@@ -186,8 +191,8 @@ module branch_unit(
     ////////////////////////////////////////////////////
     //Trace Interface
     generate if (ENABLE_TRACE_INTERFACE) begin
-        assign tr_branch_correct = instruction_is_completing & ~jump_ex & ~miss_predict;
-        assign tr_branch_misspredict = instruction_is_completing & ~jump_ex & miss_predict;
+        assign tr_branch_correct = instruction_is_completing & ~is_return & ~miss_predict;
+        assign tr_branch_misspredict = instruction_is_completing & ~is_return & miss_predict;
         assign tr_return_misspredict = instruction_is_completing & is_return & miss_predict;
     end
     endgenerate
