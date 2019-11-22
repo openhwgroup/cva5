@@ -134,7 +134,6 @@ module pre_decode
     assign data_in.uses_rs1 = !(opcode_trimmed inside {LUI_T, AUIPC_T, JAL_T, FENCE_T} || csr_imm_op || sys_op);
     assign data_in.uses_rs2 = opcode_trimmed inside {BRANCH_T, STORE_T, ARITH_T, AMO_T};
     assign data_in.uses_rd = !(opcode_trimmed inside {BRANCH_T, STORE_T, FENCE_T} || sys_op);
-    assign data_in.rd_zero = (rd_addr == 0);
 
     ////////////////////////////////////////////////////
     //Branch Predictor support

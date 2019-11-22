@@ -55,23 +55,28 @@ module write_back(
     logic [XLEN-1:0] unit_rd [NUM_WB_UNITS-1:0];
     /////
 
-    logic [XLEN-1:0] rds_by_id [MAX_INFLIGHT_COUNT-1:0];
-    logic [XLEN-1:0] rds_by_id_next [MAX_INFLIGHT_COUNT-1:0];
+    logic [XLEN-1:0] results_by_id [MAX_INFLIGHT_COUNT-1:0];
 
     logic [$clog2(NUM_WB_UNITS)-1:0] id_unit_select [MAX_INFLIGHT_COUNT-1:0];
-    instruction_id_t issue_id, retired_id, retired_id_r;
-    inflight_instruction_packet retired_instruction_packet;
+    logic [$clog2(NUM_WB_UNITS)-1:0] id_unit_select_r [MAX_INFLIGHT_COUNT-1:0];
+
+    instruction_id_t id_retiring;
+    inflight_instruction_packet retiring_instruction_packet;
 
     logic [MAX_INFLIGHT_COUNT-1:0] id_inuse;
-    logic [MAX_INFLIGHT_COUNT-1:0] id_done;
-    logic [MAX_INFLIGHT_COUNT-1:0] id_done_new;
-    logic [MAX_INFLIGHT_COUNT-1:0] alu_id_done_aborted;
-    logic [MAX_INFLIGHT_COUNT-1:0] id_done_r;
+    logic [MAX_INFLIGHT_COUNT-1:0] id_inuse_new;
 
-    logic retired, retired_r;
+    logic [MAX_INFLIGHT_COUNT-1:0] id_writeback_pending;
+    logic [MAX_INFLIGHT_COUNT-1:0] id_writeback_pending_r;
+
+    logic [MAX_INFLIGHT_COUNT-1:0] id_done_new;
+
+    logic [MAX_INFLIGHT_COUNT-1:0] id_retiring_one_hot;
+    logic [MAX_INFLIGHT_COUNT-1:0] id_issued_one_hot;
+
+    logic retiring_next_cycle, retiring;
     ////////////////////////////////////////////////////
     //Implementation
-
     //Re-assigning interface inputs to array types so that they can be dynamically indexed
     genvar i;
     generate
@@ -84,112 +89,123 @@ module write_back(
 
     ////////////////////////////////////////////////////
     //ID done determination
+    //For each ID, check if a unit is reporting that ID as done and OR the results together
+    //Additionally, OR the result of any store operation completing
     always_comb begin
-        for (int i=0; i< MAX_INFLIGHT_COUNT; i++) begin
-            id_done_new[i] = 0;
-            for (int j=0; j< NUM_WB_UNITS; j++) begin
-                if (unit_done[j] && (unit_instruction_id[j] == i[$clog2(MAX_INFLIGHT_COUNT)-1:0]))
-                    id_done_new[i] |= 1;
-            end
-            if (store_complete && (store_done_id == i[$clog2(MAX_INFLIGHT_COUNT)-1:0]))
-                id_done_new[i] |= 1;
+        id_done_new = 0;
+        for (int i=0; i< NUM_WB_UNITS; i++) begin
+            if (unit_done[i])
+                id_done_new[unit_instruction_id[i]] |= 1;// using an if statement and assigning 1 vs simply assigning unit_done[i] halves the LUTs for Xilinx
         end
+        if (store_complete)
+            id_done_new[store_done_id] |= 1;
     end
 
-    generate
-        for (i=0; i< MAX_INFLIGHT_COUNT; i++) begin
-            always_ff @ (posedge clk) begin
-                if (rst | (retired && retired_id == i)) begin
-                     id_unit_select[i] <= 0;
-                     id_inuse[i] <= 0;
-                end else if (ti.issued && issue_id == i) begin
-                     id_unit_select[i] <= ti.issue_unit_id;
-                     id_inuse[i] <= 1;
-                end
-            end
+    ////////////////////////////////////////////////////
+    //Unit select for writeback buffer
+    //Set unit_ID for each ID as they are issued
+    //If ID is not in use, use the current issue_unit_id value
+    //This is used to support single cycle units, such as the ALU
+    always_comb begin
+        id_issued_one_hot = 0;
+        id_issued_one_hot[ti.issue_id] = ti.issued;
+    end
 
-            assign rds_by_id_next[i] = unit_rd[id_unit_select[i]];
-            always_ff @ (posedge clk) begin
-                if (id_done_new[i])
-                    rds_by_id[i] <= rds_by_id_next[i];
-            end
+    generate for (i=0; i< MAX_INFLIGHT_COUNT; i++) begin
+        always_ff @ (posedge clk) begin
+            if (id_issued_one_hot[i])
+                id_unit_select_r[i] <= ti.issue_unit_id;
         end
-    endgenerate
+        assign id_unit_select[i] = id_inuse[i] ? id_unit_select_r[i] : ti.issue_unit_id;
+    end endgenerate
 
-    //result writeback either pending or complete
-    assign store_forwarding.data_valid = id_done_r[store_forwarding.id] | ~id_inuse[store_forwarding.id];
-    assign store_forwarding.data = rds_by_id[store_forwarding.id];
+    ////////////////////////////////////////////////////
+    //Writeback Buffer
+    //Mux outputs of units based on IDs
+    //If ID is done write result to buffer
+    generate for (i=0; i< MAX_INFLIGHT_COUNT; i++) begin
+        always_ff @ (posedge clk) begin
+            if (id_done_new[i])
+                results_by_id[i] <= unit_rd[id_unit_select[i]];
+        end
+    end endgenerate
 
-    //ID tracking
-    id_tracking id_fifos (.*, .issued(ti.issued), .retired(retired), .id_available(ti.id_available),
-    .oldest_id(oldest_id), .next_id(issue_id), .empty(instruction_queue_empty));
-
-    assign ti.issue_id = issue_id;
-
-    initial begin
-        foreach(packet_table[i])
-        packet_table[i] = '0;
-    end
-    //Inflight Instruction ID table
-    //Stores rd_addr and whether rd_addr is zero
-    always_ff @ (posedge clk) begin
-        if (ti.id_available)//instruction_issued_with_rd
-            packet_table[issue_id] <= ti.inflight_packet;
-    end
-
-    always_ff @ (posedge clk) begin
-        retired_instruction_packet <= instruction_queue_empty ? ti.inflight_packet : packet_table[retired_id];
-    end
-    //////////////////////
-
-    //One-hot ID retired last cycle
-    logic [MAX_INFLIGHT_COUNT-1:0] id_retired_last_cycle;
-    logic [MAX_INFLIGHT_COUNT-1:0] id_retired_last_cycle_r;
-    always_comb begin
-        id_retired_last_cycle = 0;
-        id_retired_last_cycle[retired_id] = retired;
-    end
-
-    always_ff @ (posedge clk) begin
-        id_retired_last_cycle_r <= id_retired_last_cycle;
-    end
-
-    always_comb begin
-        alu_id_done_aborted = 0;
-        alu_id_done_aborted[unit_instruction_id[ALU_UNIT_WB_ID]] = unit_done[ALU_UNIT_WB_ID] & gc_fetch_flush;
-    end
-
-    assign id_done = (id_done_r & ~id_retired_last_cycle_r) | (id_done_new & ~alu_id_done_aborted);
-
+    ////////////////////////////////////////////////////
+    //Unit Forwarding Support
+    //Track whether an ID has written to the commit buffer
+    assign id_inuse_new = id_issued_one_hot | (id_inuse & ~id_done_new);
     always_ff @ (posedge clk) begin
         if (rst)
-            id_done_r <= '0;
+            id_inuse <= 0;
         else
-            id_done_r <= id_done;
+            id_inuse <= id_inuse_new;
     end
 
-    assign retired = id_done[oldest_id];
-    assign retired_id = oldest_id;
+    //As IDs are freed for reuse in repeating order, the results will not be overwritten before the instruction
+    //needing them has itself completed
+    assign store_forwarding.data_valid = ~id_inuse[store_forwarding.id];
+    assign store_forwarding.data = results_by_id[store_forwarding.id];
+
+    ////////////////////////////////////////////////////
+    //ID Tracking
+    //Provides ordering of IDs, ID for issue and oldest ID for committing to register file
+    id_tracking id_fifos (.*, .issued(ti.issued), .retired(retiring_next_cycle), .id_available(ti.id_available),
+    .oldest_id(oldest_id), .next_id(ti.issue_id), .empty(instruction_queue_empty));
+
+    ////////////////////////////////////////////////////
+    //Metadata storage for IDs
+    //stores destination register for each ID and whether it is a store instruction
+    initial begin
+        foreach(packet_table[i])
+            packet_table[i] = '0;
+    end
+    //Inflight Instruction ID table
+    //Stores rd_addr and whether instruction is a store
+    always_ff @ (posedge clk) begin
+        if (ti.id_available)
+            packet_table[ti.issue_id] <= ti.inflight_packet;
+    end
+    assign retiring_instruction_packet = packet_table[id_retiring];
+
+    ////////////////////////////////////////////////////
+    //Register File Interface
+    //Track whether the ID has a pending write to the register file
+    always_ff @ (posedge clk) begin
+        if (rst)
+            id_writeback_pending_r <= 0;
+        else
+            id_writeback_pending_r <= id_writeback_pending;
+    end
+
+    assign id_writeback_pending = id_done_new | (id_writeback_pending_r & ~id_retiring_one_hot);
+
+    //Is the oldest instruction ready to commit?
+    assign retiring_next_cycle = id_writeback_pending[oldest_id];
 
     always_ff @(posedge clk) begin
-        retired_r <= retired;
-        retired_id_r <= retired_id;
+        retiring <= retiring_next_cycle;
+        id_retiring <= oldest_id;
     end
 
-    assign instruction_complete = retired_r & ~retired_instruction_packet.is_store;
+    always_comb begin
+        id_retiring_one_hot = 0;
+        id_retiring_one_hot[id_retiring] = retiring;
+    end
 
-    //Register file interaction
-    assign rf_wb.rd_addr = retired_instruction_packet.rd_addr;
-    assign rf_wb.id = retired_id_r;
+    //Instruction completion tracking for retired instruction count
+    assign instruction_complete = retiring & ~retiring_instruction_packet.is_store;
+
+    assign rf_wb.rd_addr = retiring_instruction_packet.rd_addr;
+    assign rf_wb.id = id_retiring;
     assign rf_wb.retired = instruction_complete;
-    assign rf_wb.rd_nzero = retired_instruction_packet.rd_addr_nzero;
-    assign rf_wb.rd_data = rds_by_id[retired_id_r];
+    assign rf_wb.rd_nzero = |retiring_instruction_packet.rd_addr;
+    assign rf_wb.rd_data = results_by_id[id_retiring];
 
-    assign rf_wb.rs1_valid = id_done_r[rf_wb.rs1_id];
-    assign rf_wb.rs2_valid = id_done_r[rf_wb.rs2_id];
-
-    assign rf_wb.rs1_data = rds_by_id[rf_wb.rs1_id];
-    assign rf_wb.rs2_data = rds_by_id[rf_wb.rs2_id];
+    //Register bypass for issue operands
+    assign rf_wb.rs1_valid = id_writeback_pending_r[rf_wb.rs1_id];
+    assign rf_wb.rs2_valid = id_writeback_pending_r[rf_wb.rs2_id];
+    assign rf_wb.rs1_data = results_by_id[rf_wb.rs1_id];
+    assign rf_wb.rs2_data = results_by_id[rf_wb.rs2_id];
     ////////////////////////////////////////////////////
     //End of Implementation
     ////////////////////////////////////////////////////
@@ -205,7 +221,7 @@ module write_back(
             tr_wb_mux_contention = 0;
             for (int i=0; i<MAX_INFLIGHT_COUNT-1; i++) begin
                     for (int j=i+1; j<MAX_INFLIGHT_COUNT; j++) begin
-                        tr_wb_mux_contention |= (id_done_r[i] & id_done_r[j]);
+                        tr_wb_mux_contention |= (id_writeback_pending[i] & id_writeback_pending[j]);
                     end
             end
         end

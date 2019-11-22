@@ -270,7 +270,6 @@ package taiga_types;
 
     typedef struct packed{
         logic [4:0] rd_addr;
-        logic rd_addr_nzero;
         logic is_store;
     } inflight_instruction_packet;
 
@@ -280,7 +279,6 @@ package taiga_types;
         logic uses_rs1;
         logic uses_rs2;
         logic uses_rd;
-        logic rd_zero;
         logic is_call;
         logic is_return;
         branch_predictor_metadata_t branch_metadata;

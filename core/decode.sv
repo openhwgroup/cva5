@@ -130,7 +130,7 @@ module decode(
     assign uses_rs1 = fb.uses_rs1;
     assign uses_rs2 = fb.uses_rs2;
     assign uses_rd = fb.uses_rd;
-    assign rd_zero = fb.rd_zero;
+    assign rd_zero = ~|future_rd_addr;
 
     assign rs1_addr = fb.instruction[19:15];
     assign rs2_addr = fb.instruction[24:20];
@@ -149,6 +149,7 @@ module decode(
 
     ////////////////////////////////////////////////////
     //Tracking Interface
+    //CSR results are passed through the load/store output
     always_comb begin
         unit_requested_for_id_gen = unit_requested[NUM_WB_UNITS-1:0];
         unit_requested_for_id_gen[LS_UNIT_WB_ID] |= (unit_requested[GC_UNIT_ID] & is_csr);
@@ -158,7 +159,6 @@ module decode(
     end
 
     assign ti.inflight_packet.rd_addr = future_rd_addr;
-    assign ti.inflight_packet.rd_addr_nzero = ~rd_zero;
     assign ti.inflight_packet.is_store = is_store;
     assign ti.issued = instruction_issued & (uses_rd | unit_requested[LS_UNIT_WB_ID]);
     assign ti.issue_unit_id = unit_requested_for_id_gen_int;
