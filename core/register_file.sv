@@ -83,7 +83,7 @@ module register_file(
     assign rf_wb.rs2_id = in_use_by[rf_decode.rs2_addr];
     assign rf_decode.rs2_id = rf_wb.rs2_id;
 
-    assign valid_write = rf_wb.rd_nzero & rf_wb.retired;
+    assign valid_write = rf_wb.rd_nzero & rf_wb.retiring;
 
     assign rs1_feedforward = rs1_inuse;
     assign rs2_feedforward = rs2_inuse;

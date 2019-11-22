@@ -122,7 +122,7 @@ endinterface
 
 interface register_file_writeback_interface;
     logic[4:0] rd_addr;
-    logic retired;
+    logic retiring;
     logic rd_nzero;
 
     logic[XLEN-1:0] rd_data;
@@ -136,8 +136,8 @@ interface register_file_writeback_interface;
     logic rs1_valid;
     logic rs2_valid;
     
-    modport writeback (output rd_addr, retired, rd_nzero, rd_data, id, rs1_data, rs2_data, rs1_valid, rs2_valid,  input rs1_id, rs2_id);
-    modport unit (input rd_addr, retired, rd_nzero, rd_data, id, rs1_data, rs2_data, rs1_valid, rs2_valid, output rs1_id, rs2_id);
+    modport writeback (output rd_addr, retiring, rd_nzero, rd_data, id, rs1_data, rs2_data, rs1_valid, rs2_valid,  input rs1_id, rs2_id);
+    modport unit (input rd_addr, retiring, rd_nzero, rd_data, id, rs1_data, rs2_data, rs1_valid, rs2_valid, output rs1_id, rs2_id);
 
 endinterface
 

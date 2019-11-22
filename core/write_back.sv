@@ -46,30 +46,28 @@ module write_back(
         );
     //////////////////////////////////////
 
-    //Inflight packetscd
-    (* ramstyle = "MLAB, no_rw_check" *) logic[$bits(inflight_instruction_packet)-1:0] packet_table [MAX_INFLIGHT_COUNT-1:0];
+    //Inflight metadata for IDs
+    (* ramstyle = "MLAB, no_rw_check" *) logic[$bits(inflight_instruction_packet)-1:0] id_metadata [MAX_INFLIGHT_COUNT-1:0];
 
     //aliases for write-back-interface signals
     instruction_id_t unit_instruction_id [NUM_WB_UNITS-1:0];
     logic [NUM_WB_UNITS-1:0] unit_done;
     logic [XLEN-1:0] unit_rd [NUM_WB_UNITS-1:0];
-    /////
-
-    logic [XLEN-1:0] results_by_id [MAX_INFLIGHT_COUNT-1:0];
-
+    //Per-ID muxes for commit buffer
     logic [$clog2(NUM_WB_UNITS)-1:0] id_unit_select [MAX_INFLIGHT_COUNT-1:0];
     logic [$clog2(NUM_WB_UNITS)-1:0] id_unit_select_r [MAX_INFLIGHT_COUNT-1:0];
+    //Commit buffer
+    logic [XLEN-1:0] results_by_id [MAX_INFLIGHT_COUNT-1:0];
 
     instruction_id_t id_retiring;
     inflight_instruction_packet retiring_instruction_packet;
 
     logic [MAX_INFLIGHT_COUNT-1:0] id_inuse;
-    logic [MAX_INFLIGHT_COUNT-1:0] id_inuse_new;
 
     logic [MAX_INFLIGHT_COUNT-1:0] id_writeback_pending;
     logic [MAX_INFLIGHT_COUNT-1:0] id_writeback_pending_r;
 
-    logic [MAX_INFLIGHT_COUNT-1:0] id_done_new;
+    logic [MAX_INFLIGHT_COUNT-1:0] id_writing_to_buffer;
 
     logic [MAX_INFLIGHT_COUNT-1:0] id_retiring_one_hot;
     logic [MAX_INFLIGHT_COUNT-1:0] id_issued_one_hot;
@@ -92,13 +90,13 @@ module write_back(
     //For each ID, check if a unit is reporting that ID as done and OR the results together
     //Additionally, OR the result of any store operation completing
     always_comb begin
-        id_done_new = 0;
+        id_writing_to_buffer = 0;
         for (int i=0; i< NUM_WB_UNITS; i++) begin
             if (unit_done[i])
-                id_done_new[unit_instruction_id[i]] |= 1;// using an if statement and assigning 1 vs simply assigning unit_done[i] halves the LUTs for Xilinx
+                id_writing_to_buffer[unit_instruction_id[i]] |= 1;// using an if statement and assigning 1 vs simply assigning unit_done[i] halves the LUTs for Xilinx
         end
         if (store_complete)
-            id_done_new[store_done_id] |= 1;
+            id_writing_to_buffer[store_done_id] |= 1;
     end
 
     ////////////////////////////////////////////////////
@@ -125,7 +123,7 @@ module write_back(
     //If ID is done write result to buffer
     generate for (i=0; i< MAX_INFLIGHT_COUNT; i++) begin
         always_ff @ (posedge clk) begin
-            if (id_done_new[i])
+            if (id_writing_to_buffer[i])
                 results_by_id[i] <= unit_rd[id_unit_select[i]];
         end
     end endgenerate
@@ -133,12 +131,11 @@ module write_back(
     ////////////////////////////////////////////////////
     //Unit Forwarding Support
     //Track whether an ID has written to the commit buffer
-    assign id_inuse_new = id_issued_one_hot | (id_inuse & ~id_done_new);
     always_ff @ (posedge clk) begin
         if (rst)
             id_inuse <= 0;
         else
-            id_inuse <= id_inuse_new;
+            id_inuse <= (id_issued_one_hot | id_inuse) & ~id_writing_to_buffer;
     end
 
     //As IDs are freed for reuse in repeating order, the results will not be overwritten before the instruction
@@ -156,16 +153,16 @@ module write_back(
     //Metadata storage for IDs
     //stores destination register for each ID and whether it is a store instruction
     initial begin
-        foreach(packet_table[i])
-            packet_table[i] = '0;
+        foreach(id_metadata[i])
+            id_metadata[i] = '0;
     end
     //Inflight Instruction ID table
     //Stores rd_addr and whether instruction is a store
     always_ff @ (posedge clk) begin
         if (ti.id_available)
-            packet_table[ti.issue_id] <= ti.inflight_packet;
+            id_metadata[ti.issue_id] <= ti.inflight_packet;
     end
-    assign retiring_instruction_packet = packet_table[id_retiring];
+    assign retiring_instruction_packet = id_metadata[id_retiring];
 
     ////////////////////////////////////////////////////
     //Register File Interface
@@ -177,7 +174,7 @@ module write_back(
             id_writeback_pending_r <= id_writeback_pending;
     end
 
-    assign id_writeback_pending = id_done_new | (id_writeback_pending_r & ~id_retiring_one_hot);
+    assign id_writeback_pending = id_writing_to_buffer | (id_writeback_pending_r & ~id_retiring_one_hot);
 
     //Is the oldest instruction ready to commit?
     assign retiring_next_cycle = id_writeback_pending[oldest_id];
@@ -197,12 +194,12 @@ module write_back(
 
     assign rf_wb.rd_addr = retiring_instruction_packet.rd_addr;
     assign rf_wb.id = id_retiring;
-    assign rf_wb.retired = instruction_complete;
+    assign rf_wb.retiring = instruction_complete;
     assign rf_wb.rd_nzero = |retiring_instruction_packet.rd_addr;
     assign rf_wb.rd_data = results_by_id[id_retiring];
 
     //Register bypass for issue operands
-    assign rf_wb.rs1_valid = id_writeback_pending_r[rf_wb.rs1_id];
+    assign rf_wb.rs1_valid = id_writeback_pending_r[rf_wb.rs1_id];//includes the instruction writing to the register file
     assign rf_wb.rs2_valid = id_writeback_pending_r[rf_wb.rs2_id];
     assign rf_wb.rs1_data = results_by_id[rf_wb.rs1_id];
     assign rf_wb.rs2_data = results_by_id[rf_wb.rs2_id];
