@@ -104,31 +104,51 @@ module load_store_unit (
     logic unit_stall;
 
     typedef struct packed{
+        logic [31:0] virtual_address;
+        logic [2:0] fn3;
+        logic load;
+        logic store;
+        logic load_store_forward;
+        instruction_id_t instruction_id;
+        instruction_id_t store_forward_id;
+        //exception support
+        logic [31:0] pc;
+        //amo support
+        amo_details_t amo;
+    } load_store_input_fifo_t;
+    load_store_input_fifo_t fifo_inputs;
+
+    typedef struct packed{
         logic [2:0] fn3;
         logic [1:0] byte_addr;
         instruction_id_t instruction_id;
         logic [0:0] subunit_id;
     } load_attributes_t;
     load_attributes_t  load_attributes_in, stage2_attr;
-    load_store_inputs_t  stage1;
+    load_store_input_fifo_t  stage1;
 
     //FIFOs
-    fifo_interface #(.DATA_WIDTH($bits(load_store_inputs_t))) input_fifo();
+    fifo_interface #(.DATA_WIDTH($bits(load_store_input_fifo_t))) input_fifo();
     fifo_interface #(.DATA_WIDTH($bits(load_attributes_t))) load_attributes();
 
     ////////////////////////////////////////////////////
     //Implementation
-    //Store forwarding request
-    assign store_forwarding.request = stage1.load_store_forward;
-    assign store_forwarding.id = stage1.store_forward_id;
-    assign store_forwarding.ack = issue_request & stage1.load_store_forward;
-
     ////////////////////////////////////////////////////
     //Input FIFO
-    taiga_fifo #(.DATA_WIDTH($bits(load_store_inputs_t)), .FIFO_DEPTH(MAX_INFLIGHT_COUNT))
+    taiga_fifo #(.DATA_WIDTH($bits(load_store_input_fifo_t)), .FIFO_DEPTH(MAX_INFLIGHT_COUNT))
         ls_input_fifo (.fifo(input_fifo), .*);
 
-    assign input_fifo.data_in = ls_inputs;
+    assign fifo_inputs.virtual_address = ls_inputs.rs1 + 32'(signed'(ls_inputs.offset));
+    assign fifo_inputs.fn3 = ls_inputs.fn3;
+    assign fifo_inputs.load = ls_inputs.load;
+    assign fifo_inputs.store = ls_inputs.store;
+    assign fifo_inputs.load_store_forward = ls_inputs.load_store_forward;
+    assign fifo_inputs.instruction_id = issue.instruction_id;
+    assign fifo_inputs.store_forward_id = ls_inputs.store_forward_id;
+    assign fifo_inputs.pc = ls_inputs.pc;
+    assign fifo_inputs.amo = ls_inputs.amo;
+
+    assign input_fifo.data_in = fifo_inputs;
     assign input_fifo.push = issue.new_request;
     assign input_fifo.supress_push = gc_fetch_flush;
     assign issue.ready = 1;//As FIFO depth is the same as MAX_INFLIGHT_COUNT
@@ -155,7 +175,7 @@ module load_store_unit (
 
     //When switching units, ensure no outstanding loads so that there can be no timing collisions with results
     assign unit_stall = (current_unit != last_unit) && load_attributes.valid;
-    assign store_ready = stage1.store & ((stage1.load_store_forward & store_forwarding.data_valid) | ~stage1.load_store_forward);
+    assign store_ready = stage1.store & store_forwarding.data_valid;
     assign issue_request = input_fifo.valid & units_ready & ~unit_stall & ~unaligned_addr & (~stage1.store | store_ready);
 
     ////////////////////////////////////////////////////
@@ -217,7 +237,9 @@ module load_store_unit (
     assign shared_inputs.be = be;
     assign shared_inputs.fn3 = stage1.fn3;
 
-    assign stage1_raw_data = stage1.load_store_forward ? store_forwarding.data : stage1.rs2;
+    //Store forwarding request
+    assign store_forwarding.id = stage1.load_store_forward ? stage1.store_forward_id : stage1.instruction_id;
+    assign stage1_raw_data = store_forwarding.data;
 
     //Input: ABCD
     //Assuming aligned requests,

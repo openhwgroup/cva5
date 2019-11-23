@@ -366,15 +366,13 @@ package taiga_types;
     } amo_details_t;
 
     typedef struct packed{
-        logic [XLEN-1:0] virtual_address;
+        logic [XLEN-1:0] rs1;
         logic [11:0] offset;
-        logic [XLEN-1:0] rs2;
         logic [2:0] fn3;
         logic load;
         logic store;
         logic load_store_forward;
         instruction_id_t store_forward_id;
-        instruction_id_t instruction_id;
         //exception support
         logic [31:0] pc;
         //amo support

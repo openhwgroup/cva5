@@ -49,6 +49,8 @@ module decode(
         output logic gc_flush_required,
 
         output logic load_store_issue,
+        output logic store_issued_with_data,
+        output logic [31:0] store_data,
 
         output logic instruction_issued,
         output logic instruction_issued_no_rd,
@@ -265,16 +267,18 @@ module decode(
     assign is_store = (opcode_trim == STORE_T) || (amo_op && store_conditional);//Used for LS unit and for ID tracking
     assign ls_offset = opcode[5] ? {fb.instruction[31:25], fb.instruction[11:7]} : fb.instruction[31:20];
 
+    assign ls_inputs.rs1 = rf_decode.rs1_data;
     assign ls_inputs.offset = ls_offset;
-    assign ls_inputs.virtual_address = rf_decode.rs1_data + 32'(signed'(ls_offset));
-    assign ls_inputs.rs2 = rf_decode.rs2_data;
     assign ls_inputs.pc = fb.pc;
     assign ls_inputs.fn3 = amo_op ? LS_W_fn3 : fn3;
     assign ls_inputs.load = is_load;
     assign ls_inputs.store = is_store;
     assign ls_inputs.load_store_forward = rf_decode.rs2_conflict;
     assign ls_inputs.store_forward_id = rf_decode.rs2_id;
-    assign ls_inputs.instruction_id = ti.issue_id;
+
+    //Store data to commit/store buffer
+    assign store_issued_with_data = ~ls_inputs.load_store_forward & issue[LS_UNIT_WB_ID];
+    assign store_data = rf_decode.rs2_data;
 
     ////////////////////////////////////////////////////
     //Branch unit inputs

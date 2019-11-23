@@ -119,6 +119,9 @@ module taiga (
     logic store_complete;
     post_issue_forwarding_interface store_forwarding();
 
+    logic store_issued_with_data;
+    logic [31:0] store_data;
+
     //Trace Interface Signals
     logic tr_operand_stall;
     logic tr_unit_stall;
