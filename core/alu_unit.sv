@@ -63,7 +63,7 @@ module alu_unit(
 
     barrel_shifter shifter (
             .shifter_input(alu_inputs.shifter_in),
-            .shift_amount(alu_inputs.in2[4:0]),
+            .shift_amount(alu_inputs.shift_amount),
             .arith(alu_inputs.arith),
             .lshift(alu_inputs.lshift),
             .shifted_resultr(rshift_result),

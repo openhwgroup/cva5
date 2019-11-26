@@ -239,6 +239,7 @@ module decode(
     assign alu_inputs.in1 = {(alu_rs1_data[XLEN-1] & ~fn3[0]), alu_rs1_data};//(fn3[0]  is SLTU_fn3);
     assign alu_inputs.in2 = {(alu_rs2_data[XLEN-1] & ~fn3[0]), alu_rs2_data};
     assign alu_inputs.shifter_in = rf_decode.rs1_data;
+    assign alu_inputs.shift_amount = opcode[5] ? rf_decode.rs2_data[4:0] : rs2_addr;
     assign alu_inputs.subtract = fb.alu_sub;
     assign alu_inputs.arith = alu_rs1_data[XLEN-1] & fb.instruction[30];//shift in bit
     assign alu_inputs.lshift = ~fn3[2];

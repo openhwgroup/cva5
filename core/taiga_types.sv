@@ -302,6 +302,7 @@ package taiga_types;
         logic [XLEN:0] in1;//contains sign padding bit for slt operation
         logic [XLEN:0] in2;//contains sign padding bit for slt operation
         logic [XLEN-1:0] shifter_in;
+        logic [4:0] shift_amount;
         logic subtract;
         logic arith;//contains sign padding bit for arithmetic shift right operation
         logic lshift;
