@@ -41,11 +41,10 @@ module div_quick_radix_4
     logic [div.DATA_WIDTH+1:0] B_2;
     logic [div.DATA_WIDTH+1:0] B_3;
     
-    logic [div.DATA_WIDTH-1:0] A_r;
-    logic [div.DATA_WIDTH-1:0] B_r;
     logic [div.DATA_WIDTH-1:0] AR_r;
     logic [div.DATA_WIDTH-1:0] Q_temp;
     logic [5:0] shift_num_R;
+    logic [6:0] shift_num_R_normalized;
     logic [5:0] shift_num_Q;
     logic [div.DATA_WIDTH*2+1:0] combined;
     logic [div.DATA_WIDTH*2+1:0] combined_normalized;
@@ -63,6 +62,7 @@ module div_quick_radix_4
     logic [div.DATA_WIDTH-1:0] A_shifted;
     logic [div.DATA_WIDTH-1:0] B_shifted;
     logic [div.DATA_WIDTH-1:0] R_shifted;
+    logic [div.DATA_WIDTH-1:0] B_shifted_r;
     
     //implementation
     ////////////////////////////////////////////////////
@@ -70,14 +70,25 @@ module div_quick_radix_4
     clz clz_b (.clz_input(div.divisor), .clz(B_CLZ));
     
     always_ff @ (posedge clk) begin
-        firstCycle <= div.start;
-        A_CLZ_r <= A_CLZ;
-        B_CLZ_r <= B_CLZ;
-        A_r <= div.dividend;
-        B_r <= div.divisor;
-    end    
-    assign A_shifted = A_r << A_CLZ_r;
-    assign B_shifted = B_r << A_CLZ_r;
+        if (rst) begin
+          firstCycle <= 0;
+          A_CLZ_r <= 0;
+          B_CLZ_r <= 0;
+          A_shifted <= 0;
+          B_shifted <= 0;
+        end else begin
+          if (div.start) begin
+            firstCycle <= 1;
+	    A_CLZ_r <= A_CLZ;
+	    B_CLZ_r <= B_CLZ;
+	    greaterDivisor <= div.divisor > div.dividend;
+            A_shifted <= div.dividend << A_CLZ;
+            B_shifted <= div.divisor << A_CLZ;
+          end else begin
+            firstCycle <= 0;
+          end 
+        end 
+    end
     
     assign new_PR_1 = {1'b0, PR} - {1'b0, B_1};
     assign new_PR_2 = {1'b0, PR} - {1'b0, B_2};
@@ -86,38 +97,45 @@ module div_quick_radix_4
     
     //Shift reg for
     always_ff @ (posedge clk) begin
-       if (firstCycle)
+      if (rst) begin
+        shift_count <= 0;
+      end else if (firstCycle) begin
         shift_count <= 1;
-    else
-        shift_count <= {shift_count[14:0], firstCycle}; 
+      end else if (terminate) begin
+        shift_count <= 0;
+      end else begin
+        shift_count <= {shift_count[14:0], firstCycle};
+      end  
     end
     
    always_ff @ (posedge clk) begin
         if (firstCycle) begin
            shift_num_R <= 2;
+           shift_num_R_normalized <= 2 + {2'b0, A_CLZ_r};
            shift_num_Q <= 32;
         end 
         else if (~terminate & ~terminate_early) begin
             shift_num_R <= shift_num_R + 2;
+            shift_num_R_normalized <= shift_num_R_normalized + 2; 
             shift_num_Q <= shift_num_Q - 2;
         end 
     end     
     
-    assign combined_normalized = {PR, AR_r} >> (shift_num_R + A_CLZ_r);
+    assign combined_normalized = {PR, AR_r} >> shift_num_R_normalized;
     assign div.remainder = combined_normalized[div.DATA_WIDTH-1:0];
 
     assign combined = {PR, AR_r} >> shift_num_R;
     assign R_shifted = combined[div.DATA_WIDTH-1:0];
 
-    assign terminate_early = (B_shifted > R_shifted) | greaterDivisor;
+    assign terminate_early = ~firstCycle & ((B_shifted_r > R_shifted) | greaterDivisor);
     assign div.quotient = terminate_early ? (Q_temp << shift_num_Q) : Q_temp;
     
     always_ff @ (posedge clk) begin
         if (firstCycle) begin
             PR <= {{(div.DATA_WIDTH){1'b0}}, A_shifted[div.DATA_WIDTH-1:div.DATA_WIDTH-2]};
-            Q_temp <= div.divisor_is_zero ? '1 : '0;
+            Q_temp <= '0;
             AR_r <= {A_shifted[div.DATA_WIDTH-3:0], 2'b00};
-            greaterDivisor <= B_r > A_r;
+            B_shifted_r <= B_shifted;
             B_1 <= {2'b0, B_shifted};           //1xB
             B_2 <= {1'b0, B_shifted, 1'b0};     //2xB
             B_3 <= {1'b0, B_shifted, 1'b0} + {2'b0, B_shifted}; //3xB
@@ -144,13 +162,12 @@ module div_quick_radix_4
         end
     end
 
-//    always_ff @ (posedge clk) begin
-//        if (firstCycle)
-//            div.divisor_is_zero <= ~B_r[0];
-//        else  if (~terminate)
-//            div.divisor_is_zero <= div.divisor_is_zero & ~(|new_PR_sign);
-//    end
-    assign div.divisor_is_zero = (&B_CLZ_r) & ~B_r[0];
+    always_ff @ (posedge clk) begin
+        if (div.start)
+            div.divisor_is_zero <= ~(|div.divisor);
+        else  if (~terminate & ~terminate_early)
+            div.divisor_is_zero <= div.divisor_is_zero & ~(|new_PR_sign);
+    end
 
     always_ff @ (posedge clk) begin
         if (rst)
@@ -167,7 +184,9 @@ module div_quick_radix_4
         if (rst)
             div.done <= 0;
         else begin
-            if ((~firstCycle & (shift_count[15] | terminate_early) & ~div.done & ~terminate) | (firstCycle & div.divisor_is_zero))
+            if (firstCycle)
+                div.done <= 0;
+            else if ((shift_count[15] | terminate_early) & ~div.done & ~terminate) 
                 div.done <= 1;
             else if (div.done)
                 div.done <= 0;
