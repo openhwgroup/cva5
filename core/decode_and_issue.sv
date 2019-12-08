@@ -99,9 +99,9 @@ module decode_and_issue (
     logic [NUM_UNITS-1:0] unit_operands_ready;
     logic mult_div_op;
 
-    logic [NUM_WB_UNITS-1:0] unit_requested_for_id_gen;
-    logic [WB_UNITS_WIDTH-1:0] unit_requested_for_id_gen_int;
-    logic [NUM_UNITS-1:0] unit_requested;
+    logic [NUM_WB_UNITS-1:0] unit_needed_for_id_gen;
+    logic [WB_UNITS_WIDTH-1:0] unit_needed_for_id_gen_int;
+    logic [NUM_UNITS-1:0] unit_needed;
     logic [NUM_UNITS-1:0] unit_ready;
     logic [NUM_UNITS-1:0] issue;
 
@@ -144,33 +144,33 @@ module decode_and_issue (
     //Tracking Interface
     //CSR results are passed through the load/store output
     always_comb begin
-        unit_requested_for_id_gen = unit_requested[NUM_WB_UNITS-1:0];
-        unit_requested_for_id_gen[LS_UNIT_WB_ID] |= (unit_requested[GC_UNIT_ID] & is_csr);
-        unit_requested_for_id_gen_int = 0;
-            foreach (unit_requested_for_id_gen[i])
-                if (unit_requested_for_id_gen[i]) unit_requested_for_id_gen_int |= i[WB_UNITS_WIDTH-1:0];
+        unit_needed_for_id_gen = unit_needed[NUM_WB_UNITS-1:0];
+        unit_needed_for_id_gen[LS_UNIT_WB_ID] |= (unit_needed[GC_UNIT_ID] & is_csr);
+        unit_needed_for_id_gen_int = 0;
+            foreach (unit_needed_for_id_gen[i])
+                if (unit_needed_for_id_gen[i]) unit_needed_for_id_gen_int |= i[WB_UNITS_WIDTH-1:0];
     end
 
     assign ti.inflight_packet.rd_addr = future_rd_addr;
     assign ti.inflight_packet.is_store = is_store;
-    assign ti.issued = instruction_issued & (uses_rd | unit_requested[LS_UNIT_WB_ID]);
-    assign ti.issue_unit_id = unit_requested_for_id_gen_int;
-    //one_hot_to_integer #(NUM_WB_UNITS) unit_id_gen (.*, .one_hot(unit_requested[NUM_WB_UNITS-1:0]), .int_out(unit_requested_for_id_gen_int));
+    assign ti.issued = instruction_issued & (uses_rd | unit_needed[LS_UNIT_WB_ID]);
+    assign ti.issue_unit_id = unit_needed_for_id_gen_int;
+    //one_hot_to_integer #(NUM_WB_UNITS) unit_id_gen (.*, .one_hot(unit_needed[NUM_WB_UNITS-1:0]), .int_out(unit_needed_for_id_gen_int));
     ////////////////////////////////////////////////////
     //Unit Determination
     assign mult_div_op = fb.instruction[25];
 
-    assign unit_requested[BRANCH_UNIT_ID] = opcode_trim inside {BRANCH_T, JAL_T, JALR_T};
-    assign unit_requested[ALU_UNIT_WB_ID] = fb.alu_request;
-    assign unit_requested[LS_UNIT_WB_ID] = opcode_trim inside {LOAD_T, STORE_T, AMO_T};
-    assign unit_requested[GC_UNIT_ID] = opcode_trim inside {SYSTEM_T, FENCE_T};
+    assign unit_needed[BRANCH_UNIT_ID] = opcode_trim inside {BRANCH_T, JAL_T, JALR_T};
+    assign unit_needed[ALU_UNIT_WB_ID] = fb.alu_request;
+    assign unit_needed[LS_UNIT_WB_ID] = opcode_trim inside {LOAD_T, STORE_T, AMO_T};
+    assign unit_needed[GC_UNIT_ID] = opcode_trim inside {SYSTEM_T, FENCE_T};
 
     generate if (USE_MUL)
-            assign unit_requested[MUL_UNIT_WB_ID] = (opcode_trim == ARITH_T) && mult_div_op && ~fn3[2];
+            assign unit_needed[MUL_UNIT_WB_ID] = (opcode_trim == ARITH_T) && mult_div_op && ~fn3[2];
     endgenerate
 
     generate if (USE_DIV)
-            assign unit_requested[DIV_UNIT_WB_ID] = (opcode_trim == ARITH_T) && mult_div_op && fn3[2];
+            assign unit_needed[DIV_UNIT_WB_ID] = (opcode_trim == ARITH_T) && mult_div_op && fn3[2];
     endgenerate
 
     assign valid_opcode = opcode_trim inside {BRANCH_T, JAL_T, JALR_T, ARITH_T, ARITH_IMM_T, AUIPC_T, LUI_T, LOAD_T, STORE_T, AMO_T, SYSTEM_T, FENCE_T};
@@ -196,7 +196,7 @@ module decode_and_issue (
         unit_operands_ready[LS_UNIT_WB_ID] = load_store_operands_ready;
     end
 
-    assign issue = {NUM_UNITS{issue_valid}} & unit_operands_ready & unit_requested & unit_ready;
+    assign issue = {NUM_UNITS{issue_valid}} & unit_operands_ready & unit_needed & unit_ready;
 
     //If not all units can provide constant ready signals:
     //((|issue_ready) & issue_valid & load_store_operands_ready);
@@ -357,9 +357,9 @@ module decode_and_issue (
 
             always_comb begin
                 prev_div_result_valid = prev_div_result_valid_r;
-                if ((unit_requested[DIV_UNIT_WB_ID] & ~div_rd_overwrites_rs1_or_rs2))
+                if ((unit_needed[DIV_UNIT_WB_ID] & ~div_rd_overwrites_rs1_or_rs2))
                     prev_div_result_valid = 1;
-                else if ((unit_requested[DIV_UNIT_WB_ID] & div_rd_overwrites_rs1_or_rs2) | (uses_rd & rd_overwrites_previously_saved_rs1_or_rs2))
+                else if ((unit_needed[DIV_UNIT_WB_ID] & div_rd_overwrites_rs1_or_rs2) | (uses_rd & rd_overwrites_previously_saved_rs1_or_rs2))
                     prev_div_result_valid = 0;
             end
 
@@ -381,7 +381,7 @@ module decode_and_issue (
     //Unit EX signals
     generate
         for(i = 0; i < NUM_UNITS; i++) begin
-            assign unit_issue[i].possible_issue = unit_requested[i] & unit_ready[i] & unit_operands_ready[i] & fb_valid & ti.id_available & ~gc_issue_hold;//Every condition other than a pipeline flush
+            assign unit_issue[i].possible_issue = unit_needed[i] & unit_ready[i] & unit_operands_ready[i] & fb_valid & ti.id_available & ~gc_issue_hold;//Every condition other than a pipeline flush
             assign unit_issue[i].new_request = issue[i];
             assign unit_issue[i].instruction_id = ti.issue_id;
             always_ff @(posedge clk) begin
@@ -416,15 +416,15 @@ module decode_and_issue (
     ////////////////////////////////////////////////////
     //Trace Interface
     generate if (ENABLE_TRACE_INTERFACE) begin
-        assign tr_operand_stall = |(unit_requested & unit_ready) & issue_valid & ~load_store_operands_ready;
-        assign tr_unit_stall = ~|(unit_requested & unit_ready) & issue_valid & load_store_operands_ready;
-        assign tr_no_id_stall = |(unit_requested & unit_ready) & (fb_valid & ~ti.id_available & ~gc_issue_hold & ~gc_fetch_flush) & load_store_operands_ready;
+        assign tr_operand_stall = |(unit_needed & unit_ready) & issue_valid & ~load_store_operands_ready;
+        assign tr_unit_stall = ~|(unit_needed & unit_ready) & issue_valid & load_store_operands_ready;
+        assign tr_no_id_stall = |(unit_needed & unit_ready) & (fb_valid & ~ti.id_available & ~gc_issue_hold & ~gc_fetch_flush) & load_store_operands_ready;
         assign tr_no_instruction_stall = ~fb_valid;
         assign tr_other_stall = fb_valid & ~instruction_issued & ~(tr_operand_stall | tr_unit_stall | tr_no_id_stall | tr_no_instruction_stall) & ~gc_fetch_flush;
-        assign tr_branch_operand_stall = tr_operand_stall & unit_requested[BRANCH_UNIT_ID];
-        assign tr_alu_operand_stall = tr_operand_stall & unit_requested[ALU_UNIT_WB_ID] & ~unit_requested[BRANCH_UNIT_ID];
-        assign tr_ls_operand_stall = tr_operand_stall & unit_requested[LS_UNIT_WB_ID];
-        assign tr_div_operand_stall = tr_operand_stall & unit_requested[DIV_UNIT_WB_ID];
+        assign tr_branch_operand_stall = tr_operand_stall & unit_needed[BRANCH_UNIT_ID];
+        assign tr_alu_operand_stall = tr_operand_stall & unit_needed[ALU_UNIT_WB_ID] & ~unit_needed[BRANCH_UNIT_ID];
+        assign tr_ls_operand_stall = tr_operand_stall & unit_needed[LS_UNIT_WB_ID];
+        assign tr_div_operand_stall = tr_operand_stall & unit_needed[DIV_UNIT_WB_ID];
 
         assign tr_instruction_issued_dec = instruction_issued;
         assign tr_instruction_pc_dec = fb.pc;
