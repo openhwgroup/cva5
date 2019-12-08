@@ -107,15 +107,6 @@ module decode(
 
     logic valid_opcode;
 
-    //LS-inputs
-    logic [11:0] ls_offset;
-    logic is_load;
-    logic is_store;
-    logic amo_op;
-    logic store_conditional;
-    logic load_reserve;
-    logic [4:0] amo_type;
-
     genvar i;
     ////////////////////////////////////////////////////
     //Implementation
@@ -248,6 +239,14 @@ module decode(
 
     ////////////////////////////////////////////////////
     //Load Store unit inputs
+    logic [11:0] ls_offset;
+    logic is_load;
+    logic is_store;
+    logic amo_op;
+    logic store_conditional;
+    logic load_reserve;
+    logic [4:0] amo_type;
+
     assign amo_op =  USE_AMO ? (opcode_trim == AMO_T) : 1'b0;
     assign amo_type = fb.instruction[31:27];
     assign store_conditional = (amo_type == AMO_SC);
@@ -309,23 +308,19 @@ module decode(
     assign environment_op = (opcode_trim == SYSTEM_T) && (fn3 == 0);
     assign is_csr = (opcode_trim == SYSTEM_T) && (fn3 != 0);
 
-    always_ff @(posedge clk) begin
-        if (issue[GC_UNIT_ID]) begin
-            gc_inputs.pc <= fb.pc;
-            gc_inputs.instruction <= fb.instruction;
-            gc_inputs.rs1 <= rf_decode.rs1_data;
-            gc_inputs.rs2 <= rf_decode.rs2_data;
-            gc_inputs.rd_is_zero <= rd_zero;
-            gc_inputs.is_fence <= (opcode_trim == FENCE_T) && ~fn3[0];
-            gc_inputs.is_csr <= is_csr;
-        end
-        gc_inputs.is_ecall <= issue[GC_UNIT_ID] && environment_op && (fb.instruction[21:20] == 0);
-        gc_inputs.is_ebreak <= issue[GC_UNIT_ID] && environment_op && (fb.instruction[21:20] == 2'b01);
-        gc_inputs.is_ret <= issue[GC_UNIT_ID] && environment_op && (fb.instruction[21:20] == 2'b10);
-        gc_inputs.is_i_fence <= issue[GC_UNIT_ID] && ifence;
-    end
-    assign gc_flush_required = issue[GC_UNIT_ID] && (environment_op | ifence);
+    assign gc_inputs.pc = fb.pc;
+    assign gc_inputs.instruction = fb.instruction;
+    assign gc_inputs.rs1 = rf_decode.rs1_data;
+    assign gc_inputs.rs2 = rf_decode.rs2_data;
+    assign gc_inputs.is_fence = (opcode_trim == FENCE_T) && ~fn3[0];
+    assign gc_inputs.is_i_fence = issue[GC_UNIT_ID] && ifence;
+    assign gc_inputs.is_csr = is_csr;
 
+    assign gc_inputs.is_ecall = environment_op && (fb.instruction[21:20] == 0);
+    assign gc_inputs.is_ebreak = environment_op && (fb.instruction[21:20] == 2'b01);
+    assign gc_inputs.is_ret = environment_op && (fb.instruction[21:20] == 2'b10);
+
+    assign gc_flush_required = issue[GC_UNIT_ID] && (environment_op | ifence);
 
     ////////////////////////////////////////////////////
     //Mul unit inputs
@@ -335,7 +330,6 @@ module decode(
             assign mul_inputs.op = fn3[1:0];
         end
     endgenerate
-
 
     ////////////////////////////////////////////////////
     //Div unit inputs
@@ -382,7 +376,6 @@ module decode(
             assign div_inputs.reuse_result = prev_div_result_valid_r & current_op_resuses_rs1_rs2;
         end
     endgenerate
-
 
     ////////////////////////////////////////////////////
     //Unit EX signals

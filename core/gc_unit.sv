@@ -155,31 +155,34 @@ module gc_unit(
 
     logic [4:0] rs1_addr;
     logic [4:0] rs2_addr;
-    logic [4:0] future_rd_addr;
+    logic [4:0] rd_addr;
 
-    logic is_csr;
+    gc_inputs_t stage1;
     logic processing_csr;
     logic csr_ready_to_complete;
     logic csr_ready_to_complete_r;
     instruction_id_t instruction_id;
     //implementation
     ////////////////////////////////////////////////////
-
+    always_ff @(posedge clk) begin
+        if (issue.new_request) begin
+            stage1 <= gc_inputs;
+        end
+    end
 
     //Instruction decode
-    assign opcode = gc_inputs.instruction[6:0];
+    assign opcode = stage1.instruction[6:0];
     assign opcode_trim = opcode[6:2];
-    assign fn3 = gc_inputs.instruction[14:12];
-    assign rs1_addr = gc_inputs.instruction[19:15];
+    assign fn3 = stage1.instruction[14:12];
+    assign rs1_addr = stage1.instruction[19:15];
+    assign rd_addr = stage1.instruction[11:7];
 
     ////////////////////////////////////////////////////
     //GC Operation
-    assign is_csr = issue.new_request_r & gc_inputs.is_csr;
-
     assign gc_fetch_flush = branch_flush | gc_fetch_pc_override;
 
     always_ff @ (posedge clk) begin
-        gc_issue_hold <= issue.new_request || is_csr || processing_csr || (next_state inside {TLB_CLEAR_STATE, IQ_DRAIN, IQ_DISCARD});
+        gc_issue_hold <= issue.new_request || processing_csr || (next_state inside {TLB_CLEAR_STATE, IQ_DRAIN, IQ_DISCARD});
     end
 
     always_ff @ (posedge clk) begin
@@ -238,26 +241,25 @@ module gc_unit(
         gc_inputs.is_ecall ? ecall_code : BREAK;
     assign gc_exception.pc = ls_exception_second_cycle ? ls_exception.pc : gc_inputs.pc;
     assign gc_exception.tval = ls_exception_second_cycle ? ls_exception.tval : '0;
-    assign gc_exception.valid = gc_inputs.is_ecall | gc_inputs.is_ebreak | ls_exception_second_cycle;
+    assign gc_exception.valid = issue.new_request & (gc_inputs.is_ecall | gc_inputs.is_ebreak) | ls_exception_second_cycle;
 
     always_ff @ (posedge clk) begin
         second_cycle_flush <= gc_flush_required;
         gc_fetch_pc_override <= gc_flush_required | second_cycle_flush | ls_exception_first_cycle;
-        gc_fetch_pc <=
-            gc_inputs.is_i_fence ? gc_inputs.pc + 4 :
-            gc_inputs.is_ret ? csr_mepc :
-            trap_pc;
+        gc_fetch_pc <= ls_exception_second_cycle ? trap_pc :
+            stage1.is_i_fence ? stage1.pc + 4 : //Could stall on dec_pc valid and use instead of another adder
+            csr_mepc;// gc_inputs.is_ret
     end
 
     ////////////////////////////////////////////////////
     //CSR registers
-    assign csr_inputs.rs1 = fn3[2] ? {27'b0, rs1_addr} : gc_inputs.rs1;
-    assign csr_inputs.csr_addr = gc_inputs.instruction[31:20];
+    assign csr_inputs.rs1 = fn3[2] ? {27'b0, rs1_addr} : stage1.rs1;
+    assign csr_inputs.csr_addr = stage1.instruction[31:20];
     assign csr_inputs.csr_op = fn3[1:0];
     assign csr_inputs.rs1_is_zero = (rs1_addr == 0);
-    assign csr_inputs.rd_is_zero = gc_inputs.rd_is_zero;
+    assign csr_inputs.rd_is_zero = (rd_addr == 0);
 
-    csr_regs csr_registers (.*, .new_request(is_csr), .read_regs(csr_ready_to_complete), .commit(csr_ready_to_complete_r));
+    csr_regs csr_registers (.*, .new_request(stage1.is_csr), .read_regs(csr_ready_to_complete), .commit(csr_ready_to_complete_r));
 
     ////////////////////////////////////////////////////
     //Decode / Write-back Handshaking
@@ -271,11 +273,11 @@ module gc_unit(
             processing_csr <= 0;
         else if (csr_ready_to_complete)
             processing_csr <= 0;
-        else if (is_csr)
+        else if (issue.new_request & gc_inputs.is_csr)
             processing_csr <= 1;
     end
 
-    assign csr_ready_to_complete = (is_csr | processing_csr) && (oldest_id == csr_id);
+    assign csr_ready_to_complete = processing_csr && (oldest_id == csr_id);
     always_ff @(posedge clk) begin
         csr_ready_to_complete_r <= csr_ready_to_complete;
         csr_id <= instruction_id;

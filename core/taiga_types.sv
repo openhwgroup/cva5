@@ -406,7 +406,6 @@ package taiga_types;
         logic [31:0] instruction;
         logic [XLEN-1:0] rs1;
         logic [XLEN-1:0] rs2;
-        logic rd_is_zero;
         logic is_csr;
         logic is_fence;
         logic is_i_fence;
