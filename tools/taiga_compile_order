@@ -91,7 +91,7 @@
 ../core/branch_predictor.sv  
 ../core/fetch.sv  
 ../core/pre_decode.sv
-../core/decode.sv  
+../core/decode_and_issue.sv
 
 ../core/id_inuse.sv
 ../core/register_file.sv  

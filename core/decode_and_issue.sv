@@ -23,7 +23,7 @@
 import taiga_config::*;
 import taiga_types::*;
 
-module decode(
+module decode_and_issue (
         input logic clk,
         input logic rst,
 

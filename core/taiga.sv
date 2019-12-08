@@ -173,7 +173,7 @@ module taiga (
 
     ////////////////////////////////////////////////////
     //Decode/Issue
-    decode decode_block (.*);
+    decode_and_issue decode_and_issue_block (.*);
     register_file register_file_block (.*);
 
     ////////////////////////////////////////////////////
