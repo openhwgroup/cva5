@@ -38,11 +38,8 @@ module ras (
     logic valid_chain_update;
     ///////////////////////////////////////////////////////
     //For simulation purposes
-    initial
-        for (int i=0; i <RAS_DEPTH; i++) begin
-            lut_ram[i] = 0;
-            valid_chain[i] = 0;
-        end    
+    initial lut_ram = '{default: 0};
+    initial valid_chain = '{default: 0};
      ///////////////////////////////////////////////////////
     assign ras.addr = lut_ram[read_index];
     assign ras.valid = valid_chain[read_index];

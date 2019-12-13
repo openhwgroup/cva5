@@ -51,12 +51,8 @@ module register_file(
     logic in_use_match;
     //////////////////////////////////////////
     //Assign zero to r0 and initialize all registers to zero
-    initial begin
-        for (int i=0; i<32; i++) begin
-            register[i] = 0;
-            in_use_by[i] = 0;
-        end
-    end
+    initial register = '{default: 0};
+    initial in_use_by = '{default: 0};
 
     //Writeback unit does not assert rf_wb.commit when the target register is r0
     always_ff @ (posedge clk) begin

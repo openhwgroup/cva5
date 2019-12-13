@@ -146,10 +146,7 @@ module write_back(
     ////////////////////////////////////////////////////
     //Metadata storage for IDs
     //stores destination register for each ID and whether it is a store instruction
-    initial begin
-        foreach(id_metadata[i])
-            id_metadata[i] = '0;
-    end
+    initial id_metadata = '{default: 0};
     //Inflight Instruction ID table
     //Stores rd_addr and whether instruction is a store
     always_ff @ (posedge clk) begin

@@ -38,12 +38,7 @@ module lut_ram #(
 
     (* ramstyle = "MLAB, no_rw_check" *) logic [WIDTH-1:0] ram [DEPTH-1:0];
 
-    initial begin
-        for (int i=0; i<DEPTH; i=i+1) begin
-            ram[i] = '0;
-        end
-    end
-
+    initial ram = '{default: 0};
     always_ff @ (posedge clk) begin
         if (ram_write)
             ram[waddr] <= new_ram_data;

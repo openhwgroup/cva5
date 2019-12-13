@@ -47,7 +47,7 @@ module tag_bank  #(
     (* ramstyle = "no_rw_check" *) logic  [WIDTH-1:0] tag_entry [LINES-1:0];
 
     int i;
-    initial for (i=0; i<LINES; i=i+1) tag_entry[i] = 0;
+    initial tag_entry = '{default: 0};
 
     always_ff @ (posedge clk) begin
         if (en_a) begin

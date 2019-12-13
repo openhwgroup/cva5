@@ -40,11 +40,7 @@ module branch_predictor_ram
     (* ram_style = "block", rw_addr_collision = "no" *)logic [C_DATA_WIDTH-1:0] branch_ram [C_DEPTH-1:0];
     //implementation
     ////////////////////////////////////////////////////
-    initial begin
-        foreach(branch_ram[i])
-            branch_ram[i] = '0;
-    end
-
+    initial branch_ram = '{default: 0};
     always_ff @(posedge clk) begin
         if (write_en)
             branch_ram[write_addr] <= write_data;
