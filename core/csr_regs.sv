@@ -115,7 +115,8 @@ module csr_regs (
     logic[COUNTER_W-1:0] mcycle;
     logic[COUNTER_W-1:0] mtime;
     logic[COUNTER_W-1:0] minst_ret;
-    logic [1:0] inst_ret_inc;
+    localparam INST_RET_INC_W = 2;
+    logic [INST_RET_INC_W-1:0] inst_ret_inc;
 
     //write_logic
     logic supervisor_write;
@@ -452,16 +453,10 @@ endgenerate
     //Timers and Counters
     //Register increment for instructions completed
     always_ff @(posedge clk) begin
-        if (rst) begin
+        if (rst)
             inst_ret_inc <= 0;
-        end else begin
-            if (instruction_complete & instruction_issued_no_rd)
-                inst_ret_inc <= 2;
-            else if (instruction_complete | instruction_issued_no_rd)
-                inst_ret_inc <= 1;
-            else
-                inst_ret_inc <= 0;
-        end
+        else
+            inst_ret_inc <= INST_RET_INC_W'(instruction_complete) + INST_RET_INC_W'(instruction_issued_no_rd);
     end
 
     always_ff @(posedge clk) begin
@@ -533,8 +528,6 @@ endgenerate
     always_ff @(posedge clk) begin
         if (read_regs)
             selected_csr_r <= selected_csr;
-        else
-            selected_csr_r <= 0;
     end
 
     assign wb_csr = selected_csr_r;

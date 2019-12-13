@@ -96,7 +96,7 @@ build_coremark:
 
 .PHONY: run_coremark_verilator
 run_coremark_verilator :
-	./build_taiga_sim/Vtaiga_local_mem "/dev/null" "/dev/null" $(TAIGA_DIR)/tools/coremark.hw_init $(VERILATOR_TRACE_FILE) >> $@
+	./build_taiga_sim/Vtaiga_local_mem "/dev/null" "/dev/null" $(TAIGA_DIR)/tools/coremark.hw_init $(VERILATOR_TRACE_FILE) > $@
 
 
 #Benchmarks already built

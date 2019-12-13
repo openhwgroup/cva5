@@ -51,8 +51,6 @@ module load_store_unit (
         output instruction_id_t store_done_id,
         output logic store_complete,
 
-        post_issue_forwarding_interface.unit store_forwarding,
-
         input logic[31:0] csr_rd,
         input instruction_id_t csr_id,
         input logic csr_done,
@@ -83,6 +81,8 @@ module load_store_unit (
     logic issue_request;
     logic load_complete;
 
+    logic [31:0] prev_load;
+
     logic [31:0] virtual_address;
     logic [3:0] be;
 
@@ -105,6 +105,7 @@ module load_store_unit (
 
     typedef struct packed{
         logic [31:0] virtual_address;
+        logic [31:0] store_data;
         logic [2:0] fn3;
         logic load;
         logic store;
@@ -139,6 +140,7 @@ module load_store_unit (
         ls_input_fifo (.fifo(input_fifo), .*);
 
     assign fifo_inputs.virtual_address = ls_inputs.rs1 + 32'(signed'(ls_inputs.offset));
+    assign fifo_inputs.store_data = ls_inputs.rs2;
     assign fifo_inputs.fn3 = ls_inputs.fn3;
     assign fifo_inputs.load = ls_inputs.load;
     assign fifo_inputs.store = ls_inputs.store;
@@ -175,7 +177,7 @@ module load_store_unit (
 
     //When switching units, ensure no outstanding loads so that there can be no timing collisions with results
     assign unit_stall = (current_unit != last_unit) && load_attributes.valid;
-    assign store_ready = stage1.store & store_forwarding.data_valid;
+    assign store_ready = stage1.store & ((stage1.load_store_forward & ~load_attributes.valid) | ~stage1.load_store_forward);
     assign issue_request = input_fifo.valid & units_ready & ~unit_stall & ~unaligned_addr & (~stage1.store | store_ready);
 
     ////////////////////////////////////////////////////
@@ -237,9 +239,8 @@ module load_store_unit (
     assign shared_inputs.be = be;
     assign shared_inputs.fn3 = stage1.fn3;
 
-    //Store forwarding request
-    assign store_forwarding.id = stage1.load_store_forward ? stage1.store_forward_id : stage1.instruction_id;
-    assign stage1_raw_data = store_forwarding.data;
+    //Store forwarding
+    assign stage1_raw_data = stage1.load_store_forward ? prev_load : stage1.store_data;
 
     //Input: ABCD
     //Assuming aligned requests,
@@ -338,6 +339,11 @@ module load_store_unit (
                 //unused 111
             default : final_load_data = aligned_load_data;
         endcase
+    end
+
+    always_ff @ (posedge clk) begin
+        if (load_complete)
+            prev_load <= final_load_data;
     end
 
     ////////////////////////////////////////////////////

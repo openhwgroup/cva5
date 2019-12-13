@@ -33,8 +33,7 @@ module alu_unit(
 
     logic[XLEN:0] add_sub_result;
     logic add_sub_carry_in;
-    logic[XLEN-1:0] rshift_result;
-    logic[XLEN-1:0] lshift_result;
+    logic[XLEN-1:0] shift_result;
 
     logic[XLEN:0] adder_in1;
     logic[XLEN:0] adder_in2;
@@ -66,18 +65,13 @@ module alu_unit(
             .shift_amount(alu_inputs.shift_amount),
             .arith(alu_inputs.arith),
             .lshift(alu_inputs.lshift),
-            .shifted_resultr(rshift_result),
-            .shifted_resultl(lshift_result)
+            .shifted_result(shift_result)
         );
 
-    //Result mux
     always_comb begin
-        case (alu_inputs.op)
-            ALU_ADD_SUB : result = add_sub_result[XLEN-1:0];
-            ALU_SLT : result = {31'b0, add_sub_result[XLEN]};
-            ALU_RSHIFT : result = rshift_result;
-            ALU_LSHIFT : result = lshift_result;
-        endcase
+        result = (alu_inputs.shifter_path ? shift_result : add_sub_result[31:0]);
+        result[31:1] &= {31{~alu_inputs.slt_path}};
+        result[0] = alu_inputs.slt_path ? add_sub_result[XLEN] : result[0];
     end
 
     ////////////////////////////////////////////////////

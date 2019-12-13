@@ -286,7 +286,6 @@ package taiga_types;
         logic [BRANCH_PREDICTOR_WAYS-1:0] bp_update_way;
         logic alu_sub;
         logic [1:0] alu_logic_op;
-        logic [1:0] alu_op;
         logic alu_request;
         alu_rs1_op_t alu_rs1_sel;
         alu_rs2_op_t alu_rs2_sel;
@@ -308,6 +307,8 @@ package taiga_types;
         logic lshift;
         logic [1:0] logic_op;
         logic [1:0] op;
+        logic shifter_path;
+        logic slt_path;
     } alu_inputs_t;
 
     typedef struct packed {
@@ -368,6 +369,7 @@ package taiga_types;
 
     typedef struct packed{
         logic [XLEN-1:0] rs1;
+        logic [XLEN-1:0] rs2;
         logic [11:0] offset;
         logic [2:0] fn3;
         logic load;

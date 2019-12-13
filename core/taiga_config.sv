@@ -31,7 +31,7 @@ package taiga_config;
     //Privileged ISA Options
 
     //Enable Machine level privilege spec
-    parameter ENABLE_M_MODE = 1;
+    parameter ENABLE_M_MODE = 0;
     //Enable Supervisor level privilege spec
     parameter ENABLE_S_MODE = 0;
 

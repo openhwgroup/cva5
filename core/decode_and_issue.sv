@@ -49,8 +49,6 @@ module decode_and_issue (
         output logic gc_flush_required,
 
         output logic load_store_issue,
-        output logic store_issued_with_data,
-        output logic [31:0] store_data,
 
         output logic instruction_issued,
         output logic instruction_issued_no_rd,
@@ -188,7 +186,7 @@ module decode_and_issue (
     assign issue_valid = fb_valid & ti.id_available & ~gc_issue_hold & ~gc_fetch_flush;
 
     assign operands_ready = ~rf_decode.rs1_conflict & ~rf_decode.rs2_conflict;
-    assign load_store_operands_ready = ~rf_decode.rs1_conflict & (~rf_decode.rs2_conflict | (rf_decode.rs2_conflict & (opcode_trim == STORE_T)));
+    assign load_store_operands_ready = ~rf_decode.rs1_conflict & (~rf_decode.rs2_conflict | (rf_decode.rs2_conflict & (opcode_trim == STORE_T) & load_store_forwarding_possible));
 
     //All units share the same operand ready logic except load-store which has an internal forwarding path
     always_comb begin
@@ -227,7 +225,7 @@ module decode_and_issue (
         endcase
     end
 
-    assign alu_inputs.in1 = {(alu_rs1_data[XLEN-1] & ~fn3[0]), alu_rs1_data};//(fn3[0]  is SLTU_fn3);
+    assign alu_inputs.in1 = {(rf_decode.rs1_data[XLEN-1] & ~fn3[0]), alu_rs1_data};//(fn3[0]  is SLTU_fn3);
     assign alu_inputs.in2 = {(alu_rs2_data[XLEN-1] & ~fn3[0]), alu_rs2_data};
     assign alu_inputs.shifter_in = rf_decode.rs1_data;
     assign alu_inputs.shift_amount = opcode[5] ? rf_decode.rs2_data[4:0] : rs2_addr;
@@ -235,7 +233,8 @@ module decode_and_issue (
     assign alu_inputs.arith = alu_rs1_data[XLEN-1] & fb.instruction[30];//shift in bit
     assign alu_inputs.lshift = ~fn3[2];
     assign alu_inputs.logic_op = fb.alu_logic_op;
-    assign alu_inputs.op = fb.alu_op;
+    assign alu_inputs.shifter_path = ~(opcode[2] | fn3 inside {SLT_fn3, SLTU_fn3, XOR_fn3, OR_fn3, AND_fn3, ADD_SUB_fn3}); //opcode[2] LUI AUIPC JAL JALR
+    assign alu_inputs.slt_path = ~opcode[2] & fn3 inside {SLT_fn3, SLTU_fn3};
 
     ////////////////////////////////////////////////////
     //Load Store unit inputs
@@ -246,6 +245,10 @@ module decode_and_issue (
     logic store_conditional;
     logic load_reserve;
     logic [4:0] amo_type;
+
+    logic load_store_forwarding_possible;
+    logic [31:0] last_use_was_load;
+    logic [4:0] last_load_rd;
 
     assign amo_op =  USE_AMO ? (opcode_trim == AMO_T) : 1'b0;
     assign amo_type = fb.instruction[31:27];
@@ -267,18 +270,28 @@ module decode_and_issue (
     assign is_store = (opcode_trim == STORE_T) || (amo_op && store_conditional);//Used for LS unit and for ID tracking
     assign ls_offset = opcode[5] ? {fb.instruction[31:25], fb.instruction[11:7]} : fb.instruction[31:20];
 
+
+    always_ff @(posedge clk) begin
+        if (instruction_issued)
+            last_use_was_load[future_rd_addr] <= unit_needed[LS_UNIT_WB_ID] & is_load;
+    end
+
+    always_ff @(posedge clk) begin
+        if (issue[LS_UNIT_WB_ID])
+            last_load_rd <= future_rd_addr;
+    end
+
+    assign load_store_forwarding_possible = last_use_was_load[rs2_addr] && (last_load_rd == rs2_addr);
+
     assign ls_inputs.rs1 = rf_decode.rs1_data;
+    assign ls_inputs.rs2 = rf_decode.rs2_data;
     assign ls_inputs.offset = ls_offset;
     assign ls_inputs.pc = fb.pc;
     assign ls_inputs.fn3 = amo_op ? LS_W_fn3 : fn3;
     assign ls_inputs.load = is_load;
     assign ls_inputs.store = is_store;
-    assign ls_inputs.load_store_forward = rf_decode.rs2_conflict;
+    assign ls_inputs.load_store_forward = rf_decode.rs2_conflict & load_store_forwarding_possible;
     assign ls_inputs.store_forward_id = rf_decode.rs2_id;
-
-    //Store data to commit/store buffer
-    assign store_issued_with_data = ~ls_inputs.load_store_forward & issue[LS_UNIT_WB_ID];
-    assign store_data = rf_decode.rs2_data;
 
     ////////////////////////////////////////////////////
     //Branch unit inputs
@@ -337,11 +350,8 @@ module decode_and_issue (
             logic [4:0] prev_div_rs1_addr;
             logic [4:0] prev_div_rs2_addr;
             logic prev_div_result_valid;
-            logic prev_div_result_valid_r;
-            //If a subsequent div request uses the same inputs then
-            //don't rerun div operation
-            logic div_rd_overwrites_rs1_or_rs2;
-            logic rd_overwrites_previously_saved_rs1_or_rs2;
+            logic set_prev_div_result_valid;
+            logic clear_prev_div_result_valid;
             logic current_op_resuses_rs1_rs2;
 
             always_ff @(posedge clk) begin
@@ -351,29 +361,23 @@ module decode_and_issue (
                 end
             end
 
-            assign div_rd_overwrites_rs1_or_rs2 = (future_rd_addr == rs1_addr || future_rd_addr == rs2_addr);
-            assign rd_overwrites_previously_saved_rs1_or_rs2 = (future_rd_addr == prev_div_rs1_addr || future_rd_addr == prev_div_rs2_addr);
             assign current_op_resuses_rs1_rs2 = (prev_div_rs1_addr == rs1_addr) && (prev_div_rs2_addr == rs2_addr);
+            assign set_prev_div_result_valid = unit_needed[DIV_UNIT_WB_ID];
 
-            always_comb begin
-                prev_div_result_valid = prev_div_result_valid_r;
-                if ((unit_needed[DIV_UNIT_WB_ID] & ~div_rd_overwrites_rs1_or_rs2))
-                    prev_div_result_valid = 1;
-                else if ((unit_needed[DIV_UNIT_WB_ID] & div_rd_overwrites_rs1_or_rs2) | (uses_rd & rd_overwrites_previously_saved_rs1_or_rs2))
-                    prev_div_result_valid = 0;
-            end
+            //If current div operation overwrites an input register OR any other instruction overwrites the last div operations input registers
+            assign clear_prev_div_result_valid = uses_rd & ((future_rd_addr == (unit_needed[DIV_UNIT_WB_ID] ? rs1_addr : prev_div_rs1_addr)) || (future_rd_addr == (unit_needed[DIV_UNIT_WB_ID] ? rs2_addr : prev_div_rs2_addr)));
 
             always_ff @(posedge clk) begin
                 if (rst)
-                    prev_div_result_valid_r <= 0;
+                    prev_div_result_valid <= 0;
                 else if (instruction_issued)
-                    prev_div_result_valid_r <= prev_div_result_valid;
+                    prev_div_result_valid <= (set_prev_div_result_valid | prev_div_result_valid) & ~clear_prev_div_result_valid;
             end
 
             assign div_inputs.rs1 = rf_decode.rs1_data;
             assign div_inputs.rs2 = rf_decode.rs2_data;
             assign div_inputs.op = fn3[1:0];
-            assign div_inputs.reuse_result = prev_div_result_valid_r & current_op_resuses_rs1_rs2;
+            assign div_inputs.reuse_result = prev_div_result_valid & current_op_resuses_rs1_rs2;
         end
     endgenerate
 

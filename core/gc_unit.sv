@@ -247,7 +247,7 @@ module gc_unit(
         second_cycle_flush <= gc_flush_required;
         gc_fetch_pc_override <= gc_flush_required | second_cycle_flush | ls_exception_first_cycle;
         gc_fetch_pc <= ls_exception_second_cycle ? trap_pc :
-            stage1.is_i_fence ? stage1.pc + 4 : //Could stall on dec_pc valid and use instead of another adder
+            //stage1.is_i_fence ? stage1.pc + 4 : //Could stall on dec_pc valid and use instead of another adder
             csr_mepc;// gc_inputs.is_ret
     end
 

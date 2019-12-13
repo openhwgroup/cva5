@@ -164,21 +164,6 @@ module pre_decode
         data_in.alu_logic_op = opcode[2] ? ALU_LOGIC_ADD : data_in.alu_logic_op;
     end
 
-    always_comb begin
-        case (fn3)
-            SLT_fn3 : data_in.alu_op = ALU_SLT;
-            SLTU_fn3 : data_in.alu_op = ALU_SLT;
-            SLL_fn3 : data_in.alu_op = ALU_LSHIFT;
-            XOR_fn3 : data_in.alu_op = ALU_ADD_SUB;
-            OR_fn3 : data_in.alu_op = ALU_ADD_SUB;
-            AND_fn3 : data_in.alu_op = ALU_ADD_SUB;
-            SRA_fn3 : data_in.alu_op = ALU_RSHIFT;
-            ADD_SUB_fn3 : data_in.alu_op = ALU_ADD_SUB;
-        endcase
-        //put LUI, AUIPC, JAL and JALR through adder path
-        data_in.alu_op = opcode[2] ? ALU_ADD_SUB : data_in.alu_op;
-    end
-
     logic non_mul_div_arith_op;
     assign non_mul_div_arith_op = ((opcode_trimmed == ARITH_T) && ~pre_decode_instruction[25]);//pre_decode_instruction[25] denotes multiply/divide instructions
     assign data_in.alu_request = non_mul_div_arith_op || (opcode_trimmed inside {ARITH_IMM_T, AUIPC_T, LUI_T, JAL_T, JALR_T});

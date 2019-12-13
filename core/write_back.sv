@@ -39,10 +39,6 @@ module write_back(
 
         input instruction_id_t store_done_id,
         input logic store_complete,
-        post_issue_forwarding_interface.wb store_forwarding,
-
-        input logic store_issued_with_data,
-        input logic [31:0] store_data,
 
         //Trace signals
         output logic tr_wb_mux_contention
@@ -55,8 +51,7 @@ module write_back(
     //aliases for write-back-interface signals
     instruction_id_t unit_instruction_id [NUM_WB_UNITS-1:0];
     logic [NUM_WB_UNITS-1:0] unit_done;
-    //Force usage of f7 muxes
-    (* keep = "true" *) logic [XLEN-1:0] unit_rd [2*NUM_WB_UNITS-1:0];
+    logic [XLEN-1:0] unit_rd [NUM_WB_UNITS-1:0];
     //Per-ID muxes for commit buffer
     logic [$clog2(NUM_WB_UNITS)-1:0] id_unit_select [MAX_INFLIGHT_COUNT-1:0];
     logic [$clog2(NUM_WB_UNITS)-1:0] id_unit_select_r [MAX_INFLIGHT_COUNT-1:0];
@@ -87,11 +82,6 @@ module write_back(
             assign unit_done[i] = unit_wb[i].done;
             assign unit_rd[i] = unit_wb[i].rd;
         end
-        for (i=NUM_WB_UNITS; i< 2*NUM_WB_UNITS; i++) begin
-            assign unit_rd[i] = store_data;
-        end
-
-
     endgenerate
 
     ////////////////////////////////////////////////////
@@ -113,7 +103,6 @@ module write_back(
     //Set unit_ID for each ID as they are issued
     //If ID is not in use, use the current issue_unit_id value
     //This is used to support single cycle units, such as the ALU
-    //Stores are not tracked for id_inuse as their data is placed in the buffer at issue time
     always_comb begin
         id_issued_one_hot = 0;
         id_issued_one_hot[ti.issue_id] = ti.issued & ~ti.inflight_packet.is_store;
@@ -131,16 +120,10 @@ module write_back(
     //Writeback Buffer
     //Mux outputs of units based on IDs
     //If ID is done write result to buffer
-    logic [MAX_INFLIGHT_COUNT-1:0] store_mux;
-    always_comb begin
-        store_mux = 0;
-        store_mux[ti.issue_id] = store_issued_with_data;
-    end
-
     generate for (i=0; i< MAX_INFLIGHT_COUNT; i++) begin
         always_ff @ (posedge clk) begin
-            if (id_writing_to_buffer[i] |store_mux[i])
-                results_by_id[i] <= unit_rd[{store_mux[i],id_unit_select[i]}];
+            if (id_writing_to_buffer[i])
+                results_by_id[i] <= unit_rd[id_unit_select[i]];
         end
     end endgenerate
 
@@ -153,11 +136,6 @@ module write_back(
         else
             id_inuse <= (id_issued_one_hot | id_inuse) & ~id_writing_to_buffer;
     end
-
-    //As IDs are freed for reuse in repeating order, the results will not be overwritten before the instruction
-    //needing them has itself completed
-    assign store_forwarding.data_valid = ~id_inuse[store_forwarding.id];
-    assign store_forwarding.data = results_by_id[store_forwarding.id];
 
     ////////////////////////////////////////////////////
     //ID Tracking

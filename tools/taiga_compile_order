@@ -94,6 +94,7 @@
 ../core/decode_and_issue.sv
 
 ../core/id_inuse.sv
+../core/reg_inuse.sv
 ../core/register_file.sv  
 
 ../core/id_tracking.sv

@@ -64,12 +64,14 @@ module register_file(
             register[rf_wb.rd_addr] <= rf_wb.rd_data;
     end
 
-    id_inuse inuse_mem (.*,
+    assign in_use_match = (rf_wb.id == in_use_by[rf_wb.rd_addr]) && valid_write;
+
+    reg_inuse inuse (.*,
+            .clr(1'b0),
             .rs1_addr(rf_decode.rs1_addr),.rs2_addr(rf_decode.rs2_addr), .issued_rd_addr(rf_decode.future_rd_addr),
+            .retired_rd_addr(rf_wb.rd_addr),
             .issued(rf_decode.instruction_issued),
-            .issue_id(rf_decode.id),
-            .retired_id(rf_wb.id),
-            .retired(valid_write),
+            .retired(in_use_match),
             .rs1_inuse(rs1_inuse),
             .rs2_inuse(rs2_inuse)
             );
