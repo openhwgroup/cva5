@@ -14,11 +14,16 @@ VERILATOR_DIR=$(TAIGA_DIR)/test_benches/verilator
 
 TAIGA_SRCS = $(shell cat taiga_compile_order)
 
-VERILATOR_LINT_IGNORE= -Wno-LITENDIAN -Wno-SYMRSVDWORD
-VERILATOR_CFLAGS =  -CFLAGS "-g0 -O3 -march=native"
-
+#Set to True or False
+TRACE_ENABLE=False
 VERILATOR_TRACE_FILE="/data/sim-logs/sim_results.vcd"
 
+VERILATOR_LINT_IGNORE= -Wno-LITENDIAN -Wno-SYMRSVDWORD
+ifeq ($(TRACE_ENABLE), True)
+	VERILATOR_CFLAGS =  --trace -CFLAGS "-g0 -O3 -march=native -D TRACE_ON"
+else
+	VERILATOR_CFLAGS =  -CFLAGS "-g0 -O3 -march=native"
+endif
 ###############################################################
 
 #Compiance parameters
