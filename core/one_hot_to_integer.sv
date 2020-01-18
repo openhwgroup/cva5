@@ -24,7 +24,7 @@
 //as all possible conditions are ORed together
 module one_hot_to_integer
     #(
-        parameter C_WIDTH = 6
+        parameter C_WIDTH = 40
         )
         (
         //clk and rst for assertion purposes
@@ -35,13 +35,23 @@ module one_hot_to_integer
         );
     ////////////////////////////////////////////////////
     //Implementation
+    localparam LOG2_WIDTH = $clog2(C_WIDTH);
+    logic [LOG2_WIDTH-1 : 0] int_array [C_WIDTH];
+    
     generate if (C_WIDTH == 1)
         assign int_out[0] = 0;
     else begin
         always_comb begin
             int_out = 0;
-            foreach (one_hot[i])
-                if (one_hot[i]) int_out |= i[$clog2(C_WIDTH)-1:0];
+            int_array = '{default :'0};
+            foreach(one_hot[i]) begin
+                if (one_hot[i])  begin
+                    int_array[i] = LOG2_WIDTH'(i);
+                end
+            end
+            foreach(int_array[i]) begin
+                int_out |= int_array[i];
+            end
         end
     end
     endgenerate

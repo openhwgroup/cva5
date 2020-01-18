@@ -144,16 +144,13 @@ module decode_and_issue (
     always_comb begin
         unit_needed_for_id_gen = unit_needed[NUM_WB_UNITS-1:0];
         unit_needed_for_id_gen[LS_UNIT_WB_ID] |= (unit_needed[GC_UNIT_ID] & is_csr);
-        unit_needed_for_id_gen_int = 0;
-            foreach (unit_needed_for_id_gen[i])
-                if (unit_needed_for_id_gen[i]) unit_needed_for_id_gen_int |= i[WB_UNITS_WIDTH-1:0];
     end
 
     assign ti.inflight_packet.rd_addr = future_rd_addr;
     assign ti.inflight_packet.is_store = is_store;
     assign ti.issued = instruction_issued & (uses_rd | unit_needed[LS_UNIT_WB_ID]);
+    one_hot_to_integer #(NUM_WB_UNITS) unit_id_gen (.*, .one_hot(unit_needed_for_id_gen), .int_out(unit_needed_for_id_gen_int));
     assign ti.issue_unit_id = unit_needed_for_id_gen_int;
-    //one_hot_to_integer #(NUM_WB_UNITS) unit_id_gen (.*, .one_hot(unit_needed[NUM_WB_UNITS-1:0]), .int_out(unit_needed_for_id_gen_int));
     ////////////////////////////////////////////////////
     //Unit Determination
     assign mult_div_op = fb.instruction[25];
