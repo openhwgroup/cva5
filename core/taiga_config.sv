@@ -184,7 +184,6 @@ package taiga_config;
     ////////////////////////////////////////////////////
     //Write-Back Unit IDs
     parameter NUM_WB_UNITS = 2 + USE_MUL + USE_DIV;
-    parameter WB_UNITS_WIDTH = $clog2(NUM_WB_UNITS);
     parameter NUM_UNITS = NUM_WB_UNITS + 2;
 
     parameter ALU_UNIT_WB_ID = 0;

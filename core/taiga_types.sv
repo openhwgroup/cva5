@@ -27,8 +27,12 @@ package taiga_types;
     parameter PAGE_ADDR_W = 12;
     parameter ECODE_W = 5;
 
-    typedef logic[$clog2(MAX_INFLIGHT_COUNT)-1:0] instruction_id_t;
-    typedef logic[$clog2(NUM_WB_UNITS)-1:0] unit_id_t;
+
+    localparam ID_W = $clog2(MAX_INFLIGHT_COUNT);
+    localparam WB_UNITS_WIDTH = $clog2(NUM_WB_UNITS);
+
+    typedef logic[ID_W-1:0] instruction_id_t;
+    typedef logic[WB_UNITS_WIDTH-1:0] unit_id_t;
     typedef logic[1:0] branch_predictor_metadata_t;
 
     typedef enum bit [6:0] {

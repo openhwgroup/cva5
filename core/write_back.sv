@@ -89,13 +89,13 @@ module write_back(
     //For each ID, check if a unit is reporting that ID as done and OR the results together
     //Additionally, OR the result of any store operation completing
     always_comb begin
-        id_writing_to_buffer = 0;
-        for (int i=0; i< NUM_WB_UNITS; i++) begin
-            if (unit_done[i])
-                id_writing_to_buffer[unit_instruction_id[i]] |= 1;// using an if statement and assigning 1 vs simply assigning unit_done[i] halves the LUTs for Xilinx
+        id_writing_to_buffer = '0;
+        for (int i=0; i< MAX_INFLIGHT_COUNT; i++) begin
+            for (int j=0; j< NUM_WB_UNITS; j++) begin
+                id_writing_to_buffer[i] |= (unit_instruction_id[j] == ID_W'(i)) && unit_done[j];
+            end
+            id_writing_to_buffer[i] |= (store_done_id == ID_W'(i)) && store_complete;
         end
-        if (store_complete)
-            id_writing_to_buffer[store_done_id] |= 1;
     end
 
     ////////////////////////////////////////////////////
