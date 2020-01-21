@@ -221,14 +221,15 @@ module load_store_unit (
     //  SH: upper or lower half of bytes
     //  SB: specific byte
     always_comb begin
-        foreach (be[i]) begin
-            case(stage1.fn3[1:0])
-                LS_B_fn3[1:0] : be[i] = (virtual_address[1:0] == i[1:0]);
-                LS_H_fn3[1:0] : be[i] = (virtual_address[1] == i[1]);
-                default : be[i] = '1; //LS_W_fn3[1:0]
-            endcase
-            be[i] &= stage1.store;
-        end
+        be = 0;
+        case(stage1.fn3[1:0])
+            LS_B_fn3[1:0] : be[virtual_address[1:0]] = stage1.store;
+            LS_H_fn3[1:0] : begin
+                be[virtual_address[1:0]] = stage1.store;
+                be[{virtual_address[1], 1'b1}] = stage1.store;
+            end
+            default : be =  {4{stage1.store}};
+        endcase
     end
 
     ////////////////////////////////////////////////////
