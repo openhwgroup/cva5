@@ -1,5 +1,5 @@
 /*
- * Copyright © 2017-2019 Eric Matthews,  Lesley Shannon
+ * Copyright © 2017-2020 Eric Matthews,  Lesley Shannon
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,8 +30,25 @@ module branch_predictor (
         input branch_results_t br_results
         );
 
-    parameter BRANCH_ADDR_W = $clog2(BRANCH_TABLE_ENTRIES);
-    parameter BTAG_W = 30 - BRANCH_ADDR_W;
+    function int get_memory_width();
+        int width;
+        longint cache_range = 64'(MEMORY_ADDR_H) - 64'(MEMORY_ADDR_L) + 1;
+        longint scratch_range = 64'(SCRATCH_ADDR_H) - 64'(SCRATCH_ADDR_L) + 1;
+
+        if(ENABLE_S_MODE)
+            return 32;
+        else if (USE_ICACHE && cache_range > scratch_range)
+            return $clog2(cache_range);
+        else
+            return $clog2(scratch_range);
+    endfunction
+
+    localparam BRANCH_ADDR_W = $clog2(BRANCH_TABLE_ENTRIES);
+    localparam BTAG_W = get_memory_width() - BRANCH_ADDR_W - 2;
+
+    function logic[BTAG_W-1:0] get_tag (input logic[31:0] pc);
+        return pc[BRANCH_ADDR_W+2 +: BTAG_W];
+    endfunction
 
     typedef struct packed {
         logic valid;
@@ -77,7 +94,7 @@ module branch_predictor (
 
     generate if (USE_BRANCH_PREDICTOR)
     for (i=0; i<BRANCH_PREDICTOR_WAYS; i++) begin : branch_hit_detection
-            assign tag_matches[i] = ({if_entry[i].valid, if_entry[i].tag} == {1'b1, bp.if_pc[31:32-BTAG_W]});
+            assign tag_matches[i] = ({if_entry[i].valid, if_entry[i].tag} == {1'b1, get_tag(bp.if_pc)});
     end
     endgenerate
 
@@ -95,7 +112,7 @@ module branch_predictor (
 
     //Predict next branch to same location/direction as current
     assign ex_entry.valid = 1;
-    assign ex_entry.tag = br_results.pc_ex[31:32-BTAG_W];
+    assign ex_entry.tag = get_tag(br_results.pc_ex);
     assign ex_entry.use_ras = br_results.is_return_ex;
 
     assign new_jump_addr = ex_entry.metadata[1] ? br_results.jump_pc : br_results.njump_pc;

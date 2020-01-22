@@ -42,7 +42,7 @@ module itag_banks(
     typedef logic [ICACHE_TAG_W : 0] itag_entry_t;
 
     function logic[ICACHE_TAG_W-1:0] getTag(logic[31:0] addr);
-        return addr[31 : 32 - ICACHE_TAG_W];
+        return addr[2+ICACHE_SUB_LINE_ADDR_W+ICACHE_LINE_ADDR_W +: ICACHE_TAG_W];
     endfunction
 
     function logic[ICACHE_LINE_ADDR_W-1:0] getLineAddr(logic[31:0] addr);

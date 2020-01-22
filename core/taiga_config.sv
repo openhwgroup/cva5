@@ -96,7 +96,7 @@ package taiga_config;
     ////////////////////////////////////////////////////
     //Address space
     parameter SCRATCH_ADDR_L = 32'h80000000;
-    parameter SCRATCH_ADDR_H = 32'h800FFFFF;
+    parameter SCRATCH_ADDR_H = 32'h8001FFFF;
     parameter SCRATCH_BIT_CHECK = 4;
 
     parameter MEMORY_ADDR_L = 32'h40000000;
@@ -123,7 +123,7 @@ package taiga_config;
     parameter ICACHE_LINE_ADDR_W = $clog2(ICACHE_LINES);
     parameter ICACHE_LINE_W = 4; //In words
     parameter ICACHE_SUB_LINE_ADDR_W = $clog2(ICACHE_LINE_W);
-    parameter ICACHE_TAG_W = 32 - ICACHE_LINE_ADDR_W - ICACHE_SUB_LINE_ADDR_W - 2;
+    parameter ICACHE_TAG_W = $clog2(64'(MEMORY_ADDR_H)-64'(MEMORY_ADDR_L)+1) - DCACHE_LINE_ADDR_W - DCACHE_SUB_LINE_ADDR_W - 2;
 
 
     ////////////////////////////////////////////////////
@@ -135,7 +135,7 @@ package taiga_config;
     parameter DCACHE_LINE_ADDR_W = $clog2(DCACHE_LINES);
     parameter DCACHE_LINE_W = 4; //In words
     parameter DCACHE_SUB_LINE_ADDR_W = $clog2(DCACHE_LINE_W);
-    parameter DCACHE_TAG_W = 32 - DCACHE_LINE_ADDR_W - DCACHE_SUB_LINE_ADDR_W - 2;
+    parameter DCACHE_TAG_W = $clog2(64'(MEMORY_ADDR_H)-64'(MEMORY_ADDR_L)+1) - DCACHE_LINE_ADDR_W - DCACHE_SUB_LINE_ADDR_W - 2;
 
     parameter USE_DTAG_INVALIDATIONS = 0;
 

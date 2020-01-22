@@ -50,7 +50,7 @@ module dtag_banks(
     } dtag_entry_t;
 
     function logic[DCACHE_TAG_W-1:0] getTag(logic[31:0] addr);
-        return addr[31 : 32 - DCACHE_TAG_W];
+        return addr[2+DCACHE_SUB_LINE_ADDR_W+DCACHE_LINE_ADDR_W +: DCACHE_TAG_W];
     endfunction
 
     function logic[DCACHE_LINE_ADDR_W-1:0] getLineAddr(logic[31:0] addr);
