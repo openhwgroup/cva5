@@ -94,7 +94,7 @@ module div_quick_naive
     always_ff @ (posedge clk) begin
         B_MSB_r <= B_MSB;
         if (div.start) begin
-            div.quotient <= div.divisor_is_zero ? '1 : 0;
+            div.quotient <= 0;
             div.remainder <= div.dividend;
         end
         else  if (~terminate & running) begin

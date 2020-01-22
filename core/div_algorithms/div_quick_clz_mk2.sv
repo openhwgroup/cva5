@@ -115,7 +115,7 @@ module div_quick_clz_mk2
 
     always_ff @ (posedge clk) begin
         if (div.start)
-            div.quotient <= div.divisor_is_zero ? '1 : '0;
+            div.quotient <= '0;
         else  if (~terminate & running)
             div.quotient <= div.quotient | new_Q_bit;
     end

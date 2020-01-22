@@ -131,7 +131,7 @@ module div_unit
     ////////////////////////////////////////////////////
     //Output
     assign negate_result = div_op.remainder_op ? div_op.negate_remainder : (~div_core.divisor_is_zero & div_op.negate_quotient);
-    assign wb.rd = negate_if (div_op.remainder_op ? div_core.remainder : div_core.quotient, negate_result);
+    assign wb.rd = negate_if (div_op.remainder_op ? div_core.remainder : ({32{div_core.divisor_is_zero}} | div_core.quotient), negate_result);
     assign wb.done = div_done;
     assign wb.id = div_op.instruction_id;
     ////////////////////////////////////////////////////
