@@ -21,6 +21,7 @@
  */
 
 import taiga_config::*;
+import riscv_types::*;
 import taiga_types::*;
 import l2_config_and_types::*;
 
@@ -100,8 +101,8 @@ interface exception_interface;
     modport unit (input valid, code, pc, addr, id, output ack);
 endinterface
 
-interface register_file_decode_interface;
-    logic[4:0] future_rd_addr; //if not a storing instruction required to be zero
+interface register_file_issue_interface;
+    logic[4:0] rd_addr; //if not a storing instruction required to be zero
     logic[4:0] rs1_addr;
     logic[XLEN-1:0] rs1_data;
     logic[4:0] rs2_addr; //if not used required to be zero
@@ -115,8 +116,8 @@ interface register_file_decode_interface;
     instruction_id_t rs2_id;
     logic instruction_issued;
 
-    modport decode (output future_rd_addr, rs1_addr, rs2_addr, instruction_issued, id, uses_rs1, uses_rs2, input rs1_conflict, rs2_conflict, rs1_data, rs2_data, rs2_id);
-    modport unit (input future_rd_addr, rs1_addr, rs2_addr, instruction_issued, id, uses_rs1, uses_rs2, output rs1_conflict, rs2_conflict, rs1_data, rs2_data, rs2_id);
+    modport issue (output rd_addr, rs1_addr, rs2_addr, instruction_issued, id, uses_rs1, uses_rs2, input rs1_conflict, rs2_conflict, rs1_data, rs2_data, rs2_id);
+    modport rf (input rd_addr, rs1_addr, rs2_addr, instruction_issued, id, uses_rs1, uses_rs2, output rs1_conflict, rs2_conflict, rs1_data, rs2_data, rs2_id);
 endinterface
 
 
@@ -137,7 +138,7 @@ interface register_file_writeback_interface;
     logic rs2_valid;
     
     modport writeback (output rd_addr, retiring, rd_nzero, rd_data, id, rs1_data, rs2_data, rs1_valid, rs2_valid,  input rs1_id, rs2_id);
-    modport unit (input rd_addr, retiring, rd_nzero, rd_data, id, rs1_data, rs2_data, rs1_valid, rs2_valid, output rs1_id, rs2_id);
+    modport rf (input rd_addr, retiring, rd_nzero, rd_data, id, rs1_data, rs2_data, rs1_valid, rs2_valid, output rs1_id, rs2_id);
 
 endinterface
 

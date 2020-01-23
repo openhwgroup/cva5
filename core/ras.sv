@@ -21,6 +21,7 @@
  */
  
 import taiga_config::*;
+import riscv_types::*;
 import taiga_types::*;
 
 module ras (
@@ -34,7 +35,7 @@ module ras (
     localparam RAS_DEPTH_W = $clog2(RAS_DEPTH);
     logic[RAS_DEPTH_W-1:0] read_index;
     logic[RAS_DEPTH_W-1:0] write_index;
-    (* ramstyle = "MLAB, no_rw_check" *) logic valid_chain[RAS_DEPTH-1:0];
+    (* ramstyle = "MLAB, no_rw_check" *) logic valid_chain [RAS_DEPTH-1:0];
     logic valid_chain_update;
     ///////////////////////////////////////////////////////
     //For simulation purposes

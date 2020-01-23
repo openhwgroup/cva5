@@ -21,6 +21,7 @@
  */
 
 import taiga_config::*;
+import riscv_types::*;
 import taiga_types::*;
 
 module mul_unit(
@@ -32,17 +33,16 @@ module mul_unit(
         output unit_writeback_t wb
         );
 
-    logic signed [65:0] result;
-    logic [1:0] mulh;
-    logic [1:0] done;
-    instruction_id_t id [1:0];
+    logic signed [63:0] result;
+    logic mulh [2];
+    logic done [2];
+    instruction_id_t id [2];
 
     logic rs1_signed, rs2_signed;
     logic signed [32:0] rs1_ext, rs2_ext;
     logic signed [32:0] rs1_r, rs2_r;
     ////////////////////////////////////////////////////
     //Implementation
-
     assign rs1_signed = mul_inputs.op[1:0] inside {MULH_fn3[1:0], MULHSU_fn3[1:0]};//MUL doesn't matter
     assign rs2_signed = mul_inputs.op[1:0] inside {MUL_fn3[1:0], MULH_fn3[1:0]};//MUL doesn't matter
 
@@ -53,17 +53,16 @@ module mul_unit(
     always_ff @ (posedge clk) begin
         rs1_r <= rs1_ext;
         rs2_r <= rs2_ext;
-        result <= rs1_r * rs2_r;
+        result <= 64'(rs1_r * rs2_r);
     end
 
     always_ff @ (posedge clk) begin
         mulh[0] <= (mul_inputs.op[1:0] != MUL_fn3[1:0]);
-        mulh[1] <= mulh[0];
-
         id[0] <= issue.instruction_id;
-        id[1] <= id[0];
-
         done[0] <= issue.new_request;
+
+        mulh[1] <= mulh[0];
+        id[1] <= id[0];
         done[1] <= done[0];
     end
 

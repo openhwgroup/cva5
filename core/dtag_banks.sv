@@ -57,8 +57,8 @@ module dtag_banks(
         return addr[DCACHE_LINE_ADDR_W + DCACHE_SUB_LINE_ADDR_W + 1 : DCACHE_SUB_LINE_ADDR_W + 2];
     endfunction
 
-    dtag_entry_t  tag_line[DCACHE_WAYS - 1:0];
-    dtag_entry_t  inv_tag_line[DCACHE_WAYS - 1:0];
+    dtag_entry_t  tag_line [DCACHE_WAYS - 1:0];
+    dtag_entry_t  inv_tag_line [DCACHE_WAYS - 1:0];
 
     dtag_entry_t new_tagline;
 

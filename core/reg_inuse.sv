@@ -38,8 +38,8 @@ module reg_inuse (
         );
     ////////////////////////////////////////////////////
     //Memory organized as 2 sets of dual-ported memories
-    logic bankA [31:0];
-    logic bankB [31:0];
+    logic bankA [32];
+    logic bankB [32];
 
     logic [4:0] w_clear;
     logic [4:0] wb_rd_addr_muxed;
@@ -94,7 +94,7 @@ module reg_inuse (
     ////////////////////////////////////////////////////
     //Simulation Only
     // synthesis translate_off
-    logic sim_inuse [31:0];
+    logic sim_inuse [32];
     always_comb begin
         foreach (sim_inuse[i])
             sim_inuse[i] = bankA[i] ^ bankB[i];

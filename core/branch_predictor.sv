@@ -21,6 +21,7 @@
  */
 
 import taiga_config::*;
+import riscv_types::*;
 import taiga_types::*;
 
 module branch_predictor (
@@ -58,7 +59,7 @@ module branch_predictor (
     } branch_table_entry_t;
 
 
-    branch_table_entry_t [BRANCH_PREDICTOR_WAYS-1:0] if_entry;
+    branch_table_entry_t if_entry [BRANCH_PREDICTOR_WAYS-1:0];
     branch_table_entry_t ex_entry;
 
     logic [31:0] new_jump_addr;

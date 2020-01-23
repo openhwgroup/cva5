@@ -1,5 +1,5 @@
 /*
- * Copyright © 2017-2019 Eric Matthews,  Lesley Shannon
+ * Copyright © 2017-2020 Eric Matthews,  Lesley Shannon
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
  */
 
 import taiga_config::*;
+import riscv_types::*;
 import taiga_types::*;
 
 module register_file(
@@ -29,8 +30,8 @@ module register_file(
         input logic gc_supress_writeback,
 
         input logic instruction_issued,
-        register_file_writeback_interface.unit rf_wb,
-        register_file_decode_interface.unit rf_decode,
+        register_file_writeback_interface.rf wb,
+        register_file_issue_interface.rf issue,
 
         //Trace signals
         output logic tr_rs1_forwarding_needed,
@@ -38,8 +39,8 @@ module register_file(
         output logic tr_rs1_and_rs2_forwarding_needed
         );
 
-    (* ramstyle = "MLAB, no_rw_check" *) logic [XLEN-1:0] register [31:0];
-    (* ramstyle = "MLAB, no_rw_check" *) instruction_id_t in_use_by [31:0];
+    (* ramstyle = "MLAB, no_rw_check" *) logic [XLEN-1:0] register [32];
+    (* ramstyle = "MLAB, no_rw_check" *) instruction_id_t in_use_by [32];
 
     logic rs1_inuse;
     logic rs2_inuse;
@@ -54,43 +55,43 @@ module register_file(
     initial register = '{default: 0};
     initial in_use_by = '{default: 0};
 
-    //Writeback unit does not assert rf_wb.commit when the target register is r0
+    //Writeback unit does not assert wb.commit when the target register is r0
     always_ff @ (posedge clk) begin
         if (~gc_supress_writeback & valid_write)
-            register[rf_wb.rd_addr] <= rf_wb.rd_data;
+            register[wb.rd_addr] <= wb.rd_data;
     end
 
-    assign in_use_match = (rf_wb.id == in_use_by[rf_wb.rd_addr]) && valid_write;
+    assign in_use_match = (wb.id == in_use_by[wb.rd_addr]) && valid_write;
 
     reg_inuse inuse (.*,
             .clr(1'b0),
-            .rs1_addr(rf_decode.rs1_addr),.rs2_addr(rf_decode.rs2_addr), .issued_rd_addr(rf_decode.future_rd_addr),
-            .retired_rd_addr(rf_wb.rd_addr),
-            .issued(rf_decode.instruction_issued),
+            .rs1_addr(issue.rs1_addr),.rs2_addr(issue.rs2_addr), .issued_rd_addr(issue.rd_addr),
+            .retired_rd_addr(wb.rd_addr),
+            .issued(issue.instruction_issued),
             .retired(in_use_match),
             .rs1_inuse(rs1_inuse),
             .rs2_inuse(rs2_inuse)
             );
 
     always_ff @ (posedge clk) begin
-        if (rf_decode.instruction_issued)
-            in_use_by[rf_decode.future_rd_addr] <= rf_decode.id;
+        if (issue.instruction_issued)
+            in_use_by[issue.rd_addr] <= issue.id;
     end
 
-    assign rf_wb.rs1_id = in_use_by[rf_decode.rs1_addr];
-    assign rf_wb.rs2_id = in_use_by[rf_decode.rs2_addr];
-    assign rf_decode.rs2_id = rf_wb.rs2_id;
+    assign wb.rs1_id = in_use_by[issue.rs1_addr];
+    assign wb.rs2_id = in_use_by[issue.rs2_addr];
+    assign issue.rs2_id = wb.rs2_id;
 
-    assign valid_write = rf_wb.rd_nzero & rf_wb.retiring;
+    assign valid_write = wb.rd_nzero & wb.retiring;
 
     assign rs1_feedforward = rs1_inuse;
     assign rs2_feedforward = rs2_inuse;
 
-    assign rf_decode.rs1_data = rs1_feedforward ? rf_wb.rs1_data : register[rf_decode.rs1_addr];
-    assign rf_decode.rs2_data = rs2_feedforward ? rf_wb.rs2_data : register[rf_decode.rs2_addr];
+    assign issue.rs1_data = rs1_feedforward ? wb.rs1_data : register[issue.rs1_addr];
+    assign issue.rs2_data = rs2_feedforward ? wb.rs2_data : register[issue.rs2_addr];
 
-    assign rf_decode.rs1_conflict = rf_decode.uses_rs1 & rs1_inuse & ~rf_wb.rs1_valid;
-    assign rf_decode.rs2_conflict = rf_decode.uses_rs2 & rs2_inuse & ~rf_wb.rs2_valid;
+    assign issue.rs1_conflict = issue.uses_rs1 & rs1_inuse & ~wb.rs1_valid;
+    assign issue.rs2_conflict = issue.uses_rs2 & rs2_inuse & ~wb.rs2_valid;
 
     ////////////////////////////////////////////////////
     //End of Implementation
@@ -99,7 +100,7 @@ module register_file(
     ////////////////////////////////////////////////////
     //Assertions
     always_ff @ (posedge clk) begin
-        assert (!(rf_decode.instruction_issued && rf_decode.future_rd_addr == 0)) else $error("Write to inuse for register x0 occured!");
+        assert (!(issue.instruction_issued && issue.rd_addr == 0)) else $error("Write to inuse for register x0 occured!");
     end
 
     ////////////////////////////////////////////////////
@@ -117,9 +118,9 @@ module register_file(
     ////////////////////////////////////////////////////
     //Trace Interface
     generate if (ENABLE_TRACE_INTERFACE) begin
-        assign tr_rs1_forwarding_needed = instruction_issued & rs1_inuse & rf_decode.uses_rs1 & ~tr_rs1_and_rs2_forwarding_needed;
-        assign tr_rs2_forwarding_needed = instruction_issued & rs2_inuse & rf_decode.uses_rs2 & ~tr_rs1_and_rs2_forwarding_needed;
-        assign tr_rs1_and_rs2_forwarding_needed = instruction_issued & (rs1_inuse & rf_decode.uses_rs1) & (rs2_inuse & rf_decode.uses_rs2);
+        assign tr_rs1_forwarding_needed = instruction_issued & rs1_inuse & issue.uses_rs1 & ~tr_rs1_and_rs2_forwarding_needed;
+        assign tr_rs2_forwarding_needed = instruction_issued & rs2_inuse & issue.uses_rs2 & ~tr_rs1_and_rs2_forwarding_needed;
+        assign tr_rs1_and_rs2_forwarding_needed = instruction_issued & (rs1_inuse & issue.uses_rs1) & (rs2_inuse & issue.uses_rs2);
     end
     endgenerate
 

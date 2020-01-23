@@ -21,6 +21,7 @@
  */
 
 import taiga_config::*;
+import riscv_types::*;
 import taiga_types::*;
 
 module taiga (
@@ -53,7 +54,8 @@ module taiga (
 
     ras_interface ras();
 
-    register_file_decode_interface rf_decode();
+    register_file_issue_interface rf_issue();
+
     alu_inputs_t alu_inputs;
     load_store_inputs_t ls_inputs;
     branch_inputs_t branch_inputs;
@@ -119,9 +121,6 @@ module taiga (
     logic store_complete;
     post_issue_forwarding_interface store_forwarding();
 
-    logic store_issued_with_data;
-    logic [31:0] store_data;
-
     //Trace Interface Signals
     logic tr_operand_stall;
     logic tr_unit_stall;
@@ -174,7 +173,7 @@ module taiga (
     ////////////////////////////////////////////////////
     //Decode/Issue
     decode_and_issue decode_and_issue_block (.*);
-    register_file register_file_block (.*);
+    register_file register_file_block (.*, .issue(rf_issue), .wb(rf_wb));
 
     ////////////////////////////////////////////////////
     //Execution Units

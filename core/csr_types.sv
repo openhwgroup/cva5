@@ -22,6 +22,7 @@
 
 package csr_types;
     import taiga_config::*;
+    import riscv_types::*;
     import taiga_types::*;
 
     const bit[1:0] CSR_READ_ONLY = 2'b11;

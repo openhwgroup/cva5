@@ -21,6 +21,7 @@
  */
 
 import taiga_config::*;
+import riscv_types::*;
 import taiga_types::*;
 
 module fetch(
@@ -68,7 +69,6 @@ module fetch(
     logic [NUM_SUB_UNITS-1:0] unit_ready;
     logic [NUM_SUB_UNITS-1:0] unit_data_valid;
     logic [31:0] unit_data_array [NUM_SUB_UNITS-1:0];
-    logic [31:0] anded_unit_data_array [NUM_SUB_UNITS-1:0];
 
     logic units_ready;
     logic units_data_valid;

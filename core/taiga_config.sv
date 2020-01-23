@@ -123,7 +123,7 @@ package taiga_config;
     parameter ICACHE_LINE_ADDR_W = $clog2(ICACHE_LINES);
     parameter ICACHE_LINE_W = 4; //In words
     parameter ICACHE_SUB_LINE_ADDR_W = $clog2(ICACHE_LINE_W);
-    parameter ICACHE_TAG_W = $clog2(64'(MEMORY_ADDR_H)-64'(MEMORY_ADDR_L)+1) - DCACHE_LINE_ADDR_W - DCACHE_SUB_LINE_ADDR_W - 2;
+    parameter ICACHE_TAG_W = $clog2(64'(MEMORY_ADDR_H)-64'(MEMORY_ADDR_L)+1) - ICACHE_LINE_ADDR_W - ICACHE_SUB_LINE_ADDR_W - 2;
 
 
     ////////////////////////////////////////////////////
