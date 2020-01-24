@@ -60,14 +60,13 @@ module pre_decode
 
     logic rs1_link, rd_link, rs1_eq_rd, use_ras;
 
-    logic push_to_reg;
-
+    fetch_buffer_packet_t new_data;
     fetch_buffer_packet_t data_in;
     fetch_buffer_packet_t data_out;
     fifo_interface #(.DATA_WIDTH($bits(fetch_buffer_packet_t))) fb_fifo();
 
     ////////////////////////////////////////////////////
-    //implementation
+    //Implementation
     //FIFO
     assign buffer_reset = rst | gc_fetch_flush;
     assign fb_fifo.supress_push = 0;//Covered by reseting on gc_fetch_flush
@@ -77,25 +76,18 @@ module pre_decode
     assign fb_fifo.data_in = data_in;
     assign data_out = fb_fifo.data_out;
 
-    assign push_to_reg = pre_decode_push &
-    ((~fb_fifo.valid & fb_valid & pre_decode_pop) | (~fb_fifo.valid & ~fb_valid));
-
-
     //Bypass overrides
+    assign new_data = fb_fifo.valid ? data_out : data_in;
     always_ff @ (posedge clk) begin
-        if (push_to_reg)
-            fb <= data_in;
-        else if (pre_decode_pop)
-            fb <= data_out;
+        if (~fb_valid | pre_decode_pop)
+            fb <= new_data;
     end
 
     always_ff @ (posedge clk) begin
         if (buffer_reset)
             fb_valid <= 0;
-        else if (pre_decode_push)
-            fb_valid <= 1;
-        else if (pre_decode_pop & ~fb_fifo.valid)
-            fb_valid <= 0;
+        else
+            fb_valid <= pre_decode_push | (fb_valid & ~(pre_decode_pop & ~fb_fifo.valid));
     end
 
     taiga_fifo #(
@@ -150,7 +142,7 @@ module pre_decode
     assign sub_instruction = (fn3 == ADD_SUB_fn3) && pre_decode_instruction[30] && opcode[5];//If ARITH instruction
     assign data_in.alu_sub = ~opcode[2] & (fn3 inside {SLTU_fn3, SLT_fn3} || sub_instruction);//opcode[2] covers LUI,AUIPC,JAL,JALR
 
-        always_comb begin
+    always_comb begin
         case (fn3)
             SLT_fn3 : data_in.alu_logic_op = ALU_LOGIC_ADD;
             SLTU_fn3 : data_in.alu_logic_op = ALU_LOGIC_ADD;
