@@ -106,7 +106,8 @@ module write_back(
     //This is used to support single cycle units, such as the ALU
     always_comb begin
         id_issued_one_hot = 0;
-        id_issued_one_hot[ti.issue_id] = ti.issued & ~ti.inflight_packet.is_store;
+        id_issued_one_hot[ti.issue_id] = 1;
+        id_issued_one_hot &= {MAX_INFLIGHT_COUNT{ti.issued}};
     end
 
     generate for (i=0; i< MAX_INFLIGHT_COUNT; i++) begin
@@ -141,7 +142,7 @@ module write_back(
     ////////////////////////////////////////////////////
     //ID Tracking
     //Provides ordering of IDs, ID for issue and oldest ID for committing to register file
-    id_tracking id_fifos (.*, .issued(ti.issued), .retired(retiring_next_cycle), .id_available(ti.id_available),
+    id_tracking id_counters (.*, .issued(ti.issued), .retired(retiring_next_cycle), .id_available(ti.id_available),
     .oldest_id(oldest_id), .next_id(ti.issue_id), .empty(instruction_queue_empty));
 
     ////////////////////////////////////////////////////
