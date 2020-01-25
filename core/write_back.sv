@@ -42,7 +42,9 @@ module write_back(
         input logic store_complete,
 
         //Trace signals
-        output logic tr_wb_mux_contention
+        output unit_id_t tr_num_instructions_completing,
+        output instruction_id_t tr_num_instructions_in_flight,
+        output instruction_id_t tr_num_of_instructions_pending_writeback
         );
     //////////////////////////////////////
 
@@ -208,11 +210,16 @@ module write_back(
     generate if (ENABLE_TRACE_INTERFACE) begin
         //Checks if any two pairs are set indicating mux contention
         always_comb begin
-            tr_wb_mux_contention = 0;
+            tr_num_instructions_completing = 0;
+            for (int i=0; i<NUM_WB_UNITS; i++) begin
+                tr_num_instructions_completing += unit_done[i];
+            end
+
+            tr_num_instructions_in_flight = 0;
+            tr_num_of_instructions_pending_writeback = 0;
             for (int i=0; i<MAX_INFLIGHT_COUNT-1; i++) begin
-                    for (int j=i+1; j<MAX_INFLIGHT_COUNT; j++) begin
-                        tr_wb_mux_contention |= (id_writeback_pending[i] & id_writeback_pending[j]);
-                    end
+                tr_num_instructions_in_flight += id_inuse[i];
+                tr_num_of_instructions_pending_writeback += id_writeback_pending[i];
             end
         end
     end

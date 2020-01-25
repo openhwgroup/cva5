@@ -132,18 +132,30 @@ module taiga (
     logic tr_ls_operand_stall;
     logic tr_div_operand_stall;
 
+    logic tr_alu_op;
+    logic tr_branch_or_jump_op;
+    logic tr_load_op;
+    logic tr_store_op;
+    logic tr_mul_op;
+    logic tr_div_op;
+    logic tr_misc_op;
+
     logic tr_instruction_issued_dec;
     logic [31:0] tr_instruction_pc_dec;
     logic [31:0] tr_instruction_data_dec;
 
     logic tr_branch_correct;
     logic tr_branch_misspredict;
+    logic tr_return_correct;
     logic tr_return_misspredict;
-    logic tr_wb_mux_contention;
 
     logic tr_rs1_forwarding_needed;
     logic tr_rs2_forwarding_needed;
     logic tr_rs1_and_rs2_forwarding_needed;
+
+    unit_id_t tr_num_instructions_completing;
+    instruction_id_t tr_num_instructions_in_flight;
+    instruction_id_t tr_num_of_instructions_pending_writeback;
     ////////////////////////////////////////////////////
     //Implementation
 
@@ -231,13 +243,23 @@ module taiga (
             tr.events.alu_operand_stall <= tr_alu_operand_stall;
             tr.events.ls_operand_stall <= tr_ls_operand_stall;
             tr.events.div_operand_stall <= tr_div_operand_stall;
+            tr.events.alu_op <= tr_alu_op;
+            tr.events.branch_or_jump_op <= tr_branch_or_jump_op;
+            tr.events.load_op <= tr_load_op;
+            tr.events.store_op <= tr_store_op;
+            tr.events.mul_op <= tr_mul_op;
+            tr.events.div_op <= tr_div_op;
+            tr.events.misc_op <= tr_misc_op;
             tr.events.branch_correct <= tr_branch_correct;
             tr.events.branch_misspredict <= tr_branch_misspredict;
+            tr.events.return_correct <= tr_return_correct;
             tr.events.return_misspredict <= tr_return_misspredict;
-            tr.events.wb_mux_contention <= tr_wb_mux_contention;
             tr.events.rs1_forwarding_needed <= tr_rs1_forwarding_needed;
             tr.events.rs2_forwarding_needed <= tr_rs2_forwarding_needed;
             tr.events.rs1_and_rs2_forwarding_needed <= tr_rs1_and_rs2_forwarding_needed;
+            tr.events.num_instructions_completing <= tr_num_instructions_completing;
+            tr.events.num_instructions_in_flight <= tr_num_instructions_in_flight;
+            tr.events.num_of_instructions_pending_writeback <= tr_num_of_instructions_pending_writeback;
             tr.instruction_pc_dec <= tr_instruction_pc_dec;
             tr.instruction_data_dec <= tr_instruction_data_dec;
         end

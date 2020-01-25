@@ -30,6 +30,8 @@
 //#define TRACE_ON
 
 #define COMPLIANCE_SIG_PHASE_NOP 0x00B00013U
+#define BENCHMARK_START_COLLECTION_NOP 0x00C00013U
+#define BENCHMARK_END_COLLECTION_NOP 0x00D00013U
 #define ERROR_TERMINATION_NOP 0x00F00013U
 #define SUCCESS_TERMINATION_NOP 0x00A00013U
 
@@ -47,13 +49,23 @@ static const char * const eventNames[] = {
     "alu_operand_stall",
     "ls_operand_stall",
     "div_operand_stall",
+    "alu_op",
+    "branch_or_jump_op",
+    "load_op",
+    "store_op",
+    "mul_op",
+    "div_op",
+    "misc_op",
     "branch_correct",
     "branch_misspredict",
+    "return_correct",
     "return_misspredict",
-    "wb_mux_contention",
     "rs1_forwarding_needed",
     "rs2_forwarding_needed",
-    "rs1_and_rs2_forwarding_needed"
+    "rs1_and_rs2_forwarding_needed",
+    "num_instructions_completing",
+    "num_instructions_in_flight",
+    "num_of_instructions_pending_writeback"
 };
 static const int numEvents = arraySize(eventNames);
 
@@ -85,6 +97,8 @@ private:
   int stall_count = 0;
   uint64_t cycle_count = 0;
   uint64_t event_counters[numEvents];
+
+  bool collect_stats = false;
 
   void update_stats();
   void update_UART();

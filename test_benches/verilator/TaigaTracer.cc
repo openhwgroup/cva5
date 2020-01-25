@@ -67,8 +67,10 @@ void TaigaTracer<TB>::reset_stats() {
 
 template <class TB>
 void TaigaTracer<TB>::update_stats() {
-    for (int i=0; i < numEvents; i++)
-        event_counters[i] += tb->taiga_events[i];
+    if (collect_stats) {
+        for (int i=0; i < numEvents; i++)
+            event_counters[i] += tb->taiga_events[i];
+    }
 }
 
 template <class TB>
@@ -129,6 +131,13 @@ void TaigaTracer<TB>::tick() {
 
 		cycle_count++;
 
+        if (check_instruction_issued(BENCHMARK_START_COLLECTION_NOP)) {
+            collect_stats = true;
+            reset_stats();
+        }
+        if (check_instruction_issued(BENCHMARK_END_COLLECTION_NOP)) {
+            collect_stats = false;
+        }
 		update_stats();
 		update_UART();
 		update_memory();

@@ -67,6 +67,14 @@ module decode_and_issue (
         output logic tr_ls_operand_stall,
         output logic tr_div_operand_stall,
 
+        output logic tr_alu_op,
+        output logic tr_branch_or_jump_op,
+        output logic tr_load_op,
+        output logic tr_store_op,
+        output logic tr_mul_op,
+        output logic tr_div_op,
+        output logic tr_misc_op,
+
         output logic tr_instruction_issued_dec,
         output logic [31:0] tr_instruction_pc_dec,
         output logic [31:0] tr_instruction_data_dec
@@ -413,12 +421,21 @@ module decode_and_issue (
         assign tr_operand_stall = |(unit_needed & unit_ready) & issue_valid & ~load_store_operands_ready;
         assign tr_unit_stall = ~|(unit_needed & unit_ready) & issue_valid & load_store_operands_ready;
         assign tr_no_id_stall = |(unit_needed & unit_ready) & (fb_valid & ~ti.id_available & ~gc_issue_hold & ~gc_fetch_flush) & load_store_operands_ready;
-        assign tr_no_instruction_stall = ~fb_valid;
-        assign tr_other_stall = fb_valid & ~instruction_issued & ~(tr_operand_stall | tr_unit_stall | tr_no_id_stall | tr_no_instruction_stall) & ~gc_fetch_flush;
+        assign tr_no_instruction_stall = ~fb_valid | gc_fetch_flush;
+        assign tr_other_stall = fb_valid & ~instruction_issued & ~(tr_operand_stall | tr_unit_stall | tr_no_id_stall | tr_no_instruction_stall);
         assign tr_branch_operand_stall = tr_operand_stall & unit_needed[BRANCH_UNIT_ID];
         assign tr_alu_operand_stall = tr_operand_stall & unit_needed[ALU_UNIT_WB_ID] & ~unit_needed[BRANCH_UNIT_ID];
         assign tr_ls_operand_stall = tr_operand_stall & unit_needed[LS_UNIT_WB_ID];
         assign tr_div_operand_stall = tr_operand_stall & unit_needed[DIV_UNIT_WB_ID];
+
+        //Instruction Mix
+        assign tr_alu_op = instruction_issued && (opcode_trim inside {ARITH_T, ARITH_IMM_T, AUIPC_T, LUI_T} && ~tr_mul_op && ~tr_div_op);
+        assign tr_branch_or_jump_op = instruction_issued && (opcode_trim inside {JAL_T, JALR_T, BRANCH_T});
+        assign tr_load_op = instruction_issued && (opcode_trim inside {LOAD_T, AMO_T});
+        assign tr_store_op = instruction_issued && (opcode_trim inside {STORE_T});
+        assign tr_mul_op = instruction_issued && unit_needed[MUL_UNIT_WB_ID];
+        assign tr_div_op = instruction_issued && unit_needed[DIV_UNIT_WB_ID];
+        assign tr_misc_op = instruction_issued & ~(tr_alu_op | tr_branch_or_jump_op | tr_load_op | tr_store_op | tr_mul_op | tr_div_op);
 
         assign tr_instruction_issued_dec = instruction_issued;
         assign tr_instruction_pc_dec = fb.pc;

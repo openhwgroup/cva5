@@ -237,18 +237,30 @@ package taiga_types;
         logic ls_operand_stall;
         logic div_operand_stall;
 
+        //Instruction mix
+        logic alu_op;
+        logic branch_or_jump_op;
+        logic load_op;
+        logic store_op;
+        logic mul_op;
+        logic div_op;
+        logic misc_op;
+
         //Branch Unit
         logic branch_correct;
         logic branch_misspredict;
+        logic return_correct;
         logic return_misspredict;
-
-        //Writeback
-        logic wb_mux_contention;
 
         //Register File
         logic rs1_forwarding_needed;
         logic rs2_forwarding_needed;
         logic rs1_and_rs2_forwarding_needed;
+
+        //Writeback
+        unit_id_t num_instructions_completing;
+        instruction_id_t num_instructions_in_flight;
+        instruction_id_t num_of_instructions_pending_writeback;
     } taiga_trace_events_t;
 
     typedef struct packed {
