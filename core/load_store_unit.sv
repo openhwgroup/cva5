@@ -48,7 +48,10 @@ module load_store_unit (
 
         local_memory_interface.master data_bram,
 
-        //Early store completion in writeback
+        //Store-Writeback Interface
+        input instruction_id_t oldest_id,
+        input logic [31:0] writeback_data,
+        input logic writeback_valid,
         output instruction_id_t store_done_id,
         output logic store_complete,
 
@@ -69,8 +72,8 @@ module load_store_unit (
     localparam BUS_ID = USE_D_SCRATCH_MEM;
     localparam DCACHE_ID = USE_D_SCRATCH_MEM+USE_BUS;
 
-    //Should be equal to pipeline depth of longest load/store subunit
-    localparam ATTRIBUTES_DEPTH = USE_DCACHE ? 2 : 1;
+    //Should be equal to pipeline depth of longest load/store subunit + 1 (for changing between subunits)
+    localparam ATTRIBUTES_DEPTH = USE_DCACHE ? 3 : 2;
 
     data_access_shared_inputs_t shared_inputs;
     ls_sub_unit_interface #(.BASE_ADDR(SCRATCH_ADDR_L), .UPPER_BOUND(SCRATCH_ADDR_H), .BIT_CHECK(SCRATCH_BIT_CHECK)) bram();
@@ -78,20 +81,20 @@ module load_store_unit (
     ls_sub_unit_interface #(.BASE_ADDR(MEMORY_ADDR_L), .UPPER_BOUND(MEMORY_ADDR_H), .BIT_CHECK(MEMORY_BIT_CHECK)) cache();
 
     logic units_ready;
-    logic store_ready;
+    logic unit_switch_stall;
+    logic ready_for_store;
+    logic ready_for_load;
     logic issue_request;
     logic load_complete;
 
-    logic [31:0] prev_load;
+    logic use_store_buffer;
 
     logic [31:0] virtual_address;
-    logic [3:0] be;
 
     logic [31:0] unit_muxed_load_data;
     logic [31:0] aligned_load_data;
     logic [31:0] final_load_data;
 
-    logic [31:0] stage1_raw_data;
 
     logic [31:0] unit_data_array [NUM_SUB_UNITS-1:0];
     logic [NUM_SUB_UNITS-1:0] unit_ready;
@@ -105,95 +108,95 @@ module load_store_unit (
     logic unit_stall;
 
     typedef struct packed{
-        logic [31:0] virtual_address;
-        logic [31:0] store_data;
-        logic [2:0] fn3;
-        logic load;
-        logic store;
-        logic load_store_forward;
-        instruction_id_t instruction_id;
-        instruction_id_t store_forward_id;
-        //exception support
-        logic [31:0] pc;
-        //amo support
-        amo_details_t amo;
-    } load_store_input_fifo_t;
-    load_store_input_fifo_t fifo_inputs;
-
-    typedef struct packed{
         logic [2:0] fn3;
         logic [1:0] byte_addr;
         instruction_id_t instruction_id;
-        logic [0:0] subunit_id;
+        logic [NUM_SUB_UNITS_W-1:0] subunit_id;
     } load_attributes_t;
     load_attributes_t  load_attributes_in, stage2_attr;
-    load_store_input_fifo_t  stage1;
 
     //FIFOs
-    fifo_interface #(.DATA_WIDTH($bits(load_store_input_fifo_t))) input_fifo();
     fifo_interface #(.DATA_WIDTH($bits(load_attributes_t))) load_attributes();
+
+    store_buffer_request_interface sb_request();
+    store_buffer_output_interface sb_output();
+
+    logic [31:0] compare_addr;
+    logic compare;
+    logic address_conflict;
 
     ////////////////////////////////////////////////////
     //Implementation
     ////////////////////////////////////////////////////
-    //Input FIFO
-    taiga_fifo #(.DATA_WIDTH($bits(load_store_input_fifo_t)), .FIFO_DEPTH(MAX_INFLIGHT_COUNT))
-        ls_input_fifo (.fifo(input_fifo), .*);
 
-    assign fifo_inputs.virtual_address = ls_inputs.rs1 + 32'(signed'(ls_inputs.offset));
-    assign fifo_inputs.store_data = ls_inputs.rs2;
-    assign fifo_inputs.fn3 = ls_inputs.fn3;
-    assign fifo_inputs.load = ls_inputs.load;
-    assign fifo_inputs.store = ls_inputs.store;
-    assign fifo_inputs.load_store_forward = ls_inputs.load_store_forward;
-    assign fifo_inputs.instruction_id = issue.instruction_id;
-    assign fifo_inputs.store_forward_id = ls_inputs.store_forward_id;
-    assign fifo_inputs.pc = ls_inputs.pc;
-    assign fifo_inputs.amo = ls_inputs.amo;
-
-    assign input_fifo.data_in = fifo_inputs;
-    assign input_fifo.push = issue.new_request;
-    assign input_fifo.supress_push = gc_fetch_flush;
-    assign issue.ready = 1;//As FIFO depth is the same as MAX_INFLIGHT_COUNT
-    assign input_fifo.pop = issue_request;
-    assign stage1 = input_fifo.data_out;
 
     ////////////////////////////////////////////////////
     //Unit tracking
     assign current_unit = sub_unit_address_match;
+
+    initial last_unit = BRAM_ID;
     always_ff @ (posedge clk) begin
         if (load_attributes.push)
             last_unit <= sub_unit_address_match;
     end
 
+
+    ////////////////////////////////////////////////////
+    //Store buffer
+    assign sb_request.addr = tlb.physical_address;
+    assign sb_request.fn3 = ls_inputs.fn3;
+    assign sb_request.data = ls_inputs.rs2;
+    assign sb_request.data_valid = ~ls_inputs.forwarded_store;
+    assign sb_request.data_id = ls_inputs.store_forward_id;
+    assign sb_request.valid = issue.new_request & ls_inputs.store;
+    assign sb_request.id = issue.instruction_id;
+
+    assign sb_output.accepted = use_store_buffer & units_ready;
+
+    store_buffer sb (.*);
+    assign compare_addr = virtual_address;
+    assign compare = ls_inputs.load;
+
+    assign store_done_id = sb_output.id;
+    assign store_complete = sb_output.accepted;
     ////////////////////////////////////////////////////
     //Primary Control Signals
     assign units_ready = &unit_ready;
     assign load_complete = |unit_data_valid;
 
+    assign use_store_buffer = sb_output.valid;
+
+    assign ready_for_load = ls_inputs.load & (~address_conflict) & (~unit_switch_stall) & units_ready & (~sb_output.valid);
+    assign ready_for_store = ls_inputs.store & sb_request.ready;
+
+    assign issue.ready = (ready_for_load | ready_for_store);
+
     always_ff @ (posedge clk) begin
-        store_done_id <= stage1.instruction_id;
-        store_complete <= stage1.store & issue_request;
+        if (rst)
+            unit_switch_stall <= 0;
+        else if (issue_request && (current_unit != last_unit) && load_attributes.valid)
+            unit_switch_stall <= 1;
+        else if (!load_attributes.valid)
+            unit_switch_stall <= 0;
     end
 
     //When switching units, ensure no outstanding loads so that there can be no timing collisions with results
     assign unit_stall = (current_unit != last_unit) && load_attributes.valid;
-    assign store_ready = stage1.store & ((stage1.load_store_forward & ~load_attributes.valid) | ~stage1.load_store_forward);
-    assign issue_request = input_fifo.valid & units_ready & ~unit_stall & ~unaligned_addr & (~stage1.store | store_ready);
+    assign issue_request = issue.new_request | sb_output.accepted;
 
     ////////////////////////////////////////////////////
     //TLB interface
-    assign virtual_address = stage1.virtual_address;// + 32'(signed'(stage1.offset));
+    assign virtual_address = ls_inputs.rs1 + 32'(signed'(ls_inputs.offset));
 
     assign tlb.virtual_address = virtual_address;
-    assign tlb.new_request = input_fifo.valid;
+    assign tlb.new_request = issue_request;
     assign tlb.execute = 0;
-    assign tlb.rnw = stage1.load & ~stage1.store;
+    assign tlb.rnw = ls_inputs.load & ~ls_inputs.store;
 
     ////////////////////////////////////////////////////
     //Alignment Exception
     always_comb begin
-        case(stage1.fn3)
+        case(ls_inputs.fn3)
             LS_H_fn3 : unaligned_addr = virtual_address[0];
             LS_W_fn3 : unaligned_addr = |virtual_address[1:0];
             default : unaligned_addr = 0;
@@ -207,69 +210,32 @@ module load_store_unit (
 //        else if (unaligned_addr & input_fifo.valid)
 //            ls_exception_valid <= 0;
 //    end
-//    assign ls_exception.code = stage1.load ? LOAD_ADDR_MISSALIGNED : STORE_AMO_ADDR_MISSALIGNED;
-//    assign ls_exception.pc = stage1.pc;
-//    assign ls_exception.tval = stage1.virtual_address;
-//    assign ls_exception.id = stage1.instruction_id;
-
-
-    ////////////////////////////////////////////////////
-    //Input Processing
-
-    //Byte enable generation
-    //Only set on store
-    //  SW: all bytes
-    //  SH: upper or lower half of bytes
-    //  SB: specific byte
-    always_comb begin
-        be = 0;
-        case(stage1.fn3[1:0])
-            LS_B_fn3[1:0] : be[virtual_address[1:0]] = stage1.store;
-            LS_H_fn3[1:0] : begin
-                be[virtual_address[1:0]] = stage1.store;
-                be[{virtual_address[1], 1'b1}] = stage1.store;
-            end
-            default : be =  {4{stage1.store}};
-        endcase
-    end
+//    assign ls_exception.code = ls_inputs.load ? LOAD_ADDR_MISSALIGNED : STORE_AMO_ADDR_MISSALIGNED;
+//    assign ls_exception.pc = ls_inputs.pc;
+//    assign ls_exception.tval = ls_inputs.virtual_address;
+//    assign ls_exception.id = issue.instruction_id;
 
     ////////////////////////////////////////////////////
     //Unit Inputs
-    assign shared_inputs.addr = tlb.physical_address;
-    assign shared_inputs.load = stage1.load;
-    assign shared_inputs.store = stage1.store;
-    assign shared_inputs.be = be;
-    assign shared_inputs.fn3 = stage1.fn3;
-
-    //Store forwarding
-    assign stage1_raw_data = stage1.load_store_forward ? prev_load : stage1.store_data;
-
-    //Input: ABCD
-    //Assuming aligned requests,
-    //Possible byte selections: (A/C/D, B/D, C/D, D)
-    always_comb begin
-        shared_inputs.data_in[7:0] = stage1_raw_data[7:0];
-        shared_inputs.data_in[15:8] = (virtual_address[1:0] == 2'b01) ? stage1_raw_data[7:0] : stage1_raw_data[15:8];
-        shared_inputs.data_in[23:16] = (virtual_address[1:0] == 2'b10) ? stage1_raw_data[7:0] : stage1_raw_data[23:16];
-        case(virtual_address[1:0])
-            2'b10 : shared_inputs.data_in[31:24] = stage1_raw_data[15:8];
-            2'b11 : shared_inputs.data_in[31:24] = stage1_raw_data[7:0];
-            default : shared_inputs.data_in[31:24] = stage1_raw_data[31:24];
-        endcase
-    end
+    assign shared_inputs.addr = use_store_buffer ? sb_output.addr : virtual_address;
+    assign shared_inputs.load = ~use_store_buffer;
+    assign shared_inputs.store = use_store_buffer;
+    assign shared_inputs.be = use_store_buffer ? sb_output.be : 0;
+    assign shared_inputs.fn3 = use_store_buffer ? sb_output.fn3 : ls_inputs.fn3;
+    assign shared_inputs.data_in = sb_output.data;
 
     ////////////////////////////////////////////////////
     //Load attributes FIFO
     one_hot_to_integer #(NUM_SUB_UNITS) hit_way_conv (.*, .one_hot(sub_unit_address_match), .int_out(load_attributes_in.subunit_id));
     taiga_fifo #(.DATA_WIDTH($bits(load_attributes_t)), .FIFO_DEPTH(ATTRIBUTES_DEPTH))
         attributes_fifo (.fifo(load_attributes), .*);
-    assign load_attributes_in.fn3 = stage1.fn3;
+    assign load_attributes_in.fn3 = ls_inputs.fn3;
     assign load_attributes_in.byte_addr = virtual_address[1:0];
-    assign load_attributes_in.instruction_id = stage1.instruction_id;
+    assign load_attributes_in.instruction_id = issue.instruction_id;
 
     assign load_attributes.data_in = load_attributes_in;
 
-    assign load_attributes.push = issue_request & stage1.load;
+    assign load_attributes.push = issue_request & ~use_store_buffer;
     assign load_attributes.pop = load_complete;
     assign load_attributes.supress_push = 0;
 
@@ -278,7 +244,7 @@ module load_store_unit (
     ////////////////////////////////////////////////////
     //Unit Instantiation
     generate if (USE_D_SCRATCH_MEM) begin
-            assign sub_unit_address_match[BRAM_ID] = bram.address_range_check(tlb.physical_address);
+            assign sub_unit_address_match[BRAM_ID] = bram.address_range_check(shared_inputs.addr);
             assign bram.new_request = sub_unit_address_match[BRAM_ID] & issue_request;
 
             assign unit_ready[BRAM_ID] = bram.ready;
@@ -289,14 +255,14 @@ module load_store_unit (
     endgenerate
 
     generate if (USE_BUS) begin
-            assign sub_unit_address_match[BUS_ID] = bus.address_range_check(tlb.physical_address);
+            assign sub_unit_address_match[BUS_ID] = bus.address_range_check(shared_inputs.addr);
             assign bus.new_request = sub_unit_address_match[BUS_ID] & issue_request;
 
             assign unit_ready[BUS_ID] = bus.ready;
             assign unit_data_valid[BUS_ID] = bus.data_valid;
 
             if(BUS_TYPE == AXI_BUS)
-                axi_master axi_bus (.*, .ls_inputs(shared_inputs), .size({1'b0,stage1.fn3[1:0]}), .m_axi(m_axi), .ls(bus), .data_out(unit_data_array[BUS_ID])); //Lower two bits of fn3 match AXI specification for request size (byte/halfword/word)
+                axi_master axi_bus (.*, .ls_inputs(shared_inputs), .size({1'b0,shared_inputs.fn3[1:0]}), .m_axi(m_axi), .ls(bus), .data_out(unit_data_array[BUS_ID])); //Lower two bits of fn3 match AXI specification for request size (byte/halfword/word)
             else if (BUS_TYPE == WISHBONE_BUS)
                 wishbone_master wishbone_bus (.*, .ls_inputs(shared_inputs), .m_wishbone(m_wishbone), .ls(bus), .data_out(unit_data_array[BUS_ID]));
             else if (BUS_TYPE == AVALON_BUS)  begin
@@ -306,13 +272,13 @@ module load_store_unit (
     endgenerate
 
     generate if (USE_DCACHE) begin
-            assign sub_unit_address_match[DCACHE_ID] = cache.address_range_check(tlb.physical_address);
+            assign sub_unit_address_match[DCACHE_ID] = cache.address_range_check(shared_inputs.addr);
             assign cache.new_request = sub_unit_address_match[DCACHE_ID] & issue_request;
 
             assign unit_ready[DCACHE_ID] = cache.ready;
             assign unit_data_valid[DCACHE_ID] = cache.data_valid;
 
-            dcache data_cache (.*, .ls_inputs(shared_inputs), .ls(cache), .amo(stage1.amo), .data_out(unit_data_array[DCACHE_ID]));
+            dcache data_cache (.*, .ls_inputs(shared_inputs), .ls(cache), .amo(ls_inputs.amo), .data_out(unit_data_array[DCACHE_ID]));
         end
     endgenerate
 
@@ -343,11 +309,6 @@ module load_store_unit (
         endcase
     end
 
-    always_ff @ (posedge clk) begin
-        if (load_complete)
-            prev_load <= final_load_data;
-    end
-
     ////////////////////////////////////////////////////
     //Output bank
     assign wb.rd = ls_done ? final_load_data : csr_rd;
@@ -355,7 +316,7 @@ module load_store_unit (
     logic exception_complete;
     logic ls_done;
     always_ff @ (posedge clk) begin
-        exception_complete <= (input_fifo.valid & ls_exception_valid & stage1.load);
+        exception_complete <= (issue_request & ls_exception_valid & ls_inputs.load);
     end
     assign ls_done = load_complete | exception_complete;
 

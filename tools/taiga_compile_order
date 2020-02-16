@@ -45,6 +45,7 @@
 ../core/dtag_banks.sv  
 ../core/amo_alu.sv  
 ../core/dcache.sv  
+../core/store_buffer.sv
 ../core/load_store_unit.sv  
 
 

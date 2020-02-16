@@ -36,8 +36,10 @@ module write_back(
         tracking_interface.wb ti,
         output logic instruction_complete,
         output logic instruction_queue_empty,
-        output instruction_id_t oldest_id,
 
+        output instruction_id_t oldest_id,
+        output logic [31:0] writeback_data,
+        output logic writeback_valid,
         input instruction_id_t store_done_id,
         input logic store_complete,
 
@@ -192,6 +194,9 @@ module write_back(
     assign rf_wb.retiring = instruction_complete;
     assign rf_wb.rd_nzero = |retiring_instruction_packet.rd_addr;
     assign rf_wb.rd_data = results_by_id[id_retiring];
+
+    assign writeback_data = results_by_id[id_retiring];
+    assign writeback_valid = instruction_complete;
 
     //Register bypass for issue operands
     assign rf_wb.rs1_valid = id_writeback_pending_r[rf_wb.rs1_id];//includes the instruction writing to the register file

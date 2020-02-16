@@ -209,6 +209,39 @@ interface tlb_interface;
 
 endinterface
 
+interface store_buffer_request_interface;
+    //Request signals
+    logic [31:0] addr;
+    logic [2:0] fn3;
+
+    logic [31:0] data;
+    logic data_valid;
+    instruction_id_t data_id;
+
+    logic valid;
+    instruction_id_t id;
+
+    logic ready;
+
+    modport store_buffer (input addr, fn3, data, data_valid, data_id, valid, id, output ready);
+    modport ls  (output addr, fn3, data, data_valid, data_id, valid, id, input ready);
+endinterface
+
+interface store_buffer_output_interface;
+
+    logic [31:0] addr;
+    logic [3:0] be;
+    logic [2:0] fn3;
+    logic [31:0] data;
+    logic valid;
+    instruction_id_t id;
+    logic accepted;
+
+    modport store_buffer (output addr, be, fn3, data, valid, id, input accepted);
+    modport ls (input addr, be, fn3, data, valid, id, output accepted);
+
+endinterface
+
 
 interface ls_sub_unit_interface #(parameter BASE_ADDR = 32'h00000000, parameter UPPER_BOUND = 32'hFFFFFFFF, parameter BIT_CHECK = 4);
     logic data_valid;

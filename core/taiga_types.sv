@@ -158,7 +158,7 @@ package taiga_types;
         logic [2:0] fn3;
         logic load;
         logic store;
-        logic load_store_forward;
+        logic forwarded_store;
         instruction_id_t store_forward_id;
         //exception support
         logic [31:0] pc;

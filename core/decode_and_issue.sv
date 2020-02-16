@@ -105,6 +105,7 @@ module decode_and_issue (
     logic [WB_UNITS_WIDTH-1:0] unit_needed_for_id_gen_int;
     logic [NUM_UNITS-1:0] unit_needed;
     logic [NUM_UNITS-1:0] unit_ready;
+    logic [NUM_UNITS-1:0] issue_ready;
     logic [NUM_UNITS-1:0] issue;
 
     genvar i;
@@ -184,7 +185,7 @@ module decode_and_issue (
     assign issue_valid = fb_valid & ti.id_available & ~gc_issue_hold & ~gc_fetch_flush;
 
     assign operands_ready = ~rf_issue.rs1_conflict & ~rf_issue.rs2_conflict;
-    assign load_store_operands_ready = ~rf_issue.rs1_conflict & (~rf_issue.rs2_conflict | (rf_issue.rs2_conflict & (opcode_trim == STORE_T) & load_store_forwarding_possible));
+    assign load_store_operands_ready = operands_ready;//~rf_issue.rs1_conflict & (~rf_issue.rs2_conflict | (rf_issue.rs2_conflict & (opcode_trim == STORE_T) & load_store_forwarding_possible));
 
     //All units share the same operand ready logic except load-store which has an internal forwarding path
     always_comb begin
@@ -192,11 +193,12 @@ module decode_and_issue (
         unit_operands_ready[LS_UNIT_WB_ID] = load_store_operands_ready;
     end
 
-    assign issue = {NUM_UNITS{issue_valid}} & unit_operands_ready & unit_needed & unit_ready;
+    assign issue_ready = unit_needed & unit_ready;
+    assign issue = {NUM_UNITS{issue_valid}} & unit_operands_ready & issue_ready;
 
     //If not all units can provide constant ready signals:
     //((|issue_ready) & issue_valid & load_store_operands_ready);
-    assign instruction_issued = issue_valid & load_store_operands_ready;
+    assign instruction_issued = (|issue_ready) & issue_valid & load_store_operands_ready;
     assign instruction_issued_no_rd = instruction_issued & ~uses_rd;
     assign instruction_issued_with_rd = instruction_issued & uses_rd;
 
@@ -244,10 +246,6 @@ module decode_and_issue (
     logic load_reserve;
     logic [4:0] amo_type;
 
-    logic load_store_forwarding_possible;
-    logic [31:0] last_use_was_load;
-    logic [4:0] last_load_rd;
-
     assign amo_op =  USE_AMO ? (opcode_trim == AMO_T) : 1'b0;
     assign amo_type = fb.instruction[31:27];
     assign store_conditional = (amo_type == AMO_SC);
@@ -268,19 +266,6 @@ module decode_and_issue (
     assign is_store = (opcode_trim == STORE_T) || (amo_op && store_conditional);//Used for LS unit and for ID tracking
     assign ls_offset = opcode[5] ? {fb.instruction[31:25], fb.instruction[11:7]} : fb.instruction[31:20];
 
-
-    always_ff @(posedge clk) begin
-        if (instruction_issued)
-            last_use_was_load[rd_addr] <= unit_needed[LS_UNIT_WB_ID] & is_load;
-    end
-
-    always_ff @(posedge clk) begin
-        if (issue[LS_UNIT_WB_ID])
-            last_load_rd <= rd_addr;
-    end
-
-    assign load_store_forwarding_possible = last_use_was_load[rs2_addr] && (last_load_rd == rs2_addr);
-
     assign ls_inputs.rs1 = rf_issue.rs1_data;
     assign ls_inputs.rs2 = rf_issue.rs2_data;
     assign ls_inputs.offset = ls_offset;
@@ -288,7 +273,7 @@ module decode_and_issue (
     assign ls_inputs.fn3 = amo_op ? LS_W_fn3 : fn3;
     assign ls_inputs.load = is_load;
     assign ls_inputs.store = is_store;
-    assign ls_inputs.load_store_forward = rf_issue.rs2_conflict & load_store_forwarding_possible;
+    assign ls_inputs.forwarded_store = 0;//rf_issue.rs2_conflict & load_store_forwarding_possible;
     assign ls_inputs.store_forward_id = rf_issue.rs2_id;
 
     ////////////////////////////////////////////////////
