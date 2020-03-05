@@ -70,8 +70,8 @@ module l2_fifo  #(parameter DATA_WIDTH = 32, parameter FIFO_DEPTH = 4, parameter
                         write_index <= '0;
                     end            
                     else begin
-                        read_index <= read_index + fifo.pop;
-                        write_index <= write_index + fifo.push;
+                        read_index <= read_index + $clog2(FIFO_DEPTH)'(fifo.pop);
+                        write_index <= write_index + $clog2(FIFO_DEPTH)'(fifo.push);
                     end
                 end
 
@@ -88,16 +88,16 @@ module l2_fifo  #(parameter DATA_WIDTH = 32, parameter FIFO_DEPTH = 4, parameter
                         count_v[0] <= 1;
                         for (int i = 1; i <= FIFO_DEPTH; i++) count_v[i] <= 0;
                     end
-                    else if (fifo.push & ~fifo.pop)
-                        count_v <= {count_v[FIFO_DEPTH-1:0], 1'b0};
-                    else if (~fifo.push & fifo.pop)
-                        count_v <= {1'b0, count_v[FIFO_DEPTH:1]};
-                end                    
-                
+                    else if (fifo.push & ~fifo.pop) begin
+                        count_v[FIFO_DEPTH:1] <= count_v[FIFO_DEPTH-1:0];
+                        count_v[0] <= 1'b0;
+                    end else if (~fifo.push & fifo.pop) begin
+                        count_v[FIFO_DEPTH] <= 1'b0;
+                        count_v[FIFO_DEPTH-1:0] <= count_v[FIFO_DEPTH:1];
+                    end
+                end
             end
         end
     endgenerate
 
 endmodule
-
-

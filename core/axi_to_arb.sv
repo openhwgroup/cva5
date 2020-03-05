@@ -35,12 +35,12 @@ module axi_to_arb
         input logic  axi_arready,
         output logic axi_arvalid,
         output logic[31:0] axi_araddr,
-        output logic[3:0] axi_arlen,
+        output logic[7:0] axi_arlen,
         output logic[2:0] axi_arsize,
         output logic[1:0] axi_arburst,
         output logic[2:0] axi_arprot,
         output logic[3:0] axi_arcache,
-        output logic[4:0] axi_arid,
+        output logic[5:0] axi_arid,
 
         //read data channel
         output logic axi_rready,
@@ -48,7 +48,7 @@ module axi_to_arb
         input logic[31:0] axi_rdata,
         input logic[1:0] axi_rresp,
         input logic axi_rlast,
-        input logic[4:0] axi_rid,
+        input logic[5:0] axi_rid,
 
         //write addr channel
         input logic axi_awready,
@@ -130,7 +130,7 @@ module axi_to_arb
     always_ff @ (posedge clk) begin
         if (rst)
             read_count <= 0;
-        else if (axi_rvalid && (axi_rid == l2.id))
+        else if (axi_rvalid && (axi_rid == 6'(l2.id)))
             read_count <= read_count + 1;
     end
 
@@ -143,7 +143,7 @@ module axi_to_arb
     //TODO:  assumption that all data caches have same line size, would have to update wrt the burst size to be safe if they have different line lengths
     //also update araddr
     always_ff @ (posedge clk) begin
-        if (axi_rvalid && (read_count == l2.addr[DCACHE_SUB_LINE_ADDR_W:0]))
+        if (axi_rvalid && (read_count == l2.addr[DCACHE_SUB_LINE_ADDR_W-1:0]))
             amo_result_r <= amo_result;
     end
 
@@ -152,7 +152,7 @@ module axi_to_arb
             amo_write_ready <= 0;
         else if (pop)
             amo_write_ready <= 0;
-        else if (l2.is_amo && axi_rvalid && read_count == l2.addr[DCACHE_SUB_LINE_ADDR_W:0])
+        else if (l2.is_amo && axi_rvalid && read_count == l2.addr[DCACHE_SUB_LINE_ADDR_W-1:0])
             amo_write_ready <= 1;
     end
     //End AMO
@@ -160,25 +160,25 @@ module axi_to_arb
     assign burst_count = l2.amo_type_or_burst_size;
 
     //read constants
-    assign axi_arlen = burst_count; //
+    assign axi_arlen = 8'(burst_count); //
     assign axi_arburst = 2'b01;// INCR
     assign axi_rready = 1; //always ready to receive data
     assign axi_arsize = 3'b010;//4 bytes
     assign axi_arcache = 4'b0011; //bufferable cacheable memory
-    assign axi_arport = '0;
-    assign axi_arid = l2.id;
+    assign axi_arprot = '0;
+    assign axi_arid = 6'(l2.id);
 
     assign axi_araddr ={l2.addr[29:DCACHE_SUB_LINE_ADDR_W],  {DCACHE_SUB_LINE_ADDR_W{1'b0}}, 2'b00};
 
     assign write_reference_burst_count = read_modify_write ? 0 : burst_count;
 
     //write constants
-    assign axi_awlen = write_reference_burst_count;
+    assign axi_awlen = 8'(write_reference_burst_count);
     assign axi_awburst = 2'b01;// INCR
     assign axi_awsize = 3'b010;//4 bytes
     assign axi_bready = 1;
     assign axi_awcache = 4'b0011;//bufferable cacheable memory
-    assign axi_awport = '0;
+    assign axi_awprot = '0;
 
     assign axi_awaddr ={l2.addr, 2'b00};
 
@@ -257,7 +257,7 @@ module axi_to_arb
 
     //read response
     assign l2.rd_data = axi_rdata;
-    assign l2.rd_id = axi_rid;
+    assign l2.rd_id = axi_rid[L2_ID_W-1:0];
     assign l2.rd_data_valid = axi_rvalid;
 
 endmodule

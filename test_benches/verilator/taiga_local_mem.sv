@@ -32,6 +32,48 @@ module taiga_local_mem # (
         input logic clk,
         input logic rst,
 
+        //DDR AXI
+        output logic [31:0]ddr_axi_araddr,
+        output logic [1:0]ddr_axi_arburst,
+        output logic [3:0]ddr_axi_arcache,
+        output logic [5:0]ddr_axi_arid,
+        output logic [7:0]ddr_axi_arlen,
+        output logic [0:0]ddr_axi_arlock,
+        output logic [2:0]ddr_axi_arprot,
+        output logic [3:0]ddr_axi_arqos,
+        output logic ddr_axi_arready,
+        output logic [3:0]ddr_axi_arregion,
+        output logic [2:0]ddr_axi_arsize,
+        input logic ddr_axi_arvalid,
+        output logic [31:0]ddr_axi_awaddr,
+        output logic [1:0]ddr_axi_awburst,
+        output logic [3:0]ddr_axi_awcache,
+        output logic [5:0]ddr_axi_awid,
+        output logic [7:0]ddr_axi_awlen,
+        output logic [0:0]ddr_axi_awlock,
+        output logic [2:0]ddr_axi_awprot,
+        output logic [3:0]ddr_axi_awqos,
+        input logic ddr_axi_awready,
+        output logic [3:0]ddr_axi_awregion,
+        output logic [2:0]ddr_axi_awsize,
+        output logic ddr_axi_awvalid,
+        output logic [5:0]ddr_axi_bid,
+        output logic ddr_axi_bready,
+        input logic [1:0]ddr_axi_bresp,
+        input logic ddr_axi_bvalid,
+        input logic [31:0]ddr_axi_rdata,
+        input logic [5:0]ddr_axi_rid,
+        input logic ddr_axi_rlast,
+        output logic ddr_axi_rready,
+        input logic [1:0]ddr_axi_rresp,
+        input logic ddr_axi_rvalid,
+        output logic [31:0]ddr_axi_wdata,
+        output logic ddr_axi_wlast,
+        input logic ddr_axi_wready,
+        output logic [3:0]ddr_axi_wstrb,
+        output logic ddr_axi_wvalid,
+        output logic [5:0]ddr_axi_wid,
+
         //        //AXI bus
         //        output logic [31:0]bus_axi_araddr,
         //        output logic [1:0]bus_axi_arburst,
@@ -95,36 +137,8 @@ module taiga_local_mem # (
         output logic instruction_issued,
         output logic taiga_events [0:$bits(taiga_trace_events_t)-1],
         output logic [31:0] instruction_pc_dec,
-        output logic [31:0] instruction_data_dec,
-
-        //L2
-        //l2 request
-        output logic [29:0] addr,
-        output logic [3:0] be,
-        output logic rnw,
-        output logic is_amo,
-        output logic [4:0] amo_type_or_burst_size,
-        output logic [L2_SUB_ID_W-1:0] sub_id,
-
-        output logic request_push,
-        input logic request_full,
-
-        input logic [31:2] inv_addr,
-        input logic inv_valid,
-        output logic inv_ack,
-
-        input logic con_result,
-        input logic con_valid,
-
-        output logic [31:0] wr_data,
-        output logic wr_data_push,
-        input logic data_full,
-
-        input logic [31:0] rd_data,
-        input logic [L2_SUB_ID_W-1:0] rd_sub_id,
-        input logic rd_data_valid,
-        output logic rd_data_ack
-        );
+        output logic [31:0] instruction_data_dec
+    );
 
     logic [3:0] WRITE_COUNTER_MAX;
     logic [3:0] READ_COUNTER_MAX;
@@ -182,6 +196,7 @@ module taiga_local_mem # (
     assign interrupt = 0;
 
     axi_interface m_axi();
+    axi_interface ddr_axi();
     avalon_interface m_avalon();
     wishbone_interface m_wishbone();
 
@@ -190,6 +205,8 @@ module taiga_local_mem # (
     l2_requester_interface l2[L2_NUM_PORTS-1:0]();
     l2_memory_interface mem();
 
+    local_memory_interface instruction_bram();
+    local_memory_interface data_bram();
 
     //    assign m_axi.arready = bus_axi_arready;
     //    assign bus_axi_arvalid = m_axi.arvalid;
@@ -220,11 +237,13 @@ module taiga_local_mem # (
     //    assign m_axi.bvalid = bus_axi_bvalid;
     //    assign m_axi.bresp = bus_axi_bresp;
 
+    assign l2[1].request_push = 0;
+    assign l2[1].wr_data_push = 0;
+    assign l2[1].inv_ack = l2[1].inv_valid;
+    assign l2[1].rd_data_ack = l2[1].rd_data_valid;
 
-
-    local_memory_interface instruction_bram();
-    local_memory_interface data_bram();
-
+    axi_to_arb l2_to_mem (.*, .l2(mem));
+    l2_arbiter l2_arb (.*, .request(l2));
 
     assign instruction_bram_addr = instruction_bram.addr;
     assign instruction_bram_en = instruction_bram.en;
@@ -237,22 +256,6 @@ module taiga_local_mem # (
     assign data_bram_be = data_bram.be;
     assign data_bram_data_in = data_bram.data_in;
     assign data_bram.data_out = data_bram_data_out;
-
-    // byte_en_BRAM #(MEM_LINES, MEMORY_FILE, 1) inst_data_ram (
-    //         .clk(clk),
-    //         .addr_a(instruction_bram.addr[$clog2(MEM_LINES)- 1:0]),
-    //         .en_a(instruction_bram.en),
-    //         .be_a(instruction_bram.be),
-    //         .data_in_a(instruction_bram.data_in),
-    //         .data_out_a(instruction_bram.data_out),
-
-    //         .addr_b(data_bram.addr[$clog2(MEM_LINES)- 1:0]),
-    //         .en_b(data_bram.en),
-    //         .be_b(data_bram.be),
-    //         .data_in_b(data_bram.data_in),
-    //         .data_out_b(data_bram.data_out)
-    //     );
-
 
     taiga cpu(.*, .l2(l2[0]));
 
@@ -350,6 +353,44 @@ module taiga_local_mem # (
         uart_byte <= m_axi.wdata[7:0];
     end
 
+
+
+    ////////////////////////////////////////////////////
+    //DDR AXI interface
+    assign ddr_axi.araddr = ddr_axi_araddr;
+    assign ddr_axi.arburst = ddr_axi_arburst;
+    assign ddr_axi.arcache = ddr_axi_arcache;
+    assign ddr_axi.arid = ddr_axi_arid;
+    assign ddr_axi.arlen = ddr_axi_arlen;
+    assign ddr_axi_arready = ddr_axi.arready;
+    assign ddr_axi.arsize = ddr_axi_arsize;
+    assign ddr_axi.arvalid = ddr_axi_arvalid;
+
+    assign ddr_axi.awaddr = ddr_axi_awaddr;
+    assign ddr_axi.awburst = ddr_axi_awburst;
+    assign ddr_axi.awcache = ddr_axi_awcache;
+    assign ddr_axi.awid = ddr_axi_awid;
+    assign ddr_axi.awlen = ddr_axi_awlen;
+    assign ddr_axi.awready = ddr_axi_awready;
+    assign ddr_axi.awvalid = ddr_axi_awvalid;
+
+    assign ddr_axi.bid = ddr_axi_bid;
+    assign ddr_axi_bready = ddr_axi.bready;
+    assign ddr_axi.bresp = ddr_axi_bresp;
+    assign ddr_axi.bvalid = ddr_axi_bvalid;
+
+    assign ddr_axi.rdata = ddr_axi_rdata;
+    assign ddr_axi.rid = ddr_axi_rid;
+    assign ddr_axi.rlast = ddr_axi_rlast;
+    assign ddr_axi_rready = ddr_axi.rready;
+    assign ddr_axi.rresp = ddr_axi_rresp;
+    assign ddr_axi.rvalid = ddr_axi_rvalid;
+
+    assign ddr_axi_wdata = ddr_axi.wdata;
+    assign ddr_axi_wlast = ddr_axi.wlast;
+    assign ddr_axi.wready = ddr_axi_wready;
+    assign ddr_axi_wstrb = ddr_axi.wstrb;
+    assign ddr_axi_wvalid = ddr_axi.wvalid;
 
     ////////////////////////////////////////////////////
     //Trace Interface

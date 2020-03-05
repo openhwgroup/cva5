@@ -39,6 +39,7 @@ module amo_alu(
 
     assign rs1_smaller_than_rs2 = rs1_ext < rs2_ext;
 
+    /* verilator lint_off CASEINCOMPLETE */
     always_comb begin
         unique case (amo_alu_inputs.op)// <--unique as not all codes are in use
             AMO_SWAP : result = amo_alu_inputs.rs2;
@@ -52,6 +53,6 @@ module amo_alu(
             AMO_MAXU : result = rs1_smaller_than_rs2 ? amo_alu_inputs.rs2 : amo_alu_inputs.rs1_load;
         endcase
     end
-
+    /* verilator lint_on CASEINCOMPLETE */
 
 endmodule

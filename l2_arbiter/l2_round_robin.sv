@@ -52,10 +52,10 @@ module l2_round_robin
             //ex: state 0, highest priority to L2_NUM_PORTS-1
             always_comb begin
                 for (int i = 0; i < L2_NUM_PORTS; i++) begin
-                    muxes[i] = i;
+                    muxes[i] = $clog2(L2_NUM_PORTS)'(i);
                     for (int j = 0; j < L2_NUM_PORTS; j++) begin
                         if (arb.requests[(i+j) % L2_NUM_PORTS])
-                            muxes[i] = (i+j) % L2_NUM_PORTS;
+                            muxes[i] = $clog2(L2_NUM_PORTS)'((i+j) % L2_NUM_PORTS);
                     end
                 end
             end

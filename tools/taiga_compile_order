@@ -103,5 +103,11 @@
 ../core/write_back.sv  
 
 ../core/placer_randomizer.sv
-../core/taiga.sv  
+
+../l2_arbiter/l2_fifo.sv
+../l2_arbiter/l2_reservation_logic.sv
+../l2_arbiter/l2_round_robin.sv
+../l2_arbiter/l2_arbiter.sv
+
+../core/taiga.sv
 
