@@ -119,10 +119,13 @@ module taiga (
     //LS
     instruction_id_t store_done_id;
     logic store_complete;
+    instruction_id_t writeback_id;
     logic [31:0] writeback_data;
     logic writeback_valid;
 
-    post_issue_forwarding_interface store_forwarding();
+    logic load_store_exception_clear;
+    instruction_id_t load_store_exception_id;
+    logic potential_exception;
 
     //Trace Interface Signals
     logic tr_operand_stall;

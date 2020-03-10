@@ -96,7 +96,6 @@ module decode_and_issue (
     logic nop;
 
     logic issue_valid;
-    logic load_store_operands_ready;
     logic operands_ready;
     logic [NUM_UNITS-1:0] unit_operands_ready;
     logic mult_div_op;
@@ -155,6 +154,7 @@ module decode_and_issue (
     assign ti.inflight_packet.is_store = is_store;
     assign ti.issued = instruction_issued & (uses_rd | unit_needed[LS_UNIT_WB_ID]);
     assign ti.issue_unit_id = unit_needed_for_id_gen_int;
+    assign ti.exception_possible = opcode_trim inside {LOAD_T, STORE_T, AMO_T};
     ////////////////////////////////////////////////////
     //Unit Determination
     assign mult_div_op = fb.instruction[25];
@@ -185,20 +185,17 @@ module decode_and_issue (
     assign issue_valid = fb_valid & ti.id_available & ~gc_issue_hold & ~gc_fetch_flush;
 
     assign operands_ready = ~rf_issue.rs1_conflict & ~rf_issue.rs2_conflict;
-    assign load_store_operands_ready = operands_ready;//~rf_issue.rs1_conflict & (~rf_issue.rs2_conflict | (rf_issue.rs2_conflict & (opcode_trim == STORE_T) & load_store_forwarding_possible));
 
     //All units share the same operand ready logic except load-store which has an internal forwarding path
     always_comb begin
         unit_operands_ready = {NUM_UNITS{operands_ready}};
-        unit_operands_ready[LS_UNIT_WB_ID] = load_store_operands_ready;
+        unit_operands_ready[LS_UNIT_WB_ID] = ~rf_issue.rs1_conflict;
     end
 
     assign issue_ready = unit_needed & unit_ready;
     assign issue = {NUM_UNITS{issue_valid}} & unit_operands_ready & issue_ready;
 
-    //If not all units can provide constant ready signals:
-    //((|issue_ready) & issue_valid & load_store_operands_ready);
-    assign instruction_issued = (|issue_ready) & issue_valid & load_store_operands_ready;
+    assign instruction_issued = issue_valid & |(unit_operands_ready & issue_ready);
     assign instruction_issued_no_rd = instruction_issued & ~uses_rd;
     assign instruction_issued_with_rd = instruction_issued & uses_rd;
 
@@ -273,7 +270,7 @@ module decode_and_issue (
     assign ls_inputs.fn3 = amo_op ? LS_W_fn3 : fn3;
     assign ls_inputs.load = is_load;
     assign ls_inputs.store = is_store;
-    assign ls_inputs.forwarded_store = 0;//rf_issue.rs2_conflict & load_store_forwarding_possible;
+    assign ls_inputs.forwarded_store = rf_issue.rs2_conflict;
     assign ls_inputs.store_forward_id = rf_issue.rs2_id;
 
     ////////////////////////////////////////////////////
@@ -368,7 +365,7 @@ module decode_and_issue (
     //Unit EX signals
     generate
         for (i = 0; i < NUM_UNITS; i++) begin
-            assign unit_issue[i].possible_issue = unit_needed[i] & unit_ready[i] & unit_operands_ready[i] & fb_valid & ti.id_available & ~gc_issue_hold;//Every condition other than a pipeline flush
+            assign unit_issue[i].possible_issue = unit_needed[i] & unit_operands_ready[i] & fb_valid & ti.id_available;
             assign unit_issue[i].new_request = issue[i];
             assign unit_issue[i].instruction_id = ti.issue_id;
             always_ff @(posedge clk) begin
@@ -403,9 +400,9 @@ module decode_and_issue (
     ////////////////////////////////////////////////////
     //Trace Interface
     generate if (ENABLE_TRACE_INTERFACE) begin
-        assign tr_operand_stall = |(unit_needed & unit_ready) & issue_valid & ~load_store_operands_ready;
-        assign tr_unit_stall = ~|(unit_needed & unit_ready) & issue_valid & load_store_operands_ready;
-        assign tr_no_id_stall = |(unit_needed & unit_ready) & (fb_valid & ~ti.id_available & ~gc_issue_hold & ~gc_fetch_flush) & load_store_operands_ready;
+        assign tr_operand_stall = |(unit_needed & unit_ready) & issue_valid & ~|(unit_operands_ready & issue_ready);
+        assign tr_unit_stall = ~|(unit_needed & unit_ready) & issue_valid & |(unit_operands_ready & issue_ready);
+        assign tr_no_id_stall = |(unit_needed & unit_ready) & (fb_valid & ~ti.id_available & ~gc_issue_hold & ~gc_fetch_flush) & |(unit_operands_ready & issue_ready);
         assign tr_no_instruction_stall = ~fb_valid | gc_fetch_flush;
         assign tr_other_stall = fb_valid & ~instruction_issued & ~(tr_operand_stall | tr_unit_stall | tr_no_id_stall | tr_no_instruction_stall);
         assign tr_branch_operand_stall = tr_operand_stall & unit_needed[BRANCH_UNIT_ID];

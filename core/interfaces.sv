@@ -150,9 +150,10 @@ interface tracking_interface;
     inflight_instruction_packet inflight_packet;
     logic issued;
     logic [WB_UNITS_WIDTH-1:0] issue_unit_id;
+    logic exception_possible;
 
-    modport decode (input issue_id, id_available, output inflight_packet, issued, issue_unit_id);
-    modport wb (output issue_id, id_available, input inflight_packet, issued, issue_unit_id);
+    modport decode (input issue_id, id_available, output inflight_packet, issued, issue_unit_id, exception_possible);
+    modport wb (output issue_id, id_available, input inflight_packet, issued, issue_unit_id, exception_possible);
 endinterface
 
 interface fifo_interface #(parameter DATA_WIDTH = 42);//#(parameter type data_type = logic[31:0]);
@@ -209,39 +210,23 @@ interface tlb_interface;
 
 endinterface
 
-interface store_buffer_request_interface;
-    //Request signals
-    logic [31:0] addr;
-    logic [2:0] fn3;
+interface load_store_queue_interface;
 
-    logic [31:0] data;
+    logic ready;
+    data_access_shared_inputs_t transaction_in;
+    logic valid;
+
     logic data_valid;
     instruction_id_t data_id;
 
-    logic valid;
-    instruction_id_t id;
-
-    logic ready;
-
-    modport store_buffer (input addr, fn3, data, data_valid, data_id, valid, id, output ready);
-    modport ls  (output addr, fn3, data, data_valid, data_id, valid, id, input ready);
-endinterface
-
-interface store_buffer_output_interface;
-
-    logic [31:0] addr;
-    logic [3:0] be;
-    logic [2:0] fn3;
-    logic [31:0] data;
-    logic valid;
-    instruction_id_t id;
+    data_access_shared_inputs_t transaction_out;
+    logic transaction_ready;
     logic accepted;
 
-    modport store_buffer (output addr, be, fn3, data, valid, id, input accepted);
-    modport ls (input addr, be, fn3, data, valid, id, output accepted);
 
+    modport queue (input transaction_in, data_valid, data_id, valid, accepted, output ready, transaction_out, transaction_ready);
+    modport ls  (output transaction_in, data_valid, data_id, valid, accepted, input ready, transaction_out, transaction_ready);
 endinterface
-
 
 interface ls_sub_unit_interface #(parameter BASE_ADDR = 32'h00000000, parameter UPPER_BOUND = 32'hFFFFFFFF, parameter BIT_CHECK = 4);
     logic data_valid;

@@ -50,6 +50,11 @@ module load_store_unit (
 
         //Store-Writeback Interface
         input instruction_id_t oldest_id,
+        output logic load_store_exception_clear,
+        output instruction_id_t load_store_exception_id,
+        input logic potential_exception,
+
+        input instruction_id_t writeback_id,
         input logic [31:0] writeback_data,
         input logic writeback_valid,
         output instruction_id_t store_done_id,
@@ -82,19 +87,18 @@ module load_store_unit (
 
     logic units_ready;
     logic unit_switch_stall;
-    logic ready_for_store;
-    logic ready_for_load;
+    logic ready_for_delayed_store;
+    logic ready_for_bypass_store;
+    logic ready_for_issue;
+    logic bypass_possible;
     logic issue_request;
     logic load_complete;
-
-    logic use_store_buffer;
 
     logic [31:0] virtual_address;
 
     logic [31:0] unit_muxed_load_data;
     logic [31:0] aligned_load_data;
     logic [31:0] final_load_data;
-
 
     logic [31:0] unit_data_array [NUM_SUB_UNITS-1:0];
     logic [NUM_SUB_UNITS-1:0] unit_ready;
@@ -115,15 +119,16 @@ module load_store_unit (
     } load_attributes_t;
     load_attributes_t  load_attributes_in, stage2_attr;
 
+    logic [3:0] be;
     //FIFOs
     fifo_interface #(.DATA_WIDTH($bits(load_attributes_t))) load_attributes();
 
-    store_buffer_request_interface sb_request();
-    store_buffer_output_interface sb_output();
+    load_store_queue_interface lsq();
 
     logic [31:0] compare_addr;
     logic compare;
     logic address_conflict;
+    logic store_buffer_bypassable;
 
     ////////////////////////////////////////////////////
     //Implementation
@@ -131,70 +136,11 @@ module load_store_unit (
 
 
     ////////////////////////////////////////////////////
-    //Unit tracking
-    assign current_unit = sub_unit_address_match;
-
-    initial last_unit = BRAM_ID;
-    always_ff @ (posedge clk) begin
-        if (load_attributes.push)
-            last_unit <= sub_unit_address_match;
-    end
-
-
-    ////////////////////////////////////////////////////
-    //Store buffer
-    assign sb_request.addr = tlb.physical_address;
-    assign sb_request.fn3 = ls_inputs.fn3;
-    assign sb_request.data = ls_inputs.rs2;
-    assign sb_request.data_valid = ~ls_inputs.forwarded_store;
-    assign sb_request.data_id = ls_inputs.store_forward_id;
-    assign sb_request.valid = issue.new_request & ls_inputs.store;
-    assign sb_request.id = issue.instruction_id;
-
-    assign sb_output.accepted = use_store_buffer & units_ready;
-
-    store_buffer sb (.*);
-    assign compare_addr = virtual_address;
-    assign compare = ls_inputs.load;
-
-    assign store_done_id = sb_output.id;
-    assign store_complete = sb_output.accepted;
-    ////////////////////////////////////////////////////
-    //Primary Control Signals
-    assign units_ready = &unit_ready;
-    assign load_complete = |unit_data_valid;
-
-    assign use_store_buffer = sb_output.valid;
-
-    assign ready_for_load = ls_inputs.load & (~address_conflict) & (~unit_switch_stall) & units_ready & (~sb_output.valid);
-    assign ready_for_store = ls_inputs.store & sb_request.ready;
-
-    assign issue.ready = (ready_for_load | ready_for_store);
-
-    always_ff @ (posedge clk) begin
-        if (rst)
-            unit_switch_stall <= 0;
-        else if (issue_request && (current_unit != last_unit) && load_attributes.valid)
-            unit_switch_stall <= 1;
-        else if (!load_attributes.valid)
-            unit_switch_stall <= 0;
-    end
-
-    //When switching units, ensure no outstanding loads so that there can be no timing collisions with results
-    assign unit_stall = (current_unit != last_unit) && load_attributes.valid;
-    assign issue_request = issue.new_request | sb_output.accepted;
-
-    ////////////////////////////////////////////////////
-    //TLB interface
-    assign virtual_address = ls_inputs.rs1 + 32'(signed'(ls_inputs.offset));
-
-    assign tlb.virtual_address = virtual_address;
-    assign tlb.new_request = issue_request;
-    assign tlb.execute = 0;
-    assign tlb.rnw = ls_inputs.load & ~ls_inputs.store;
-
-    ////////////////////////////////////////////////////
     //Alignment Exception
+    assign load_store_exception_clear = issue.new_request;
+    assign load_store_exception_id = issue.instruction_id;
+
+
     always_comb begin
         case(ls_inputs.fn3)
             LS_H_fn3 : unaligned_addr = virtual_address[0];
@@ -216,26 +162,100 @@ module load_store_unit (
 //    assign ls_exception.id = issue.instruction_id;
 
     ////////////////////////////////////////////////////
-    //Unit Inputs
-    assign shared_inputs.addr = use_store_buffer ? sb_output.addr : virtual_address;
-    assign shared_inputs.load = ~use_store_buffer;
-    assign shared_inputs.store = use_store_buffer;
-    assign shared_inputs.be = use_store_buffer ? sb_output.be : 0;
-    assign shared_inputs.fn3 = use_store_buffer ? sb_output.fn3 : ls_inputs.fn3;
-    assign shared_inputs.data_in = sb_output.data;
+    //TLB interface
+    assign virtual_address = ls_inputs.rs1 + 32'(signed'(ls_inputs.offset));
+
+    assign tlb.virtual_address = virtual_address;
+    assign tlb.new_request = issue_request;
+    assign tlb.execute = 0;
+    assign tlb.rnw = ls_inputs.load & ~ls_inputs.store;
+
+    ////////////////////////////////////////////////////
+    //Byte enable generation
+    //Only set on store
+    //  SW: all bytes
+    //  SH: upper or lower half of bytes
+    //  SB: specific byte
+    always_comb begin
+        be = 0;
+        case(ls_inputs.fn3[1:0])
+            LS_B_fn3[1:0] : be[virtual_address[1:0]] = 1;
+            LS_H_fn3[1:0] : begin
+                be[virtual_address[1:0]] = 1;
+                be[{virtual_address[1], 1'b1}] = 1;
+            end
+            default : be = '1;
+        endcase
+        be &= {4{~ls_inputs.load}};
+    end
+
+    ////////////////////////////////////////////////////
+    //Load Store Queue
+    assign lsq.transaction_in.addr = virtual_address;
+    assign lsq.transaction_in.fn3 = ls_inputs.fn3;
+    assign lsq.transaction_in.be = be;
+    assign lsq.transaction_in.data_in = ls_inputs.rs2;
+    assign lsq.transaction_in.load = ls_inputs.load;
+    assign lsq.transaction_in.store = ls_inputs.store;
+    assign lsq.transaction_in.id = issue.instruction_id;
+
+    assign lsq.data_valid = ~ls_inputs.forwarded_store;
+    assign lsq.data_id = ls_inputs.store_forward_id;
+    assign lsq.valid = issue.new_request & ~bypass_possible;
+
+    load_store_queue lsq_block (.*);
+    assign compare_addr = virtual_address;
+    assign compare = 1;//ls_inputs.load;
+
+    assign lsq.accepted = lsq.transaction_ready & ready_for_issue;
+
+    assign store_done_id = shared_inputs.id;
+    assign store_complete = (lsq.accepted & shared_inputs.store) | (issue.new_request & ls_inputs.store & bypass_possible);
+
+    assign shared_inputs = lsq.transaction_out;
+
+    ////////////////////////////////////////////////////
+    //Unit tracking
+    assign current_unit = sub_unit_address_match;
+
+    initial last_unit = BRAM_ID;
+    always_ff @ (posedge clk) begin
+        if (load_attributes.push)
+            last_unit <= sub_unit_address_match;
+    end
+
+    //When switching units, ensure no outstanding loads so that there can be no timing collisions with results
+    assign unit_stall = (current_unit != last_unit) && load_attributes.valid;
+    always_ff @ (posedge clk) begin
+        if (rst)
+            unit_switch_stall <= 0;
+        else if (issue_request && (current_unit != last_unit) && load_attributes.valid)
+            unit_switch_stall <= 1;
+        else if (~load_attributes.valid)
+            unit_switch_stall <= 0;
+    end
+
+    ////////////////////////////////////////////////////
+    //Primary Control Signals
+    assign units_ready = &unit_ready;
+    assign load_complete = |unit_data_valid;
+
+    assign ready_for_issue = units_ready & (~unit_switch_stall);
+    assign bypass_possible = ready_for_issue & (~address_conflict) & (~lsq.transaction_ready) & (~ls_inputs.forwarded_store);
+
+    assign issue.ready = lsq.ready;
+    assign issue_request = (issue.new_request & bypass_possible) | lsq.accepted;
 
     ////////////////////////////////////////////////////
     //Load attributes FIFO
-    one_hot_to_integer #(NUM_SUB_UNITS) hit_way_conv (.*, .one_hot(sub_unit_address_match), .int_out(load_attributes_in.subunit_id));
-    taiga_fifo #(.DATA_WIDTH($bits(load_attributes_t)), .FIFO_DEPTH(ATTRIBUTES_DEPTH))
-        attributes_fifo (.fifo(load_attributes), .*);
-    assign load_attributes_in.fn3 = ls_inputs.fn3;
-    assign load_attributes_in.byte_addr = virtual_address[1:0];
-    assign load_attributes_in.instruction_id = issue.instruction_id;
+    one_hot_to_integer #(NUM_SUB_UNITS) sub_unit_select (.*, .one_hot(sub_unit_address_match), .int_out(load_attributes_in.subunit_id));
+    taiga_fifo #(.DATA_WIDTH($bits(load_attributes_t)), .FIFO_DEPTH(ATTRIBUTES_DEPTH)) attributes_fifo (.fifo(load_attributes), .*);
+    assign load_attributes_in.fn3 = shared_inputs.fn3;
+    assign load_attributes_in.byte_addr = shared_inputs.addr[1:0];
+    assign load_attributes_in.instruction_id = shared_inputs.id;
 
     assign load_attributes.data_in = load_attributes_in;
-
-    assign load_attributes.push = issue_request & ~use_store_buffer;
+    assign load_attributes.push = issue_request & shared_inputs.load;
     assign load_attributes.pop = load_complete;
     assign load_attributes.supress_push = 0;
 
@@ -311,17 +331,33 @@ module load_store_unit (
 
     ////////////////////////////////////////////////////
     //Output bank
-    assign wb.rd = ls_done ? final_load_data : csr_rd;
+
 
     logic exception_complete;
     logic ls_done;
-    always_ff @ (posedge clk) begin
-        exception_complete <= (issue_request & ls_exception_valid & ls_inputs.load);
-    end
     assign ls_done = load_complete | exception_complete;
 
+    assign exception_complete = (issue_request & ls_exception_valid & ls_inputs.load);
+    assign wb.rd = ls_done ? final_load_data : csr_rd;
     assign wb.done = csr_done | ls_done;
     assign wb.id = csr_done ? csr_id : stage2_attr.instruction_id;
+
+
+    // always_ff @ (posedge clk) begin
+    //     exception_complete <= (issue_request & ls_exception_valid & ls_inputs.load);
+
+    //         wb.rd <= ls_done ? final_load_data : csr_rd;
+
+
+    // if (rst)
+    //     wb.done <= 0;
+    // else
+    //     wb.done <= csr_done | ls_done;
+
+    // wb.id <= csr_done ? csr_id : stage2_attr.instruction_id;
+
+    // end
+
     ////////////////////////////////////////////////////
     //End of Implementation
     ////////////////////////////////////////////////////
@@ -330,6 +366,7 @@ module load_store_unit (
     //Assertions
     always_ff @ (posedge clk) begin
         assert ((issue_request & |sub_unit_address_match) || (!issue_request)) else $error("invalid L/S address");
+        assert ((issue_request & ready_for_issue) || (!issue_request)) else $error("L/S internal request issued without subunits ready");
     end
 
 endmodule

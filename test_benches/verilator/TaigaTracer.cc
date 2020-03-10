@@ -75,10 +75,10 @@ void TaigaTracer<TB>::update_stats() {
 
 template <class TB>
 void TaigaTracer<TB>::print_stats() {
-	std::cout << "   Taiga trace stats:\n";
+	std::cout << "   Taiga trace stats\n";
 	std::cout << "--------------------------------------------------------------\n";
     for (int i=0; i < numEvents; i++)
-       std::cout << "    " << eventNames[i] << ": " << event_counters[i] << std::endl;
+       std::cout << "    " << eventNames[i] << ":" << event_counters[i] << std::endl;
 
 	std::cout << "--------------------------------------------------------------\n\n";
 }

@@ -38,8 +38,15 @@ module write_back(
         output logic instruction_queue_empty,
 
         output instruction_id_t oldest_id,
+
+        input logic load_store_exception_clear,
+        input instruction_id_t load_store_exception_id,
+        output logic potential_exception,
+
+        output instruction_id_t writeback_id,
         output logic [31:0] writeback_data,
         output logic writeback_valid,
+
         input instruction_id_t store_done_id,
         input logic store_complete,
 
@@ -67,6 +74,8 @@ module write_back(
     inflight_instruction_packet retiring_instruction_packet;
 
     logic [MAX_INFLIGHT_COUNT-1:0] id_inuse;
+    logic [MAX_INFLIGHT_COUNT-1:0] id_potential_exception;
+    logic [MAX_INFLIGHT_COUNT-1:0] exception_cleared_one_hot;
 
     logic [MAX_INFLIGHT_COUNT-1:0] id_writeback_pending;
     logic [MAX_INFLIGHT_COUNT-1:0] id_writeback_pending_r;
@@ -162,6 +171,20 @@ module write_back(
     assign retiring_instruction_packet = id_metadata[id_retiring];
 
     ////////////////////////////////////////////////////
+    //Potential Exception Tracking
+    // always_comb begin
+    //     exception_cleared_one_hot = 0;
+    //     exception_cleared_one_hot[load_store_exception_id] = load_store_exception_clear;
+    // end
+    // always_ff @ (posedge clk) begin
+    //     if (rst)
+    //         id_potential_exception <= 0;
+    //     else
+    //         id_potential_exception <= (id_potential_exception | {MAX_INFLIGHT_COUNT{ti.exception_possible}} & id_issued_one_hot) & ~exception_cleared_one_hot;
+    // end
+    // assign potential_exception = |id_potential_exception;
+
+    ////////////////////////////////////////////////////
     //Register File Interface
     //Track whether the ID has a pending write to the register file
     always_ff @ (posedge clk) begin
@@ -195,8 +218,10 @@ module write_back(
     assign rf_wb.rd_nzero = |retiring_instruction_packet.rd_addr;
     assign rf_wb.rd_data = results_by_id[id_retiring];
 
-    assign writeback_data = results_by_id[id_retiring];
-    assign writeback_valid = instruction_complete;
+    //Store Buffer data
+    assign writeback_id = rf_wb.id;
+    assign writeback_data = rf_wb.rd_data;
+    assign writeback_valid = rf_wb.retiring;
 
     //Register bypass for issue operands
     assign rf_wb.rs1_valid = id_writeback_pending_r[rf_wb.rs1_id];//includes the instruction writing to the register file
@@ -223,8 +248,8 @@ module write_back(
             tr_num_instructions_in_flight = 0;
             tr_num_of_instructions_pending_writeback = 0;
             for (int i=0; i<MAX_INFLIGHT_COUNT-1; i++) begin
-                tr_num_instructions_in_flight += id_inuse[i];
-                tr_num_of_instructions_pending_writeback += id_writeback_pending[i];
+                tr_num_instructions_in_flight += ID_W'(id_inuse[i]);
+                tr_num_of_instructions_pending_writeback += ID_W'(id_writeback_pending[i]);
             end
         end
     end

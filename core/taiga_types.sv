@@ -216,6 +216,7 @@ package taiga_types;
         logic [3:0] be;
         logic [2:0] fn3;
         logic [31:0] data_in;
+        instruction_id_t id;
     } data_access_shared_inputs_t;
 
     typedef enum  {

@@ -156,7 +156,7 @@ package taiga_config;
     ////////////////////////////////////////////////////
     //Branch Predictor Options
     parameter USE_BRANCH_PREDICTOR = 1;
-    parameter BRANCH_PREDICTOR_WAYS = 2;
+    parameter BRANCH_PREDICTOR_WAYS = 1;
     parameter BRANCH_TABLE_ENTRIES = 512;
     parameter RAS_DEPTH = 8;
 
@@ -169,7 +169,7 @@ package taiga_config;
 
     ////////////////////////////////////////////////////
     //Trace Options
-    parameter ENABLE_TRACE_INTERFACE = 1;
+    parameter ENABLE_TRACE_INTERFACE = 0;
 
 
     ////////////////////////////////////////////////////
