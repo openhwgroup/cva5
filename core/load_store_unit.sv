@@ -87,10 +87,7 @@ module load_store_unit (
 
     logic units_ready;
     logic unit_switch_stall;
-    logic ready_for_delayed_store;
-    logic ready_for_bypass_store;
     logic ready_for_issue;
-    logic bypass_possible;
     logic issue_request;
     logic load_complete;
 
@@ -126,9 +123,7 @@ module load_store_unit (
     load_store_queue_interface lsq();
 
     logic [31:0] compare_addr;
-    logic compare;
     logic address_conflict;
-    logic store_buffer_bypassable;
 
     ////////////////////////////////////////////////////
     //Implementation
@@ -201,18 +196,14 @@ module load_store_unit (
 
     assign lsq.data_valid = ~ls_inputs.forwarded_store;
     assign lsq.data_id = ls_inputs.store_forward_id;
-    assign lsq.valid = issue.new_request & ~bypass_possible;
+    assign lsq.valid = issue.new_request;
 
     load_store_queue lsq_block (.*);
-    assign compare_addr = virtual_address;
-    assign compare = 1;//ls_inputs.load;
+    assign shared_inputs = lsq.transaction_out;
 
     assign lsq.accepted = lsq.transaction_ready & ready_for_issue;
-
     assign store_done_id = shared_inputs.id;
-    assign store_complete = (lsq.accepted & shared_inputs.store) | (issue.new_request & ls_inputs.store & bypass_possible);
-
-    assign shared_inputs = lsq.transaction_out;
+    assign store_complete = lsq.accepted & shared_inputs.store;
 
     ////////////////////////////////////////////////////
     //Unit tracking
@@ -241,10 +232,9 @@ module load_store_unit (
     assign load_complete = |unit_data_valid;
 
     assign ready_for_issue = units_ready & (~unit_switch_stall);
-    assign bypass_possible = ready_for_issue & (~address_conflict) & (~lsq.transaction_ready) & (~ls_inputs.forwarded_store);
 
     assign issue.ready = lsq.ready;
-    assign issue_request = (issue.new_request & bypass_possible) | lsq.accepted;
+    assign issue_request = lsq.accepted;
 
     ////////////////////////////////////////////////////
     //Load attributes FIFO
