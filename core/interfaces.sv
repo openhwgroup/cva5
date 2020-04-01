@@ -212,20 +212,41 @@ endinterface
 
 interface load_store_queue_interface;
 
-    logic ready;
-    data_access_shared_inputs_t transaction_in;
-    logic valid;
-
-    logic data_valid;
+    logic [31:0] addr;
+    logic load;
+    logic store;
+    logic [3:0] be;
+    logic [2:0] fn3;
+    logic [31:0] data_in;
+    instruction_id_t id;
+    logic forwarded_store;
     instruction_id_t data_id;
 
+    logic valid;
+    logic ready;
+
+    instruction_id_t id_needed_by_store;
     data_access_shared_inputs_t transaction_out;
     logic transaction_ready;
     logic accepted;
 
 
-    modport queue (input transaction_in, data_valid, data_id, valid, accepted, output ready, transaction_out, transaction_ready);
-    modport ls  (output transaction_in, data_valid, data_id, valid, accepted, input ready, transaction_out, transaction_ready);
+    modport queue (input addr, load, store, be, fn3, data_in, id, forwarded_store, data_id, valid, accepted, output ready, id_needed_by_store, transaction_out, transaction_ready);
+    modport ls  (output addr, load, store, be, fn3, data_in, id, forwarded_store, data_id, valid, accepted, input ready, id_needed_by_store, transaction_out, transaction_ready);
+endinterface
+
+interface writeback_store_interface;
+        instruction_id_t id_needed_at_issue;
+        instruction_id_t id_needed_at_commit;
+        instruction_id_t commit_id;
+        logic commit;
+        logic [MAX_INFLIGHT_COUNT-1:0] hold_for_store_ids;
+
+        logic forwarding_data_ready;
+        logic [31:0] forwarded_data;
+
+        modport ls (input forwarding_data_ready, forwarded_data, output id_needed_at_issue, id_needed_at_commit, commit_id, commit, hold_for_store_ids);
+        modport wb (output forwarding_data_ready, forwarded_data, input id_needed_at_issue, id_needed_at_commit, commit_id, commit, hold_for_store_ids);
 endinterface
 
 interface ls_sub_unit_interface #(parameter BASE_ADDR = 32'h00000000, parameter UPPER_BOUND = 32'hFFFFFFFF, parameter BIT_CHECK = 4);

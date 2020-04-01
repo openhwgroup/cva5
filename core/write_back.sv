@@ -43,12 +43,8 @@ module write_back(
         input instruction_id_t load_store_exception_id,
         output logic potential_exception,
 
-        output instruction_id_t writeback_id,
-        output logic [31:0] writeback_data,
-        output logic writeback_valid,
-
-        input instruction_id_t store_done_id,
-        input logic store_complete,
+        //Writeback-Store Interface
+        writeback_store_interface.wb wb_store,
 
         //Trace signals
         output unit_id_t tr_num_instructions_completing,
@@ -108,7 +104,7 @@ module write_back(
             for (int j=0; j< NUM_WB_UNITS; j++) begin
                 id_writing_to_buffer[i] |= (unit_instruction_id[j] == ID_W'(i)) && unit_done[j];
             end
-            id_writing_to_buffer[i] |= (store_done_id == ID_W'(i)) && store_complete;
+            id_writing_to_buffer[i] |= (wb_store.commit_id == ID_W'(i)) && wb_store.commit;
         end
     end
 
@@ -151,6 +147,8 @@ module write_back(
         else
             id_inuse <= (id_issued_one_hot | id_inuse) & ~id_writing_to_buffer;
     end
+    assign wb_store.forwarding_data_ready = ~id_inuse[wb_store.id_needed_at_commit];
+    assign wb_store.forwarded_data = results_by_id[wb_store.id_needed_at_commit];
 
     ////////////////////////////////////////////////////
     //ID Tracking
@@ -197,7 +195,7 @@ module write_back(
     assign id_writeback_pending = id_writing_to_buffer | (id_writeback_pending_r & ~id_retiring_one_hot);
 
     //Is the oldest instruction ready to commit?
-    assign retiring_next_cycle = id_writeback_pending[oldest_id];
+    assign retiring_next_cycle = id_writeback_pending[oldest_id] & ~wb_store.hold_for_store_ids[oldest_id];
 
     always_ff @(posedge clk) begin
         retiring <= retiring_next_cycle;
@@ -217,11 +215,6 @@ module write_back(
     assign rf_wb.retiring = instruction_complete;
     assign rf_wb.rd_nzero = |retiring_instruction_packet.rd_addr;
     assign rf_wb.rd_data = results_by_id[id_retiring];
-
-    //Store Buffer data
-    assign writeback_id = rf_wb.id;
-    assign writeback_data = rf_wb.rd_data;
-    assign writeback_valid = rf_wb.retiring;
 
     //Register bypass for issue operands
     assign rf_wb.rs1_valid = id_writeback_pending_r[rf_wb.rs1_id];//includes the instruction writing to the register file

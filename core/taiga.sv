@@ -117,11 +117,7 @@ module taiga (
     logic gc_flush_required;
 
     //LS
-    instruction_id_t store_done_id;
-    logic store_complete;
-    instruction_id_t writeback_id;
-    logic [31:0] writeback_data;
-    logic writeback_valid;
+    writeback_store_interface wb_store();
 
     logic load_store_exception_clear;
     instruction_id_t load_store_exception_id;

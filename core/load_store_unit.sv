@@ -48,17 +48,13 @@ module load_store_unit (
 
         local_memory_interface.master data_bram,
 
-        //Store-Writeback Interface
+        //Writeback-Store Interface
+        writeback_store_interface.ls wb_store,
+
         input instruction_id_t oldest_id,
         output logic load_store_exception_clear,
         output instruction_id_t load_store_exception_id,
         input logic potential_exception,
-
-        input instruction_id_t writeback_id,
-        input logic [31:0] writeback_data,
-        input logic writeback_valid,
-        output instruction_id_t store_done_id,
-        output logic store_complete,
 
         input logic[31:0] csr_rd,
         input instruction_id_t csr_id,
@@ -186,25 +182,31 @@ module load_store_unit (
 
     ////////////////////////////////////////////////////
     //Load Store Queue
-    assign lsq.transaction_in.addr = virtual_address;
-    assign lsq.transaction_in.fn3 = ls_inputs.fn3;
-    assign lsq.transaction_in.be = be;
-    assign lsq.transaction_in.data_in = ls_inputs.rs2;
-    assign lsq.transaction_in.load = ls_inputs.load;
-    assign lsq.transaction_in.store = ls_inputs.store;
-    assign lsq.transaction_in.id = issue.instruction_id;
-
-    assign lsq.data_valid = ~ls_inputs.forwarded_store;
+    assign lsq.addr = virtual_address;
+    assign lsq.fn3 = ls_inputs.fn3;
+    assign lsq.be = be;
+    assign lsq.data_in = ls_inputs.rs2;
+    assign lsq.load = ls_inputs.load;
+    assign lsq.store = ls_inputs.store;
+    assign lsq.id = issue.instruction_id;
+    assign lsq.forwarded_store = ls_inputs.forwarded_store;
     assign lsq.data_id = ls_inputs.store_forward_id;
+
     assign lsq.valid = issue.new_request;
 
-    load_store_queue lsq_block (.*);
+    logic [MAX_INFLIGHT_COUNT-1:0] wb_hold_for_store_ids;
+    load_store_queue lsq_block (.*, .writeback_valid(wb_store.forwarding_data_ready), .writeback_data(wb_store.forwarded_data));
     assign shared_inputs = lsq.transaction_out;
 
     assign lsq.accepted = lsq.transaction_ready & ready_for_issue;
-    assign store_done_id = shared_inputs.id;
-    assign store_complete = lsq.accepted & shared_inputs.store;
 
+    ////////////////////////////////////////////////////
+    //Writeback-Store interface
+    assign wb_store.id_needed_at_issue = ls_inputs.store_forward_id;
+    assign wb_store.id_needed_at_commit = lsq.id_needed_by_store;
+    assign wb_store.commit_id = lsq.transaction_out.id;
+    assign wb_store.commit = lsq.accepted & lsq.transaction_out.store;
+    assign wb_store.hold_for_store_ids = wb_hold_for_store_ids;
     ////////////////////////////////////////////////////
     //Unit tracking
     assign current_unit = sub_unit_address_match;
