@@ -365,7 +365,7 @@ module decode_and_issue (
     //Unit EX signals
     generate
         for (i = 0; i < NUM_UNITS; i++) begin
-            assign unit_issue[i].possible_issue = unit_needed[i] & unit_operands_ready[i] & fb_valid & ti.id_available;
+            assign unit_issue[i].possible_issue = unit_needed[i] & unit_operands_ready[i] & fb_valid & ti.id_available & ~gc_issue_hold;
             assign unit_issue[i].new_request = issue[i];
             assign unit_issue[i].instruction_id = ti.issue_id;
             always_ff @(posedge clk) begin

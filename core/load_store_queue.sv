@@ -29,6 +29,7 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
     (
         input logic clk,
         input logic rst,
+        input logic gc_fetch_flush,
 
         load_store_queue_interface.queue lsq,
         output logic [MAX_INFLIGHT_COUNT-1:0] wb_hold_for_store_ids,
@@ -69,8 +70,8 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
     taiga_fifo #(.DATA_WIDTH($bits(instruction_id_t)), .FIFO_DEPTH(MAX_INFLIGHT_COUNT)) oldest_id_fifo (.fifo(oldest_fifo), .*);
 
     assign oldest_fifo.data_in = lsq.id;
-    assign oldest_fifo.push = lsq.valid;
-    assign oldest_fifo.supress_push = 0;
+    assign oldest_fifo.push = lsq.possible_issue;
+    assign oldest_fifo.supress_push = gc_fetch_flush;
     assign oldest_fifo.pop = lsq.accepted;
     assign oldest_id = oldest_fifo.data_out;
 
@@ -89,7 +90,7 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
     end
 
     always_ff @ (posedge clk) begin
-        if (lsq.valid)
+        if (lsq.possible_issue)
             lsq_entries[lsq.id] <= new_lsq_entry;
     end
 
@@ -101,7 +102,7 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
 
     always_comb begin
         new_id_one_hot = 0;
-        new_id_one_hot[lsq.id] = lsq.valid;
+        new_id_one_hot[lsq.id] = lsq.new_issue;
 
         issuing_one_hot = 0;
         issuing_one_hot[oldest_id] = lsq.accepted;
@@ -120,7 +121,7 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
     logic new_forwarded_store;
     logic forwarded_store_complete;
 
-    assign new_forwarded_store = lsq.valid & lsq.forwarded_store;
+    assign new_forwarded_store = lsq.new_issue & lsq.forwarded_store;
     assign forwarded_store_complete = lsq.accepted & oldest_lsq_entry.forwarded_store;
 
     always_comb begin

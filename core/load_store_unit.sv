@@ -192,7 +192,8 @@ module load_store_unit (
     assign lsq.forwarded_store = ls_inputs.forwarded_store;
     assign lsq.data_id = ls_inputs.store_forward_id;
 
-    assign lsq.valid = issue.new_request;
+    assign lsq.possible_issue = issue.possible_issue;
+    assign lsq.new_issue = issue.new_request;
 
     logic [MAX_INFLIGHT_COUNT-1:0] wb_hold_for_store_ids;
     load_store_queue lsq_block (.*, .writeback_valid(wb_store.forwarding_data_ready), .writeback_data(wb_store.forwarded_data));
