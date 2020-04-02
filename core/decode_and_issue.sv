@@ -347,12 +347,12 @@ module decode_and_issue (
             //If current div operation overwrites an input register OR any other instruction overwrites the last div operations input registers
             assign clear_prev_div_result_valid = uses_rd & ((rd_addr == (unit_needed[DIV_UNIT_WB_ID] ? rs1_addr : prev_div_rs1_addr)) || (rd_addr == (unit_needed[DIV_UNIT_WB_ID] ? rs2_addr : prev_div_rs2_addr)));
 
-            always_ff @(posedge clk) begin
-                if (rst)
-                    prev_div_result_valid <= 0;
-                else if (instruction_issued)
-                    prev_div_result_valid <= (set_prev_div_result_valid | prev_div_result_valid) & ~clear_prev_div_result_valid;
-            end
+            set_clr_reg_with_rst #(.SET_OVER_CLR(0), .WIDTH(1), .RST_VALUE(0)) prev_div_result_valid_m (
+              .clk, .rst,
+              .set(instruction_issued & set_prev_div_result_valid),
+              .clr(instruction_issued & clear_prev_div_result_valid),
+              .result(prev_div_result_valid)
+            );
 
             assign div_inputs.rs1 = rf_issue.rs1_data;
             assign div_inputs.rs2 = rf_issue.rs2_data;

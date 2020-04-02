@@ -31,6 +31,8 @@
 ../core/taiga_fifo.sv  
 ../core/shift_counter.sv
 
+../core/set_clr_reg_with_rst.sv
+
 ../core/intel/intel_byte_enable_ram.sv
 ../core/xilinx/xilinx_byte_enable_ram.sv
 ../core/byte_en_BRAM.sv 

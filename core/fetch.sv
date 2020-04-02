@@ -173,14 +173,12 @@ module fetch(
         icache i_cache (.*, .fetch_sub(fetch_sub[ICACHE_ID]));
         assign sub_unit_address_match[ICACHE_ID] = tlb.physical_address[31:32-MEMORY_BIT_CHECK] == MEMORY_ADDR_L[31:32-MEMORY_BIT_CHECK];
 
-        always_ff @(posedge clk) begin
-            if(flush_or_rst)
-                stage2_valid <= 0;
-            else if (new_mem_request)
-                stage2_valid <= 1;
-            else if (pre_decode_push)
-                stage2_valid <= 0;
-        end
+        set_clr_reg_with_rst #(.SET_OVER_CLR(1), .WIDTH(1), .RST_VALUE(0)) stage2_valid_m (
+          .clk, .rst(flush_or_rst),
+          .set(new_mem_request),
+          .clr(pre_decode_push),
+          .result(stage2_valid)
+        );
 
         always_ff @(posedge clk) begin
             if (new_mem_request)
@@ -188,14 +186,12 @@ module fetch(
         end
         //TODO potentially move support into cache so that we're not stalled on a request we no longer need due to a flush
         //If the cache is processing a miss when a flush occurs we need to discard the result once complete
-        always_ff @(posedge clk) begin
-            if (rst)
-                delayed_flush <= 0;
-            else if (gc_fetch_flush & stage2_valid & last_sub_unit_id[ICACHE_ID] & ~fetch_sub[ICACHE_ID].data_valid)//& ~fetch_sub[ICACHE_ID].ready
-                delayed_flush <= 1;
-            else if (fetch_sub[ICACHE_ID].data_valid)
-                delayed_flush <= 0;
-        end
+        set_clr_reg_with_rst #(.SET_OVER_CLR(1), .WIDTH(1), .RST_VALUE(0)) delayed_flush_m (
+          .clk, .rst,
+          .set(gc_fetch_flush & stage2_valid & last_sub_unit_id[ICACHE_ID] & ~fetch_sub[ICACHE_ID].data_valid),
+          .clr(fetch_sub[ICACHE_ID].data_valid),
+          .result(delayed_flush)
+        );
     end else begin
         assign delayed_flush = 0;
     end

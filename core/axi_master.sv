@@ -61,14 +61,12 @@ module axi_master
     assign m_axi.awburst = 0;
     assign m_axi.bready = 1;
 
-    always_ff @ (posedge clk) begin
-        if (rst)
-            ready <= 1;
-        else if (ls.new_request)
-            ready <= 0;
-        else if (m_axi.rvalid | m_axi.bvalid)
-            ready <= 1;
-    end
+    set_clr_reg_with_rst #(.SET_OVER_CLR(0), .WIDTH(1), .RST_VALUE(1)) ready_m (
+      .clk, .rst,
+      .set(m_axi.rvalid | m_axi.bvalid),
+      .clr(ls.new_request),
+      .result(ready)
+    );
     assign ls.ready = ready;
 
     always_ff @ (posedge clk) begin
@@ -79,14 +77,12 @@ module axi_master
     end
 
     //read channel
-    always_ff @ (posedge clk) begin
-        if (rst)
-            m_axi.arvalid <= 0;
-        else if (ls.new_request & ls_inputs.load)
-            m_axi.arvalid <= 1;
-        else if (m_axi.arready)
-            m_axi.arvalid <= 0;
-    end
+    set_clr_reg_with_rst #(.SET_OVER_CLR(1), .WIDTH(1), .RST_VALUE(0)) arvalid_m (
+      .clk, .rst,
+      .set(ls.new_request & ls_inputs.load),
+      .clr(m_axi.arready),
+      .result(m_axi.arvalid)
+    );
 
     always_ff @ (posedge clk) begin
         if (m_axi.rvalid)
@@ -94,23 +90,19 @@ module axi_master
     end
 
     //write channel
-    always_ff @ (posedge clk) begin
-        if (rst)
-            m_axi.awvalid <= 0;
-        else if (ls.new_request & ls_inputs.store)
-            m_axi.awvalid <= 1;
-        else if (m_axi.awready)
-            m_axi.awvalid <= 0;
-    end
+    set_clr_reg_with_rst #(.SET_OVER_CLR(1), .WIDTH(1), .RST_VALUE(0)) awvalid_m (
+      .clk, .rst,
+      .set(ls.new_request & ls_inputs.store),
+      .clr(m_axi.awready),
+      .result(m_axi.awvalid)
+    );
 
-    always_ff @ (posedge clk) begin
-        if (rst)
-            m_axi.wvalid <= 0;
-        else if (ls.new_request & ls_inputs.store)
-            m_axi.wvalid <= 1;
-        else if (m_axi.wready)
-            m_axi.wvalid <= 0;
-    end
+    set_clr_reg_with_rst #(.SET_OVER_CLR(1), .WIDTH(1), .RST_VALUE(0)) wvalid_m (
+      .clk, .rst,
+      .set(ls.new_request & ls_inputs.store),
+      .clr(m_axi.wready),
+      .result(m_axi.wvalid)
+    );
     assign  m_axi.wlast = m_axi.wvalid;
 
 endmodule

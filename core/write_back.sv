@@ -141,12 +141,13 @@ module write_back(
     ////////////////////////////////////////////////////
     //Unit Forwarding Support
     //Track whether an ID has written to the commit buffer
-    always_ff @ (posedge clk) begin
-        if (rst)
-            id_inuse <= 0;
-        else
-            id_inuse <= (id_issued_one_hot | id_inuse) & ~id_writing_to_buffer;
-    end
+    set_clr_reg_with_rst #(.SET_OVER_CLR(0), .WIDTH($bits(id_inuse)), .RST_VALUE('0)) id_inuse_m (
+      .clk, .rst,
+      .set(id_issued_one_hot),
+      .clr(id_writing_to_buffer),
+      .result(id_inuse)
+    );
+
     assign wb_store.forwarding_data_ready = ~id_inuse[wb_store.id_needed_at_commit];
     assign wb_store.forwarded_data = results_by_id[wb_store.id_needed_at_commit];
 

@@ -83,12 +83,12 @@ module pre_decode
             fb <= new_data;
     end
 
-    always_ff @ (posedge clk) begin
-        if (buffer_reset)
-            fb_valid <= 0;
-        else
-            fb_valid <= pre_decode_push | (fb_valid & ~(pre_decode_pop & ~fb_fifo.valid));
-    end
+    set_clr_reg_with_rst #(.SET_OVER_CLR(1), .WIDTH(1), .RST_VALUE(0)) fb_valid_m (
+      .clk, .rst(buffer_reset),
+      .set(pre_decode_push),
+      .clr(pre_decode_pop & ~fb_fifo.valid),
+      .result(fb_valid)
+    );
 
     taiga_fifo #(
             .DATA_WIDTH($bits(fetch_buffer_packet_t)),

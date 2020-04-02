@@ -220,14 +220,12 @@ module load_store_unit (
 
     //When switching units, ensure no outstanding loads so that there can be no timing collisions with results
     assign unit_stall = (current_unit != last_unit) && load_attributes.valid;
-    always_ff @ (posedge clk) begin
-        if (rst)
-            unit_switch_stall <= 0;
-        else if (issue_request && (current_unit != last_unit) && load_attributes.valid)
-            unit_switch_stall <= 1;
-        else if (~load_attributes.valid)
-            unit_switch_stall <= 0;
-    end
+    set_clr_reg_with_rst #(.SET_OVER_CLR(1), .WIDTH(1), .RST_VALUE(0)) unit_switch_stall_m (
+      .clk, .rst,
+      .set(issue_request && (current_unit != last_unit) && load_attributes.valid),
+      .clr(~load_attributes.valid),
+      .result(unit_switch_stall)
+    );
 
     ////////////////////////////////////////////////////
     //Primary Control Signals

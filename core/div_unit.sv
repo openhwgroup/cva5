@@ -114,14 +114,12 @@ module div_unit
     assign div_done = div_core.done | (input_fifo.valid & div_op.reuse_result);
 
     //If more than one cycle, set in_progress so that multiple div.start signals are not sent to the div unit.
-    always_ff @(posedge clk) begin
-        if (rst)
-            in_progress <= 0;
-        else if (div_core.start)
-            in_progress <= 1;
-        else if (div_core.done)
-            in_progress <= 0;
-    end
+    set_clr_reg_with_rst #(.SET_OVER_CLR(1), .WIDTH(1), .RST_VALUE('0)) in_progress_m (
+      .clk, .rst,
+      .set(div_core.start),
+      .clr(div_core.done),
+      .result(in_progress)
+    );
 
     ////////////////////////////////////////////////////
     //Div core

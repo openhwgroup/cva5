@@ -129,6 +129,7 @@ module dcache(
     end
 
     //LR reservation, cleared on exceptions
+
     always_ff @ (posedge clk) begin
         if (rst)
             reservation <= 0;

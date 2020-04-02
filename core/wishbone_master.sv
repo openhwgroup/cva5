@@ -48,14 +48,12 @@ module wishbone_master
         end
     end
 
-    always_ff @ (posedge clk) begin
-        if (rst)
-            ls.ready <= 1;
-        else if (ls.new_request)
-            ls.ready <= 0;
-        else if (m_wishbone.ack)
-            ls.ready <= 1;
-    end
+    set_clr_reg_with_rst #(.SET_OVER_CLR(0), .WIDTH(1), .RST_VALUE(1)) ready_m (
+      .clk, .rst,
+      .set(m_wishbone.ack),
+      .clr(ls.new_request),
+      .result(ls.ready)
+    );
 
     always_ff @ (posedge clk) begin
         if (rst)

@@ -269,14 +269,12 @@ module gc_unit(
     //while processing a csr operation, gc_issue_hold prevents further instructions from being issued
     assign issue.ready = 1;
 
-    always_ff @(posedge clk) begin
-        if (rst)
-            processing_csr <= 0;
-        else if (csr_ready_to_complete)
-            processing_csr <= 0;
-        else if (issue.new_request & gc_inputs.is_csr)
-            processing_csr <= 1;
-    end
+    set_clr_reg_with_rst #(.SET_OVER_CLR(0), .WIDTH(1), .RST_VALUE(0)) processing_csr_m (
+      .clk, .rst,
+      .set(issue.new_request & gc_inputs.is_csr),
+      .clr(csr_ready_to_complete),
+      .result(processing_csr)
+    );
 
     assign csr_ready_to_complete = processing_csr && (oldest_id == csr_id);
     always_ff @(posedge clk) begin

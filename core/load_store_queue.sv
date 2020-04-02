@@ -97,23 +97,23 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
     ////////////////////////////////////////////////////
     //ID status registers
     //for whether an ID is valid
-    logic [MAX_INFLIGHT_COUNT-1:0] issuing_one_hot;
-    logic [MAX_INFLIGHT_COUNT-1:0] new_id_one_hot;
+    // logic [MAX_INFLIGHT_COUNT-1:0] issuing_one_hot;
+    // logic [MAX_INFLIGHT_COUNT-1:0] new_id_one_hot;
 
-    always_comb begin
-        new_id_one_hot = 0;
-        new_id_one_hot[lsq.id] = lsq.new_issue;
+    // always_comb begin
+    //     new_id_one_hot = 0;
+    //     new_id_one_hot[lsq.id] = lsq.new_issue;
 
-        issuing_one_hot = 0;
-        issuing_one_hot[oldest_id] = lsq.accepted;
-    end
+    //     issuing_one_hot = 0;
+    //     issuing_one_hot[oldest_id] = lsq.accepted;
+    // end
 
-    always_ff @ (posedge clk) begin
-        if (rst)
-            valid <= 0;
-        else
-            valid <= (new_id_one_hot | valid) & ~issuing_one_hot;
-    end
+    // set_clr_reg_with_rst #(.SET_OVER_CLR(0), .WIDTH(MAX_INFLIGHT_COUNT), .RST_VALUE('0)) valid_m (
+    //   .clk, .rst,
+    //   .set(new_id_one_hot),
+    //   .clr(issuing_one_hot),
+    //   .result(valid)
+    // );
 
     ////////////////////////////////////////////////////
     //Counters for determining if an existing ID's data is needed for a store
@@ -149,7 +149,7 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
     logic [31:0] data_for_alignment;
 
     assign oldest_lsq_entry = lsq_entries[oldest_id];
-    assign lsq.transaction_ready =  valid[oldest_id] & (~oldest_lsq_entry.forwarded_store | writeback_valid);
+    assign lsq.transaction_ready =  oldest_fifo.valid & (~oldest_lsq_entry.forwarded_store | writeback_valid);
     assign lsq.id_needed_by_store = oldest_lsq_entry.data_id;
 
     always_comb begin

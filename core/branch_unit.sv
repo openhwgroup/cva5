@@ -84,14 +84,12 @@ module branch_unit(
     assign issue.ready = 1;
 
     //Branch new request is held if the following instruction hasn't arrived at decode/issue yet
-    always_ff @(posedge clk) begin
-        if (rst)
-            branch_issued_r <= 0;
-        else if (issue.new_request)
-            branch_issued_r <= 1;
-        else if (branch_inputs.dec_pc_valid)
-            branch_issued_r <= 0;
-    end
+    set_clr_reg_with_rst #(.SET_OVER_CLR(1), .WIDTH(1), .RST_VALUE(0)) branch_issued_m (
+      .clk, .rst,
+      .set(issue.new_request),
+      .clr(branch_inputs.dec_pc_valid),
+      .result(branch_issued_r)
+    );
 
     assign instruction_is_completing = branch_issued_r & branch_inputs.dec_pc_valid;
 
