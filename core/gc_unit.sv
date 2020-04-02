@@ -166,7 +166,7 @@ module gc_unit(
     //implementation
     ////////////////////////////////////////////////////
     always_ff @(posedge clk) begin
-        if (issue.new_request) begin
+        if (issue.possible_issue) begin
             stage1 <= gc_inputs;
         end
     end
