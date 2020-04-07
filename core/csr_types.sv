@@ -25,9 +25,9 @@ package csr_types;
     import riscv_types::*;
     import taiga_types::*;
 
-    const bit[1:0] CSR_READ_ONLY = 2'b11;
+    const logic [1:0] CSR_READ_ONLY = 2'b11;
 
-    typedef enum bit [1:0] {
+    typedef enum logic [1:0] {
         USER_PRIVILEGE = 2'b00,
         SUPERVISOR_PRIVILEGE = 2'b01,
         //reserved
@@ -38,13 +38,12 @@ package csr_types;
     typedef struct packed {
         logic [1:0] rw_bits;
         logic [1:0] privilege;
-        logic [1:0] subtype;
-        logic [5:0] sub_addr;
+        logic [7:0] sub_addr;
     } csr_addr_t;
 
     //Constant registers
     typedef struct packed {
-        logic[1:0] base; //RV32I
+        logic[1:0] mxlen; //RV32I
         logic[3:0] reserved;
         logic Z;
         logic Y;
@@ -91,46 +90,68 @@ package csr_types;
         logic [1:0] zeros1;
         logic spp;
         logic mpie;
-        logic zero2;
+        logic ube;
         logic spie;
-        logic upie;
+        logic zero2;
         logic mie;
         logic zero3;
         logic sie;
-        logic uie;
+        logic zero4;
     } mstatus_t;
 
+    typedef struct packed {
+        logic [7:0] custom;
+        logic [7:0] zeros;
+        logic store_amo_page_fault;
+        logic zero1;
+        logic load_page_fault;
+        logic instruction_page_fault;
+        logic m_ecall;
+        logic zero2;
+        logic s_ecall;
+        logic u_ecall;
+        logic store_amo_access_fault;
+        logic store_amo_misaligned;
+        logic load_fault;
+        logic load_misaligned;
+        logic breakpoint;
+        logic illegal_instruction;
+        logic instruction_access_fault;
+        logic instruction_misaligned;
+    } medeleg_t;
 
     typedef struct packed {
-        logic [32-1:12] zeros;
+        logic [31:16] custom;
+        logic [15:12] zeros;
         logic meip;
         logic zero1;
         logic seip;
-        logic ueip;
-        logic mtip;
         logic zero2;
-        logic stip;
-        logic utip;
-        logic msip;
+        logic mtip;
         logic zero3;
+        logic stip;
+        logic zero4;
+        logic msip;
+        logic zero5;
         logic ssip;
-        logic usip;
+        logic zero6;
     } mip_t;
 
     typedef struct packed {
-        logic [32-1:12] zeros;
+        logic [31:16] custom;
+        logic [15:12] zeros;
         logic meie;
         logic zero1;
         logic seie;
-        logic ueie;
-        logic mtie;
         logic zero2;
-        logic stie;
-        logic utie;
-        logic msie;
+        logic mtie;
         logic zero3;
+        logic stie;
+        logic zero4;
+        logic msie;
+        logic zero5;
         logic ssie;
-        logic usie;
+        logic zero6;
     } mie_t;
 
     typedef struct packed {

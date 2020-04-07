@@ -84,7 +84,7 @@ module gc_unit(
     //Instructions
     //All instructions are processed only if in IDLE state, meaning there can be no exceptions caused by instructions already further in the pipeline.
     //FENCE:
-    //    Drain Load/Store FIFO (i.e. not in in-order mode)
+    //    Drain Load/Store FIFO
     //FENCE.I:
     //    flush and hold fetch until L/S unit empty
     //    Local mem (nothing extra required for coherency)

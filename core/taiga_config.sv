@@ -25,8 +25,6 @@ package taiga_config;
     ////////////////////////////////////////////////////
     //Vendor Selection
     parameter FPGA_VENDOR = "xilinx"; //xilinx or intel
-
-
     ////////////////////////////////////////////////////
     //Privileged ISA Options
 
@@ -34,7 +32,10 @@ package taiga_config;
     parameter ENABLE_M_MODE = 0;
     //Enable Supervisor level privilege spec
     parameter ENABLE_S_MODE = 0;
+    //Enable User level privilege spec
+    parameter ENABLE_U_MODE = 0;
 
+    parameter MACHINE_IMPLEMENTATION_ID = 0;
     parameter CPU_ID = 0;//32-bit value
     parameter bit[31:0] RESET_VEC = 32'h80000000;
 
