@@ -219,6 +219,12 @@ module gc_unit(
     shift_counter #(.DEPTH(TLB_CLEAR_DEPTH)) tlb_clear_counter (.*, .start((state == IDLE_STATE) && (next_state == TLB_CLEAR_STATE)), .done(tlb_clear_done));
 
     ////////////////////////////////////////////////////
+    //mret/sret
+    always_ff @ (posedge clk) begin
+        mret = issue.new_request & gc_inputs.is_ret & (gc_inputs.instruction[31:25] == 7'b0011000);
+        sret = issue.new_request & gc_inputs.is_ret & (gc_inputs.instruction[31:25] == 7'b0001000);
+    end
+    ////////////////////////////////////////////////////
     //Exception handling
     logic ls_exception_first_cycle;
     logic ls_exception_second_cycle;
@@ -228,6 +234,7 @@ module gc_unit(
         ls_exception_second_cycle <= ls_exception_first_cycle;
     end
 
+    //The type of call instruction is depedent on the current privilege level
     always_comb begin
         case (current_privilege)
             USER_PRIVILEGE : ecall_code = ECALL_U;
@@ -237,19 +244,36 @@ module gc_unit(
         endcase
     end
 
-    assign gc_exception.code =
-        ls_exception_second_cycle ? ls_exception.code :
-        gc_inputs.is_ecall ? ecall_code : BREAK;
-    assign gc_exception.pc = ls_exception_second_cycle ? ls_exception.pc : gc_inputs.pc;
-    assign gc_exception.tval = ls_exception_second_cycle ? ls_exception.tval : '0;
-    assign gc_exception.valid = issue.new_request & (gc_inputs.is_ecall | gc_inputs.is_ebreak) | ls_exception_second_cycle;
+    always_comb begin
+        if (ls_exception_second_cycle) begin
+            gc_exception.code = ls_exception.code;
+            gc_exception.pc = ls_exception.pc;
+            gc_exception.tval = ls_exception.tval;
+        end else if (gc_inputs.is_ecall) begin
+            gc_exception.code = ecall_code;
+            gc_exception.pc = gc_inputs.pc;
+            gc_exception.tval = '0;
+        end else begin
+            gc_exception.code = BREAK;
+            gc_exception.pc = gc_inputs.pc;
+            gc_exception.tval = '0;
+        end
+    end
+    logic ecall_break_exception;
+    assign ecall_break_exception = issue.new_request & (gc_inputs.is_ecall | gc_inputs.is_ebreak);
+    assign gc_exception.valid = ecall_break_exception | ls_exception_second_cycle;
 
+    //PC determination (trap, flush or return)
+    //Two cycles: on first cycle the processor front end is flushed,
+    //on the second cycle the new PC is fetched
     always_ff @ (posedge clk) begin
         second_cycle_flush <= gc_flush_required;
         gc_fetch_pc_override <= gc_flush_required | second_cycle_flush | ls_exception_first_cycle;
-        gc_fetch_pc <= ls_exception_second_cycle ? trap_pc :
-            //stage1.is_i_fence ? stage1.pc + 4 : //Could stall on dec_pc valid and use instead of another adder
-            csr_mepc;// gc_inputs.is_ret
+        if (gc_exception.valid | stage1.is_i_fence | (issue.new_request & gc_inputs.is_ret)) begin
+            gc_fetch_pc <= gc_exception.valid ? trap_pc :
+                stage1.is_i_fence ? stage1.pc + 4 : //Could stall on dec_pc valid and use instead of another adder
+                csr_mepc;// gc_inputs.is_ret
+        end
     end
 
     ////////////////////////////////////////////////////
