@@ -67,6 +67,8 @@ module gc_unit(
         output logic gc_fetch_pc_override,
         output logic gc_supress_writeback,
 
+        output logic ls_exception_ack,
+
         output logic [31:0] gc_fetch_pc,
 
         //Write-back to Load-Store Unit
@@ -130,6 +132,7 @@ module gc_unit(
     typedef enum {RST_STATE, IDLE_STATE, TLB_CLEAR_STATE, IQ_DRAIN, IQ_DISCARD} gc_state;
     gc_state state;
     gc_state next_state;
+    gc_state prev_state;
 
     logic tlb_clear_done;
 
@@ -163,6 +166,10 @@ module gc_unit(
     logic csr_ready_to_complete;
     logic csr_ready_to_complete_r;
     instruction_id_t instruction_id;
+
+    instruction_id_t exception_id;
+    instruction_id_t exception_id_r;
+
     //implementation
     ////////////////////////////////////////////////////
     always_ff @(posedge clk) begin
@@ -203,13 +210,20 @@ module gc_unit(
             state <= next_state;
     end
 
+    always @(posedge clk) begin
+        if (rst)
+            prev_state <= RST_STATE;
+        else
+            prev_state <= state;
+    end
+
     always_comb begin
         next_state = state;
         case (state)
             RST_STATE : next_state = IDLE_STATE;
-            IDLE_STATE : if (ls_exception_valid) next_state = IQ_DISCARD;
+            IDLE_STATE : if (ls_exception.valid) next_state = (exception_id == oldest_id) ? IQ_DISCARD : IQ_DRAIN;
             TLB_CLEAR_STATE : if (tlb_clear_done) next_state = IDLE_STATE;
-            IQ_DRAIN : if (ls_exception.id == oldest_id) next_state = IQ_DISCARD;
+            IQ_DRAIN : if (exception_id_r == oldest_id) next_state = IQ_DISCARD;
             IQ_DISCARD : if (instruction_queue_empty) next_state = IDLE_STATE;
             default : next_state = RST_STATE;
         endcase
@@ -226,13 +240,6 @@ module gc_unit(
     end
     ////////////////////////////////////////////////////
     //Exception handling
-    logic ls_exception_first_cycle;
-    logic ls_exception_second_cycle;
-
-    assign ls_exception_first_cycle =  ls_exception_valid;
-    always_ff @ (posedge clk) begin
-        ls_exception_second_cycle <= ls_exception_first_cycle;
-    end
 
     //The type of call instruction is depedent on the current privilege level
     always_comb begin
@@ -244,8 +251,16 @@ module gc_unit(
         endcase
     end
 
+    assign ls_exception_ack = (prev_state inside {IDLE_STATE, IQ_DRAIN}) && (state == IQ_DISCARD);
+
+    assign exception_id = ls_exception.id;
+    always_ff @(posedge clk) begin
+        if (gc_exception.valid)
+            exception_id_r <= exception_id;
+    end
+
     always_comb begin
-        if (ls_exception_second_cycle) begin
+        if (ls_exception.valid) begin
             gc_exception.code = ls_exception.code;
             gc_exception.pc = ls_exception.pc;
             gc_exception.tval = ls_exception.tval;
@@ -261,14 +276,14 @@ module gc_unit(
     end
     logic ecall_break_exception;
     assign ecall_break_exception = issue.new_request & (gc_inputs.is_ecall | gc_inputs.is_ebreak);
-    assign gc_exception.valid = ecall_break_exception | ls_exception_second_cycle;
+    assign gc_exception.valid = ecall_break_exception | ls_exception.valid;
 
     //PC determination (trap, flush or return)
     //Two cycles: on first cycle the processor front end is flushed,
     //on the second cycle the new PC is fetched
     always_ff @ (posedge clk) begin
         second_cycle_flush <= gc_flush_required;
-        gc_fetch_pc_override <= gc_flush_required | second_cycle_flush | ls_exception_first_cycle;
+        gc_fetch_pc_override <= gc_flush_required | second_cycle_flush | ls_exception.valid;
         if (gc_exception.valid | stage1.is_i_fence | (issue.new_request & gc_inputs.is_ret)) begin
             gc_fetch_pc <= gc_exception.valid ? trap_pc :
                 stage1.is_i_fence ? stage1.pc + 4 : //Could stall on dec_pc valid and use instead of another adder
@@ -300,7 +315,7 @@ module gc_unit(
       .result(processing_csr)
     );
 
-    assign csr_ready_to_complete = processing_csr && (oldest_id == csr_id);
+    assign csr_ready_to_complete = processing_csr && (oldest_id == instruction_id);
     always_ff @(posedge clk) begin
         csr_ready_to_complete_r <= csr_ready_to_complete;
         csr_id <= instruction_id;

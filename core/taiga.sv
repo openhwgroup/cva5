@@ -100,7 +100,7 @@ module taiga (
     instruction_id_t oldest_id;
     logic load_store_issue;
     logic [31:0] gc_fetch_pc;
-
+    logic ls_exception_ack;
 
     logic[31:0] csr_rd;
     instruction_id_t csr_id;

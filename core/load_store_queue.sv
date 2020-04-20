@@ -30,6 +30,7 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
         input logic clk,
         input logic rst,
         input logic gc_fetch_flush,
+        input logic gc_issue_flush,
 
         load_store_queue_interface.queue lsq,
         output logic [MAX_INFLIGHT_COUNT-1:0] wb_hold_for_store_ids,
@@ -67,7 +68,10 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
     assign lsq.ready = 1;
 
     //FIFO to store ordering of IDs
-    taiga_fifo #(.DATA_WIDTH($bits(instruction_id_t)), .FIFO_DEPTH(MAX_INFLIGHT_COUNT)) oldest_id_fifo (.fifo(oldest_fifo), .*);
+    taiga_fifo #(.DATA_WIDTH($bits(instruction_id_t)), .FIFO_DEPTH(MAX_INFLIGHT_COUNT)) oldest_id_fifo (
+        .clk, .rst(rst | gc_issue_flush),
+        .fifo(oldest_fifo)
+    );
 
     assign oldest_fifo.data_in = lsq.id;
     assign oldest_fifo.push = lsq.possible_issue;
@@ -133,7 +137,7 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
     end
 
     always_ff @ (posedge clk) begin
-        if (rst)
+        if (rst | gc_issue_flush)
             hold_for_store_ids_r <= '{default: 0};
         else
             hold_for_store_ids_r <= hold_for_store_ids;
