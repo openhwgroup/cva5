@@ -51,6 +51,9 @@ module taiga (
     branch_predictor_interface bp();
     branch_results_t br_results;
     logic branch_flush;
+    logic potential_branch_exception;
+    exception_packet_t br_exception;
+    logic branch_exception_is_jump;
 
     ras_interface ras();
 

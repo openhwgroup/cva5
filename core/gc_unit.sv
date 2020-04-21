@@ -37,6 +37,10 @@ module gc_unit(
         input logic gc_flush_required,
         //Branch miss predict
         input logic branch_flush,
+        //instruction misalignement
+        input logic potential_branch_exception,
+        input exception_packet_t br_exception,
+        input branch_exception_is_jump,
 
         //Load Store Unit
         input exception_packet_t ls_exception,
@@ -190,7 +194,7 @@ module gc_unit(
     assign gc_fetch_flush = branch_flush | gc_fetch_pc_override;
 
     always_ff @ (posedge clk) begin
-        gc_issue_hold <= issue.new_request || processing_csr || (next_state inside {TLB_CLEAR_STATE, IQ_DRAIN, IQ_DISCARD});
+        gc_issue_hold <= issue.new_request || processing_csr || (next_state inside {TLB_CLEAR_STATE, IQ_DRAIN, IQ_DISCARD}) || potential_branch_exception;
     end
 
     always_ff @ (posedge clk) begin
@@ -221,7 +225,11 @@ module gc_unit(
         next_state = state;
         case (state)
             RST_STATE : next_state = IDLE_STATE;
-            IDLE_STATE : if (ls_exception.valid) next_state = (exception_id == oldest_id) ? IQ_DISCARD : IQ_DRAIN;
+            IDLE_STATE : begin
+                if (ls_exception.valid | (branch_exception_is_jump & potential_branch_exception)) begin
+                    next_state = (exception_id == oldest_id) ? IQ_DISCARD : IQ_DRAIN;
+                end
+            end
             TLB_CLEAR_STATE : if (tlb_clear_done) next_state = IDLE_STATE;
             IQ_DRAIN : if (exception_id_r == oldest_id) next_state = IQ_DISCARD;
             IQ_DISCARD : if (instruction_queue_empty) next_state = IDLE_STATE;
@@ -240,6 +248,7 @@ module gc_unit(
     end
     ////////////////////////////////////////////////////
     //Exception handling
+    logic processing_ls_exception;
 
     //The type of call instruction is depedent on the current privilege level
     always_comb begin
@@ -251,9 +260,14 @@ module gc_unit(
         endcase
     end
 
-    assign ls_exception_ack = (prev_state inside {IDLE_STATE, IQ_DRAIN}) && (state == IQ_DISCARD);
+    always_ff @(posedge clk) begin
+        if (gc_exception.valid)
+            processing_ls_exception <= ls_exception.valid;
+    end
 
-    assign exception_id = ls_exception.id;
+    assign ls_exception_ack = processing_ls_exception && (prev_state inside {IDLE_STATE, IQ_DRAIN}) && (state == IQ_DISCARD);
+
+    assign exception_id = potential_branch_exception ? br_exception.id : ls_exception.id;
     always_ff @(posedge clk) begin
         if (gc_exception.valid)
             exception_id_r <= exception_id;
@@ -264,6 +278,10 @@ module gc_unit(
             gc_exception.code = ls_exception.code;
             gc_exception.pc = ls_exception.pc;
             gc_exception.tval = ls_exception.tval;
+        end else if (br_exception.valid) begin
+            gc_exception.code = br_exception.code;
+            gc_exception.pc = br_exception.pc;
+            gc_exception.tval = br_exception.tval;
         end else if (gc_inputs.is_ecall) begin
             gc_exception.code = ecall_code;
             gc_exception.pc = gc_inputs.pc;
@@ -276,14 +294,14 @@ module gc_unit(
     end
     logic ecall_break_exception;
     assign ecall_break_exception = issue.new_request & (gc_inputs.is_ecall | gc_inputs.is_ebreak);
-    assign gc_exception.valid = ecall_break_exception | ls_exception.valid;
+    assign gc_exception.valid = ecall_break_exception | ls_exception.valid | br_exception.valid;
 
     //PC determination (trap, flush or return)
     //Two cycles: on first cycle the processor front end is flushed,
     //on the second cycle the new PC is fetched
     always_ff @ (posedge clk) begin
         second_cycle_flush <= gc_flush_required;
-        gc_fetch_pc_override <= gc_flush_required | second_cycle_flush | ls_exception.valid;
+        gc_fetch_pc_override <= gc_flush_required | second_cycle_flush | ls_exception.valid | br_exception.valid;
         if (gc_exception.valid | stage1.is_i_fence | (issue.new_request & gc_inputs.is_ret)) begin
             gc_fetch_pc <= gc_exception.valid ? trap_pc :
                 stage1.is_i_fence ? stage1.pc + 4 : //Could stall on dec_pc valid and use instead of another adder

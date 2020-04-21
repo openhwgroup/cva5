@@ -32,7 +32,11 @@ module branch_unit(
         input branch_inputs_t branch_inputs,
         output branch_results_t br_results,
         ras_interface.branch_unit ras,
-        output branch_flush,
+        output logic branch_flush,
+
+        output logic potential_branch_exception,
+        output logic branch_exception_is_jump,
+        output exception_packet_t br_exception,
 
         //Trace signals
         output logic tr_branch_correct,
@@ -87,7 +91,7 @@ module branch_unit(
     set_clr_reg_with_rst #(.SET_OVER_CLR(1), .WIDTH(1), .RST_VALUE(0)) branch_issued_m (
       .clk, .rst,
       .set(issue.new_request),
-      .clr(branch_inputs.dec_pc_valid),
+      .clr(branch_inputs.dec_pc_valid | br_exception.valid),
       .result(branch_issued_r)
     );
 
@@ -133,8 +137,30 @@ module branch_unit(
         end
     end
 
-    //Predictor support
     ////////////////////////////////////////////////////
+    //Exception support
+    instruction_id_t jmp_instruction_id;
+
+    generate if (ENABLE_M_MODE) begin
+        always_ff @(posedge clk) begin
+            if (instruction_is_completing | ~branch_issued_r)
+                jmp_instruction_id <= issue.instruction_id;
+        end
+
+        assign potential_branch_exception = jump_pc_dec[1] & issue.new_request;
+
+        assign br_exception.valid = (jump_pc[1] & branch_taken) & branch_issued_r;
+        assign br_exception.code = INST_ADDR_MISSALIGNED;
+        assign br_exception.pc = pc_ex;
+        assign br_exception.tval = jump_pc;
+        assign br_exception.id = jmp_instruction_id;
+
+        assign branch_exception_is_jump = (branch_inputs.jal | branch_inputs.jalr);
+    end
+    endgenerate
+
+    ////////////////////////////////////////////////////
+    //Predictor support
     always_ff @(posedge clk) begin
         if (instruction_is_completing | ~branch_issued_r) begin
             pc_ex <= branch_inputs.dec_pc;
@@ -166,8 +192,8 @@ module branch_unit(
         instruction_is_completing & miss_predict:
         instruction_is_completing & branch_taken;
 
-    //RAS support
     ////////////////////////////////////////////////////
+    //RAS support
     generate if (USE_BRANCH_PREDICTOR) begin
             always_ff @(posedge clk) begin
                 if (instruction_is_completing | ~branch_issued_r) begin
