@@ -294,7 +294,7 @@ module gc_unit(
     end
     logic ecall_break_exception;
     assign ecall_break_exception = issue.new_request & (gc_inputs.is_ecall | gc_inputs.is_ebreak);
-    assign gc_exception.valid = ecall_break_exception | ls_exception.valid | br_exception.valid;
+    assign gc_exception.valid = ENABLE_M_MODE & (ecall_break_exception | ls_exception.valid | br_exception.valid);
 
     //PC determination (trap, flush or return)
     //Two cycles: on first cycle the processor front end is flushed,

@@ -305,15 +305,15 @@ module decode_and_issue (
     assign gc_inputs.instruction = fb.instruction;
     assign gc_inputs.rs1 = rf_issue.rs1_data;
     assign gc_inputs.rs2 = rf_issue.rs2_data;
-    assign gc_inputs.is_fence = (opcode_trim == FENCE_T) && ~fn3[0];
-    assign gc_inputs.is_i_fence = issue[GC_UNIT_ID] && ifence;
+    assign gc_inputs.is_fence = ENABLE_M_MODE && (opcode_trim == FENCE_T) && ~fn3[0];
+    assign gc_inputs.is_i_fence = ENABLE_M_MODE & issue[GC_UNIT_ID] & ifence;
     assign gc_inputs.is_csr = is_csr;
 
-    assign gc_inputs.is_ecall = environment_op && (fb.instruction[21:20] == 0);
-    assign gc_inputs.is_ebreak = environment_op && (fb.instruction[21:20] == 2'b01);
-    assign gc_inputs.is_ret = environment_op && (fb.instruction[21:20] == 2'b10);
+    assign gc_inputs.is_ecall = ENABLE_M_MODE && environment_op && (fb.instruction[21:20] == 0);
+    assign gc_inputs.is_ebreak = ENABLE_M_MODE && environment_op && (fb.instruction[21:20] == 2'b01);
+    assign gc_inputs.is_ret = ENABLE_M_MODE && environment_op && (fb.instruction[21:20] == 2'b10);
 
-    assign gc_flush_required = issue[GC_UNIT_ID] && (environment_op | ifence);
+    assign gc_flush_required = ENABLE_M_MODE && issue[GC_UNIT_ID] && (environment_op | ifence);
 
     ////////////////////////////////////////////////////
     //Mul unit inputs

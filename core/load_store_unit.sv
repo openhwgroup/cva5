@@ -129,6 +129,10 @@ module load_store_unit (
 
     ////////////////////////////////////////////////////
     //Alignment Exception
+    instruction_id_t exception_id;
+    logic exception_is_store;
+
+generate if (ENABLE_M_MODE) begin
     assign load_store_exception_clear = issue.new_request;
     assign load_store_exception_id = issue.instruction_id;
 
@@ -147,15 +151,14 @@ module load_store_unit (
    assign ls_exception.tval = virtual_address;
    assign ls_exception.id = issue.instruction_id;
 
-    instruction_id_t exception_id;
-    logic exception_is_store;
     always_ff @ (posedge clk) begin
         if (ls_exception.valid) begin
             exception_is_store <= ls_inputs.store;
             exception_id <= issue.instruction_id;
         end
     end
-
+end
+endgenerate
     ////////////////////////////////////////////////////
     //TLB interface
     assign virtual_address = ls_inputs.rs1 + 32'(signed'(ls_inputs.offset));
