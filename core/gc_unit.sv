@@ -40,7 +40,9 @@ module gc_unit(
         //instruction misalignement
         input logic potential_branch_exception,
         input exception_packet_t br_exception,
-        input branch_exception_is_jump,
+        input logic branch_exception_is_jump,
+        //Illegal instruction
+        input logic illegal_instruction,
 
         //Load Store Unit
         input exception_packet_t ls_exception,
@@ -267,21 +269,29 @@ module gc_unit(
 
     assign ls_exception_ack = processing_ls_exception && (prev_state inside {IDLE_STATE, IQ_DRAIN}) && (state == IQ_DISCARD);
 
-    assign exception_id = potential_branch_exception ? br_exception.id : ls_exception.id;
+    assign exception_id =
+        potential_branch_exception ? br_exception.id :
+        (ls_exception.valid ? ls_exception.id : issue.instruction_id);
+
     always_ff @(posedge clk) begin
         if (gc_exception.valid)
             exception_id_r <= exception_id;
     end
 
+    //TODO: check if possible to convert to unique if, verify potential for overlap
     always_comb begin
-        if (ls_exception.valid) begin
-            gc_exception.code = ls_exception.code;
-            gc_exception.pc = ls_exception.pc;
-            gc_exception.tval = ls_exception.tval;
-        end else if (br_exception.valid) begin
+        if (br_exception.valid) begin
             gc_exception.code = br_exception.code;
             gc_exception.pc = br_exception.pc;
             gc_exception.tval = br_exception.tval;
+        end else if (illegal_instruction) begin
+            gc_exception.code = ILLEGAL_INST;
+            gc_exception.pc = gc_inputs.pc;
+            gc_exception.tval = gc_inputs.instruction;//optional, can be zero instead
+        end else if (ls_exception.valid) begin
+            gc_exception.code = ls_exception.code;
+            gc_exception.pc = ls_exception.pc;
+            gc_exception.tval = ls_exception.tval;
         end else if (gc_inputs.is_ecall) begin
             gc_exception.code = ecall_code;
             gc_exception.pc = gc_inputs.pc;
@@ -294,7 +304,7 @@ module gc_unit(
     end
     logic ecall_break_exception;
     assign ecall_break_exception = issue.new_request & (gc_inputs.is_ecall | gc_inputs.is_ebreak);
-    assign gc_exception.valid = ENABLE_M_MODE & (ecall_break_exception | ls_exception.valid | br_exception.valid);
+    assign gc_exception.valid = ENABLE_M_MODE & (ecall_break_exception | ls_exception.valid | br_exception.valid | illegal_instruction);
 
     //PC determination (trap, flush or return)
     //Two cycles: on first cycle the processor front end is flushed,

@@ -182,7 +182,7 @@ module decode_and_issue (
 
     ////////////////////////////////////////////////////
     //Issue Determination
-    assign issue_valid = fb_valid & ti.id_available & ~gc_issue_hold & ~gc_fetch_flush;
+    assign issue_valid = fb_valid & ti.id_available & ~gc_issue_hold & ~gc_fetch_flush & ~illegal_instruction_pattern;
 
     assign operands_ready = ~rf_issue.rs1_conflict & ~rf_issue.rs2_conflict;
 
@@ -375,21 +375,17 @@ module decode_and_issue (
     endgenerate
 
     ////////////////////////////////////////////////////
-    //Illegal Opcode check
-    always_comb begin
-        illegal_instruction = !(opcode inside {LUI, AUIPC, JAL, JALR, BRANCH, LOAD, STORE, ARITH, ARITH_IMM, FENCE, AMO, SYSTEM});
-        if (opcode == ARITH) begin
-            if (!USE_MUL && !USE_DIV)
-                illegal_instruction = fb.instruction[25];
-            else if (!USE_MUL && USE_DIV)
-                illegal_instruction = fb.instruction[25] & ~fn3[2];
-            else if (!USE_MUL && !USE_DIV)
-                illegal_instruction = fb.instruction[25] & fn3[2];
-            else
-                illegal_instruction = 0;
-        end
-    end
+    //Illegal Instruction check
+    generate if (ENABLE_M_MODE) begin
+        logic illegal_instruction_pattern;
 
+        illegal_instruction_checker illegal_op_check (
+            .instruction(fb.instruction), .illegal_instruction(illegal_instruction_pattern)
+        );
+
+        //Illegal instruction if the instruction is invalid, but could otherwise be issued
+        assign illegal_instruction = illegal_instruction_pattern & fb_valid & ti.id_available & ~gc_issue_hold & ~gc_fetch_flush;
+    end endgenerate
     ////////////////////////////////////////////////////
     //End of Implementation
     ////////////////////////////////////////////////////
