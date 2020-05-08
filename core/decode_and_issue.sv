@@ -107,6 +107,8 @@ module decode_and_issue (
     logic [NUM_UNITS-1:0] issue_ready;
     logic [NUM_UNITS-1:0] issue;
 
+    logic illegal_instruction_pattern;
+
     genvar i;
     ////////////////////////////////////////////////////
     //Implementation
@@ -377,7 +379,6 @@ module decode_and_issue (
     ////////////////////////////////////////////////////
     //Illegal Instruction check
     generate if (ENABLE_M_MODE) begin
-        logic illegal_instruction_pattern;
 
         illegal_instruction_checker illegal_op_check (
             .instruction(fb.instruction), .illegal_instruction(illegal_instruction_pattern)
