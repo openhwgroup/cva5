@@ -261,7 +261,7 @@ module dcache(
 
     ////////////////////////////////////////////////////
     //Pipeline Advancement
-    assign line_complete = (l1_response.data_valid && (word_count == (DCACHE_LINE_W-1))); //covers load, LR, AMO
+    assign line_complete = (l1_response.data_valid && (word_count == $clog2(DCACHE_LINE_W)'(DCACHE_LINE_W-1))); //covers load, LR, AMO
     assign store_complete = l1_request.ack & stage2_store & ~stage2_amo.is_sc;
 
     //read miss complete includes store conditional complete

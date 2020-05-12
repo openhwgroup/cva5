@@ -177,7 +177,7 @@ module icache(
     /*************************************
      * Pipeline Advancement
      *************************************/
-    assign  line_complete = (l1_response.data_valid && (word_count == (ICACHE_LINE_W-1)));
+    assign  line_complete = (l1_response.data_valid && (word_count == $clog2(ICACHE_LINE_W)'(ICACHE_LINE_W-1)));
 
     always_ff @ (posedge clk) begin
         if (rst)

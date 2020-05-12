@@ -150,6 +150,7 @@ module fetch(
 
     ////////////////////////////////////////////////////
     //Subunit Interfaces
+    logic cache_address_match;
     generate
         for (i = 0; i < NUM_SUB_UNITS; i++) begin
             assign unit_ready[i] = fetch_sub[i].ready;
@@ -166,12 +167,13 @@ module fetch(
 
     generate if (USE_I_SCRATCH_MEM) begin
         ibram i_bram (.*, .fetch_sub(fetch_sub[BRAM_ID]));
-        assign sub_unit_address_match[BRAM_ID] = USE_ICACHE ? ~sub_unit_address_match[ICACHE_ID] : 1'b1;
+        assign sub_unit_address_match[BRAM_ID] = USE_ICACHE ? ~cache_address_match : 1'b1;
     end
     endgenerate
     generate if (USE_ICACHE) begin
         icache i_cache (.*, .fetch_sub(fetch_sub[ICACHE_ID]));
-        assign sub_unit_address_match[ICACHE_ID] = tlb.physical_address[31:32-MEMORY_BIT_CHECK] == MEMORY_ADDR_L[31:32-MEMORY_BIT_CHECK];
+        assign cache_address_match = tlb.physical_address[31:32-MEMORY_BIT_CHECK] == MEMORY_ADDR_L[31:32-MEMORY_BIT_CHECK];
+        assign sub_unit_address_match[ICACHE_ID] = cache_address_match;
 
         set_clr_reg_with_rst #(.SET_OVER_CLR(1), .WIDTH(1), .RST_VALUE(0)) stage2_valid_m (
           .clk, .rst(flush_or_rst),
