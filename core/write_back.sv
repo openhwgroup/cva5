@@ -154,7 +154,7 @@ module write_back(
     ////////////////////////////////////////////////////
     //ID Tracking
     //Provides ordering of IDs, ID for issue and oldest ID for committing to register file
-    id_tracking id_counters (.*, .issued(ti.issued), .retired(retiring_next_cycle), .id_available(ti.id_available),
+    writeback_id_tracking id_counters (.*, .issued(ti.issued), .retired(retiring_next_cycle), .id_available(ti.id_available),
     .oldest_id(oldest_id), .next_id(ti.issue_id), .empty(instruction_queue_empty));
 
     ////////////////////////////////////////////////////

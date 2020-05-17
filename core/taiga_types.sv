@@ -74,20 +74,29 @@ package taiga_types;
     typedef struct packed{
         logic [31:0] instruction;
         logic [31:0] pc;
-        logic uses_rs1;
-        logic uses_rs2;
-        logic uses_rd;
-        logic is_call;
-        logic is_return;
         branch_predictor_metadata_t branch_metadata;
         logic branch_prediction_used;
         logic [BRANCH_PREDICTOR_WAYS-1:0] bp_update_way;
-        logic alu_sub;
-        logic [1:0] alu_logic_op;
-        logic alu_request;
-        alu_rs1_op_t alu_rs1_sel;
-        alu_rs2_op_t alu_rs2_sel;
     } fetch_buffer_packet_t;
+
+    typedef struct packed{
+        branch_predictor_metadata_t branch_predictor_metadata;
+        logic branch_prediction_used;
+        logic [BRANCH_PREDICTOR_WAYS-1:0] bp_update_way;
+    } branch_unit_metadata_t;
+
+
+    typedef struct packed{
+        logic id_assigned;
+        instruction_id_t pc_id;
+        logic [31:0] pc;
+        branch_unit_metadata_t branch_unit_metadata;
+
+        logic complete;
+        instruction_id_t instruction_id;
+        logic [31:0] instruction;
+
+    } fetch_instruction_metadata_t;
 
     typedef struct packed{
         instruction_id_t id;

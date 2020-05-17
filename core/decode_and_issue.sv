@@ -93,6 +93,8 @@ module decode_and_issue (
     logic [4:0] rs2_addr;
     logic [4:0] rd_addr;
 
+    logic csr_imm_op;
+    logic environment_op;
     logic nop;
 
     logic issue_valid;
@@ -117,9 +119,7 @@ module decode_and_issue (
     //Instruction Buffer
     assign pre_decode_pop = instruction_issued;
 
-    assign uses_rs1 = fb.uses_rs1;
-    assign uses_rs2 = fb.uses_rs2;
-    assign uses_rd = fb.uses_rd;
+
 
     //Instruction aliases
     assign opcode = fb.instruction[6:0];
@@ -129,6 +129,14 @@ module decode_and_issue (
     assign rs2_addr = fb.instruction[24:20];
     assign rd_addr = fb.instruction[11:7];
 
+    assign csr_imm_op = (opcode_trim == SYSTEM_T) && fn3[2];
+    assign environment_op = (opcode_trim == SYSTEM_T) && (fn3 == 0);
+
+    ////////////////////////////////////////////////////
+    //Register File Support
+    assign uses_rs1 = !(opcode_trim inside {LUI_T, AUIPC_T, JAL_T, FENCE_T} || csr_imm_op || environment_op);
+    assign uses_rs2 = opcode_trim inside {BRANCH_T, STORE_T, ARITH_T, AMO_T};
+    assign uses_rd = !(opcode_trim inside {BRANCH_T, STORE_T, FENCE_T} || environment_op);
 
     assign rd_zero = ~|rd_addr;
     assign nop = (opcode_trim inside {LUI_T, AUIPC_T, ARITH_T, ARITH_IMM_T} && rd_zero);
@@ -159,19 +167,19 @@ module decode_and_issue (
     assign ti.exception_possible = opcode_trim inside {LOAD_T, STORE_T, AMO_T};
     ////////////////////////////////////////////////////
     //Unit Determination
-    assign mult_div_op = fb.instruction[25];
+    assign mult_div_op = (opcode_trim == ARITH_T) && fb.instruction[25];
 
     assign unit_needed[BRANCH_UNIT_ID] = opcode_trim inside {BRANCH_T, JAL_T, JALR_T};
-    assign unit_needed[ALU_UNIT_WB_ID] = fb.alu_request;
+    assign unit_needed[ALU_UNIT_WB_ID] =  ((opcode_trim == ARITH_T) && ~fb.instruction[25]) || (opcode_trim inside {ARITH_IMM_T, AUIPC_T, LUI_T, JAL_T, JALR_T});
     assign unit_needed[LS_UNIT_WB_ID] = opcode_trim inside {LOAD_T, STORE_T, AMO_T};
     assign unit_needed[GC_UNIT_ID] = opcode_trim inside {SYSTEM_T, FENCE_T};
 
     generate if (USE_MUL)
-            assign unit_needed[MUL_UNIT_WB_ID] = (opcode_trim == ARITH_T) && mult_div_op && ~fn3[2];
+            assign unit_needed[MUL_UNIT_WB_ID] = mult_div_op && ~fn3[2];
     endgenerate
 
     generate if (USE_DIV)
-            assign unit_needed[DIV_UNIT_WB_ID] = (opcode_trim == ARITH_T) && mult_div_op && fn3[2];
+            assign unit_needed[DIV_UNIT_WB_ID] = mult_div_op && fn3[2];
     endgenerate
 
     ////////////////////////////////////////////////////
@@ -208,15 +216,37 @@ module decode_and_issue (
     //ALU unit inputs
     logic [XLEN-1:0] alu_rs1_data;
     logic [XLEN-1:0] alu_rs2_data;
+    alu_rs1_op_t alu_rs1_sel;
+    alu_rs2_op_t alu_rs2_sel;
 
     always_comb begin
-        case(fb.alu_rs1_sel)
+        if (opcode_trim inside {ARITH_T, ARITH_IMM_T})
+            alu_rs1_sel = ALU_RS1_RF;
+        else if (opcode_trim inside {JAL_T, JALR_T, AUIPC_T})//AUIPC JAL JALR
+            alu_rs1_sel = ALU_RS1_PC;
+        else
+            alu_rs1_sel = ALU_RS1_ZERO;//LUI
+    end
+
+    always_comb begin
+        if (opcode_trim inside {LUI_T, AUIPC_T}) //LUI or AUIPC
+            alu_rs2_sel = ALU_RS2_LUI_AUIPC;
+        else if (opcode_trim == ARITH_IMM_T) //ARITH_IMM
+            alu_rs2_sel = ALU_RS2_ARITH_IMM;
+        else if (opcode_trim inside {JAL_T, JALR_T} ) //JAL JALR
+            alu_rs2_sel = ALU_RS2_JAL_JALR;
+        else
+            alu_rs2_sel = ALU_RS2_RF;
+    end
+
+    always_comb begin
+        case(alu_rs1_sel)
             ALU_RS1_ZERO : alu_rs1_data = '0;
             ALU_RS1_PC : alu_rs1_data = fb.pc;
             default : alu_rs1_data = rf_issue.rs1_data; //ALU_RS1_RF
         endcase
 
-        case(fb.alu_rs2_sel)
+        case(alu_rs2_sel)
             ALU_RS2_LUI_AUIPC : alu_rs2_data = {fb.instruction[31:12], 12'b0};
             ALU_RS2_ARITH_IMM : alu_rs2_data = 32'(signed'(fb.instruction[31:20]));
             ALU_RS2_JAL_JALR : alu_rs2_data = 4;
@@ -224,14 +254,33 @@ module decode_and_issue (
         endcase
     end
 
+    //Add cases: JAL, JALR, LUI, AUIPC, ADD[I], all logic ops
+    //sub cases: SUB, SLT[U][I]
+    logic sub_instruction;
+    assign sub_instruction = (fn3 == ADD_SUB_fn3) && fb.instruction[30] && opcode[5];//If ARITH instruction
+    assign alu_inputs.subtract = ~opcode[2] & (fn3 inside {SLTU_fn3, SLT_fn3} || sub_instruction);//opcode[2] covers LUI,AUIPC,JAL,JALR
+
+    always_comb begin
+        case (fn3)
+            SLT_fn3 : alu_inputs.logic_op = ALU_LOGIC_ADD;
+            SLTU_fn3 : alu_inputs.logic_op = ALU_LOGIC_ADD;
+            SLL_fn3 : alu_inputs.logic_op = ALU_LOGIC_ADD;
+            XOR_fn3 : alu_inputs.logic_op = ALU_LOGIC_XOR;
+            OR_fn3 : alu_inputs.logic_op = ALU_LOGIC_OR;
+            AND_fn3 : alu_inputs.logic_op = ALU_LOGIC_AND;
+            SRA_fn3 : alu_inputs.logic_op = ALU_LOGIC_ADD;
+            ADD_SUB_fn3 : alu_inputs.logic_op = ALU_LOGIC_ADD;
+        endcase
+        //put LUI, AUIPC, JAL and JALR through adder path
+        alu_inputs.logic_op = opcode[2] ? ALU_LOGIC_ADD : alu_inputs.logic_op;
+    end
+
     assign alu_inputs.in1 = {(rf_issue.rs1_data[XLEN-1] & ~fn3[0]), alu_rs1_data};//(fn3[0]  is SLTU_fn3);
     assign alu_inputs.in2 = {(alu_rs2_data[XLEN-1] & ~fn3[0]), alu_rs2_data};
     assign alu_inputs.shifter_in = rf_issue.rs1_data;
     assign alu_inputs.shift_amount = opcode[5] ? rf_issue.rs2_data[4:0] : rs2_addr;
-    assign alu_inputs.subtract = fb.alu_sub;
     assign alu_inputs.arith = alu_rs1_data[XLEN-1] & fb.instruction[30];//shift in bit
     assign alu_inputs.lshift = ~fn3[2];
-    assign alu_inputs.logic_op = fb.alu_logic_op;
     assign alu_inputs.shifter_path = ~(opcode[2] | fn3 inside {SLT_fn3, SLTU_fn3, XOR_fn3, OR_fn3, AND_fn3, ADD_SUB_fn3}); //opcode[2] LUI AUIPC JAL JALR
     assign alu_inputs.slt_path = ~opcode[2] & fn3 inside {SLT_fn3, SLTU_fn3};
 
@@ -277,6 +326,18 @@ module decode_and_issue (
 
     ////////////////////////////////////////////////////
     //Branch unit inputs
+
+    ////////////////////////////////////////////////////
+    //RAS Support
+    logic rs1_link;
+    logic rd_link;
+    logic rs1_eq_rd;
+    assign rs1_link = (rs1_addr inside {1,5});
+    assign rd_link = (rd_addr inside {1,5});
+    assign rs1_eq_rd = (rs1_addr == rd_addr);
+    assign branch_inputs.is_return = (opcode_trim == JALR_T) && ((rs1_link & ~rd_link) | (rs1_link & rd_link & ~rs1_eq_rd));
+    assign branch_inputs.is_call = (opcode_trim inside {JAL_T, JALR_T}) && rd_link;
+
     assign branch_inputs.rs1 = rf_issue.rs1_data;
     assign branch_inputs.rs2 = rf_issue.rs2_data;
     assign branch_inputs.fn3 = fn3;
@@ -285,9 +346,10 @@ module decode_and_issue (
     assign branch_inputs.use_signed = !(fn3 inside {BLTU_fn3, BGEU_fn3});
     assign branch_inputs.jal = opcode[3];//(opcode == JAL);
     assign branch_inputs.jalr = ~opcode[3] & opcode[2];//(opcode == JALR);
-    assign branch_inputs.is_call = fb.is_call;
-    assign branch_inputs.is_return = fb.is_return;
     assign branch_inputs.instruction = fb.instruction;
+
+    ////////////////////////////////////////////////////
+    //Branch Predictor support
     assign branch_inputs.branch_metadata = fb.branch_metadata;
     assign branch_inputs.branch_prediction_used = fb.branch_prediction_used;
     assign branch_inputs.bp_update_way = fb.bp_update_way;
@@ -296,11 +358,9 @@ module decode_and_issue (
     //Global Control unit inputs
     logic sfence;
     logic ifence;
-    logic environment_op;
     logic is_csr;
     assign sfence = fb.instruction[25];
     assign ifence =  (opcode_trim == FENCE_T) && fn3[0];
-    assign environment_op = (opcode_trim == SYSTEM_T) && (fn3 == 0);
     assign is_csr = (opcode_trim == SYSTEM_T) && (fn3 != 0);
 
     assign gc_inputs.pc = fb.pc;
