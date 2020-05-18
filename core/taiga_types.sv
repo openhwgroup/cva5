@@ -112,8 +112,7 @@ package taiga_types;
         logic subtract;
         logic arith;//contains sign padding bit for arithmetic shift right operation
         logic lshift;
-        logic [1:0] logic_op;
-        logic [1:0] op;
+        alu_logic_op_t logic_op;
         logic shifter_path;
         logic slt_path;
     } alu_inputs_t;
