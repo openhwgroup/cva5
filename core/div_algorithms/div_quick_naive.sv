@@ -49,6 +49,7 @@ module div_quick_naive
     logic [MSB_W-1:0] B_MSB;
     logic [MSB_W-1:0] B_MSB_r;
     logic [MSB_W-1:0] MSB_delta;
+    logic divisor_is_zero_first_cycle;
 
     msb_naive msb_r (.msb_input(div.remainder), .msb(R_MSB));
     msb_naive msb_b (.msb_input(div.divisor), .msb(B_MSB));
@@ -68,13 +69,16 @@ module div_quick_naive
 
     assign new_R = A1[div.DATA_WIDTH] ? A2 : A1[div.DATA_WIDTH-1:0];
 
-    assign div.divisor_is_zero = (B_MSB == 0 && ~div.divisor[0]);
-
+    assign divisor_is_zero_first_cycle = (B_MSB == 0 && ~div.divisor[0]);
+    always @ (posedge clk) begin
+        if (div.start)
+            div.divisor_is_zero <= divisor_is_zero_first_cycle;
+    end
 
     always_ff @ (posedge clk) begin
         if (rst)
             running <= 0;
-        else if (div.start & ~div.divisor_is_zero)
+        else if (div.start & ~divisor_is_zero_first_cycle)
             running <= 1;
         else if (terminate)
             running <= 0;
@@ -85,7 +89,7 @@ module div_quick_naive
             div.done <= 0;
         else if (div.done)
             div.done <= 0;
-        else if ((running & terminate) | (div.start & div.divisor_is_zero))
+        else if ((running & terminate) | (div.start & divisor_is_zero_first_cycle))
             div.done <= 1;
     end
 

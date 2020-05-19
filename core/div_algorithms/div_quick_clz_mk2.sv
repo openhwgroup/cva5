@@ -51,6 +51,7 @@ module div_quick_clz_mk2
     logic [CLZ_W-1:0] B_CLZ;
     logic [CLZ_W-1:0] B_CLZ_r;
     logic [CLZ_W-1:0] CLZ_delta;
+    logic divisor_is_zero_first_cycle;
 
     logic [div.DATA_WIDTH-1:0] shiftedB;
     //////////////////////////////////////////
@@ -96,19 +97,23 @@ module div_quick_clz_mk2
             new_R = A0[div.DATA_WIDTH-1:0];
     end
 
-    assign div.divisor_is_zero = (B_CLZ == 5'b11111 && ~div.divisor[0]);
+    assign divisor_is_zero_first_cycle = (B_CLZ == 5'b11111 && ~div.divisor[0]);
+    always @ (posedge clk) begin
+        if (div.start)
+            div.divisor_is_zero <= divisor_is_zero_first_cycle;
+    end
 
     always_ff @ (posedge clk) begin
         if (rst)
             running <= 0;
-        else if (div.start & ~div.divisor_is_zero)
+        else if (div.start & ~divisor_is_zero_first_cycle)
             running <= 1;
         else if (terminate)
             running <= 0;
     end
 
     always_ff @ (posedge clk) begin
-        div.done <= (running & terminate) | (div.start & div.divisor_is_zero);
+        div.done <= (running & terminate) | (div.start & divisor_is_zero_first_cycle);
     end
 
     assign terminate = div.remainder < div.divisor;
