@@ -27,7 +27,10 @@ import taiga_types::*;
 module branch_predictor (
         input logic clk,
         input logic rst,
+
         branch_predictor_interface.branch_predictor bp,
+        output branch_metadata_t branch_metadata_if,
+        input branch_metadata_t branch_metadata_ex,
         input branch_results_t br_results
         );
 
@@ -62,24 +65,25 @@ module branch_predictor (
     branch_table_entry_t if_entry [BRANCH_PREDICTOR_WAYS-1:0];
     branch_table_entry_t ex_entry;
 
+    logic branch_predictor_direction_changed;
     logic [31:0] new_jump_addr;
     logic [31:0] predicted_pc [BRANCH_PREDICTOR_WAYS-1:0];
 
     logic [BRANCH_PREDICTOR_WAYS-1:0] tag_matches;
     logic [BRANCH_PREDICTOR_WAYS-1:0] replacement_way;
-    logic [BRANCH_PREDICTOR_WAYS-1:0] update_way;
+    logic [BRANCH_PREDICTOR_WAYS-1:0] tag_update_way;
+    logic [BRANCH_PREDICTOR_WAYS-1:0] target_update_way;
     logic [$clog2(BRANCH_PREDICTOR_WAYS > 1 ? BRANCH_PREDICTOR_WAYS : 2)-1:0] hit_way;
     logic tag_match;
+    logic use_predicted_pc;
     /////////////////////////////////////////
-
-    cycler #(BRANCH_PREDICTOR_WAYS) replacement_policy (.*, .en(1'b1), .one_hot(replacement_way));
 
     genvar i;
     generate if (USE_BRANCH_PREDICTOR)
     for (i=0; i<BRANCH_PREDICTOR_WAYS; i++) begin : branch_tag_banks
         branch_predictor_ram #(.C_DATA_WIDTH($bits(branch_table_entry_t)), .C_DEPTH(BRANCH_TABLE_ENTRIES))
         tag_bank (.*,
-            .write_addr(br_results.pc_ex[2 +: BRANCH_ADDR_W]), .write_en(update_way[i]), .write_data(ex_entry),
+            .write_addr(br_results.pc_ex[2 +: BRANCH_ADDR_W]), .write_en(tag_update_way[i]), .write_data(ex_entry),
             .read_addr(bp.next_pc[2 +: BRANCH_ADDR_W]), .read_en(bp.new_mem_request), .read_data(if_entry[i]));
     end
     endgenerate
@@ -88,7 +92,7 @@ module branch_predictor (
     for (i=0; i<BRANCH_PREDICTOR_WAYS; i++) begin : branch_table_banks
         branch_predictor_ram #(.C_DATA_WIDTH(32), .C_DEPTH(BRANCH_TABLE_ENTRIES))
         addr_table (.*,
-            .write_addr(br_results.pc_ex[2 +: BRANCH_ADDR_W]), .write_en(update_way[i]), .write_data(new_jump_addr),
+            .write_addr(br_results.pc_ex[2 +: BRANCH_ADDR_W]), .write_en(target_update_way[i]), .write_data(br_results.new_pc),
             .read_addr(bp.next_pc[2 +: BRANCH_ADDR_W]), .read_en(bp.new_mem_request), .read_data(predicted_pc[i]));
     end
     endgenerate
@@ -99,6 +103,8 @@ module branch_predictor (
     end
     endgenerate
 
+    ////////////////////////////////////////////////////
+    //Instruction Fetch Response
     generate if (BRANCH_PREDICTOR_WAYS > 1)
         one_hot_to_integer #(BRANCH_PREDICTOR_WAYS) hit_way_conv (.*, .one_hot(tag_matches), .int_out(hit_way));
     else
@@ -106,38 +112,46 @@ module branch_predictor (
     endgenerate
     assign tag_match = |tag_matches;
 
-    assign bp.predicted_pc = predicted_pc[hit_way];
-    assign bp.metadata = if_entry[hit_way].metadata;
-    assign bp.use_ras = if_entry[hit_way].use_ras;
-    assign bp.update_way = tag_matches;
+    assign use_predicted_pc = USE_BRANCH_PREDICTOR & tag_match;
 
-    //Predict next branch to same location/direction as current
+    //Predicted PC and whether the prediction is valid
+    assign bp.predicted_pc = predicted_pc[hit_way];
+    assign bp.use_prediction = use_predicted_pc;
+    assign bp.use_ras = if_entry[hit_way].use_ras;
+
+    ////////////////////////////////////////////////////
+    //Execution stage update
     assign ex_entry.valid = 1;
     assign ex_entry.tag = get_tag(br_results.pc_ex);
     assign ex_entry.use_ras = br_results.is_return_ex;
 
-    assign new_jump_addr = ex_entry.metadata[1] ? br_results.jump_pc : br_results.njump_pc;
-
     //2-bit saturating counter
     always_comb begin
-        case(br_results.branch_ex_metadata)
+        case(branch_metadata_ex.branch_predictor_metadata)
             2'b00 : ex_entry.metadata = br_results.branch_taken ? 2'b01 : 2'b00;
             2'b01 : ex_entry.metadata = br_results.branch_taken ? 2'b10 : 2'b00;
             2'b10 : ex_entry.metadata = br_results.branch_taken ? 2'b11 : 2'b01;
             2'b11 : ex_entry.metadata = br_results.branch_taken ? 2'b11 : 2'b10;
         endcase
-        if (~br_results.branch_prediction_used)
+        if (~branch_metadata_ex.branch_prediction_used)
             ex_entry.metadata = br_results.branch_taken ? 2'b11 : 2'b00;
     end
+    assign branch_predictor_direction_changed =
+        (~branch_metadata_ex.branch_prediction_used) |
+        (branch_metadata_ex.branch_predictor_metadata[1] ^ ex_entry.metadata[1]);
 
-    assign update_way = {BRANCH_PREDICTOR_WAYS{br_results.branch_ex}} & (br_results.branch_prediction_used ? br_results.bp_update_way : replacement_way);
+    assign tag_update_way = {BRANCH_PREDICTOR_WAYS{br_results.branch_ex}} & (branch_metadata_ex.branch_predictor_update_way);
+    assign target_update_way = {BRANCH_PREDICTOR_WAYS{branch_predictor_direction_changed}} & tag_update_way;
+    ////////////////////////////////////////////////////
+    //Target PC if branch flush occured
+    assign bp.branch_flush_pc = br_results.new_pc;
 
-    assign bp.branch_flush_pc = br_results.branch_taken ? br_results.jump_pc : br_results.njump_pc;
+    ////////////////////////////////////////////////////
+    //Instruction Fetch metadata
+    cycler #(BRANCH_PREDICTOR_WAYS) replacement_policy (.*, .en(1'b1), .one_hot(replacement_way));
 
-    generate if (USE_BRANCH_PREDICTOR) begin
-            assign bp.use_prediction = tag_match;
-        end else begin
-            assign bp.use_prediction = 0;
-        end endgenerate
+    assign branch_metadata_if.branch_predictor_metadata = if_entry[hit_way].metadata;
+    assign branch_metadata_if.branch_prediction_used = use_predicted_pc;
+    assign branch_metadata_if.branch_predictor_update_way = tag_match ? tag_matches : replacement_way;
 
 endmodule

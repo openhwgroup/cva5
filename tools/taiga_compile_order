@@ -93,8 +93,8 @@
 ../core/ras.sv  
 ../core/branch_predictor_ram.sv
 ../core/branch_predictor.sv  
-../core/fetch.sv  
-../core/pre_decode.sv
+../core/fetch.sv
+
 ../core/illegal_instruction_checker.sv
 ../core/decode_and_issue.sv
 
@@ -111,6 +111,9 @@
 ../l2_arbiter/l2_reservation_logic.sv
 ../l2_arbiter/l2_round_robin.sv
 ../l2_arbiter/l2_arbiter.sv
+
+../core/id_management.sv
+../core/instruction_metadata.sv
 
 ../core/taiga.sv
 

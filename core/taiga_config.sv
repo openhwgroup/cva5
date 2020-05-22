@@ -29,7 +29,7 @@ package taiga_config;
     //Privileged ISA Options
 
     //Enable Machine level privilege spec
-    parameter ENABLE_M_MODE = 0;
+    parameter ENABLE_M_MODE = 1;
     //Enable Supervisor level privilege spec
     parameter ENABLE_S_MODE = 0;
     //Enable User level privilege spec
@@ -158,13 +158,14 @@ package taiga_config;
     //Branch Predictor Options
     parameter USE_BRANCH_PREDICTOR = 1;
     parameter BRANCH_PREDICTOR_WAYS = 2;
-    parameter BRANCH_TABLE_ENTRIES = 512;
+    parameter BRANCH_TABLE_ENTRIES = 512;//min 512
     parameter RAS_DEPTH = 8;
 
 
     ////////////////////////////////////////////////////
     //FIFO/Buffer Depths
     //All parameters restricted to powers of two
+    parameter MAX_IDS = 16;
     parameter MAX_INFLIGHT_COUNT = 4;
     parameter FETCH_BUFFER_DEPTH = 4;
 

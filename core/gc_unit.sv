@@ -56,8 +56,12 @@ module gc_unit(
         mmu_interface.csr immu,
         mmu_interface.csr dmmu,
 
+        //ID Management
+        output logic system_op_complete,
+        output id_t system_op_id,
+
         //WB
-        input logic instruction_complete,
+        input logic instruction_retired,
         input logic instruction_queue_empty,
         input instruction_id_t oldest_id,
         //unit_writeback_interface.unit gc_wb,
@@ -183,6 +187,11 @@ module gc_unit(
             stage1 <= gc_inputs;
         end
     end
+
+    ////////////////////////////////////////////////////
+    //ID Management
+    assign system_op_complete = issue.new_request & (gc_inputs.is_fence | gc_inputs.is_i_fence);
+    assign system_op_id = issue.id;
 
     //Instruction decode
     assign opcode = stage1.instruction[6:0];

@@ -27,6 +27,8 @@ package taiga_types;
     localparam ID_W = $clog2(MAX_INFLIGHT_COUNT);
     localparam WB_UNITS_WIDTH = $clog2(NUM_WB_UNITS);
 
+    typedef logic[$clog2(MAX_IDS)-1:0] id_t;
+
     typedef logic[ID_W-1:0] instruction_id_t;
     typedef logic[WB_UNITS_WIDTH-1:0] unit_id_t;
     typedef logic[1:0] branch_predictor_metadata_t;
@@ -82,20 +84,17 @@ package taiga_types;
     typedef struct packed{
         branch_predictor_metadata_t branch_predictor_metadata;
         logic branch_prediction_used;
-        logic [BRANCH_PREDICTOR_WAYS-1:0] bp_update_way;
-    } branch_unit_metadata_t;
+        logic [BRANCH_PREDICTOR_WAYS-1:0] branch_predictor_update_way;
+    } branch_metadata_t;
 
 
     typedef struct packed{
         logic id_assigned;
-        instruction_id_t pc_id;
+        id_t pc_id;
         logic [31:0] pc;
-        branch_unit_metadata_t branch_unit_metadata;
-
         logic complete;
-        instruction_id_t instruction_id;
+        id_t instruction_id;
         logic [31:0] instruction;
-
     } fetch_instruction_metadata_t;
 
     typedef struct packed{
@@ -128,22 +127,15 @@ package taiga_types;
         logic jalr;
         logic is_call;
         logic is_return;
-        logic [31:0] instruction;
-        branch_predictor_metadata_t branch_metadata;
-        logic branch_prediction_used;
-        logic [BRANCH_PREDICTOR_WAYS-1:0] bp_update_way;
+        logic [20:0] pc_offset;
     } branch_inputs_t;
 
     typedef struct packed {
         logic[31:0] pc_ex;
-        logic [31:0] jump_pc;
-        logic [31:0] njump_pc;
+        logic [31:0] new_pc;
         logic branch_taken;
         logic branch_ex;
         logic is_return_ex;
-        branch_predictor_metadata_t branch_ex_metadata;
-        logic branch_prediction_used;
-        logic [BRANCH_PREDICTOR_WAYS-1:0] bp_update_way;
     } branch_results_t;
 
     typedef struct packed{

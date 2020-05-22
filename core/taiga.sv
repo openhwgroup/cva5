@@ -83,16 +83,38 @@ module taiga (
     logic tlb_on;
     logic [ASIDLEN-1:0] asid;
 
-    //Pre-Decode
-    logic pre_decode_push;
-    logic pre_decode_pop;
-    logic [31:0] pre_decode_instruction;
-    logic [31:0] pre_decode_pc;
-    branch_predictor_metadata_t branch_metadata;
-    logic branch_prediction_used;
-    logic [BRANCH_PREDICTOR_WAYS-1:0] bp_update_way;
-    logic fb_valid;
-    fetch_buffer_packet_t fb;
+    //Instruction ID/Metadata
+        //ID issuing
+    id_t pc_id;
+    logic pc_id_available;
+    logic pc_id_assigned;
+    logic [31:0] if_pc;
+        //Fetch stage
+    id_t fetch_id;
+    logic fetch_complete;
+    logic [31:0] fetch_instruction;
+        //Decode stage
+    logic decode_advance;
+    id_t decode_id;
+    logic decode_id_valid;
+    logic [31:0] decode_pc;
+    logic [31:0] decode_instruction;
+        //Issue stage
+    logic issue_stage_valid;
+    logic dummy_id_complete;
+    id_t issue_id;
+        //Branch predictor
+    branch_metadata_t branch_metadata_if;
+    branch_metadata_t branch_metadata_ex;
+        //ID freeing
+    logic store_complete;
+    id_t store_id;
+    logic branch_complete;
+    id_t branch_id;
+    logic system_op_complete;
+    id_t system_op_id;
+    logic instruction_retired;
+    id_t retired_id;
 
     //Global Control
     logic gc_issue_hold;
@@ -112,10 +134,10 @@ module taiga (
     logic illegal_instruction;
     logic instruction_queue_empty;
 
+    logic id_issued;
     logic instruction_issued;
     logic instruction_issued_no_rd;
     logic instruction_issued_with_rd;
-    logic instruction_complete;
     logic gc_flush_required;
 
     //LS
@@ -171,7 +193,12 @@ module taiga (
     endgenerate
 
     ////////////////////////////////////////////////////
-    // Fetch and Pre-Decode
+    // ID support
+    id_management id_management_block (.*);
+    instruction_metadata id_metadata_block (.*);
+
+    ////////////////////////////////////////////////////
+    // Fetch
     fetch fetch_block (.*, .icache_on('1), .tlb(itlb), .l1_request(l1_request[L1_ICACHE_ID]), .l1_response(l1_response[L1_ICACHE_ID]), .exception(1'b0));
     branch_predictor bp_block (.*);
     ras ras_block(.*);
@@ -184,7 +211,6 @@ module taiga (
             assign itlb.physical_address = itlb.virtual_address;
         end
     endgenerate
-    pre_decode pre_decode_block(.*);
 
     ////////////////////////////////////////////////////
     //Decode/Issue
@@ -193,7 +219,7 @@ module taiga (
 
     ////////////////////////////////////////////////////
     //Execution Units
-    branch_unit branch_unit_block (.*, .issue(unit_issue[BRANCH_UNIT_ID]));
+    branch_unit branch_unit_block (.*, .issue(unit_issue[BRANCH_UNIT_ID]), .dec_pc_plus_4(unit_wb[ALU_UNIT_WB_ID].rd));
     alu_unit alu_unit_block (.*, .issue(unit_issue[ALU_UNIT_WB_ID]), .wb(unit_wb[ALU_UNIT_WB_ID]));
     load_store_unit load_store_unit_block (.*, .dcache_on(1'b1), .clear_reservation(1'b0), .tlb(dtlb), .issue(unit_issue[LS_UNIT_WB_ID]), .wb(unit_wb[LS_UNIT_WB_ID]), .l1_request(l1_request[L1_DCACHE_ID]), .l1_response(l1_response[L1_DCACHE_ID]));
     generate if (ENABLE_S_MODE) begin

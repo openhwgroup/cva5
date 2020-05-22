@@ -48,6 +48,10 @@ module load_store_unit (
 
         local_memory_interface.master data_bram,
 
+        //ID Management
+        output logic store_complete,
+        output id_t store_id,
+
         //Writeback-Store Interface
         writeback_store_interface.ls wb_store,
 
@@ -207,6 +211,11 @@ endgenerate
     assign shared_inputs = lsq.transaction_out;
 
     assign lsq.accepted = lsq.transaction_ready & ready_for_issue;
+
+    ////////////////////////////////////////////////////
+    //ID Management
+    assign store_complete = (lsq.accepted & lsq.transaction_out.store) | (ls_exception_ack & exception_is_store);
+    assign store_id = $clog2(MAX_IDS)'(wb_store.commit_id);
 
     ////////////////////////////////////////////////////
     //Writeback-Store interface

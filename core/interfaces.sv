@@ -28,6 +28,7 @@ import l2_config_and_types::*;
 interface branch_predictor_interface;
     //Fetch signals
     logic [31:0] if_pc;
+    id_t if_id;
     logic new_mem_request;
     logic [31:0] next_pc;
     
@@ -35,17 +36,15 @@ interface branch_predictor_interface;
     logic [31:0] branch_flush_pc;
     logic [31:0] predicted_pc;
     logic use_prediction;
-    logic [BRANCH_PREDICTOR_WAYS-1:0] update_way;
     logic use_ras;
-    branch_predictor_metadata_t metadata;
 
     modport branch_predictor (
-        input if_pc, new_mem_request, next_pc,
-        output branch_flush_pc, predicted_pc, use_prediction, update_way, use_ras, metadata
+        input if_pc, if_id, new_mem_request, next_pc,
+        output branch_flush_pc, predicted_pc, use_prediction, use_ras
     );
     modport fetch (
-        input branch_flush_pc, predicted_pc, use_prediction, update_way, use_ras, metadata,
-        output if_pc, new_mem_request, next_pc
+        input branch_flush_pc, predicted_pc, use_prediction, use_ras,
+        output if_pc, if_id, new_mem_request, next_pc
      );
 
 endinterface
@@ -55,11 +54,12 @@ interface unit_issue_interface;
     logic new_request;
     logic new_request_r;
     instruction_id_t instruction_id;
+    id_t id;
 
     logic ready;
 
-    modport decode (input ready, output possible_issue, new_request, new_request_r, instruction_id);
-    modport unit (output ready, input possible_issue, new_request, new_request_r, instruction_id);
+    modport decode (input ready, output possible_issue, new_request, new_request_r, instruction_id, id);
+    modport unit (output ready, input possible_issue, new_request, new_request_r, instruction_id, id);
 endinterface
 
 interface ras_interface;

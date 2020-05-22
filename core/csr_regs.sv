@@ -57,7 +57,7 @@ module csr_regs
         mmu_interface.csr dmmu,
 
         //WB
-        input logic instruction_complete,
+        input logic instruction_retired,
 
 
         //External
@@ -490,13 +490,13 @@ endgenerate
     ////////////////////////////////////////////////////
     //Timers and Counters
     //Register increment for instructions completed
-    logic instruction_retired;
-    assign instruction_retired = instruction_complete & ~gc_supress_writeback;
+    logic instruction_completed;
+    assign instruction_completed = instruction_retired & ~gc_supress_writeback;
     always_ff @(posedge clk) begin
         if (rst)
             inst_ret_inc <= 0;
         else
-            inst_ret_inc <= INST_RET_INC_W'(instruction_retired) + INST_RET_INC_W'(instruction_issued_no_rd);
+            inst_ret_inc <= INST_RET_INC_W'(instruction_completed) + INST_RET_INC_W'(instruction_issued_no_rd);
     end
 
     always_ff @(posedge clk) begin

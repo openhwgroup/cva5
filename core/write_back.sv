@@ -34,7 +34,8 @@ module write_back(
         input unit_writeback_t unit_wb[NUM_WB_UNITS-1:0],
         register_file_writeback_interface.writeback rf_wb,
         tracking_interface.wb ti,
-        output logic instruction_complete,
+        output logic instruction_retired,
+        output id_t retired_id,
         output logic instruction_queue_empty,
 
         output instruction_id_t oldest_id,
@@ -209,11 +210,12 @@ module write_back(
     end
 
     //Instruction completion tracking for retired instruction count
-    assign instruction_complete = retiring & ~retiring_instruction_packet.is_store;
+    assign instruction_retired = retiring & ~retiring_instruction_packet.is_store;
+    assign retired_id = $clog2(MAX_IDS)'(id_retiring);
 
     assign rf_wb.rd_addr = retiring_instruction_packet.rd_addr;
     assign rf_wb.id = id_retiring;
-    assign rf_wb.retiring = instruction_complete;
+    assign rf_wb.retiring = instruction_retired;
     assign rf_wb.rd_nzero = |retiring_instruction_packet.rd_addr;
     assign rf_wb.rd_data = results_by_id[id_retiring];
 
