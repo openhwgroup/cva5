@@ -27,7 +27,6 @@ import taiga_types::*;
 module branch_predictor (
         input logic clk,
         input logic rst,
-
         branch_predictor_interface.branch_predictor bp,
         output branch_metadata_t branch_metadata_if,
         input branch_metadata_t branch_metadata_ex,

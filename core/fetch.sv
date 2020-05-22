@@ -95,10 +95,10 @@ module fetch(
     end
 
     always_comb begin
-        if (branch_flush)
-            next_pc = bp.branch_flush_pc;
-        else if (gc_fetch_pc_override)
+        if (gc_fetch_pc_override)
             next_pc = gc_fetch_pc;
+        else if (branch_flush)
+            next_pc = bp.branch_flush_pc;
         else if (bp.use_prediction)
             next_pc = (bp.use_ras & ras.valid) ? ras.addr : bp.predicted_pc;
         else

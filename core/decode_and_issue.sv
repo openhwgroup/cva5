@@ -463,9 +463,8 @@ module decode_and_issue (
     assign branch_inputs.jal = opcode_issue_stage[3];//(opcode == JAL);
     assign branch_inputs.jalr = ~opcode_issue_stage[3] & opcode_issue_stage[2];//(opcode == JALR);
 
-
-    assign branch_inputs.dec_pc = pc_issue_stage;
-    assign branch_inputs.dec_pc_valid = issue_stage_valid;
+    assign branch_inputs.issue_pc = pc_issue_stage;
+    assign branch_inputs.issue_pc_valid = issue_stage_valid;
     assign branch_inputs.rs1 = rf_issue.rs1_data;
     assign branch_inputs.rs2 = rf_issue.rs2_data;
 
