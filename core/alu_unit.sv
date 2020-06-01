@@ -1,5 +1,5 @@
 /*
- * Copyright © 2017 Eric Matthews,  Lesley Shannon
+ * Copyright © 2017-2020 Eric Matthews,  Lesley Shannon
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,9 +27,10 @@ import taiga_types::*;
 module alu_unit(
         input logic clk,
         input logic rst,
+        input logic single_cycle_issue_possible,
         unit_issue_interface.unit issue,
         input alu_inputs_t alu_inputs,
-        output unit_writeback_t wb
+        unit_writeback_interface.unit wb
         );
 
     logic[XLEN:0] add_sub_result;
@@ -77,10 +78,10 @@ module alu_unit(
 
     ////////////////////////////////////////////////////
     //Output
-    assign issue.ready = 1;
+    assign issue.ready = single_cycle_issue_possible;//single_cycle_issue_possible;
     assign wb.rd = result;
     assign wb.done = issue.new_request;
-    assign wb.id = issue.instruction_id;
+    assign wb.id = issue.id;
 
     ////////////////////////////////////////////////////
     //Assertions

@@ -24,12 +24,10 @@ package taiga_types;
     import taiga_config::*;
     import riscv_types::*;
 
-    localparam ID_W = $clog2(MAX_INFLIGHT_COUNT);
     localparam WB_UNITS_WIDTH = $clog2(NUM_WB_UNITS);
 
     typedef logic[$clog2(MAX_IDS)-1:0] id_t;
 
-    typedef logic[ID_W-1:0] instruction_id_t;
     typedef logic[WB_UNITS_WIDTH-1:0] unit_id_t;
     typedef logic[1:0] branch_predictor_metadata_t;
 
@@ -63,23 +61,9 @@ package taiga_types;
     typedef struct packed{
         logic valid;
         exception_code_t code;
-        logic [31:0] pc;
         logic [31:0] tval;
-        instruction_id_t id;
+        id_t id;
     } exception_packet_t;
-
-    typedef struct packed{
-        logic [4:0] rd_addr;
-        logic is_store;
-    } inflight_instruction_packet;
-
-    typedef struct packed{
-        logic [31:0] instruction;
-        logic [31:0] pc;
-        branch_predictor_metadata_t branch_metadata;
-        logic branch_prediction_used;
-        logic [BRANCH_PREDICTOR_WAYS-1:0] bp_update_way;
-    } fetch_buffer_packet_t;
 
     typedef struct packed{
         branch_predictor_metadata_t branch_predictor_metadata;
@@ -87,21 +71,6 @@ package taiga_types;
         logic [BRANCH_PREDICTOR_WAYS-1:0] branch_predictor_update_way;
     } branch_metadata_t;
 
-
-    typedef struct packed{
-        logic id_assigned;
-        id_t pc_id;
-        logic [31:0] pc;
-        logic complete;
-        id_t instruction_id;
-        logic [31:0] instruction;
-    } fetch_instruction_metadata_t;
-
-    typedef struct packed{
-        instruction_id_t id;
-        logic done;
-        logic [XLEN-1:0] rd;
-    } unit_writeback_t;
 
     typedef struct packed{
         logic [XLEN:0] in1;//contains sign padding bit for slt operation
@@ -159,9 +128,7 @@ package taiga_types;
         logic load;
         logic store;
         logic forwarded_store;
-        instruction_id_t store_forward_id;
-        //exception support
-        logic [31:0] pc;
+        id_t store_forward_id;
         //amo support
         amo_details_t amo;
     } load_store_inputs_t;
@@ -216,7 +183,7 @@ package taiga_types;
         logic [3:0] be;
         logic [2:0] fn3;
         logic [31:0] data_in;
-        instruction_id_t id;
+        id_t id;
     } data_access_shared_inputs_t;
 
     typedef enum  {
@@ -260,8 +227,8 @@ package taiga_types;
 
         //Writeback
         unit_id_t num_instructions_completing;
-        instruction_id_t num_instructions_in_flight;
-        instruction_id_t num_of_instructions_pending_writeback;
+        id_t num_instructions_in_flight;
+        id_t num_of_instructions_pending_writeback;
     } taiga_trace_events_t;
 
     typedef struct packed {

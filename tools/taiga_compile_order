@@ -98,11 +98,9 @@
 ../core/illegal_instruction_checker.sv
 ../core/decode_and_issue.sv
 
-../core/id_inuse.sv
 ../core/reg_inuse.sv
 ../core/register_file.sv  
 
-../core/writeback_id_tracking.sv
 ../core/write_back.sv  
 
 ../core/placer_randomizer.sv

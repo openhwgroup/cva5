@@ -40,6 +40,7 @@ module csr_regs
         output exception_packet_t csr_exception,
         output logic [1:0] current_privilege,
         input logic gc_supress_writeback,
+        input logic [31:0] exception_pc,
 
         //Decode
         input logic instruction_issued_no_rd,
@@ -382,7 +383,7 @@ generate if (ENABLE_M_MODE) begin
     always_ff @(posedge clk) begin
         mepc[1:0] <= '0;
         if (mwrite_decoder[MEPC[7:0]] | gc_exception.valid)
-            mepc[XLEN-1:2] <= gc_exception.valid ? gc_exception.pc[XLEN-1:2] : updated_csr[XLEN-1:2];
+            mepc[XLEN-1:2] <= gc_exception.valid ? exception_pc[XLEN-1:2] : updated_csr[XLEN-1:2];
     end
     assign csr_mepc = mepc;
 

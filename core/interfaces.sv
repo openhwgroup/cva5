@@ -53,13 +53,29 @@ interface unit_issue_interface;
     logic possible_issue;
     logic new_request;
     logic new_request_r;
-    instruction_id_t instruction_id;
     id_t id;
 
     logic ready;
 
-    modport decode (input ready, output possible_issue, new_request, new_request_r, instruction_id, id);
-    modport unit (output ready, input possible_issue, new_request, new_request_r, instruction_id, id);
+    modport decode (input ready, output possible_issue, new_request, new_request_r, id);
+    modport unit (output ready, input possible_issue, new_request, new_request_r, id);
+endinterface
+
+interface unit_writeback_interface;
+        logic ack;
+
+        id_t id;
+        logic done;
+        logic [XLEN-1:0] rd;
+
+        modport unit (
+            input ack,
+            output id, done, rd
+        );
+        modport wb (
+            output ack,
+            input id, done, rd
+        );
 endinterface
 
 interface ras_interface;
@@ -95,7 +111,7 @@ interface exception_interface;
     exception_code_t code;
     logic [31:0] pc;
     logic [31:0] addr;
-    instruction_id_t id;
+    id_t id;
 
     modport econtrol (output valid, code, pc, addr, id, input ack);
     modport unit (input valid, code, pc, addr, id, output ack);
@@ -107,13 +123,13 @@ interface register_file_issue_interface;
     logic[XLEN-1:0] rs1_data;
     logic[4:0] rs2_addr; //if not used required to be zero
     logic[XLEN-1:0] rs2_data;
-    instruction_id_t id;
+    id_t id;
 
     logic uses_rs1;
     logic uses_rs2;
     logic rs1_conflict;
     logic rs2_conflict;
-    instruction_id_t rs2_id;
+    id_t rs2_id;
     logic instruction_issued;
 
     modport issue (output rd_addr, rs1_addr, rs2_addr, instruction_issued, id, uses_rs1, uses_rs2, input rs1_conflict, rs2_conflict, rs1_data, rs2_data, rs2_id);
@@ -122,38 +138,22 @@ endinterface
 
 
 interface register_file_writeback_interface;
-    logic[4:0] rd_addr;
+    //Writeback data
     logic retiring;
-    logic rd_nzero;
-
+    id_t id;
     logic[XLEN-1:0] rd_data;
-    instruction_id_t id;
 
-    instruction_id_t rs1_id;
-    instruction_id_t rs2_id;
-
+    //Forwarding signals
+    id_t rs1_id;
+    id_t rs2_id;
     logic[XLEN-1:0] rs1_data;
     logic[XLEN-1:0] rs2_data;
     logic rs1_valid;
     logic rs2_valid;
     
-    modport writeback (output rd_addr, retiring, rd_nzero, rd_data, id, rs1_data, rs2_data, rs1_valid, rs2_valid,  input rs1_id, rs2_id);
-    modport rf (input rd_addr, retiring, rd_nzero, rd_data, id, rs1_data, rs2_data, rs1_valid, rs2_valid, output rs1_id, rs2_id);
+    modport writeback (output retiring, rd_data, id, rs1_data, rs2_data, rs1_valid, rs2_valid,  input rs1_id, rs2_id);
+    modport rf (input retiring, rd_data, id, rs1_data, rs2_data, rs1_valid, rs2_valid, output rs1_id, rs2_id);
 
-endinterface
-
-
-interface tracking_interface;
-    instruction_id_t issue_id;
-    logic id_available;
-    
-    inflight_instruction_packet inflight_packet;
-    logic issued;
-    logic [WB_UNITS_WIDTH-1:0] issue_unit_id;
-    logic exception_possible;
-
-    modport decode (input issue_id, id_available, output inflight_packet, issued, issue_unit_id, exception_possible);
-    modport wb (output issue_id, id_available, input inflight_packet, issued, issue_unit_id, exception_possible);
 endinterface
 
 interface fifo_interface #(parameter DATA_WIDTH = 42);//#(parameter type data_type = logic[31:0]);
@@ -218,30 +218,30 @@ interface load_store_queue_interface;
     logic [3:0] be;
     logic [2:0] fn3;
     logic [31:0] data_in;
-    instruction_id_t id;
+    id_t id;
     logic forwarded_store;
-    instruction_id_t data_id;
+    id_t data_id;
 
     logic possible_issue;
     logic new_issue;
     logic ready;
 
-    instruction_id_t id_needed_by_store;
+    id_t id_needed_by_store;
     data_access_shared_inputs_t transaction_out;
     logic transaction_ready;
+    logic empty;
     logic accepted;
 
-
-    modport queue (input addr, load, store, be, fn3, data_in, id, forwarded_store, data_id, possible_issue, new_issue, accepted, output ready, id_needed_by_store, transaction_out, transaction_ready);
-    modport ls  (output addr, load, store, be, fn3, data_in, id, forwarded_store, data_id, possible_issue, new_issue, accepted, input ready, id_needed_by_store, transaction_out, transaction_ready);
+    modport queue (input addr, load, store, be, fn3, data_in, id, forwarded_store, data_id, possible_issue, new_issue, accepted, output ready, id_needed_by_store, transaction_out, transaction_ready, empty);
+    modport ls  (output addr, load, store, be, fn3, data_in, id, forwarded_store, data_id, possible_issue, new_issue, accepted, input ready, id_needed_by_store, transaction_out, transaction_ready, empty);
 endinterface
 
 interface writeback_store_interface;
-        instruction_id_t id_needed_at_issue;
-        instruction_id_t id_needed_at_commit;
-        instruction_id_t commit_id;
+        id_t id_needed_at_issue;
+        id_t id_needed_at_commit;
+        id_t commit_id;
         logic commit;
-        logic [MAX_INFLIGHT_COUNT-1:0] hold_for_store_ids;
+        logic [MAX_IDS-1:0] hold_for_store_ids;
 
         logic forwarding_data_ready;
         logic [31:0] forwarded_data;
@@ -291,17 +291,5 @@ interface unsigned_division_interface #(parameter DATA_WIDTH = 32);
     logic divisor_is_zero;
     modport requester (input remainder, quotient, done, divisor_is_zero, output dividend, divisor, start);
     modport divider (output remainder, quotient, done, divisor_is_zero, input dividend, divisor, start);
-endinterface
-
-//Unit sets the ID of the instruction that will provide the data
-//data_valid is high when the data is valid
-interface post_issue_forwarding_interface;
-    instruction_id_t id;
-
-    logic [31:0] data;
-    logic data_valid;
-
-    modport unit (input data, data_valid, output id);
-    modport wb (output data, data_valid, input id);
 endinterface
 

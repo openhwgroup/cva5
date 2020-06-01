@@ -163,11 +163,13 @@ package taiga_config;
 
 
     ////////////////////////////////////////////////////
-    //FIFO/Buffer Depths
-    //All parameters restricted to powers of two
-    parameter MAX_IDS = 16;
-    parameter MAX_INFLIGHT_COUNT = 4;
-    parameter FETCH_BUFFER_DEPTH = 4;
+    //ID limit
+    //MAX_IDS restricted to a power of 2
+    parameter MAX_IDS = 32;
+
+    ////////////////////////////////////////////////////
+    //Number of Writeback Buffers
+    parameter WRITEBACK_BUFFERS = 3;
 
     ////////////////////////////////////////////////////
     //Trace Options
@@ -185,15 +187,19 @@ package taiga_config;
 
     ////////////////////////////////////////////////////
     //Write-Back Unit IDs
-    parameter NUM_WB_UNITS = 2 + USE_MUL + USE_DIV;
-    parameter NUM_UNITS = NUM_WB_UNITS + 2;
+    parameter NUM_MULTI_CYCLE_WB_UNITS = 1 + USE_MUL + USE_DIV;//LS
+    parameter NUM_SINGLE_CYCLE_WB_UNITS = 1;//ALU
 
-    parameter ALU_UNIT_WB_ID = 0;
-    parameter LS_UNIT_WB_ID = 1;
+    parameter NUM_WB_UNITS = NUM_MULTI_CYCLE_WB_UNITS + NUM_SINGLE_CYCLE_WB_UNITS;
+
+    parameter NUM_UNITS = NUM_WB_UNITS + 2;//Branch and CSRs
+
+    parameter LS_UNIT_WB_ID = 0;
     parameter DIV_UNIT_WB_ID = LS_UNIT_WB_ID + USE_DIV;
-    parameter MUL_UNIT_WB_ID = DIV_UNIT_WB_ID + USE_MUL;
+    parameter MUL_UNIT_WB_ID = DIV_UNIT_WB_ID + 1;
+    parameter ALU_UNIT_WB_ID = MUL_UNIT_WB_ID + USE_MUL;
     //Non-writeback units
-    parameter BRANCH_UNIT_ID = MUL_UNIT_WB_ID + 1;
+    parameter BRANCH_UNIT_ID = ALU_UNIT_WB_ID + 1;
     parameter GC_UNIT_ID = BRANCH_UNIT_ID + 1;
 
     ////////////////////////////////////////////////////

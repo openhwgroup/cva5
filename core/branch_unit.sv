@@ -65,6 +65,7 @@ module branch_unit(
     logic [31:0] pc_ex;
     logic instruction_is_completing;
 
+    logic jal_jalr_ex;
     ////////////////////////////////////////////////////
     //Implementation
     //Only stall condition is if the following instruction is not valid for pc comparisons.
@@ -108,17 +109,18 @@ module branch_unit(
             new_pc_ex[31:1] <= new_pc[31:1];
             new_pc_ex[0] <= new_pc[0] & ~branch_inputs.jalr;
             id_ex <= issue.id;
+            jal_jalr_ex <= branch_inputs.jal | branch_inputs.jalr;
         end
     end
 
     ////////////////////////////////////////////////////
     //Exception support
-    instruction_id_t jmp_instruction_id;
+    id_t jmp_id;
 
     generate if (ENABLE_M_MODE) begin
         always_ff @(posedge clk) begin
             if (instruction_is_completing | ~branch_issued_r)
-                jmp_instruction_id <= issue.instruction_id;
+                jmp_id <= issue.id;
         end
 
         assign potential_branch_exception = new_pc[1] & issue.new_request;
@@ -126,16 +128,15 @@ module branch_unit(
 
         assign br_exception.valid = new_pc_ex[1] & branch_taken_ex & branch_issued_r;
         assign br_exception.code = INST_ADDR_MISSALIGNED;
-        assign br_exception.pc = pc_ex;
         assign br_exception.tval = new_pc_ex;
-        assign br_exception.id = jmp_instruction_id;
+        assign br_exception.id = jmp_id;
 
     end
     endgenerate
 
     ////////////////////////////////////////////////////
     //ID Management
-    assign branch_complete = instruction_is_completing | br_exception.valid;
+    assign branch_complete = (instruction_is_completing & ~jal_jalr_ex);
     assign branch_id = id_ex;
 
     ////////////////////////////////////////////////////

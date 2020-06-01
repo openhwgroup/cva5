@@ -66,13 +66,11 @@ module taiga (
     div_inputs_t div_inputs;
     gc_inputs_t gc_inputs;
 
-    unit_issue_interface unit_issue [NUM_UNITS-1:0]();
+    unit_issue_interface unit_issue [NUM_UNITS]();
 
     exception_packet_t  ls_exception;
-    logic ls_exception_valid;
 
-    tracking_interface ti();
-    unit_writeback_t unit_wb [NUM_WB_UNITS-1:0];
+    unit_writeback_interface unit_wb  [NUM_WB_UNITS]();
     register_file_writeback_interface rf_wb();
 
     mmu_interface immu();
@@ -111,10 +109,14 @@ module taiga (
     id_t store_id;
     logic branch_complete;
     id_t branch_id;
-    logic system_op_complete;
-    id_t system_op_id;
+    logic system_op_or_exception_complete;
+    id_t system_op_or_exception_id;
     logic instruction_retired;
     id_t retired_id;
+    logic [4:0] retired_rd_addr;
+        //Exception
+    id_t exception_id;
+    logic [31:0] exception_pc;
 
     //Global Control
     logic gc_issue_hold;
@@ -122,13 +124,14 @@ module taiga (
     logic gc_fetch_flush;
     logic gc_fetch_pc_override;
     logic gc_supress_writeback;
-    instruction_id_t oldest_id;
+    id_t oldest_id;
     logic [31:0] gc_fetch_pc;
     logic ls_exception_ack;
 
     logic[31:0] csr_rd;
-    instruction_id_t csr_id;
+    id_t csr_id;
     logic csr_done;
+    logic ls_is_idle;
 
     //Decode Unit and Fetch Unit
     logic illegal_instruction;
@@ -143,9 +146,9 @@ module taiga (
     //LS
     writeback_store_interface wb_store();
 
-    logic load_store_exception_clear;
-    instruction_id_t load_store_exception_id;
-    logic potential_exception;
+    //WB
+    logic single_cycle_issue_possible;
+    logic writeback_is_idle;
 
     //Trace Interface Signals
     logic tr_operand_stall;
@@ -180,8 +183,8 @@ module taiga (
     logic tr_rs1_and_rs2_forwarding_needed;
 
     unit_id_t tr_num_instructions_completing;
-    instruction_id_t tr_num_instructions_in_flight;
-    instruction_id_t tr_num_of_instructions_pending_writeback;
+    id_t tr_num_instructions_in_flight;
+    id_t tr_num_of_instructions_pending_writeback;
     ////////////////////////////////////////////////////
     //Implementation
 

@@ -38,7 +38,6 @@ module instruction_metadata
         input logic fetch_complete,
         input logic [31:0] fetch_instruction,
 
-
         //Decode ID
         input id_t decode_id,
         output logic [31:0] decode_pc,
@@ -47,18 +46,22 @@ module instruction_metadata
         //Branch Predictor
         input branch_metadata_t branch_metadata_if,
         input id_t branch_id,
-        output branch_metadata_t branch_metadata_ex
+        output branch_metadata_t branch_metadata_ex,
+
+        //Writeback/Register File
+        input id_t retired_id,
+        output logic [4:0] retired_rd_addr,
 
         //Exception
-        //input id_t exception_id,
-        //output logic [31:0] exception_pc,
-        //output logic [31:0] exception_instruction
+        input id_t exception_id,
+        output logic [31:0] exception_pc
 
     );
     //////////////////////////////////////////
     logic [31:0] pc_table [MAX_IDS];
     logic [31:0] instruction_table [MAX_IDS];
     logic [$bits(branch_metadata_t)-1:0] branch_metadata_table [MAX_IDS];
+    logic [31:0] rd_table [MAX_IDS];
     ////////////////////////////////////////////////////
     //Implementation
 
@@ -80,6 +83,12 @@ module instruction_metadata
             instruction_table[fetch_id] <= fetch_instruction;
     end
 
+    //rd table
+  //  always_ff @ (posedge clk) begin
+   //     if (instruction_retired)
+   //         rd_table[id_retired] <= retired_rd;
+   // end
+
     ////////////////////////////////////////////////////
     //Outputs
 
@@ -90,11 +99,13 @@ module instruction_metadata
     //Branch Predictor
     assign branch_metadata_ex = branch_metadata_table[branch_id];
 
+    //Register File
+    assign retired_rd_addr = instruction_table[retired_id][11:7];
+
     //Exception Support
-    // generate if (ENABLE_M_MODE) begin
-    //     assign exception_pc = pc_table[exception_id];
-    //     assign exception_instruction = instruction_table[exception_id];
-    // end endgenerate
+     generate if (ENABLE_M_MODE) begin
+         assign exception_pc = pc_table[exception_id];
+     end endgenerate
 
     ////////////////////////////////////////////////////
     //End of Implementation

@@ -33,16 +33,16 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
         input logic gc_issue_flush,
 
         load_store_queue_interface.queue lsq,
-        output logic [MAX_INFLIGHT_COUNT-1:0] wb_hold_for_store_ids,
+        output logic [MAX_IDS-1:0] wb_hold_for_store_ids,
         //Writeback data
         input logic [31:0] writeback_data,
         input logic writeback_valid
     );
 
-    logic [MAX_INFLIGHT_COUNT-1:0] valid;
-    logic [$clog2(MAX_INFLIGHT_COUNT)-1:0] hold_for_store_ids [MAX_INFLIGHT_COUNT];
-    logic [$clog2(MAX_INFLIGHT_COUNT)-1:0] hold_for_store_ids_r [MAX_INFLIGHT_COUNT];
-    instruction_id_t oldest_id;
+    logic [MAX_IDS-1:0] valid;
+    logic [$clog2(MAX_IDS)-1:0] hold_for_store_ids [MAX_IDS];
+    logic [$clog2(MAX_IDS)-1:0] hold_for_store_ids_r [MAX_IDS];
+    id_t oldest_id;
 
     typedef struct packed {
         logic [31:0] addr;
@@ -51,24 +51,24 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
         logic [3:0] be;
         logic [2:0] fn3;
         logic [31:0] data_in;
-        instruction_id_t id;
+        id_t id;
         logic forwarded_store;
-        instruction_id_t data_id;
+        id_t data_id;
     } lsq_entry_t;
 
     lsq_entry_t new_lsq_entry;
-    logic [$bits(lsq_entry_t)-1:0] lsq_entries [MAX_INFLIGHT_COUNT];
+    logic [$bits(lsq_entry_t)-1:0] lsq_entries [MAX_IDS];
     lsq_entry_t oldest_lsq_entry;
 
-    fifo_interface #(.DATA_WIDTH($bits(instruction_id_t))) oldest_fifo ();
+    fifo_interface #(.DATA_WIDTH($bits(id_t))) oldest_fifo ();
     ////////////////////////////////////////////////////
     //Implementation
 
-    //Can accept an input so long as it is a load or as long as an update from writeback for an exisiting store is not in progress
+    //Can always buffer new requests
     assign lsq.ready = 1;
 
     //FIFO to store ordering of IDs
-    taiga_fifo #(.DATA_WIDTH($bits(instruction_id_t)), .FIFO_DEPTH(MAX_INFLIGHT_COUNT)) oldest_id_fifo (
+    taiga_fifo #(.DATA_WIDTH($bits(id_t)), .FIFO_DEPTH(MAX_IDS)) oldest_id_fifo (
         .clk, .rst(rst | gc_issue_flush),
         .fifo(oldest_fifo)
     );
@@ -78,6 +78,8 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
     assign oldest_fifo.supress_push = gc_fetch_flush;
     assign oldest_fifo.pop = lsq.accepted;
     assign oldest_id = oldest_fifo.data_out;
+
+    assign lsq.empty = ~oldest_fifo.valid;
 
     ////////////////////////////////////////////////////
     //Request attributes and input data (LUTRAMs)

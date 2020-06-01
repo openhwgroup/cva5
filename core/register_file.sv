@@ -33,6 +33,9 @@ module register_file(
         register_file_writeback_interface.rf wb,
         register_file_issue_interface.rf issue,
 
+        //ID Metadata
+        input logic [4:0] retired_rd_addr,
+
         //Trace signals
         output logic tr_rs1_forwarding_needed,
         output logic tr_rs2_forwarding_needed,
@@ -40,7 +43,7 @@ module register_file(
         );
 
     (* ramstyle = "MLAB, no_rw_check" *) logic [XLEN-1:0] register [32];
-    (* ramstyle = "MLAB, no_rw_check" *) instruction_id_t in_use_by [32];
+    (* ramstyle = "MLAB, no_rw_check" *) id_t in_use_by [32];
 
     logic rs1_inuse;
     logic rs2_inuse;
@@ -57,16 +60,16 @@ module register_file(
 
     //Writeback unit does not assert wb.commit when the target register is r0
     always_ff @ (posedge clk) begin
-        if (~gc_supress_writeback & valid_write)
-            register[wb.rd_addr] <= wb.rd_data;
+        if (~gc_supress_writeback & in_use_match)
+            register[retired_rd_addr] <= wb.rd_data;
     end
 
-    assign in_use_match = (wb.id == in_use_by[wb.rd_addr]) && valid_write;
+    assign in_use_match = (wb.id == in_use_by[retired_rd_addr]) && valid_write;
 
     reg_inuse inuse (.*,
             .clr(1'b0),
             .rs1_addr(issue.rs1_addr),.rs2_addr(issue.rs2_addr), .issued_rd_addr(issue.rd_addr),
-            .retired_rd_addr(wb.rd_addr),
+            .retired_rd_addr(retired_rd_addr),
             .issued(issue.instruction_issued),
             .retired(in_use_match),
             .rs1_inuse(rs1_inuse),
@@ -82,7 +85,7 @@ module register_file(
     assign wb.rs2_id = in_use_by[issue.rs2_addr];
     assign issue.rs2_id = wb.rs2_id;
 
-    assign valid_write = wb.rd_nzero & wb.retiring;
+    assign valid_write = (|retired_rd_addr) & wb.retiring;
 
     assign rs1_feedforward = rs1_inuse;
     assign rs2_feedforward = rs2_inuse;

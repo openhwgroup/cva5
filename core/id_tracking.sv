@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019 Eric Matthews,  Lesley Shannon
+ * Copyright © 2020 Eric Matthews,  Lesley Shannon
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,48 +20,66 @@
  *             Eric Matthews <ematthew@sfu.ca>
  */
 
-import taiga_config::*;
-import taiga_types::*;
 
 module id_tracking
-        (
+    import taiga_config::*;
+    import taiga_types::*;
+    (
         input logic clk,
         input logic rst,
-        input logic issued,
-        input logic retired,
+
+        input logic gc_fetch_flush,
+
+
+        //ID issuing
+        output id_t next_id,
         output logic id_available,
-        output instruction_id_t oldest_id,
-        output instruction_id_t next_id,
-        output logic empty
-        );
+        input id_assigned,
+
+        // m
+
+        //Decode ID
+        input id_t decode_id,
+        input decode_issued,
+        output decode_id_valid,
+
+        //Issue stage
+        input id_t issue_id,
+        input instruction_issued,
+
+    );
     //////////////////////////////////////////
-    localparam LOG2_MAX_INFLIGHT_COUNT = $clog2(MAX_INFLIGHT_COUNT);
-    logic [LOG2_MAX_INFLIGHT_COUNT:0] inflight_count;
+    localparam LOG2_MAX_IDS = $clog2(MAX_IDS);
+
+    fifo_interface #(.DATA_WIDTH($bits(id_t))) fetched_ids();
     ////////////////////////////////////////////////////
     //Implementation
     always_ff @ (posedge clk) begin
         if (rst)
-            oldest_id <= 0;
-        else
-            oldest_id <= oldest_id + LOG2_MAX_INFLIGHT_COUNT'(retired);
-    end
-    always_ff @ (posedge clk) begin
-        if (rst)
             next_id <= 0;
         else
-            next_id <= next_id + LOG2_MAX_INFLIGHT_COUNT'(issued);
+            next_id <= next_id + LOG2_MAX_IDS'(id_assigned);
     end
 
-    //Upper bit is id_available
+    assign fetched_ids.push = id_assigned;
+    assign fetched_ids.pop = decode_issued;
+    assign fetched_ids.data_in = next_id;
+
+    assign decode_id = fetched_ids.data_out;
+    assign decode_id_valid = fetched_ids.valid;
+
+    taiga_fifo #(.DATA_WIDTH($bits(id_t)), .FIFO_DEPTH(MAX_IDS))
+        fetched_ids_fifo (.fifo(fetched_ids), .rst(rst | gc_fetch_flush), .*);
+
+
+
+
     always_ff @ (posedge clk) begin
         if (rst)
-            inflight_count <= '1;
+            id_available <= 0;
         else
-            inflight_count <= inflight_count + (LOG2_MAX_INFLIGHT_COUNT+1)'(retired) - (LOG2_MAX_INFLIGHT_COUNT+1)'(issued);
+            id_available <=
     end
-
-    assign empty = &inflight_count;//all ones
-    assign id_available = inflight_count[LOG2_MAX_INFLIGHT_COUNT];
 
     ////////////////////////////////////////////////////
     //End of Implementation
@@ -70,7 +88,6 @@ module id_tracking
     ////////////////////////////////////////////////////
     //Assertions
     always_ff @ (posedge clk) begin
-        assert (rst | !(~rst & ~id_available & issued)) else $error("Issued without valid ID!");
-        assert (rst | !(~rst & empty & (retired & ~issued))) else $error("Retired without any instruction inflight!");
+        assert (rst | !(~rst & ~id_available & id_assigned)) else $error("Issued without valid ID!");
     end
 endmodule

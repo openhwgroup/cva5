@@ -33,7 +33,7 @@ module div_unit
 
         input div_inputs_t div_inputs,
         unit_issue_interface.unit issue,
-        output unit_writeback_t wb
+        unit_writeback_interface.unit wb
     );
 
     logic signed_divop;
@@ -53,7 +53,7 @@ module div_unit
         logic negate_quotient;
         logic negate_remainder;
         logic reuse_result;
-        instruction_id_t instruction_id;
+        id_t id;
     } div_fifo_inputs_t;
 
     div_fifo_inputs_t fifo_inputs;
@@ -94,18 +94,18 @@ module div_unit
     assign fifo_inputs.negate_quotient = negate_quotient;
     assign fifo_inputs.negate_remainder = negate_remainder;
     assign fifo_inputs.reuse_result = div_inputs.reuse_result;
-    assign fifo_inputs.instruction_id = issue.instruction_id;
+    assign fifo_inputs.id = issue.id;
 
     ////////////////////////////////////////////////////
     //Input FIFO
-    taiga_fifo #(.DATA_WIDTH($bits(div_fifo_inputs_t)), .FIFO_DEPTH(MAX_INFLIGHT_COUNT))
+    taiga_fifo #(.DATA_WIDTH($bits(div_fifo_inputs_t)), .FIFO_DEPTH(MAX_IDS))
         div_input_fifo (.fifo(input_fifo), .*);
 
     assign input_fifo.data_in = fifo_inputs;
     assign input_fifo.push = issue.possible_issue;
     assign input_fifo.supress_push = gc_fetch_flush;
     assign issue.ready = 1; //As FIFO depth is the same as MAX_INFLIGHT_COUNT
-    assign input_fifo.pop = div_done;
+    assign input_fifo.pop = wb.done & wb.ack;
     assign div_op = input_fifo.data_out;
 
     ////////////////////////////////////////////////////
@@ -117,7 +117,7 @@ module div_unit
     set_clr_reg_with_rst #(.SET_OVER_CLR(1), .WIDTH(1), .RST_VALUE('0)) in_progress_m (
       .clk, .rst,
       .set(div_core.start),
-      .clr(div_core.done),
+      .clr(wb.ack),
       .result(in_progress)
     );
 
@@ -129,10 +129,18 @@ module div_unit
 
     ////////////////////////////////////////////////////
     //Output
+    logic done_r;
     assign negate_result = div_op.remainder_op ? div_op.negate_remainder : (~div_core.divisor_is_zero & div_op.negate_quotient);
     assign wb.rd = negate_if (div_op.remainder_op ? div_core.remainder : ({32{div_core.divisor_is_zero}} | div_core.quotient), negate_result);
-    assign wb.done = div_done;
-    assign wb.id = div_op.instruction_id;
+
+    always_ff @ (posedge clk) begin
+        if (wb.ack)
+            done_r <= 0;
+        else if (div_done)
+            done_r <= 1;
+    end
+    assign wb.done = div_done | done_r;
+    assign wb.id = div_op.id;
     ////////////////////////////////////////////////////
     //Assertions
 

@@ -35,7 +35,6 @@ module decode_and_issue (
         input logic [31:0] decode_pc,
         input logic [31:0] decode_instruction,
 
-        tracking_interface.decode ti,
         register_file_issue_interface.issue rf_issue,
 
         output alu_inputs_t alu_inputs,
@@ -57,7 +56,6 @@ module decode_and_issue (
         output id_t issue_id,
         output logic issue_stage_valid,
         output logic id_issued,
-        output logic dummy_id_complete,
         output logic instruction_issued_no_rd,
         output logic instruction_issued_with_rd,
         output logic illegal_instruction,
@@ -189,26 +187,7 @@ module decode_and_issue (
         end
     end
     assign rf_issue.instruction_issued = instruction_issued_with_rd & (|rd_addr_issue_stage);
-    assign rf_issue.id = ti.issue_id;
-
-    ////////////////////////////////////////////////////
-    //Tracking Interface
-    //CSR results are passed through the load/store output
-    always_comb begin
-        unit_needed_for_id_gen = unit_needed[NUM_WB_UNITS-1:0];
-        unit_needed_for_id_gen[LS_UNIT_WB_ID] |= (unit_needed[GC_UNIT_ID] & is_csr);
-    end
-    one_hot_to_integer #(NUM_WB_UNITS) unit_id_gen (.*, .one_hot(unit_needed_for_id_gen), .int_out(unit_needed_for_id_gen_int));
-
-    always_ff @(posedge clk) begin
-        if (issue_stage_ready) begin
-            ti.inflight_packet.is_store <= is_store;
-            ti.issue_unit_id <= unit_needed_for_id_gen_int;
-            ti.exception_possible <= opcode_trim inside {LOAD_T, STORE_T, AMO_T};
-            ti.inflight_packet.rd_addr <= rd_addr;
-        end
-    end
-    assign ti.issued = instruction_issued & (uses_rd_issue_stage | unit_needed_issue_stage[LS_UNIT_WB_ID]);
+    assign rf_issue.id = issue_id;
 
     ////////////////////////////////////////////////////
     //Unit Determination
@@ -239,14 +218,15 @@ module decode_and_issue (
 
     ////////////////////////////////////////////////////
     //Issue Determination
-    assign issue_valid = issue_stage_valid & ti.id_available & ~gc_issue_hold & ~gc_fetch_flush;
+    assign issue_valid = issue_stage_valid & ~gc_issue_hold & ~gc_fetch_flush;
 
     assign operands_ready = ~rf_issue.rs1_conflict & ~rf_issue.rs2_conflict;
 
     //All units share the same operand ready logic except load-store which has an internal forwarding path
     always_comb begin
         unit_operands_ready = {NUM_UNITS{operands_ready}};
-        unit_operands_ready[LS_UNIT_WB_ID] = ~rf_issue.rs1_conflict;
+        unit_operands_ready[LS_UNIT_WB_ID] = ~rf_issue.rs1_conflict & ~rf_issue.rs2_conflict;
+        unit_operands_ready[BRANCH_UNIT_ID] &= unit_ready[ALU_UNIT_WB_ID];
     end
 
     assign issue_ready = unit_needed_issue_stage & unit_ready;
@@ -257,7 +237,6 @@ module decode_and_issue (
     assign instruction_issued_with_rd = instruction_issued & uses_rd_issue_stage;
 
     assign id_issued = instruction_issued;
-    assign dummy_id_complete = instruction_issued & ~unit_needed_issue_stage[BRANCH_UNIT_ID];
     ////////////////////////////////////////////////////
     //ALU unit inputs
     logic [XLEN-1:0] alu_rs1_data;
@@ -401,10 +380,9 @@ module decode_and_issue (
     assign ls_inputs.load = is_load_r;
     assign ls_inputs.store = is_store_r;
     assign ls_inputs.fn3 = amo_op ? LS_W_fn3 : fn3_issue_stage;
-    assign ls_inputs.pc = pc_issue_stage;
     assign ls_inputs.rs1 = rf_issue.rs1_data;
     assign ls_inputs.rs2 = rf_issue.rs2_data;
-    assign ls_inputs.forwarded_store = rf_issue.rs2_conflict;
+    assign ls_inputs.forwarded_store = 0;//rf_issue.rs2_conflict;
     assign ls_inputs.store_forward_id = rf_issue.rs2_id;
 
     ////////////////////////////////////////////////////
@@ -558,9 +536,8 @@ module decode_and_issue (
     ////////////////////////////////////////////////////
     //Unit EX signals
     generate for (i = 0; i < NUM_UNITS; i++) begin
-        assign unit_issue[i].possible_issue = unit_needed_issue_stage[i] & unit_operands_ready[i] & issue_stage_valid & ti.id_available & ~gc_issue_hold;
+        assign unit_issue[i].possible_issue = unit_needed_issue_stage[i] & unit_operands_ready[i] & issue_stage_valid & ~gc_issue_hold;
         assign unit_issue[i].new_request = issue[i];
-        assign unit_issue[i].instruction_id = ti.issue_id;
         assign unit_issue[i].id = issue_id;
         always_ff @(posedge clk) begin
             unit_issue[i].new_request_r <= issue[i];
@@ -583,7 +560,7 @@ module decode_and_issue (
 
 
         //Illegal instruction if the instruction is invalid, but could otherwise be issued
-        assign illegal_instruction = illegal_instruction_pattern_r & issue_stage_valid & ti.id_available & ~gc_issue_hold & ~gc_fetch_flush;
+        assign illegal_instruction = illegal_instruction_pattern_r & issue_stage_valid & ~gc_issue_hold & ~gc_fetch_flush;
     end endgenerate
     ////////////////////////////////////////////////////
     //End of Implementation
@@ -597,7 +574,7 @@ module decode_and_issue (
     generate if (ENABLE_TRACE_INTERFACE) begin
         assign tr_operand_stall = |(unit_needed_issue_stage & unit_ready) & issue_valid & ~|(unit_operands_ready & issue_ready);
         assign tr_unit_stall = ~|(unit_needed_issue_stage & unit_ready) & issue_valid & |(unit_operands_ready & issue_ready);
-        assign tr_no_id_stall = |(unit_needed_issue_stage & unit_ready) & (issue_stage_valid & ~ti.id_available & ~gc_issue_hold & ~gc_fetch_flush) & |(unit_operands_ready & issue_ready);
+        assign tr_no_id_stall = 0;
         assign tr_no_instruction_stall = ~issue_stage_valid | gc_fetch_flush;
         assign tr_other_stall = issue_stage_valid & ~instruction_issued & ~(tr_operand_stall | tr_unit_stall | tr_no_id_stall | tr_no_instruction_stall);
         assign tr_branch_operand_stall = tr_operand_stall & unit_needed_issue_stage[BRANCH_UNIT_ID];

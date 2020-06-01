@@ -58,8 +58,8 @@ module id_management
         input logic branch_complete,
         input id_t branch_id,
 
-        input logic system_op_complete,
-        input id_t system_op_id,
+        input logic system_op_or_exception_complete,
+        input id_t system_op_or_exception_id,
 
         input logic instruction_retired,
         input id_t retired_id
@@ -75,10 +75,9 @@ module id_management
     logic decoded_toggle_mem [MAX_IDS];
     logic decoded_issued_toggle_mem [MAX_IDS];
     logic issued_toggle_mem [MAX_IDS];
-    logic dummy_toggle_mem [MAX_IDS];
     logic branch_complete_toggle_mem [MAX_IDS];
     logic store_complete_toggle_mem [MAX_IDS];
-    logic system_op_complete_toggle_mem [MAX_IDS];
+    logic system_op_or_exception_complete_toggle_mem [MAX_IDS];
     logic retired_toggle_mem [MAX_IDS];
 
     ////////////////////////////////////////////////////
@@ -146,12 +145,6 @@ module id_management
             issued_toggle_mem[issue_id] <= ~issued_toggle_mem[issue_id];
     end
 
-    initial dummy_toggle_mem = '{default: 0};
-    always_ff @ (posedge clk) begin
-        if (dummy_id_complete)
-            dummy_toggle_mem[issue_id] <= ~dummy_toggle_mem[issue_id];
-    end
-
     initial branch_complete_toggle_mem = '{default: 0};
     always_ff @ (posedge clk) begin
         if (branch_complete)
@@ -164,10 +157,10 @@ module id_management
             store_complete_toggle_mem[store_id] <= ~store_complete_toggle_mem[store_id];
     end
 
-    initial system_op_complete_toggle_mem = '{default: 0};
+    initial system_op_or_exception_complete_toggle_mem = '{default: 0};
     always_ff @ (posedge clk) begin
-        if (system_op_complete)
-            system_op_complete_toggle_mem[system_op_id] <= ~system_op_complete_toggle_mem[system_op_id];
+        if (system_op_or_exception_complete)
+            system_op_or_exception_complete_toggle_mem[system_op_or_exception_id] <= ~system_op_or_exception_complete_toggle_mem[system_op_or_exception_id];
     end
 
     initial retired_toggle_mem = '{default: 0};
@@ -183,11 +176,9 @@ module id_management
     assign id_not_inflight =
         ~(issued_toggle_mem[pc_id_i] ^
             branch_complete_toggle_mem[pc_id_i] ^
-            dummy_toggle_mem[pc_id_i]
-            );// ^
-                //store_complete_toggle_mem[pc_id_i] ^
-                //system_op_complete_toggle_mem[pc_id_i] ^
-                //retired_toggle_mem[pc_id_i]);
+            store_complete_toggle_mem[pc_id_i] ^
+            system_op_or_exception_complete_toggle_mem[pc_id_i] ^
+            retired_toggle_mem[pc_id_i]);
 
     always_ff @ (posedge clk) begin
         if (rst)

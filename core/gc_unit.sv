@@ -46,7 +46,6 @@ module gc_unit(
 
         //Load Store Unit
         input exception_packet_t ls_exception,
-        input logic ls_exception_valid,
 
         //TLBs
         output logic tlb_on,
@@ -57,13 +56,17 @@ module gc_unit(
         mmu_interface.csr dmmu,
 
         //ID Management
-        output logic system_op_complete,
-        output id_t system_op_id,
+        output logic system_op_or_exception_complete,
+        output id_t system_op_or_exception_id,
+
+        //Exception
+        output id_t exception_id,
+        input logic [31:0] exception_pc,
 
         //WB
         input logic instruction_retired,
         input logic instruction_queue_empty,
-        input instruction_id_t oldest_id,
+        input logic writeback_is_idle,
         //unit_writeback_interface.unit gc_wb,
 
         //External
@@ -77,14 +80,13 @@ module gc_unit(
         output logic gc_fetch_pc_override,
         output logic gc_supress_writeback,
 
-        output logic ls_exception_ack,
-
         output logic [31:0] gc_fetch_pc,
 
         //Write-back to Load-Store Unit
         output logic[31:0] csr_rd,
-        output instruction_id_t csr_id,
-        output logic csr_done
+        output id_t csr_id,
+        output logic csr_done,
+        input logic ls_is_idle
         );
 
     //Largest depth for TLBs
@@ -139,7 +141,7 @@ module gc_unit(
     //     *If in-order mode and inflight queue empty, disable zero cycle write-back (eg. ALU)
     //*Hold fetch during potential fetch exception, when fetch buffer drained, if no other exceptions trigger exception
 
-    typedef enum {RST_STATE, IDLE_STATE, TLB_CLEAR_STATE, IQ_DRAIN, IQ_DISCARD} gc_state;
+    typedef enum {RST_STATE, IDLE_STATE, TLB_CLEAR_STATE, IQ_DRAIN} gc_state;
     gc_state state;
     gc_state next_state;
     gc_state prev_state;
@@ -175,10 +177,7 @@ module gc_unit(
     logic processing_csr;
     logic csr_ready_to_complete;
     logic csr_ready_to_complete_r;
-    instruction_id_t instruction_id;
-
-    instruction_id_t exception_id;
-    instruction_id_t exception_id_r;
+    id_t instruction_id;
 
     //implementation
     ////////////////////////////////////////////////////
@@ -190,8 +189,10 @@ module gc_unit(
 
     ////////////////////////////////////////////////////
     //ID Management
-    assign system_op_complete = issue.new_request & (gc_inputs.is_fence | gc_inputs.is_i_fence);
-    assign system_op_id = issue.id;
+    assign system_op_or_exception_complete =
+        (issue.new_request & (gc_inputs.is_fence | gc_inputs.is_i_fence)) |
+        gc_exception.valid;
+    assign system_op_or_exception_id = issue.new_request ? issue.id : exception_id;
 
     //Instruction decode
     assign opcode = stage1.instruction[6:0];
@@ -205,15 +206,11 @@ module gc_unit(
     assign gc_fetch_flush = branch_flush | gc_fetch_pc_override;
 
     always_ff @ (posedge clk) begin
-        gc_issue_hold <= issue.new_request || processing_csr || (next_state inside {TLB_CLEAR_STATE, IQ_DRAIN, IQ_DISCARD}) || potential_branch_exception;
+        gc_issue_hold <= issue.new_request || processing_csr || (next_state inside {TLB_CLEAR_STATE, IQ_DRAIN}) || potential_branch_exception;
     end
 
     always_ff @ (posedge clk) begin
-        gc_issue_flush <= (next_state == IQ_DISCARD);
-    end
-
-    always_ff @ (posedge clk) begin
-        gc_supress_writeback <= next_state inside {TLB_CLEAR_STATE, IQ_DISCARD} ? 1 : 0;
+        gc_supress_writeback <= next_state inside {TLB_CLEAR_STATE} ? 1 : 0;
     end
 
     ////////////////////////////////////////////////////
@@ -238,12 +235,11 @@ module gc_unit(
             RST_STATE : next_state = IDLE_STATE;
             IDLE_STATE : begin
                 if (ls_exception.valid | (branch_exception_is_jump & potential_branch_exception)) begin
-                    next_state = (exception_id == oldest_id) ? IQ_DISCARD : IQ_DRAIN;
+                    next_state = IQ_DRAIN;
                 end
             end
             TLB_CLEAR_STATE : if (tlb_clear_done) next_state = IDLE_STATE;
-            IQ_DRAIN : if (exception_id_r == oldest_id) next_state = IQ_DISCARD;
-            IQ_DISCARD : if (instruction_queue_empty) next_state = IDLE_STATE;
+            IQ_DRAIN : next_state = IDLE_STATE;
             default : next_state = RST_STATE;
         endcase
     end
@@ -259,7 +255,6 @@ module gc_unit(
     end
     ////////////////////////////////////////////////////
     //Exception handling
-    logic processing_ls_exception;
 
     //The type of call instruction is depedent on the current privilege level
     always_comb begin
@@ -271,43 +266,27 @@ module gc_unit(
         endcase
     end
 
-    always_ff @(posedge clk) begin
-        if (gc_exception.valid)
-            processing_ls_exception <= ls_exception.valid;
-    end
-
-    assign ls_exception_ack = processing_ls_exception && (prev_state inside {IDLE_STATE, IQ_DRAIN}) && (state == IQ_DISCARD);
-
     assign exception_id =
         potential_branch_exception ? br_exception.id :
-        (ls_exception.valid ? ls_exception.id : issue.instruction_id);
-
-    always_ff @(posedge clk) begin
-        if (gc_exception.valid)
-            exception_id_r <= exception_id;
-    end
+        (ls_exception.valid ? ls_exception.id : issue.id);
 
     //TODO: check if possible to convert to unique if, verify potential for overlap
     always_comb begin
+        //PC sourced from instruction metadata table
         if (br_exception.valid) begin
             gc_exception.code = br_exception.code;
-            gc_exception.pc = br_exception.pc;
             gc_exception.tval = br_exception.tval;
         end else if (illegal_instruction) begin
             gc_exception.code = ILLEGAL_INST;
-            gc_exception.pc = gc_inputs.pc;
             gc_exception.tval = gc_inputs.instruction;//optional, can be zero instead
         end else if (ls_exception.valid) begin
             gc_exception.code = ls_exception.code;
-            gc_exception.pc = ls_exception.pc;
             gc_exception.tval = ls_exception.tval;
         end else if (gc_inputs.is_ecall) begin
             gc_exception.code = ecall_code;
-            gc_exception.pc = gc_inputs.pc;
             gc_exception.tval = '0;
         end else begin
             gc_exception.code = BREAK;
-            gc_exception.pc = gc_inputs.pc;
             gc_exception.tval = '0;
         end
     end
@@ -352,12 +331,12 @@ module gc_unit(
       .result(processing_csr)
     );
 
-    assign csr_ready_to_complete = processing_csr && (oldest_id == instruction_id);
+    assign csr_ready_to_complete = processing_csr & ls_is_idle & writeback_is_idle;
     always_ff @(posedge clk) begin
         csr_ready_to_complete_r <= csr_ready_to_complete;
         csr_id <= instruction_id;
         if (issue.new_request) begin
-            instruction_id <= issue.instruction_id;
+            instruction_id <= issue.id;
         end
     end
 
