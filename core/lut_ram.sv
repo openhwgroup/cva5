@@ -22,17 +22,18 @@
 
 module lut_ram #(
         parameter WIDTH = 32,
-        parameter DEPTH = 32
+        parameter DEPTH = 32,
+        parameter READ_PORTS = 2
         )
         (
         input logic clk,
 
         input logic[$clog2(DEPTH)-1:0] waddr,
-        input logic[$clog2(DEPTH)-1:0] raddr,
+        input logic[$clog2(DEPTH)-1:0] raddr [READ_PORTS],
 
         input logic ram_write,
         input logic[WIDTH-1:0] new_ram_data,
-        output logic[WIDTH-1:0] ram_data_out
+        output logic[WIDTH-1:0] ram_data_out [READ_PORTS]
 
         );
 
@@ -44,6 +45,10 @@ module lut_ram #(
             ram[waddr] <= new_ram_data;
     end
 
-    assign ram_data_out = ram[raddr];
+    always_comb begin
+        for (int i = 0; i < READ_PORTS; i++) begin
+            ram_data_out[i] = ram[raddr[i]];
+        end
+    end
 
 endmodule
