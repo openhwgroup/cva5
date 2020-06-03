@@ -1,3 +1,4 @@
+
 #include <stdlib.h>
 #include <iostream>
 #include <fstream>
@@ -16,7 +17,6 @@ TaigaTracer<Vtaiga_local_mem> *taigaTracer;
 //#define TRACE_ON
 using namespace std;
 int main(int argc, char **argv) {
-
     ofstream logFile, sigFile;
     ifstream programFile;
 
@@ -45,6 +45,7 @@ int main(int argc, char **argv) {
 
     logFile.open (argv[1]);
     sigFile.open (argv[2]);
+    //printf("HW INIT:%s \n", argv[3]);
     programFile.open (argv[3]);
 
     if (!logFile.is_open()) {
@@ -68,13 +69,13 @@ int main(int argc, char **argv) {
 	#endif
 	taigaTracer->reset();
 	cout << "--------------------------------------------------------------\n";
-	cout << "   Starting Simulation, logging to " << argv[1] << "\n";
+	cout << "   Starting Simulation, logging to: " << argv[1] << "\n";
 	cout << "--------------------------------------------------------------\n";
+    cout << flush;
 
 	// Tick the clock until we are done
 	while(!(taigaTracer->has_stalled() || taigaTracer->has_terminated())) {
 	    taigaTracer->tick();
-
         //Compliance Tests Signature Printing Phase
         if (taigaTracer->check_instruction_issued(COMPLIANCE_SIG_PHASE_NOP)) {
             std::cout << "\n--------------------------------------------------------------\n";
@@ -85,7 +86,7 @@ int main(int argc, char **argv) {
 	}
 
 	cout << "--------------------------------------------------------------\n";
-	cout << "   Simulation Completed.  " << taigaTracer->get_cycle_count() << " cycles.\n";
+	cout << "   Simulation Completed:  " << taigaTracer->get_cycle_count() << " cycles.\n";
     taigaTracer->print_stats();
 
 	logFile.close();

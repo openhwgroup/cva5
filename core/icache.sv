@@ -48,6 +48,7 @@ module icache(
     logic [31:0] data_out [ICACHE_WAYS-1:0];
     logic [31:0] miss_data;
 
+    logic miss_in_progress;
     logic miss_data_ready;
     logic second_cycle;
 
@@ -67,10 +68,10 @@ module icache(
     end
 
     always_ff @ (posedge clk) begin
-        if (rst)
+        if (rst | fetch_sub.flush)
             tag_update <= 0;
         else if (second_cycle)
-            tag_update <= icache_on  & ~tag_hit;        //Cache enabled, read miss
+            tag_update <= icache_on & ~tag_hit;        //Cache enabled, read miss
         else
             tag_update <= 0;
     end
@@ -94,14 +95,27 @@ module icache(
     end
 
     //request registered
+    logic request;
     always_ff @ (posedge clk) begin
-        if (rst)
-            l1_request.request <= 0;
+        if (rst | fetch_sub.flush)
+            request <= 0;
         else if (second_cycle)
-            l1_request.request <= ~tag_hit | ~icache_on;
+            request <= ~tag_hit | ~icache_on;
         else if (l1_request.ack)
-            l1_request.request <= 0;
+            request <= 0;
     end
+    assign l1_request.request = request;
+
+
+    always_ff @ (posedge clk) begin
+        if (rst | fetch_sub.flush)
+            miss_in_progress <= 0;
+        else if (l1_request.ack)
+            miss_in_progress <= 1;
+        else if (line_complete)
+            miss_in_progress <= 0;
+    end
+
 
 
     /*************************************
@@ -118,6 +132,7 @@ module icache(
 
     //Tag banks
     itag_banks icache_tag_banks (.*,
+            .rst(rst | fetch_sub.flush),
             .stage1_addr(fetch_sub.stage1_addr),
             .stage2_addr(fetch_sub.stage2_addr),
             .update_way(tag_update_way),
@@ -161,7 +176,7 @@ module icache(
         if (rst)
             miss_data_ready <= 0;
         else
-            miss_data_ready <= l1_response.data_valid & is_target_word;
+            miss_data_ready <= miss_in_progress & l1_response.data_valid & is_target_word & ~fetch_sub.flush;
     end
 
 
@@ -193,7 +208,7 @@ module icache(
             idle <= 1;
         else if (fetch_sub.new_request & ~fetch_sub.flush)
             idle <= 0;
-        else if (memory_complete | tag_hit) //read miss OR write through complete
+        else if (memory_complete | tag_hit | (second_cycle & fetch_sub.flush) | (request & ~l1_request.ack & fetch_sub.flush)) //read miss OR write through complete
             idle <= 1;
     end
 

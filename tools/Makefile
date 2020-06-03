@@ -3,7 +3,7 @@
 #MAKEFLAGS += --silent
 -include internal.mak
 MAKEFILE_DIR=$(pwd)
-TAIGA_DIR=/home/ematthew/taiga
+TAIGA_DIR=/home/zaguila/Documents/Research/AXI_DDR_simulation/Taiga-dev
 
 RISCV_PREFIX   ?= riscv32-unknown-elf-
 
@@ -14,29 +14,73 @@ VERILATOR_DIR=$(TAIGA_DIR)/test_benches/verilator
 
 TAIGA_SRCS = $(shell cat taiga_compile_order)
 
-#Set to True or False
-TRACE_ENABLE=False
-VERILATOR_TRACE_FILE="/data/sim-logs/sim_results.vcd"
 
+#Tracing: Set to True or False
+TRACE_ENABLE=False
+VERILATOR_TRACE_FILE="/home/zaguila/Tools/RISCV/sim-logs/sim_results.vcd"
+
+#DDR Pre-Initialization
+LOAD_DDR_FROM_FILE = False
+DDR_FILE = "\"path_to_DDR_init_file\""
+DDR_FILE_STARTING_LOCATION = 0
+DDR_FILE_NUM_BYTES = 0
+
+#AXI DDR Parameters
+DDR_SIZE_GB = 4
+PAGE_SIZE_KB = 2
+MAX_READ_REQ = 8
+MAX_WRITE_REQ = $(MAX_READ_REQ)
+MIN_RD_DELAY = 1
+MAX_RD_DELAY = 1
+MIN_WR_DELAY = 1
+MAX_WR_DELAY = 1
+DELAY_SEED = 867583
+######################################################################
+ddr_size_def = DDR_SIZE=\(long\)$(DDR_SIZE_GB)*\(long\)1073741824
+page_size_def = PAGE_SIZE=\($(PAGE_SIZE_KB)*1024\)
+max_inflight_read_requests = MAX_INFLIGHT_RD_REQ=$(MAX_READ_REQ)
+max_inflight_write_requests = MAX_INFLIGHT_WD_REQ=$(MAX_WRITE_REQ)
+mix_delay_read = MIN_DELAY_RD=$(MIN_RD_DELAY)
+max_delay_read = MAX_DELAY_RD=$(MAX_RD_DELAY)
+min_delay_write = MIN_DELAY_WR=$(MIN_WR_DELAY)
+max_delay_write = MAX_DELAY_WR=$(MAX_WR_DELAY)
+delay_seed = DELAY_SEED=$(DELAY_SEED)
+ddr_init_file = DDR_INIT_FILE=$(DDR_FILE)
+ddr_start_loc = DDR_FILE_STARTING_LOCATION=$(DDR_FILE_STARTING_LOCATION)
+ddr_num_bytes = DDR_FILE_NUM_BYTES=$(DDR_FILE_NUM_BYTES)
+
+CFLAGS = -g0 -O3 -march=native -D$(ddr_size_def) -D$(page_size_def) -D$(max_inflight_read_requests) -D$(max_inflight_write_requests)\
+	-D$(mix_delay_read) -D$(max_delay_read) -D$(min_delay_write) -D$(max_delay_write) -D$(delay_seed)\
+	-D$(ddr_init_file) -D$(ddr_start_loc) -D$(ddr_num_bytes)
+
+#Verilator
+################################################################################
 VERILATOR_LINT_IGNORE= -Wno-LITENDIAN -Wno-SYMRSVDWORD
 ifeq ($(TRACE_ENABLE), True)
-	VERILATOR_CFLAGS =  --trace -CFLAGS "-g0 -O3 -march=native -D TRACE_ON"
+	VERILATOR_CFLAGS =  --trace --CFLAGS "$(CFLAGS)  -D TRACE_ON"
 else
-	VERILATOR_CFLAGS =  -CFLAGS "-g0 -O3 -march=native"
+	VERILATOR_CFLAGS =   --CFLAGS  "$(CFLAGS)"
 endif
-###############################################################
+
+VERILATOR_LINT_IGNORE= -Wno-LITENDIAN -Wno-SYMRSVDWORD
+ifeq ($(LOAD_DDR_FROM_FILE), True)
+	VERILATOR_CFLAGS :=  $(VERILATOR_CFLAGS) -D LOAD_DDR_FROM_FILE"
+endif
+
+##################################################################################
+
 
 #Compiance parameters
 ###############################################################
-COMPLIANCE_DIR=/home/ematthew/Research/RISCV/sfu-rcl/taiga-riscv-compliance/
+COMPLIANCE_DIR=/home/zaguila/Tools/RISCV/taiga-riscv-compliance/
 COMPLIANCE_TARGET=rv32im
 ###############################################################
 
 #Benchmark parameters
 #Assumes binaries are in the BENCHMARK_DIR
 ###############################################################
-EMBENCH_DIR=/home/ematthew/Research/RISCV/sfu-rcl/taiga-embench
-EMBENCH_BENCHMARKS = \
+EMBENCH_DIR=/home/zaguila/Tools/RISCV/taiga-embench
+EMBENCH_BENCHMARKS =  \
 aha-mont64 \
 crc32 \
 cubic \
@@ -56,6 +100,7 @@ st \
 statemate \
 ud \
 wikisort \
+
  
 embench_logs  = $(addsuffix _full.log,  $(EMBENCH_BENCHMARKS))
 embench_hw  = $(addsuffix .hw_init,  $(EMBENCH_BENCHMARKS))
@@ -118,8 +163,13 @@ build_taiga_sim: $(TAIGA_SRCS)
 	cp $(VERILATOR_DIR)/SimMem.h $@/
 	cp $(VERILATOR_DIR)/SimMem.cc $@/
 	cp $(VERILATOR_DIR)/taiga_local_mem.cc $@/
+	cp $(VERILATOR_DIR)/AXI_DDR_simulation/axi_ddr_sim.cc $@/
+	cp $(VERILATOR_DIR)/AXI_DDR_simulation/axi_ddr_sim.h $@/
+	cp $(VERILATOR_DIR)/AXI_DDR_simulation/ddr_page.cc $@/
+	cp $(VERILATOR_DIR)/AXI_DDR_simulation/ddr_page.h $@/
+	cp $(VERILATOR_DIR)/AXI_DDR_simulation/axi_interface.h $@/
 	verilator --cc --exe --Mdir $@ --assert $(VERILATOR_LINT_IGNORE) $(VERILATOR_CFLAGS) $(TAIGA_SRCS) \
-		 ../test_benches/verilator/taiga_local_mem.sv --top-module taiga_local_mem taiga_local_mem.cc SimMem.cc
+		 ../test_benches/verilator/taiga_local_mem.sv --top-module taiga_local_mem taiga_local_mem.cc ddr_page.cc SimMem.cc
 	$(MAKE) -C  $@ -f Vtaiga_local_mem.mk
 
 #Run verilator

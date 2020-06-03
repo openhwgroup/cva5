@@ -65,7 +65,6 @@ module fetch(
     //Subunit signals
     fetch_sub_unit_interface fetch_sub[NUM_SUB_UNITS-1:0]();
     logic [NUM_SUB_UNITS-1:0] sub_unit_address_match;
-    logic [NUM_SUB_UNITS-1:0] last_sub_unit_id;
     logic [NUM_SUB_UNITS-1:0] unit_ready;
     logic [NUM_SUB_UNITS-1:0] unit_data_valid;
     logic [31:0] unit_data_array [NUM_SUB_UNITS-1:0];
@@ -83,9 +82,7 @@ module fetch(
     logic new_mem_request;
 
     //Cache related
-    logic delayed_flush;
     logic [31:0] stage2_phys_address;
-    logic stage2_valid;
 
     genvar i;
     ////////////////////////////////////////////////////
@@ -174,28 +171,6 @@ module fetch(
         icache i_cache (.*, .fetch_sub(fetch_sub[ICACHE_ID]));
         assign cache_address_match = tlb.physical_address[31:32-MEMORY_BIT_CHECK] == MEMORY_ADDR_L[31:32-MEMORY_BIT_CHECK];
         assign sub_unit_address_match[ICACHE_ID] = cache_address_match;
-
-        set_clr_reg_with_rst #(.SET_OVER_CLR(1), .WIDTH(1), .RST_VALUE(0)) stage2_valid_m (
-          .clk, .rst(flush_or_rst),
-          .set(new_mem_request),
-          .clr(pre_decode_push),
-          .result(stage2_valid)
-        );
-
-        always_ff @(posedge clk) begin
-            if (new_mem_request)
-                last_sub_unit_id <= sub_unit_address_match;
-        end
-        //TODO potentially move support into cache so that we're not stalled on a request we no longer need due to a flush
-        //If the cache is processing a miss when a flush occurs we need to discard the result once complete
-        set_clr_reg_with_rst #(.SET_OVER_CLR(1), .WIDTH(1), .RST_VALUE(0)) delayed_flush_m (
-          .clk, .rst,
-          .set(gc_fetch_flush & stage2_valid & last_sub_unit_id[ICACHE_ID] & ~fetch_sub[ICACHE_ID].data_valid),
-          .clr(fetch_sub[ICACHE_ID].data_valid),
-          .result(delayed_flush)
-        );
-    end else begin
-        assign delayed_flush = 0;
     end
     endgenerate
 
@@ -203,7 +178,7 @@ module fetch(
     //Pre-Decode Output
     assign pre_decode_instruction = unit_data_array[next_unit.data_out];
     assign pre_decode_pc = stage2_phys_address;
-    assign pre_decode_push = (~delayed_flush) & units_data_valid;//FIFO is cleared on gc_fetch_flush
+    assign pre_decode_push = units_data_valid;//FIFO is cleared on gc_fetch_flush
 
     always_ff @(posedge clk) begin
         if (new_mem_request) begin
