@@ -41,7 +41,7 @@ module amo_alu(
 
     /* verilator lint_off CASEINCOMPLETE */
     always_comb begin
-        unique case (amo_alu_inputs.op)// <--unique as not all codes are in use
+        case (amo_alu_inputs.op)// <--unique as not all codes are in use
             AMO_SWAP : result = amo_alu_inputs.rs2;
             AMO_ADD : result = amo_alu_inputs.rs1_load + amo_alu_inputs.rs2;
             AMO_XOR : result = amo_alu_inputs.rs1_load ^ amo_alu_inputs.rs2;
@@ -54,5 +54,6 @@ module amo_alu(
         endcase
     end
     /* verilator lint_on CASEINCOMPLETE */
+
 
 endmodule

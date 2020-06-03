@@ -162,6 +162,7 @@ module l2_arbiter (
 	assign mem.be = mem_addr_fifo_data_out.be;
 	assign mem.is_amo = mem_addr_fifo_data_out.is_amo;
 	assign mem.amo_type_or_burst_size = mem_addr_fifo_data_out.amo_type_or_burst_size;
+    assign mem.id = mem_addr_fifo_data_out.id;
 
     l2_fifo #(.DATA_WIDTH($bits(l2_mem_request_t)), .FIFO_DEPTH(L2_MEM_ADDR_FIFO_DEPTH))  input_fifo (.*, .fifo(mem_addr_fifo));
 

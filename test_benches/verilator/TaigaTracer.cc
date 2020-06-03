@@ -23,6 +23,8 @@
 #include <iostream>
 #include "TaigaTracer.h"
 
+
+
 //#define TRACE_ON
 template <class TB>
 bool TaigaTracer<TB>::check_instruction_issued(uint32_t inst) {
@@ -46,16 +48,17 @@ bool TaigaTracer<TB>::has_terminated() {
 template <class TB>
 bool TaigaTracer<TB>::has_stalled() {
     if (!tb->instruction_issued) {
-        stall_count++;
         if (stall_count > stall_limit) {
             stall_count = 0;
             std::cout << "\n\nError!!!!\n";
             std::cout << "Stall of " << stall_limit << " cycles detected!\n\n";
             return true;
 		} else {
-			stall_count = 0;
+			stall_count++;
 		}
 	}
+    else 
+        stall_count=0;
 	return false;
 }
 
@@ -86,14 +89,17 @@ void TaigaTracer<TB>::print_stats() {
 
 template <class TB>
 void TaigaTracer<TB>::reset() {
+    tb->clk = 0;
     tb->rst = 1;
-	tb->eval();
-
-    for (int i=0; i <reset_length; i++)
+    for (int i=0; i <reset_length; i++){
         tick();
+    }
 
     tb->rst = 0;
     reset_stats();
+    std::cout << "DONE System reset \n" << std::flush;
+
+
 }
 template <class TB>
 void TaigaTracer<TB>::set_log_file(std::ofstream* logFile) {
@@ -123,13 +129,21 @@ void TaigaTracer<TB>::update_memory() {
 
 template <class TB>
 void TaigaTracer<TB>::tick() {
-		tb->eval();
+        cycle_count++;
+
 		tb->clk = 1;
 		tb->eval();
-		tb->clk = 0;
-		tb->eval();
+        #ifdef TRACE_ON
+            verilatorWaveformTracer->dump(vluint32_t(10*cycle_count-2));
+        #endif
+        cycle_count++;
 
-		cycle_count++;
+        tb->clk = 0;
+        tb->eval();
+        #ifdef TRACE_ON
+            verilatorWaveformTracer->dump(vluint32_t(10*cycle_count));
+        #endif
+
 
         if (check_instruction_issued(BENCHMARK_START_COLLECTION_NOP)) {
             collect_stats = true;
@@ -138,13 +152,14 @@ void TaigaTracer<TB>::tick() {
         if (check_instruction_issued(BENCHMARK_END_COLLECTION_NOP)) {
             collect_stats = false;
         }
-		update_stats();
-		update_UART();
-		update_memory();
 
-        #ifdef TRACE_ON
-            verilatorWaveformTracer->dump(vluint32_t(cycle_count));
-        #endif
+
+        tb->clk = 1;
+        tb->eval();
+        axi_ddr->step();
+        update_stats();
+        update_UART();
+        update_memory();
 }
 
 template <class TB>
@@ -168,10 +183,19 @@ TaigaTracer<TB>::TaigaTracer(std::ifstream& programFile) {
 		Verilated::traceEverOn(true);
 	#endif
 
-    mem = new SimMem(programFile, 128);
+
     tb = new TB;
 
-	tb->clk = 0;
+   #ifdef DDR_LOAD_FILE
+        axi_ddr = new axi_ddr_sim<Vtaiga_local_mem>(DDR_INIT_FILE,DDR_FILE_STARTING_LOCATION,DDR_FILE_NUM_BYTES);
+    #else
+        axi_ddr = new axi_ddr_sim<Vtaiga_local_mem>(programFile, tb);
+        
+    #endif
+    programFile.clear();
+    programFile.seekg(0, ios::beg);
+    mem = new SimMem(programFile, 128);
+
     instruction_r = mem->read(tb->instruction_bram_addr);
     data_out_r = 0;
 }

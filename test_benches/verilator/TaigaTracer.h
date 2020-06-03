@@ -26,7 +26,7 @@
 #include <iostream>
 #include <iterator>
 #include "SimMem.h"
-
+#include "axi_ddr_sim.h"
 //#define TRACE_ON
 
 #define COMPLIANCE_SIG_PHASE_NOP 0x00B00013U
@@ -82,11 +82,15 @@ public:
   void reset_stats();
   void reset();
   void tick();
+
   void set_log_file(std::ofstream* logFile);
   void start_tracer(const char *trace_file);
   uint64_t get_cycle_count();
-private:
+
+  //DDR Simulation
   TB *tb;
+private:
+  axi_ddr_sim<TB> * axi_ddr;
   SimMem *mem;
 #ifdef TRACE_ON
 		VerilatedVcdC	*verilatorWaveformTracer;
@@ -105,8 +109,9 @@ private:
   void update_memory();
   uint32_t instruction_r;
   uint32_t data_out_r;
-};
 
+};
 #include "TaigaTracer.cc"
+
 
 #endif

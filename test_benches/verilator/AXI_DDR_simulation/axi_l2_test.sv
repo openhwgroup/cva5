@@ -25,7 +25,7 @@ import taiga_types::*;
 import l2_config_and_types::*;
 
 
-module taiga_local_mem # (
+module axi_l2_test # (
         parameter MEMORY_FILE = "/home/ematthew/Research/RISCV/software/riscv-tools/riscv-tests/benchmarks/dhrystone.riscv.hw_init" //change this to appropriate location "/home/ematthew/Downloads/dhrystone.riscv.sim_init"
         )
         (
@@ -74,74 +74,33 @@ module taiga_local_mem # (
         output logic ddr_axi_wvalid,
         output logic [5:0]ddr_axi_wid,
 
-        //L2 interface
-        input logic [29:0] addr,
-        input logic [3:0] be,
-        input logic rnw,
-        input logic is_amo,
-        input logic [4:0] amo_type_or_burst_size,
-        input logic [L2_SUB_ID_W-1:0] sub_id,
 
-        input logic request_push,
-        output logic request_full,
+		//L2 interface
+	   	input logic [29:0] addr,
+		input logic [3:0] be,
+		input logic rnw,
+		input logic is_amo,
+		input logic [4:0] amo_type_or_burst_size,
+		input logic [L2_SUB_ID_W-1:0] sub_id,
 
-        output logic [31:2] inv_addr,
-        output logic inv_valid,
-        input logic inv_ack,
+		input logic request_push,
+		output logic request_full,
 
-        output logic con_result,
-        output logic con_valid,
+		output logic [31:2] inv_addr,
+		output logic inv_valid,
+		input logic inv_ack,
 
-        input logic [31:0] wr_data,
-        input logic wr_data_push,
-        output logic data_full,
+		output logic con_result,
+		output logic con_valid,
 
-        output logic [31:0] rd_data,
-        output logic [L2_SUB_ID_W-1:0] rd_sub_id,
-        output logic rd_data_valid,
-        input logic rd_data_ack,
+		input logic [31:0] wr_data,
+		input logic wr_data_push,
+		output logic data_full,
 
-        //        //AXI bus
-        //        output logic [31:0]bus_axi_araddr,
-        //        output logic [1:0]bus_axi_arburst,
-        //        output logic [3:0]bus_axi_arcache,
-        //        output logic [5:0]bus_axi_arid,
-        //        output logic [7:0]bus_axi_arlen,
-        //        output logic [0:0]bus_axi_arlock,
-        //        output logic [2:0]bus_axi_arprot,
-        //        output logic [3:0]bus_axi_arqos,
-        //        input logic bus_axi_arready,
-        //        output logic [3:0]bus_axi_arregion,
-        //        output logic [2:0]bus_axi_arsize,
-        //        output logic bus_axi_arvalid,
-        //        output logic [31:0]bus_axi_awaddr,
-        //        output logic [1:0]bus_axi_awburst,
-        //        output logic [3:0]bus_axi_awcache,
-        //        output logic [5:0]bus_axi_awid,
-        //        output logic [7:0]bus_axi_awlen,
-        //        output logic [0:0]bus_axi_awlock,
-        //        output logic [2:0]bus_axi_awprot,
-        //        output logic [3:0]bus_axi_awqos,
-        //        input logic bus_axi_awready,
-        //        output logic [3:0]bus_axi_awregion,
-        //        output logic [2:0]bus_axi_awsize,
-        //        output logic bus_axi_awvalid,
-        //        output logic [5:0]bus_axi_bid,
-        //        output logic bus_axi_bready,
-        //        input logic [1:0]bus_axi_bresp,
-        //        input logic bus_axi_bvalid,
-        //        input logic [31:0]bus_axi_rdata,
-        //        output logic [5:0]bus_axi_rid,
-        //        output logic bus_axi_rlast,
-        //        output logic bus_axi_rready,
-        //        input logic [1:0]bus_axi_rresp,
-        //        input logic bus_axi_rvalid,
-        //        output logic [31:0]bus_axi_wdata,
-        //        output logic bus_axi_wlast,
-        //        input logic bus_axi_wready,
-        //        output logic [3:0]bus_axi_wstrb,
-        //        output logic bus_axi_wvalid,
-        //        output logic [5:0]bus_axi_wid,
+		output logic [31:0] rd_data,
+		output logic [L2_SUB_ID_W-1:0] rd_sub_id,
+		output logic rd_data_valid,
+		input logic rd_data_ack,
 
         //Local Memory
         output logic [29:0] instruction_bram_addr,
@@ -264,6 +223,33 @@ module taiga_local_mem # (
     //    assign m_axi.bvalid = bus_axi_bvalid;
     //    assign m_axi.bresp = bus_axi_bresp;
 
+    assign l2[0].addr = addr;
+    assign l2[0].be = be;
+    assign l2[0].rnw = rnw;
+    assign l2[0].is_amo = is_amo;
+    assign l2[0].amo_type_or_burst_size = amo_type_or_burst_size;
+    assign l2[0].sub_id = sub_id;
+
+    assign l2[0].request_push = request_push;
+    assign request_full = l2[0].request_full;
+
+    assign inv_addr = l2[0].inv_addr;
+    assign inv_valid = l2[0].inv_valid;
+    assign l2[0].inv_ack = inv_ack;
+
+    assign con_result = l2[0].con_result;
+    assign con_valid = l2[0].con_valid;
+
+    assign l2[0].wr_data = wr_data;
+    assign l2[0].wr_data_push = wr_data_push;
+    assign data_full = l2[0].data_full;
+
+    assign rd_data = l2[0].rd_data;
+    assign rd_sub_id = l2[0].rd_sub_id;
+    assign rd_data_valid = l2[0].rd_data_valid;
+    assign l2[0].rd_data_ack = rd_data_ack;
+
+
     assign l2[1].request_push = 0;
     assign l2[1].wr_data_push = 0;
     assign l2[1].inv_ack = l2[1].inv_valid;
@@ -271,116 +257,6 @@ module taiga_local_mem # (
 
     axi_to_arb l2_to_mem (.*, .l2(mem));
     l2_arbiter l2_arb (.*, .request(l2));
-
-    assign instruction_bram_addr = instruction_bram.addr;
-    assign instruction_bram_en = instruction_bram.en;
-    assign instruction_bram_be = instruction_bram.be;
-    assign instruction_bram_data_in = instruction_bram.data_in;
-    assign instruction_bram.data_out = instruction_bram_data_out;
-
-    assign data_bram_addr = data_bram.addr;
-    assign data_bram_en = data_bram.en;
-    assign data_bram_be = data_bram.be;
-    assign data_bram_data_in = data_bram.data_in;
-    assign data_bram.data_out = data_bram_data_out;
-
-    taiga cpu(.*, .l2(l2[0]));
-
-    //read channel
-    logic[3:0] read_counter;
-    logic begin_read_counter;
-
-    always_ff @(posedge clk) begin
-        if (rst) begin
-            m_axi.rvalid <= 0;
-            m_axi.arready <= 1; //You want it to start at ready
-            m_axi.rresp <= 0;
-            read_counter <= READ_COUNTER_MAX;
-        end
-        else begin
-            if(m_axi.arready == 1 && m_axi.arvalid == 1) begin
-                m_axi.arready <= 0;
-                begin_read_counter <= 1;
-                m_axi.rdata <= 32'hFFFFFF21;
-            end
-
-            if(begin_read_counter) begin
-                if(read_counter == 0) begin
-                    m_axi.rvalid <= 1;
-                    m_axi.arready <= 1;
-                    read_counter <= READ_COUNTER_MAX;
-                    begin_read_counter <= 0;
-                end
-                else begin
-                    read_counter <= read_counter - 1;
-                    m_axi.rvalid <= 0;
-                end
-            end
-
-            if(m_axi.rvalid &&  m_axi.rready) begin
-                m_axi.rvalid <= 0;
-            end
-
-        end
-    end
-
-    //Write channel
-    //write address
-    logic[3:0] write_counter;
-    logic begin_write_counter;
-
-    always_ff @(posedge clk) begin
-        if (rst) begin
-            m_axi.wready <= 0;
-            m_axi.awready <= 1; //You want it to start at ready
-            m_axi.bresp <= 0;
-            write_counter <= WRITE_COUNTER_MAX;
-        end
-        else begin
-            if(m_axi.awready == 1 && m_axi.awvalid == 1) begin
-                m_axi.awready <= 0;
-                begin_write_counter <= 1;
-            end
-
-            if(begin_write_counter) begin
-                if(write_counter == 0) begin
-                    m_axi.awready <= 1;
-                    m_axi.wready <= 1;
-                    write_counter <= WRITE_COUNTER_MAX;
-                    begin_write_counter <= 0;
-                end
-                else begin
-                    write_counter <= write_counter - 1;
-                    m_axi.wready <= 0;
-                end
-            end
-
-            if(m_axi.bready == 1 && m_axi.wready) begin
-                m_axi.bvalid <= 1;
-                m_axi.bresp <= 0;
-            end
-            else begin
-                m_axi.bvalid <= 0;
-                m_axi.bresp <= 0;
-            end
-
-            if(m_axi.wready & m_axi.wvalid) begin
-                m_axi.wready <= 0;
-            end
-        end
-    end
-
-    initial begin
-        write_uart = 0;
-        uart_byte = 0;
-    end
-    //Capture writes to UART
-    always_ff @(posedge clk) begin
-        write_uart <= (m_axi.wvalid && m_axi.wready && m_axi.awaddr[13:0] == 4096);
-        uart_byte <= m_axi.wdata[7:0];
-    end
-
-
 
     ////////////////////////////////////////////////////
     //DDR AXI interface
@@ -418,6 +294,7 @@ module taiga_local_mem # (
     assign axi_wready = ddr_axi_wready;
     assign ddr_axi_wstrb = axi_wstrb;
     assign ddr_axi_wvalid = axi_wvalid;
+
 
     ////////////////////////////////////////////////////
     //Trace Interface
