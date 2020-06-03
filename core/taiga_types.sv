@@ -24,7 +24,10 @@ package taiga_types;
     import taiga_config::*;
     import riscv_types::*;
 
+    localparam MAX_COMPLETE_COUNT = 3 + COMMIT_PORTS; //Branch + Store + System + COMMIT_PORTS
+
     localparam WB_UNITS_WIDTH = $clog2(NUM_WB_UNITS);
+    localparam LOG2_COMMIT_PORTS = $clog2(COMMIT_PORTS);
 
     typedef logic[$clog2(MAX_IDS)-1:0] id_t;
 
@@ -71,6 +74,17 @@ package taiga_types;
         logic [BRANCH_PREDICTOR_WAYS-1:0] branch_predictor_update_way;
     } branch_metadata_t;
 
+    typedef struct packed{
+        logic[4:0] rs1_addr;
+        logic[4:0] rs2_addr;
+        logic[4:0] rd_addr;
+        logic uses_rs1;
+        logic uses_rs2;
+        logic uses_rd;
+        id_t id;
+        logic stage_valid;
+        logic issued;
+    } issue_packet_t;
 
     typedef struct packed{
         logic [XLEN:0] in1;//contains sign padding bit for slt operation

@@ -98,10 +98,9 @@
 ../core/illegal_instruction_checker.sv
 ../core/decode_and_issue.sv
 
-../core/reg_inuse.sv
-../core/register_file.sv  
-
-../core/write_back.sv  
+../core/regfile_bank_sel.sv
+../core/register_file.sv
+../core/register_file_and_writeback.sv
 
 ../core/placer_randomizer.sv
 
@@ -110,6 +109,7 @@
 ../l2_arbiter/l2_round_robin.sv
 ../l2_arbiter/l2_arbiter.sv
 
+../core/toggle_memory.sv
 ../core/id_management.sv
 ../core/instruction_metadata.sv
 

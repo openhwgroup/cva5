@@ -20,111 +20,57 @@
  *             Eric Matthews <ematthew@sfu.ca>
  */
 
-import taiga_config::*;
-import riscv_types::*;
-import taiga_types::*;
-
-module register_file(
+module register_file
+    import taiga_config::*;
+    import riscv_types::*;
+    import taiga_types::*;
+    (
         input logic clk,
         input logic rst,
-        input logic gc_supress_writeback,
 
-        input logic instruction_issued,
-        register_file_writeback_interface.rf wb,
-        register_file_issue_interface.rf issue,
+        //Issue interface
+        input issue_packet_t issue,
+        input logic [4:0] rd_addr,
+        input logic [31:0] new_data,
+        input logic commit,
 
-        //ID Metadata
-        input logic [4:0] retired_rd_addr,
+        output logic [31:0] rs1_data,
+        output logic [31:0] rs2_data
+    );
 
-        //Trace signals
-        output logic tr_rs1_forwarding_needed,
-        output logic tr_rs2_forwarding_needed,
-        output logic tr_rs1_and_rs2_forwarding_needed
-        );
+    logic [31:0] register_file [32];
+    genvar i;
+    ////////////////////////////////////////////////////
+    //Implementation
 
-    (* ramstyle = "MLAB, no_rw_check" *) logic [XLEN-1:0] register [32];
-    (* ramstyle = "MLAB, no_rw_check" *) id_t in_use_by [32];
-
-    logic rs1_inuse;
-    logic rs2_inuse;
-
-    logic rs1_feedforward;
-    logic rs2_feedforward;
-
-    logic valid_write;
-    logic in_use_match;
-    //////////////////////////////////////////
+    ////////////////////////////////////////////////////
+    //Register File
     //Assign zero to r0 and initialize all registers to zero
-    initial register = '{default: 0};
-    initial in_use_by = '{default: 0};
 
-    //Writeback unit does not assert wb.commit when the target register is r0
+    initial register_file = '{default: 0};
     always_ff @ (posedge clk) begin
-        if (~gc_supress_writeback & in_use_match)
-            register[retired_rd_addr] <= wb.rd_data;
+        if (commit)
+            register_file[rd_addr] <= new_data;
     end
-
-    assign in_use_match = (wb.id == in_use_by[retired_rd_addr]) && valid_write;
-
-    reg_inuse inuse (.*,
-            .clr(1'b0),
-            .rs1_addr(issue.rs1_addr),.rs2_addr(issue.rs2_addr), .issued_rd_addr(issue.rd_addr),
-            .retired_rd_addr(retired_rd_addr),
-            .issued(issue.instruction_issued),
-            .retired(in_use_match),
-            .rs1_inuse(rs1_inuse),
-            .rs2_inuse(rs2_inuse)
-            );
-
-    always_ff @ (posedge clk) begin
-        if (issue.instruction_issued)
-            in_use_by[issue.rd_addr] <= issue.id;
-    end
-
-    assign wb.rs1_id = in_use_by[issue.rs1_addr];
-    assign wb.rs2_id = in_use_by[issue.rs2_addr];
-    assign issue.rs2_id = wb.rs2_id;
-
-    assign valid_write = (|retired_rd_addr) & wb.retiring;
-
-    assign rs1_feedforward = rs1_inuse;
-    assign rs2_feedforward = rs2_inuse;
-
-    assign issue.rs1_data = rs1_feedforward ? wb.rs1_data : register[issue.rs1_addr];
-    assign issue.rs2_data = rs2_feedforward ? wb.rs2_data : register[issue.rs2_addr];
-
-    assign issue.rs1_conflict = issue.uses_rs1 & rs1_inuse & ~wb.rs1_valid;
-    assign issue.rs2_conflict = issue.uses_rs2 & rs2_inuse & ~wb.rs2_valid;
-
-    ////////////////////////////////////////////////////
-    //End of Implementation
-    ////////////////////////////////////////////////////
+    assign rs1_data = register_file[issue.rs1_addr];
+    assign rs2_data = register_file[issue.rs2_addr];
 
     ////////////////////////////////////////////////////
     //Assertions
-    always_ff @ (posedge clk) begin
-        assert (!(issue.instruction_issued && issue.rd_addr == 0)) else $error("Write to inuse for register x0 occured!");
-    end
+    write_to_zero_reg_assertion:
+        assert property (@(posedge clk) disable iff (rst) !(commit & rd_addr == 0))
+        else $error("Write to zero reg occured!");
 
     ////////////////////////////////////////////////////
     //Simulation Only
-    // synthesis translate_off
+    //synthesis translate_off
     logic [31:0][31:0] sim_registers_unamed;
     simulation_named_regfile sim_register;
     always_comb begin
-        foreach(register[i])
-            sim_registers_unamed[i] = register[i];
+        foreach(register_file[i])
+            sim_registers_unamed[i] = register_file[i];
         sim_register = sim_registers_unamed;
     end
-    // synthesis translate_on
-
-    ////////////////////////////////////////////////////
-    //Trace Interface
-    generate if (ENABLE_TRACE_INTERFACE) begin
-        assign tr_rs1_forwarding_needed = instruction_issued & rs1_inuse & issue.uses_rs1 & ~tr_rs1_and_rs2_forwarding_needed;
-        assign tr_rs2_forwarding_needed = instruction_issued & rs2_inuse & issue.uses_rs2 & ~tr_rs1_and_rs2_forwarding_needed;
-        assign tr_rs1_and_rs2_forwarding_needed = instruction_issued & (rs1_inuse & issue.uses_rs1) & (rs2_inuse & issue.uses_rs2);
-    end
-    endgenerate
+    //synthesis translate_on
 
 endmodule

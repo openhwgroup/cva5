@@ -57,6 +57,7 @@ module gc_unit(
 
         //ID Management
         output logic system_op_or_exception_complete,
+        output logic exception_with_rd_complete,
         output id_t system_op_or_exception_id,
 
         //Exception
@@ -64,9 +65,8 @@ module gc_unit(
         input logic [31:0] exception_pc,
 
         //WB
+        input logic [$clog2(MAX_COMPLETE_COUNT)-1:0] retire_inc,
         input logic instruction_retired,
-        input logic instruction_queue_empty,
-        input logic writeback_is_idle,
         //unit_writeback_interface.unit gc_wb,
 
         //External
@@ -192,6 +192,7 @@ module gc_unit(
     assign system_op_or_exception_complete =
         (issue.new_request & (gc_inputs.is_fence | gc_inputs.is_i_fence)) |
         gc_exception.valid;
+    assign exception_with_rd_complete = ls_exception.valid;
     assign system_op_or_exception_id = issue.new_request ? issue.id : exception_id;
 
     //Instruction decode
@@ -331,7 +332,7 @@ module gc_unit(
       .result(processing_csr)
     );
 
-    assign csr_ready_to_complete = processing_csr & ls_is_idle & writeback_is_idle;
+    assign csr_ready_to_complete = processing_csr & ls_is_idle;
     always_ff @(posedge clk) begin
         csr_ready_to_complete_r <= csr_ready_to_complete;
         csr_id <= instruction_id;

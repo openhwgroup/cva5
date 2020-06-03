@@ -165,11 +165,11 @@ package taiga_config;
     ////////////////////////////////////////////////////
     //ID limit
     //MAX_IDS restricted to a power of 2
-    parameter MAX_IDS = 32;
+    parameter MAX_IDS = 64;
 
     ////////////////////////////////////////////////////
-    //Number of Writeback Buffers
-    parameter WRITEBACK_BUFFERS = 3;
+    //Number of commit ports
+    parameter COMMIT_PORTS = 3;
 
     ////////////////////////////////////////////////////
     //Trace Options
@@ -187,19 +187,15 @@ package taiga_config;
 
     ////////////////////////////////////////////////////
     //Write-Back Unit IDs
-    parameter NUM_MULTI_CYCLE_WB_UNITS = 1 + USE_MUL + USE_DIV;//LS
-    parameter NUM_SINGLE_CYCLE_WB_UNITS = 1;//ALU
-
-    parameter NUM_WB_UNITS = NUM_MULTI_CYCLE_WB_UNITS + NUM_SINGLE_CYCLE_WB_UNITS;
-
+    parameter NUM_WB_UNITS = 2 + USE_MUL + USE_DIV;//ALU and LS
     parameter NUM_UNITS = NUM_WB_UNITS + 2;//Branch and CSRs
 
-    parameter LS_UNIT_WB_ID = 0;
+    parameter ALU_UNIT_WB_ID = 0;
+    parameter LS_UNIT_WB_ID = 1;
     parameter DIV_UNIT_WB_ID = LS_UNIT_WB_ID + USE_DIV;
     parameter MUL_UNIT_WB_ID = DIV_UNIT_WB_ID + 1;
-    parameter ALU_UNIT_WB_ID = MUL_UNIT_WB_ID + USE_MUL;
     //Non-writeback units
-    parameter BRANCH_UNIT_ID = ALU_UNIT_WB_ID + 1;
+    parameter BRANCH_UNIT_ID = MUL_UNIT_WB_ID + 1;
     parameter GC_UNIT_ID = BRANCH_UNIT_ID + 1;
 
     ////////////////////////////////////////////////////

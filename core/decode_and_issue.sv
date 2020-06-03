@@ -35,7 +35,10 @@ module decode_and_issue (
         input logic [31:0] decode_pc,
         input logic [31:0] decode_instruction,
 
-        register_file_issue_interface.issue rf_issue,
+        output issue_packet_t issue,
+        input logic [31:0] rs1_data,
+        input logic [31:0] rs2_data,
+        input id_t rs2_id,
 
         output alu_inputs_t alu_inputs,
         output load_store_inputs_t ls_inputs,
@@ -51,10 +54,14 @@ module decode_and_issue (
         input logic gc_issue_flush,
         output logic gc_flush_required,
 
+        //ID Management
+        input logic rs1_inuse,
+        input logic rs2_inuse,
+        input logic rs1_id_inuse,
+        input logic rs2_id_inuse,
 
         output logic instruction_issued,
-        output id_t issue_id,
-        output logic issue_stage_valid,
+
         output logic id_issued,
         output logic instruction_issued_no_rd,
         output logic instruction_issued_with_rd,
@@ -91,6 +98,11 @@ module decode_and_issue (
     logic uses_rs1;
     logic uses_rs2;
     logic uses_rd;
+    logic uses_rs1_issue_stage;
+    logic uses_rs2_issue_stage;
+    logic uses_rd_issue_stage;
+
+
     logic rd_zero;
 
     logic [4:0] rs1_addr;
@@ -101,6 +113,8 @@ module decode_and_issue (
     logic environment_op;
     logic nop;
 
+    logic issue_stage_valid;
+    id_t issue_id;
     logic issue_valid;
     logic operands_ready;
     logic [NUM_UNITS-1:0] unit_operands_ready;
@@ -112,18 +126,20 @@ module decode_and_issue (
     logic [NUM_UNITS-1:0] unit_needed_issue_stage;
     logic [NUM_UNITS-1:0] unit_ready;
     logic [NUM_UNITS-1:0] issue_ready;
-    logic [NUM_UNITS-1:0] issue;
+    logic [NUM_UNITS-1:0] issue_to;
 
     logic illegal_instruction_pattern;
 
     logic issue_stage_ready;
+
+    logic rs1_conflict;
+    logic rs2_conflict;
 
     logic [2:0] fn3_issue_stage;
     logic [6:0] opcode_issue_stage;
     logic [4:0] rs1_addr_issue_stage;
     logic [4:0] rs2_addr_issue_stage;
     logic [4:0] rd_addr_issue_stage;
-    logic uses_rd_issue_stage;
     logic [31:0] pc_issue_stage;
     logic [31:0] instruction_issue_stage;
 
@@ -149,8 +165,10 @@ module decode_and_issue (
             rs1_addr_issue_stage <= rs1_addr;
             rs2_addr_issue_stage <= rs2_addr;
             rd_addr_issue_stage <= rd_addr;
-            uses_rd_issue_stage <= uses_rd;
             issue_id <= decode_id;
+            uses_rs1_issue_stage <= uses_rs1;
+            uses_rs2_issue_stage <= uses_rs2;
+            uses_rd_issue_stage <= uses_rd;
         end
     end
 
@@ -175,19 +193,16 @@ module decode_and_issue (
     assign nop = (opcode_trim inside {LUI_T, AUIPC_T, ARITH_T, ARITH_IMM_T} && rd_zero);
 
     ////////////////////////////////////////////////////
-    //Register File interface inputs
-    assign rf_issue.rs1_addr = rs1_addr_issue_stage;
-    assign rf_issue.rs2_addr = rs2_addr_issue_stage;
-    assign rf_issue.rd_addr = rd_addr_issue_stage;
-
-    always_ff @(posedge clk) begin
-        if (issue_stage_ready) begin
-            rf_issue.uses_rs1 <= uses_rs1;
-            rf_issue.uses_rs2 <= uses_rs2;
-        end
-    end
-    assign rf_issue.instruction_issued = instruction_issued_with_rd & (|rd_addr_issue_stage);
-    assign rf_issue.id = issue_id;
+    //Issue stage general outputs
+    assign issue.rs1_addr = rs1_addr_issue_stage;
+    assign issue.rs2_addr = rs2_addr_issue_stage;
+    assign issue.rd_addr = rd_addr_issue_stage;
+    assign issue.uses_rs1 = uses_rs1_issue_stage;
+    assign issue.uses_rs2 = uses_rs2_issue_stage;
+    assign issue.uses_rd = uses_rd_issue_stage;
+    assign issue.id = issue_id;
+    assign issue.stage_valid = issue_stage_valid;
+    assign issue.issued = instruction_issued;
 
     ////////////////////////////////////////////////////
     //Unit Determination
@@ -220,17 +235,20 @@ module decode_and_issue (
     //Issue Determination
     assign issue_valid = issue_stage_valid & ~gc_issue_hold & ~gc_fetch_flush;
 
-    assign operands_ready = ~rf_issue.rs1_conflict & ~rf_issue.rs2_conflict;
+    assign rs1_conflict = rs1_inuse & rs1_id_inuse & uses_rs1_issue_stage;
+    assign rs2_conflict = rs2_inuse & rs2_id_inuse & uses_rs2_issue_stage;
+
+
+    assign operands_ready = ~rs1_conflict & ~rs2_conflict;
 
     //All units share the same operand ready logic except load-store which has an internal forwarding path
     always_comb begin
         unit_operands_ready = {NUM_UNITS{operands_ready}};
-        unit_operands_ready[LS_UNIT_WB_ID] = ~rf_issue.rs1_conflict & ~rf_issue.rs2_conflict;
-        unit_operands_ready[BRANCH_UNIT_ID] &= unit_ready[ALU_UNIT_WB_ID];
+        unit_operands_ready[LS_UNIT_WB_ID] = ~rs1_conflict & ~rs2_conflict;
     end
 
     assign issue_ready = unit_needed_issue_stage & unit_ready;
-    assign issue = {NUM_UNITS{issue_valid}} & unit_operands_ready & issue_ready;
+    assign issue_to = {NUM_UNITS{issue_valid}} & unit_operands_ready & issue_ready;
 
     assign instruction_issued = issue_valid & |(unit_operands_ready & issue_ready);
     assign instruction_issued_no_rd = instruction_issued & ~uses_rd_issue_stage;
@@ -277,14 +295,14 @@ module decode_and_issue (
         case(alu_rs1_sel_r)
             ALU_RS1_ZERO : alu_rs1_data = '0;
             ALU_RS1_PC : alu_rs1_data = pc_issue_stage;
-            default : alu_rs1_data = rf_issue.rs1_data; //ALU_RS1_RF
+            default : alu_rs1_data = rs1_data; //ALU_RS1_RF
         endcase
 
         case(alu_rs2_sel_r)
             ALU_RS2_LUI_AUIPC : alu_rs2_data = {instruction_issue_stage[31:12], 12'b0};
             ALU_RS2_ARITH_IMM : alu_rs2_data = 32'(signed'(instruction_issue_stage[31:20]));
             ALU_RS2_JAL_JALR : alu_rs2_data = 4;
-            ALU_RS2_RF : alu_rs2_data = rf_issue.rs2_data;
+            ALU_RS2_RF : alu_rs2_data = rs2_data;
         endcase
     end
 
@@ -332,10 +350,10 @@ module decode_and_issue (
     assign alu_inputs.slt_path = alu_slt_path;
 
 
-    assign alu_inputs.in1 = {(rf_issue.rs1_data[XLEN-1] & ~fn3_issue_stage[0]), alu_rs1_data};//(fn3[0]  is SLTU_fn3);
+    assign alu_inputs.in1 = {(rs1_data[XLEN-1] & ~fn3_issue_stage[0]), alu_rs1_data};//(fn3[0]  is SLTU_fn3);
     assign alu_inputs.in2 = {(alu_rs2_data[XLEN-1] & ~fn3_issue_stage[0]), alu_rs2_data};
-    assign alu_inputs.shifter_in = rf_issue.rs1_data;
-    assign alu_inputs.shift_amount = opcode_issue_stage[5] ? rf_issue.rs2_data[4:0] : rs2_addr_issue_stage;
+    assign alu_inputs.shifter_in = rs1_data;
+    assign alu_inputs.shift_amount = opcode_issue_stage[5] ? rs2_data[4:0] : rs2_addr_issue_stage;
 
     ////////////////////////////////////////////////////
     //Load Store unit inputs
@@ -380,10 +398,10 @@ module decode_and_issue (
     assign ls_inputs.load = is_load_r;
     assign ls_inputs.store = is_store_r;
     assign ls_inputs.fn3 = amo_op ? LS_W_fn3 : fn3_issue_stage;
-    assign ls_inputs.rs1 = rf_issue.rs1_data;
-    assign ls_inputs.rs2 = rf_issue.rs2_data;
-    assign ls_inputs.forwarded_store = 0;//rf_issue.rs2_conflict;
-    assign ls_inputs.store_forward_id = rf_issue.rs2_id;
+    assign ls_inputs.rs1 = rs1_data;
+    assign ls_inputs.rs2 = rs2_data;
+    assign ls_inputs.forwarded_store = 0;//rs2_conflict;
+    assign ls_inputs.store_forward_id = rs2_id;
 
     ////////////////////////////////////////////////////
     //Branch unit inputs
@@ -443,8 +461,8 @@ module decode_and_issue (
 
     assign branch_inputs.issue_pc = pc_issue_stage;
     assign branch_inputs.issue_pc_valid = issue_stage_valid;
-    assign branch_inputs.rs1 = rf_issue.rs1_data;
-    assign branch_inputs.rs2 = rf_issue.rs2_data;
+    assign branch_inputs.rs1 = rs1_data;
+    assign branch_inputs.rs2 = rs2_data;
 
 
     ////////////////////////////////////////////////////
@@ -483,17 +501,17 @@ module decode_and_issue (
     assign gc_inputs.instruction = instruction_issue_stage;
     assign gc_inputs.is_csr = is_csr_r;
     assign gc_inputs.is_fence = is_fence;
-    assign gc_inputs.is_i_fence = ENABLE_M_MODE & issue[GC_UNIT_ID] & is_ifence_r;
+    assign gc_inputs.is_i_fence = ENABLE_M_MODE & issue_to[GC_UNIT_ID] & is_ifence_r;
 
-    assign gc_inputs.rs1 = rf_issue.rs1_data;
-    assign gc_inputs.rs2 = rf_issue.rs2_data;
-    assign gc_flush_required = ENABLE_M_MODE && issue[GC_UNIT_ID] && potential_flush;
+    assign gc_inputs.rs1 = rs1_data;
+    assign gc_inputs.rs2 = rs2_data;
+    assign gc_flush_required = ENABLE_M_MODE && issue_to[GC_UNIT_ID] && potential_flush;
 
     ////////////////////////////////////////////////////
     //Mul unit inputs
     generate if (USE_MUL) begin
-        assign mul_inputs.rs1 = rf_issue.rs1_data;
-        assign mul_inputs.rs2 = rf_issue.rs2_data;
+        assign mul_inputs.rs1 = rs1_data;
+        assign mul_inputs.rs2 = rs2_data;
         assign mul_inputs.op = fn3_issue_stage[1:0];
     end endgenerate
 
@@ -508,7 +526,7 @@ module decode_and_issue (
         logic current_op_resuses_rs1_rs2;
 
         always_ff @(posedge clk) begin
-            if (issue[DIV_UNIT_WB_ID]) begin
+            if (issue_to[DIV_UNIT_WB_ID]) begin
                 prev_div_rs1_addr <= rs1_addr;
                 prev_div_rs2_addr <= rs2_addr;
             end
@@ -527,8 +545,8 @@ module decode_and_issue (
             .result(prev_div_result_valid)
         );
 
-        assign div_inputs.rs1 = rf_issue.rs1_data;
-        assign div_inputs.rs2 = rf_issue.rs2_data;
+        assign div_inputs.rs1 = rs1_data;
+        assign div_inputs.rs2 = rs2_data;
         assign div_inputs.op = fn3_issue_stage[1:0];
         assign div_inputs.reuse_result = prev_div_result_valid & current_op_resuses_rs1_rs2;
     end endgenerate
@@ -537,10 +555,10 @@ module decode_and_issue (
     //Unit EX signals
     generate for (i = 0; i < NUM_UNITS; i++) begin
         assign unit_issue[i].possible_issue = unit_needed_issue_stage[i] & unit_operands_ready[i] & issue_stage_valid & ~gc_issue_hold;
-        assign unit_issue[i].new_request = issue[i];
+        assign unit_issue[i].new_request = issue_to[i];
         assign unit_issue[i].id = issue_id;
         always_ff @(posedge clk) begin
-            unit_issue[i].new_request_r <= issue[i];
+            unit_issue[i].new_request_r <= issue_to[i];
         end
     end endgenerate
 

@@ -46,10 +46,11 @@ module id_management
         output logic decode_id_valid,
 
         //Issue stage
-        input id_t issue_id,
-        input logic issue_stage_valid,
-        input logic dummy_id_complete,
-        input logic id_issued,
+        input issue_packet_t issue,
+        input id_t rs1_id,
+        input id_t rs2_id,
+        output logic rs1_id_inuse,
+        output logic rs2_id_inuse,
 
         //ID freeing
         input logic store_complete,
@@ -59,10 +60,13 @@ module id_management
         input id_t branch_id,
 
         input logic system_op_or_exception_complete,
+        input logic exception_with_rd_complete,
         input id_t system_op_or_exception_id,
 
-        input logic instruction_retired,
-        input id_t retired_id
+        input id_t ids_retiring [COMMIT_PORTS],
+        input logic retired [COMMIT_PORTS],
+
+        output logic [$clog2(MAX_COMPLETE_COUNT)-1:0] retire_inc
     );
     //////////////////////////////////////////
     id_t pc_id_i;
@@ -71,15 +75,28 @@ module id_management
     //FIFO to store IDs that have been fetched but not yet decoded
     fifo_interface #(.DATA_WIDTH(LOG2_MAX_IDS)) fetch_fifo();
 
-    //Toggle memory blocks for tracking completion after issue
-    logic decoded_toggle_mem [MAX_IDS];
-    logic decoded_issued_toggle_mem [MAX_IDS];
-    logic issued_toggle_mem [MAX_IDS];
-    logic branch_complete_toggle_mem [MAX_IDS];
-    logic store_complete_toggle_mem [MAX_IDS];
-    logic system_op_or_exception_complete_toggle_mem [MAX_IDS];
-    logic retired_toggle_mem [MAX_IDS];
+    //Toggle memory results for tracking completion after issue
+    logic decoded_status;
+    logic decoded_issued_status;
 
+    logic issued_status;
+    logic issued_status_rs1;
+    logic issued_status_rs2;
+    logic branch_complete_status;
+    logic branch_complete_status_rs1;
+    logic branch_complete_status_rs2;
+    logic store_complete_status;
+    logic store_complete_status_rs1;
+    logic store_complete_status_rs2;
+    logic system_op_or_exception_complete_status;
+    logic exception_with_rd_complete_status_rs1;
+    logic exception_with_rd_complete_status_rs2;
+    logic [COMMIT_PORTS-1:0] retired_status;
+    logic [COMMIT_PORTS-1:0] retired_status_rs1;
+    logic [COMMIT_PORTS-1:0] retired_status_rs2;
+
+
+    logic [$clog2(MAX_COMPLETE_COUNT)-1:0] complete_count;
     ////////////////////////////////////////////////////
     //Implementation
 
@@ -126,65 +143,161 @@ module id_management
     //TODO: support arbitrary rst assertion (clear signal from global control)
 
     //Instruction decoded and (issued or flushed) pair
-    initial decoded_toggle_mem = '{default: 0};
-    always_ff @ (posedge clk) begin
-        if (decode_advance & ~gc_fetch_flush)
-            decoded_toggle_mem[decode_id] <= ~decoded_toggle_mem[decode_id];
-    end
+    toggle_memory decode_toggle_mem (
+        .clk, .rst,
+        .toggle(decode_advance & ~gc_fetch_flush),
+        .toggle_id(decode_id),
+        .read_id(pc_id_i),
+        .read_data(decoded_status)
+    );
 
-    initial decoded_issued_toggle_mem = '{default: 0};
-    always_ff @ (posedge clk) begin
-        if (id_issued | (gc_fetch_flush & issue_stage_valid))
-            decoded_issued_toggle_mem[issue_id] <= ~decoded_issued_toggle_mem[issue_id];
-    end
+    toggle_memory decoded_issued_toggle_mem (
+        .clk, .rst,
+        .toggle(issue.issued | (gc_fetch_flush & issue.stage_valid)),
+        .toggle_id(issue.id),
+        .read_id(pc_id_i),
+        .read_data(decoded_issued_status)
+    );
 
     //Post issue status tracking
-    initial issued_toggle_mem = '{default: 0};
-    always_ff @ (posedge clk) begin
-        if (id_issued)
-            issued_toggle_mem[issue_id] <= ~issued_toggle_mem[issue_id];
-    end
+    toggle_memory issued_toggle_mem (
+        .clk, .rst,
+        .toggle(issue.issued),
+        .toggle_id(issue.id),
+        .read_id(pc_id_i),
+        .read_data(issued_status)
+    );
+    toggle_memory issued_toggle_mem_rs1 (
+        .clk, .rst,
+        .toggle(issue.issued & issue.uses_rd),
+        .toggle_id(issue.id),
+        .read_id(rs1_id),
+        .read_data(issued_status_rs1)
+    );
+    toggle_memory issued_toggle_mem_rs2 (
+        .clk, .rst,
+        .toggle(issue.issued & issue.uses_rd),
+        .toggle_id(issue.id),
+        .read_id(rs2_id),
+        .read_data(issued_status_rs2)
+    );
 
-    initial branch_complete_toggle_mem = '{default: 0};
-    always_ff @ (posedge clk) begin
-        if (branch_complete)
-            branch_complete_toggle_mem[branch_id] <= ~branch_complete_toggle_mem[branch_id];
-    end
+    toggle_memory branch_toggle_mem (
+        .clk, .rst,
+        .toggle(branch_complete),
+        .toggle_id(branch_id),
+        .read_id(pc_id_i),
+        .read_data(branch_complete_status)
+    );
 
-    initial store_complete_toggle_mem = '{default: 0};
-    always_ff @ (posedge clk) begin
-        if (store_complete)
-            store_complete_toggle_mem[store_id] <= ~store_complete_toggle_mem[store_id];
-    end
+    toggle_memory store_toggle_mem (
+        .clk, .rst,
+        .toggle(store_complete),
+        .toggle_id(store_id),
+        .read_id(pc_id_i),
+        .read_data(store_complete_status)
+    );
 
-    initial system_op_or_exception_complete_toggle_mem = '{default: 0};
-    always_ff @ (posedge clk) begin
-        if (system_op_or_exception_complete)
-            system_op_or_exception_complete_toggle_mem[system_op_or_exception_id] <= ~system_op_or_exception_complete_toggle_mem[system_op_or_exception_id];
-    end
+    toggle_memory system_op_or_exception_complete_toggle_mem (
+        .clk, .rst,
+        .toggle(system_op_or_exception_complete),
+        .toggle_id(system_op_or_exception_id),
+        .read_id(pc_id_i),
+        .read_data(system_op_or_exception_complete_status)
+    );
+    toggle_memory exception_complete_toggle_mem_rs1 (
+        .clk, .rst,
+        .toggle(exception_with_rd_complete),
+        .toggle_id(system_op_or_exception_id),
+        .read_id(rs1_id),
+        .read_data(exception_with_rd_complete_status_rs1)
+    );
+    toggle_memory xception_complete_toggle_mem_rs2 (
+        .clk, .rst,
+        .toggle(exception_with_rd_complete),
+        .toggle_id(system_op_or_exception_id),
+        .read_id(rs2_id),
+        .read_data(exception_with_rd_complete_status_rs2)
+    );
+    //One memory per commit port
+    genvar i;
+    generate for (i = 0; i < COMMIT_PORTS; i++) begin
+        toggle_memory retired_toggle_mem (
+            .clk, .rst,
+            .toggle(retired[i]),
+            .toggle_id(ids_retiring[i]),
+            .read_id(pc_id_i),
+            .read_data(retired_status[i])
+        );
+        toggle_memory retired_toggle_mem_rs1 (
+            .clk, .rst,
+            .toggle(retired[i]),
+            .toggle_id(ids_retiring[i]),
+            .read_id(rs1_id),
+            .read_data(retired_status_rs1[i])
+        );
+        toggle_memory retired_toggle_mem_rs2 (
+            .clk, .rst,
+            .toggle(retired[i]),
+            .toggle_id(ids_retiring[i]),
+            .read_id(rs2_id),
+            .read_data(retired_status_rs2[i])
+        );
+    end endgenerate
 
-    initial retired_toggle_mem = '{default: 0};
-    always_ff @ (posedge clk) begin
-        if (instruction_retired)
-            retired_toggle_mem[retired_id] <= ~retired_toggle_mem[retired_id];
+    logic id_retired_xor;
+    logic id_retired_xor_rs1;
+    logic id_retired_xor_rs2;
+    always_comb begin
+        id_retired_xor = 0;
+        id_retired_xor_rs1 = 0;
+        id_retired_xor_rs2 = 0;
+        for (int i = 0; i < COMMIT_PORTS; i++) begin
+            id_retired_xor ^= retired_status[i];
+            id_retired_xor_rs1 ^= retired_status_rs1[i];
+            id_retired_xor_rs2^= retired_status_rs2[i];
+        end
     end
 
     //Computed one cycle in advance using pc_id_i
     logic id_not_in_decode_issue;
     logic id_not_inflight;
-    assign id_not_in_decode_issue = ~(decoded_toggle_mem[pc_id_i] ^ decoded_issued_toggle_mem[pc_id_i]);
+    assign id_not_in_decode_issue = ~(decoded_status ^ decoded_issued_status);
     assign id_not_inflight =
-        ~(issued_toggle_mem[pc_id_i] ^
-            branch_complete_toggle_mem[pc_id_i] ^
-            store_complete_toggle_mem[pc_id_i] ^
-            system_op_or_exception_complete_toggle_mem[pc_id_i] ^
-            retired_toggle_mem[pc_id_i]);
+        ~(issued_status ^
+            branch_complete_status ^
+            store_complete_status ^
+            system_op_or_exception_complete_status ^
+            id_retired_xor);
+
+    //rs1/rs2 conflicts don't check branch or store memories as the only
+    //IDs stored in the rs to ID table are instructions that write to the register file
+     assign rs1_id_inuse =
+         (issued_status_rs1 ^
+             exception_with_rd_complete_status_rs1 ^
+             id_retired_xor_rs1);
+
+     assign rs2_id_inuse =
+         (issued_status_rs2 ^
+             exception_with_rd_complete_status_rs2 ^
+             id_retired_xor_rs2);
 
     always_ff @ (posedge clk) begin
         if (rst)
             pc_id_available <= 1;
         else
             pc_id_available <= id_not_in_decode_issue & id_not_inflight;
+    end
+
+    localparam MCC_W = $clog2(MAX_COMPLETE_COUNT);
+    always_comb begin
+        complete_count = MCC_W'(branch_complete) + MCC_W'(store_complete) + MCC_W'(system_op_or_exception_complete);
+        for (int i = 0; i < COMMIT_PORTS; i++) begin
+            complete_count  += MCC_W'(retired[i]);
+        end
+    end
+    always_ff @ (posedge clk) begin
+        retire_inc <= complete_count;
     end
 
     ////////////////////////////////////////////////////

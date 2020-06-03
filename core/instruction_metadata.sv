@@ -43,15 +43,22 @@ module instruction_metadata
         output logic [31:0] decode_pc,
         output logic [31:0] decode_instruction,
 
+        //Issue stage
+        input issue_packet_t issue,
+        output id_t rs1_id,
+        output id_t rs2_id,
+        output logic rs1_inuse,
+        output logic rs2_inuse,
+
         //Branch Predictor
         input branch_metadata_t branch_metadata_if,
         input id_t branch_id,
         output branch_metadata_t branch_metadata_ex,
 
         //Writeback/Register File
-        input id_t retired_id,
-        output logic [4:0] retired_rd_addr,
-
+        input id_t ids_retiring [COMMIT_PORTS],
+        output logic [4:0] retired_rd_addr [COMMIT_PORTS],
+        output id_t id_for_rd [COMMIT_PORTS],
         //Exception
         input id_t exception_id,
         output logic [31:0] exception_pc
@@ -62,6 +69,10 @@ module instruction_metadata
     logic [31:0] instruction_table [MAX_IDS];
     logic [$bits(branch_metadata_t)-1:0] branch_metadata_table [MAX_IDS];
     logic [31:0] rd_table [MAX_IDS];
+
+    //Writes to register file
+    logic uses_rd [MAX_IDS];
+    id_t rd_to_id_table [32];
     ////////////////////////////////////////////////////
     //Implementation
 
@@ -83,11 +94,19 @@ module instruction_metadata
             instruction_table[fetch_id] <= fetch_instruction;
     end
 
-    //rd table
-  //  always_ff @ (posedge clk) begin
-   //     if (instruction_retired)
-   //         rd_table[id_retired] <= retired_rd;
-   // end
+    ////////////////////////////////////////////////////
+    //Operand inuse determination
+    initial uses_rd = '{default: 0};
+    always_ff @ (posedge clk) begin
+        if (issue.issued)
+            uses_rd[issue.id] <= issue.uses_rd;
+    end
+
+    initial rd_to_id_table = '{default: 0};
+    always_ff @ (posedge clk) begin
+        if (issue.issued & issue.uses_rd)//tracks most recently issued instruction that writes to the register file
+            rd_to_id_table[issue.rd_addr] <= issue.id;
+    end
 
     ////////////////////////////////////////////////////
     //Outputs
@@ -99,8 +118,20 @@ module instruction_metadata
     //Branch Predictor
     assign branch_metadata_ex = branch_metadata_table[branch_id];
 
-    //Register File
-    assign retired_rd_addr = instruction_table[retired_id][11:7];
+    //Issue
+    assign rs1_id = rd_to_id_table[issue.rs1_addr];
+    assign rs2_id = rd_to_id_table[issue.rs2_addr];
+
+    assign rs1_inuse = uses_rd[rs1_id];
+    assign rs2_inuse = uses_rd[rs2_id];
+
+    //Writeback support
+    always_comb begin
+        for (int i = 0; i < COMMIT_PORTS; i++) begin
+            retired_rd_addr[i] = instruction_table[ids_retiring[i]][11:7];
+            id_for_rd[i] = rd_to_id_table[retired_rd_addr[i]];
+        end
+    end
 
     //Exception Support
      generate if (ENABLE_M_MODE) begin

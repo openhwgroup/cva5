@@ -57,7 +57,9 @@ module taiga (
 
     ras_interface ras();
 
-    register_file_issue_interface rf_issue();
+    issue_packet_t issue;
+    logic [31:0] rs1_data;
+    logic [31:0] rs2_data;
 
     alu_inputs_t alu_inputs;
     load_store_inputs_t ls_inputs;
@@ -98,9 +100,12 @@ module taiga (
     logic [31:0] decode_pc;
     logic [31:0] decode_instruction;
         //Issue stage
-    logic issue_stage_valid;
-    logic dummy_id_complete;
-    id_t issue_id;
+    id_t rs1_id;
+    id_t rs2_id;
+    logic rs1_inuse;
+    logic rs2_inuse;
+    logic rs1_id_inuse;
+    logic rs2_id_inuse;
         //Branch predictor
     branch_metadata_t branch_metadata_if;
     branch_metadata_t branch_metadata_ex;
@@ -110,10 +115,10 @@ module taiga (
     logic branch_complete;
     id_t branch_id;
     logic system_op_or_exception_complete;
+    logic exception_with_rd_complete;
     id_t system_op_or_exception_id;
     logic instruction_retired;
-    id_t retired_id;
-    logic [4:0] retired_rd_addr;
+    logic [$clog2(MAX_COMPLETE_COUNT)-1:0] retire_inc;
         //Exception
     id_t exception_id;
     logic [31:0] exception_pc;
@@ -147,8 +152,10 @@ module taiga (
     writeback_store_interface wb_store();
 
     //WB
-    logic single_cycle_issue_possible;
-    logic writeback_is_idle;
+    id_t ids_retiring [COMMIT_PORTS];
+    logic retired [COMMIT_PORTS];
+    logic [4:0] retired_rd_addr [COMMIT_PORTS];
+    id_t id_for_rd [COMMIT_PORTS];
 
     //Trace Interface Signals
     logic tr_operand_stall;
@@ -218,7 +225,10 @@ module taiga (
     ////////////////////////////////////////////////////
     //Decode/Issue
     decode_and_issue decode_and_issue_block (.*);
-    register_file register_file_block (.*, .issue(rf_issue), .wb(rf_wb));
+
+    ////////////////////////////////////////////////////
+    //Register File and Writeback
+    register_file_and_writeback register_file_and_writeback_block (.*);
 
     ////////////////////////////////////////////////////
     //Execution Units
@@ -242,11 +252,6 @@ module taiga (
     generate if (USE_DIV)
             div_unit div_unit_block (.*, .issue(unit_issue[DIV_UNIT_WB_ID]), .wb(unit_wb[DIV_UNIT_WB_ID]));
     endgenerate
-
-    ////////////////////////////////////////////////////
-    //Writeback Mux and Instruction Tracking
-    write_back write_back_mux (.*);
-
 
     ////////////////////////////////////////////////////
     //End of Implementation

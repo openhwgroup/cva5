@@ -103,7 +103,6 @@ module load_store_unit (
     logic [NUM_SUB_UNITS-1:0] sub_unit_address_match;
 
     logic unit_stall;
-    logic done_r;
 
     typedef struct packed{
         logic [2:0] fn3;
@@ -227,7 +226,7 @@ endgenerate
     assign units_ready = &unit_ready;
     assign load_complete = |unit_data_valid;
 
-    assign ready_for_issue = units_ready & (~unit_switch_stall) & (~done_r | wb.ack);
+    assign ready_for_issue = units_ready & (~unit_switch_stall);
 
     assign issue.ready = lsq.ready;
     assign issue_request = lsq.accepted;
@@ -242,7 +241,7 @@ endgenerate
 
     assign load_attributes.data_in = load_attributes_in;
     assign load_attributes.push = issue_request & shared_inputs.load;
-    assign load_attributes.pop = ((done_r | load_complete) & wb.ack);
+    assign load_attributes.pop = load_complete;
     assign load_attributes.supress_push = 0;
 
     assign stage2_attr = load_attributes.data_out;
@@ -317,16 +316,8 @@ endgenerate
 
     ////////////////////////////////////////////////////
     //Output bank
-    always_ff @ (posedge clk) begin
-        if (wb.ack)
-            done_r <= 0;
-        else if (load_complete)
-            done_r <= 1;
-    end
-
-
     assign wb.rd = csr_done ? csr_rd : final_load_data;
-    assign wb.done = csr_done | load_complete | done_r;
+    assign wb.done = csr_done | load_complete;
     assign wb.id = csr_done ? csr_id : stage2_attr.id;
 
     ////////////////////////////////////////////////////

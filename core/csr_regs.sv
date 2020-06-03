@@ -59,7 +59,7 @@ module csr_regs
 
         //WB
         input logic instruction_retired,
-
+        input logic [$clog2(MAX_COMPLETE_COUNT)-1:0] retire_inc,
 
         //External
         input logic interrupt,
@@ -491,22 +491,13 @@ endgenerate
     ////////////////////////////////////////////////////
     //Timers and Counters
     //Register increment for instructions completed
-    logic instruction_completed;
-    assign instruction_completed = instruction_retired & ~gc_supress_writeback;
-    always_ff @(posedge clk) begin
-        if (rst)
-            inst_ret_inc <= 0;
-        else
-            inst_ret_inc <= INST_RET_INC_W'(instruction_completed) + INST_RET_INC_W'(instruction_issued_no_rd);
-    end
-
     always_ff @(posedge clk) begin
         if (rst) begin
             mcycle <= 0;
             minst_ret <= 0;
         end else begin
             mcycle <= mcycle + 1;
-            minst_ret <= minst_ret + COUNTER_W'(inst_ret_inc);
+            minst_ret <= minst_ret + COUNTER_W'(retire_inc);
         end
     end
 
