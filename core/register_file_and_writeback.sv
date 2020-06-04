@@ -64,6 +64,7 @@ module register_file_and_writeback
     logic [$clog2(NUM_WB_UNITS)-1:0] retiring_unit_select [COMMIT_PORTS];
     logic [31:0] rs1_data_set [COMMIT_PORTS];
     logic [31:0] rs2_data_set [COMMIT_PORTS];
+    logic [31:0] retiring_data [COMMIT_PORTS];
 
     genvar i;
     ////////////////////////////////////////////////////
@@ -83,11 +84,11 @@ module register_file_and_writeback
     //   Assign to a commit port, mask that unit and commit port
     always_comb begin
         unit_ack = '{default: 0};
-        retiring_unit_select = '{default: 0};
         retired = '{default: 0};
 
-        for (int i=0; i < COMMIT_PORTS; i++) begin
-            for (int j=0; j < NUM_WB_UNITS; j++) begin
+        for (int i = 0; i < COMMIT_PORTS; i++) begin
+            retiring_unit_select[i] = WB_UNITS_WIDTH'(i);
+            for (int j = i; j < NUM_WB_UNITS; j++) begin //Unit index i will always be handled by commit port i or lower, so can be skipped when checking higher commit port indicies
                 if (unit_done[j] & ~unit_ack[j] & ~retired[i]) begin
                     retiring_unit_select[i] = WB_UNITS_WIDTH'(j);
                     unit_ack[j] = 1;
@@ -95,8 +96,9 @@ module register_file_and_writeback
                 end
             end
 
-            //ID muxes
+            //ID and data muxes
             ids_retiring[i] = unit_instruction_id[retiring_unit_select[i]];
+            retiring_data[i] = unit_rd[retiring_unit_select[i]];
         end
     end
 
@@ -109,7 +111,7 @@ module register_file_and_writeback
             .clk, .rst,
             .issue,
             .rd_addr(retired_rd_addr[i]),
-            .new_data(unit_rd[retiring_unit_select[i]]),
+            .new_data(retiring_data[i]),
             .commit(retired[i] & (|retired_rd_addr[i])),
             .rs1_data(rs1_data_set[i]),
             .rs2_data(rs2_data_set[i])
