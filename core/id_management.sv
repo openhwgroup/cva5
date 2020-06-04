@@ -124,8 +124,8 @@ module id_management
     //Fetch buffer
     assign fetch_fifo.data_in = fetch_id;
     assign fetch_fifo.push = fetch_complete;
+    assign fetch_fifo.potential_push = fetch_complete;
     assign fetch_fifo.pop = decode_advance;
-    assign fetch_fifo.supress_push = 0;
 
     taiga_fifo #(.DATA_WIDTH(LOG2_MAX_IDS), .FIFO_DEPTH(MAX_IDS)) fetch_fifo_block (
         .fifo(fetch_fifo),

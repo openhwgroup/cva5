@@ -102,8 +102,8 @@ module div_unit
         div_input_fifo (.fifo(input_fifo), .*);
 
     assign input_fifo.data_in = fifo_inputs;
-    assign input_fifo.push = issue.possible_issue;
-    assign input_fifo.supress_push = gc_fetch_flush;
+    assign input_fifo.push = issue.new_request;
+    assign input_fifo.potential_push = issue.possible_issue;
     assign issue.ready = 1; //As FIFO depth is the same as MAX_INFLIGHT_COUNT
     assign input_fifo.pop = wb.done & wb.ack;
     assign div_op = input_fifo.data_out;

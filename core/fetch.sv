@@ -130,6 +130,7 @@ module fetch(
     //////////////////////////////////////////////
     //Subunit Tracking
     assign next_unit.push = new_mem_request;
+    assign next_unit.potential_push = new_mem_request;
     assign next_unit.pop = units_data_valid;
     one_hot_to_integer #(NUM_SUB_UNITS) hit_way_conv (.*, .one_hot(sub_unit_address_match), .int_out(next_unit.data_in));
     taiga_fifo #(.DATA_WIDTH(NUM_SUB_UNITS_W), .FIFO_DEPTH(NEXT_ID_DEPTH))

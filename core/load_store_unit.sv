@@ -186,7 +186,7 @@ endgenerate
     assign lsq.forwarded_store = ls_inputs.forwarded_store;
     assign lsq.data_id = ls_inputs.store_forward_id;
 
-    assign lsq.possible_issue = issue.possible_issue & ~unaligned_addr;
+    assign lsq.possible_issue = issue.possible_issue;
     assign lsq.new_issue = issue.new_request & ~unaligned_addr;
 
     logic [MAX_IDS-1:0] wb_hold_for_store_ids;
@@ -241,8 +241,8 @@ endgenerate
 
     assign load_attributes.data_in = load_attributes_in;
     assign load_attributes.push = issue_request & shared_inputs.load;
+    assign load_attributes.potential_push = 1;
     assign load_attributes.pop = load_complete;
-    assign load_attributes.supress_push = 0;
 
     assign stage2_attr = load_attributes.data_out;
 
