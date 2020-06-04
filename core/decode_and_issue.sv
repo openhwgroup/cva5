@@ -255,55 +255,41 @@ module decode_and_issue (
     assign instruction_issued_with_rd = instruction_issued & uses_rd_issue_stage;
 
     assign id_issued = instruction_issued;
+
     ////////////////////////////////////////////////////
     //ALU unit inputs
     logic [XLEN-1:0] alu_rs1_data;
     logic [XLEN-1:0] alu_rs2_data;
-    alu_rs1_op_t alu_rs1_sel;
-    alu_rs1_op_t alu_rs1_sel_r;
-    alu_rs2_op_t alu_rs2_sel;
-    alu_rs2_op_t alu_rs2_sel_r;
-
-    always_comb begin
-        if (opcode_trim inside {ARITH_T, ARITH_IMM_T})
-            alu_rs1_sel = ALU_RS1_RF;
-        else if (opcode_trim inside {JAL_T, JALR_T, AUIPC_T})//AUIPC JAL JALR
-            alu_rs1_sel = ALU_RS1_PC;
-        else
-            alu_rs1_sel = ALU_RS1_ZERO;//LUI
-    end
+    logic [31:0] pre_alu_rs2;
+    logic [31:0] pre_alu_rs2_r;
+    logic [31:0] pre_alu_rs1_r;
+    logic rs1_use_regfile;
+    logic rs2_use_regfile;
 
     always_comb begin
         if (opcode_trim inside {LUI_T, AUIPC_T}) //LUI or AUIPC
-            alu_rs2_sel = ALU_RS2_LUI_AUIPC;
+            pre_alu_rs2 = {decode_instruction[31:12], 12'b0};
         else if (opcode_trim == ARITH_IMM_T) //ARITH_IMM
-            alu_rs2_sel = ALU_RS2_ARITH_IMM;
-        else if (opcode_trim inside {JAL_T, JALR_T} ) //JAL JALR
-            alu_rs2_sel = ALU_RS2_JAL_JALR;
-        else
-            alu_rs2_sel = ALU_RS2_RF;
+            pre_alu_rs2 = 32'(signed'(decode_instruction[31:20]));
+        else //JAL JALR
+            pre_alu_rs2 = 4;
     end
 
     always_ff @(posedge clk) begin
         if (issue_stage_ready) begin
-            alu_rs1_sel_r <= alu_rs1_sel;
-            alu_rs2_sel_r <= alu_rs2_sel;
+            if (opcode_trim inside {LUI_T})
+                pre_alu_rs1_r <= '0;
+            else
+                pre_alu_rs1_r <= decode_pc;
         end
     end
 
-    always_comb begin
-        case(alu_rs1_sel_r)
-            ALU_RS1_ZERO : alu_rs1_data = '0;
-            ALU_RS1_PC : alu_rs1_data = pc_issue_stage;
-            default : alu_rs1_data = rs1_data; //ALU_RS1_RF
-        endcase
-
-        case(alu_rs2_sel_r)
-            ALU_RS2_LUI_AUIPC : alu_rs2_data = {instruction_issue_stage[31:12], 12'b0};
-            ALU_RS2_ARITH_IMM : alu_rs2_data = 32'(signed'(instruction_issue_stage[31:20]));
-            ALU_RS2_JAL_JALR : alu_rs2_data = 4;
-            ALU_RS2_RF : alu_rs2_data = rs2_data;
-        endcase
+    always_ff @(posedge clk) begin
+        if (issue_stage_ready) begin
+            pre_alu_rs2_r <= pre_alu_rs2;
+            rs1_use_regfile <= !(opcode_trim inside {LUI_T, AUIPC_T, JAL_T, JALR_T});
+            rs2_use_regfile <= !(opcode_trim inside {LUI_T, AUIPC_T, JAL_T, JALR_T, ARITH_IMM_T});
+        end
     end
 
     //Add cases: JAL, JALR, LUI, AUIPC, ADD[I], all logic ops
@@ -349,6 +335,8 @@ module decode_and_issue (
     assign alu_inputs.shifter_path = alu_shifter_path;
     assign alu_inputs.slt_path = alu_slt_path;
 
+    assign alu_rs1_data = rs1_use_regfile ? rs1_data : pre_alu_rs1_r;
+    assign alu_rs2_data = rs2_use_regfile ? rs2_data : pre_alu_rs2_r;
 
     assign alu_inputs.in1 = {(rs1_data[XLEN-1] & ~fn3_issue_stage[0]), alu_rs1_data};//(fn3[0]  is SLTU_fn3);
     assign alu_inputs.in2 = {(alu_rs2_data[XLEN-1] & ~fn3_issue_stage[0]), alu_rs2_data};
