@@ -30,6 +30,7 @@ module register_file_and_writeback
 
         //Issue interface
         input issue_packet_t issue,
+        input logic alu_issued,
         output logic [31:0] rs1_data,
         output logic [31:0] rs2_data,
 
@@ -100,6 +101,8 @@ module register_file_and_writeback
             ids_retiring[i] = unit_instruction_id[retiring_unit_select[i]];
             retiring_data[i] = unit_rd[retiring_unit_select[i]];
         end
+        //Late cycle abort for when ALU is not issued to
+        if (retiring_unit_select[0] == ALU_UNIT_WB_ID) retired[0] &= alu_issued;
     end
 
     ////////////////////////////////////////////////////

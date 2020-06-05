@@ -74,8 +74,8 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
     );
 
     assign oldest_fifo.data_in = lsq.id;
-    assign oldest_fifo.push = lsq.possible_issue;
-    assign oldest_fifo.supress_push = gc_fetch_flush;
+    assign oldest_fifo.push = lsq.new_issue;
+    assign oldest_fifo.potential_push = lsq.possible_issue;
     assign oldest_fifo.pop = lsq.accepted;
     assign oldest_id = oldest_fifo.data_out;
 

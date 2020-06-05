@@ -48,6 +48,7 @@ module decode_and_issue (
         output div_inputs_t div_inputs,
 
         unit_issue_interface.decode unit_issue [NUM_UNITS-1:0],
+        output logic alu_issued,
 
         input logic gc_issue_hold,
         input logic gc_fetch_flush,
@@ -342,6 +343,8 @@ module decode_and_issue (
     assign alu_inputs.in2 = {(alu_rs2_data[XLEN-1] & ~fn3_issue_stage[0]), alu_rs2_data};
     assign alu_inputs.shifter_in = rs1_data;
     assign alu_inputs.shift_amount = opcode_issue_stage[5] ? rs2_data[4:0] : rs2_addr_issue_stage;
+
+    assign alu_issued = issue_to[ALU_UNIT_WB_ID];
 
     ////////////////////////////////////////////////////
     //Load Store unit inputs

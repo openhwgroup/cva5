@@ -69,6 +69,7 @@ module taiga (
     gc_inputs_t gc_inputs;
 
     unit_issue_interface unit_issue [NUM_UNITS]();
+    logic alu_issued;
 
     exception_packet_t  ls_exception;
 
