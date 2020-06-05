@@ -248,20 +248,6 @@ module id_management
         );
     end endgenerate
 
-    logic id_retired_xor;
-    logic id_retired_xor_rs1;
-    logic id_retired_xor_rs2;
-    always_comb begin
-        id_retired_xor = 0;
-        id_retired_xor_rs1 = 0;
-        id_retired_xor_rs2 = 0;
-        for (int i = 0; i < COMMIT_PORTS; i++) begin
-            id_retired_xor ^= retired_status[i];
-            id_retired_xor_rs1 ^= retired_status_rs1[i];
-            id_retired_xor_rs2^= retired_status_rs2[i];
-        end
-    end
-
     //Computed one cycle in advance using pc_id_i
     logic id_not_in_decode_issue;
     logic id_not_inflight;
@@ -271,19 +257,22 @@ module id_management
             branch_complete_status ^
             store_complete_status ^
             system_op_or_exception_complete_status ^
-            id_retired_xor);
+            (^retired_status)
+        );
 
     //rs1/rs2 conflicts don't check branch or store memories as the only
     //IDs stored in the rs to ID table are instructions that write to the register file
-     assign rs1_id_inuse =
-         (issued_status_rs1 ^
-             exception_with_rd_complete_status_rs1 ^
-             id_retired_xor_rs1);
+     assign rs1_id_inuse = (
+        issued_status_rs1 ^
+        exception_with_rd_complete_status_rs1 ^
+        (^retired_status_rs1)
+    );
 
-     assign rs2_id_inuse =
-         (issued_status_rs2 ^
-             exception_with_rd_complete_status_rs2 ^
-             id_retired_xor_rs2);
+     assign rs2_id_inuse = (
+        issued_status_rs2 ^
+        exception_with_rd_complete_status_rs2 ^
+        (^retired_status_rs2)
+     );
 
     always_ff @ (posedge clk) begin
         if (rst)
