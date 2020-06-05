@@ -100,13 +100,16 @@ module id_management
     ////////////////////////////////////////////////////
     //Implementation
 
-    //Next ID always increases, even on a fetch buffer flush
-    //If this leads to a temporary shortage of IDs, the oldest non-issued
-    //ID can be found and pc_id could be reset to that.
+    //Next ID always increases, except on a fetch buffer flush.
+    //On a fetch buffer flush, the next ID is restored to the current decode ID.
+    //This prevents a stall in the case where all  IDs are either in-flight or
+    //in the fetch buffer at the point of a fetch flush.
     assign pc_id_i = pc_id + LOG2_MAX_IDS'(pc_id_assigned);
     always_ff @ (posedge clk) begin
         if (rst)
             pc_id <= 0;
+        else if (gc_fetch_flush)
+            pc_id <= decode_id_valid ? decode_id : pc_id;
         else
             pc_id <= pc_id_i;
     end
@@ -115,7 +118,7 @@ module id_management
         if (rst)
             fetch_id <= 0;
         else if (gc_fetch_flush)
-            fetch_id <= pc_id;
+            fetch_id <= decode_id_valid ? decode_id : pc_id;
         else
             fetch_id <= fetch_id + LOG2_MAX_IDS'(fetch_complete);
     end
