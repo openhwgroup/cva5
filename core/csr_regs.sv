@@ -42,9 +42,6 @@ module csr_regs
         input logic gc_supress_writeback,
         input logic [31:0] exception_pc,
 
-        //Decode
-        input logic instruction_issued_no_rd,
-
         //exception_control
         input logic mret,
         input logic sret,

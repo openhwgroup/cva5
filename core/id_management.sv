@@ -47,6 +47,7 @@ module id_management
 
         //Issue stage
         input issue_packet_t issue,
+        input logic instruction_issued,
         input id_t rs1_id,
         input id_t rs2_id,
         output logic rs1_id_inuse,
@@ -156,7 +157,7 @@ module id_management
 
     toggle_memory decoded_issued_toggle_mem (
         .clk, .rst,
-        .toggle(issue.issued | (gc_fetch_flush & issue.stage_valid)),
+        .toggle(instruction_issued | (gc_fetch_flush & issue.stage_valid)),
         .toggle_id(issue.id),
         .read_id(pc_id_i),
         .read_data(decoded_issued_status)
@@ -165,21 +166,21 @@ module id_management
     //Post issue status tracking
     toggle_memory issued_toggle_mem (
         .clk, .rst,
-        .toggle(issue.issued),
+        .toggle(instruction_issued),
         .toggle_id(issue.id),
         .read_id(pc_id_i),
         .read_data(issued_status)
     );
     toggle_memory issued_toggle_mem_rs1 (
         .clk, .rst,
-        .toggle(issue.issued & issue.uses_rd),
+        .toggle(instruction_issued & issue.uses_rd),
         .toggle_id(issue.id),
         .read_id(rs1_id),
         .read_data(issued_status_rs1)
     );
     toggle_memory issued_toggle_mem_rs2 (
         .clk, .rst,
-        .toggle(issue.issued & issue.uses_rd),
+        .toggle(instruction_issued & issue.uses_rd),
         .toggle_id(issue.id),
         .read_id(rs2_id),
         .read_data(issued_status_rs2)

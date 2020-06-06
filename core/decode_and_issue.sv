@@ -62,10 +62,6 @@ module decode_and_issue (
         input logic rs2_id_inuse,
 
         output logic instruction_issued,
-
-        output logic id_issued,
-        output logic instruction_issued_no_rd,
-        output logic instruction_issued_with_rd,
         output logic illegal_instruction,
 
         //Trace signals
@@ -99,12 +95,6 @@ module decode_and_issue (
     logic uses_rs1;
     logic uses_rs2;
     logic uses_rd;
-    logic uses_rs1_issue_stage;
-    logic uses_rs2_issue_stage;
-    logic uses_rd_issue_stage;
-
-
-    logic rd_zero;
 
     logic [4:0] rs1_addr;
     logic [4:0] rs2_addr;
@@ -112,10 +102,7 @@ module decode_and_issue (
 
     logic csr_imm_op;
     logic environment_op;
-    logic nop;
 
-    logic issue_stage_valid;
-    id_t issue_id;
     logic issue_valid;
     logic operands_ready;
     logic [NUM_UNITS-1:0] unit_operands_ready;
@@ -136,42 +123,11 @@ module decode_and_issue (
     logic rs1_conflict;
     logic rs2_conflict;
 
-    logic [2:0] fn3_issue_stage;
-    logic [6:0] opcode_issue_stage;
-    logic [4:0] rs1_addr_issue_stage;
-    logic [4:0] rs2_addr_issue_stage;
-    logic [4:0] rd_addr_issue_stage;
-    logic [31:0] pc_issue_stage;
-    logic [31:0] instruction_issue_stage;
-
     genvar i;
     ////////////////////////////////////////////////////
     //Implementation
-    assign issue_stage_ready = (~issue_stage_valid) | instruction_issued;
+    assign issue_stage_ready = (~issue.stage_valid) | instruction_issued;
     assign decode_advance = decode_id_valid & issue_stage_ready;
-
-    always_ff @(posedge clk) begin
-        if (rst | gc_fetch_flush)
-            issue_stage_valid <= 0;
-        else if (issue_stage_ready)
-            issue_stage_valid <= decode_id_valid;
-    end
-
-    always_ff @(posedge clk) begin
-        if (issue_stage_ready) begin
-            pc_issue_stage <= decode_pc;
-            instruction_issue_stage <= decode_instruction;
-            fn3_issue_stage <= fn3;
-            opcode_issue_stage <= opcode;
-            rs1_addr_issue_stage <= rs1_addr;
-            rs2_addr_issue_stage <= rs2_addr;
-            rd_addr_issue_stage <= rd_addr;
-            issue_id <= decode_id;
-            uses_rs1_issue_stage <= uses_rs1;
-            uses_rs2_issue_stage <= uses_rs2;
-            uses_rd_issue_stage <= uses_rd;
-        end
-    end
 
     //Instruction aliases
     assign opcode = decode_instruction[6:0];
@@ -190,20 +146,28 @@ module decode_and_issue (
     assign uses_rs2 = opcode_trim inside {BRANCH_T, STORE_T, ARITH_T, AMO_T};
     assign uses_rd = !(opcode_trim inside {BRANCH_T, STORE_T, FENCE_T} || environment_op);
 
-    assign rd_zero = ~|rd_addr;
-    assign nop = (opcode_trim inside {LUI_T, AUIPC_T, ARITH_T, ARITH_IMM_T} && rd_zero);
+    always_ff @(posedge clk) begin
+        if (rst | gc_fetch_flush)
+            issue.stage_valid <= 0;
+        else if (issue_stage_ready)
+            issue.stage_valid <= decode_id_valid;
+    end
 
-    ////////////////////////////////////////////////////
-    //Issue stage general outputs
-    assign issue.rs1_addr = rs1_addr_issue_stage;
-    assign issue.rs2_addr = rs2_addr_issue_stage;
-    assign issue.rd_addr = rd_addr_issue_stage;
-    assign issue.uses_rs1 = uses_rs1_issue_stage;
-    assign issue.uses_rs2 = uses_rs2_issue_stage;
-    assign issue.uses_rd = uses_rd_issue_stage;
-    assign issue.id = issue_id;
-    assign issue.stage_valid = issue_stage_valid;
-    assign issue.issued = instruction_issued;
+    always_ff @(posedge clk) begin
+        if (issue_stage_ready) begin
+            issue.pc <= decode_pc;
+            issue.instruction <= decode_instruction;
+            issue.fn3 <= fn3;
+            issue.opcode <= opcode;
+            issue.rs1_addr <= rs1_addr;
+            issue.rs2_addr <= rs2_addr;
+            issue.rd_addr <= rd_addr;
+            issue.id <= decode_id;
+            issue.uses_rs1 <= uses_rs1;
+            issue.uses_rs2 <= uses_rs2;
+            issue.uses_rd <= uses_rd;
+        end
+    end
 
     ////////////////////////////////////////////////////
     //Unit Determination
@@ -234,28 +198,23 @@ module decode_and_issue (
 
     ////////////////////////////////////////////////////
     //Issue Determination
-    assign issue_valid = issue_stage_valid & ~gc_issue_hold & ~gc_fetch_flush;
+    assign issue_valid = issue.stage_valid & ~gc_issue_hold & ~gc_fetch_flush;
 
-    assign rs1_conflict = rs1_inuse & rs1_id_inuse & uses_rs1_issue_stage;
-    assign rs2_conflict = rs2_inuse & rs2_id_inuse & uses_rs2_issue_stage;
-
+    assign rs1_conflict = rs1_inuse & rs1_id_inuse & issue.uses_rs1;
+    assign rs2_conflict = rs2_inuse & rs2_id_inuse & issue.uses_rs2;
 
     assign operands_ready = ~rs1_conflict & ~rs2_conflict;
 
     //All units share the same operand ready logic except load-store which has an internal forwarding path
     always_comb begin
         unit_operands_ready = {NUM_UNITS{operands_ready}};
-        unit_operands_ready[LS_UNIT_WB_ID] = ~rs1_conflict & ~rs2_conflict;
+        //unit_operands_ready[LS_UNIT_WB_ID] = ~rs1_conflict;
     end
 
     assign issue_ready = unit_needed_issue_stage & unit_ready;
     assign issue_to = {NUM_UNITS{issue_valid}} & unit_operands_ready & issue_ready;
 
     assign instruction_issued = issue_valid & |(unit_operands_ready & issue_ready);
-    assign instruction_issued_no_rd = instruction_issued & ~uses_rd_issue_stage;
-    assign instruction_issued_with_rd = instruction_issued & uses_rd_issue_stage;
-
-    assign id_issued = instruction_issued;
 
     ////////////////////////////////////////////////////
     //ALU unit inputs
@@ -331,7 +290,7 @@ module decode_and_issue (
     end
     assign alu_inputs.logic_op = alu_logic_op_r;
     assign alu_inputs.subtract = alu_subtract;
-    assign alu_inputs.arith = alu_rs1_data[XLEN-1] & instruction_issue_stage[30];//shift in bit
+    assign alu_inputs.arith = alu_rs1_data[XLEN-1] & issue.instruction[30];//shift in bit
     assign alu_inputs.lshift = alu_lshift;
     assign alu_inputs.shifter_path = alu_shifter_path;
     assign alu_inputs.slt_path = alu_slt_path;
@@ -339,10 +298,10 @@ module decode_and_issue (
     assign alu_rs1_data = rs1_use_regfile ? rs1_data : pre_alu_rs1_r;
     assign alu_rs2_data = rs2_use_regfile ? rs2_data : pre_alu_rs2_r;
 
-    assign alu_inputs.in1 = {(rs1_data[XLEN-1] & ~fn3_issue_stage[0]), alu_rs1_data};//(fn3[0]  is SLTU_fn3);
-    assign alu_inputs.in2 = {(alu_rs2_data[XLEN-1] & ~fn3_issue_stage[0]), alu_rs2_data};
+    assign alu_inputs.in1 = {(rs1_data[XLEN-1] & ~issue.fn3[0]), alu_rs1_data};//(fn3[0]  is SLTU_fn3);
+    assign alu_inputs.in2 = {(alu_rs2_data[XLEN-1] & ~issue.fn3[0]), alu_rs2_data};
     assign alu_inputs.shifter_in = rs1_data;
-    assign alu_inputs.shift_amount = opcode_issue_stage[5] ? rs2_data[4:0] : rs2_addr_issue_stage;
+    assign alu_inputs.shift_amount = issue.opcode[5] ? rs2_data[4:0] : issue.rs2_addr;
 
     assign alu_issued = issue_to[ALU_UNIT_WB_ID];
 
@@ -388,7 +347,7 @@ module decode_and_issue (
     assign ls_inputs.offset = ls_offset;
     assign ls_inputs.load = is_load_r;
     assign ls_inputs.store = is_store_r;
-    assign ls_inputs.fn3 = amo_op ? LS_W_fn3 : fn3_issue_stage;
+    assign ls_inputs.fn3 = amo_op ? LS_W_fn3 : issue.fn3;
     assign ls_inputs.rs1 = rs1_data;
     assign ls_inputs.rs2 = rs2_data;
     assign ls_inputs.forwarded_store = 0;//rs2_conflict;
@@ -444,14 +403,14 @@ module decode_and_issue (
     end
     assign branch_inputs.is_return = is_return;
     assign branch_inputs.is_call = is_call;
-    assign branch_inputs.fn3 = fn3_issue_stage;
+    assign branch_inputs.fn3 = issue.fn3;
     assign branch_inputs.pc_offset = pc_offset_r;
     assign branch_inputs.use_signed = br_use_signed;
-    assign branch_inputs.jal = opcode_issue_stage[3];//(opcode == JAL);
-    assign branch_inputs.jalr = ~opcode_issue_stage[3] & opcode_issue_stage[2];//(opcode == JALR);
+    assign branch_inputs.jal = issue.opcode[3];//(opcode == JAL);
+    assign branch_inputs.jalr = ~issue.opcode[3] & issue.opcode[2];//(opcode == JALR);
 
-    assign branch_inputs.issue_pc = pc_issue_stage;
-    assign branch_inputs.issue_pc_valid = issue_stage_valid;
+    assign branch_inputs.issue_pc = issue.pc;
+    assign branch_inputs.issue_pc_valid = issue.stage_valid;
     assign branch_inputs.rs1 = rs1_data;
     assign branch_inputs.rs2 = rs2_data;
 
@@ -488,8 +447,8 @@ module decode_and_issue (
     assign gc_inputs.is_ecall = is_ecall;
     assign gc_inputs.is_ebreak = is_ebreak;
     assign gc_inputs.is_ret = is_ret;
-    assign gc_inputs.pc = pc_issue_stage;
-    assign gc_inputs.instruction = instruction_issue_stage;
+    assign gc_inputs.pc = issue.pc;
+    assign gc_inputs.instruction = issue.instruction;
     assign gc_inputs.is_csr = is_csr_r;
     assign gc_inputs.is_fence = is_fence;
     assign gc_inputs.is_i_fence = ENABLE_M_MODE & issue_to[GC_UNIT_ID] & is_ifence_r;
@@ -503,7 +462,7 @@ module decode_and_issue (
     generate if (USE_MUL) begin
         assign mul_inputs.rs1 = rs1_data;
         assign mul_inputs.rs2 = rs2_data;
-        assign mul_inputs.op = fn3_issue_stage[1:0];
+        assign mul_inputs.op = issue.fn3[1:0];
     end endgenerate
 
     ////////////////////////////////////////////////////
@@ -523,11 +482,11 @@ module decode_and_issue (
             end
         end
 
-        assign current_op_resuses_rs1_rs2 = (prev_div_rs1_addr == rs1_addr_issue_stage) && (prev_div_rs2_addr == rs2_addr_issue_stage);
+        assign current_op_resuses_rs1_rs2 = (prev_div_rs1_addr == issue.rs1_addr) && (prev_div_rs2_addr == issue.rs2_addr);
         assign set_prev_div_result_valid = unit_needed_issue_stage[DIV_UNIT_WB_ID];
 
         //If current div operation overwrites an input register OR any other instruction overwrites the last div operations input registers
-        assign clear_prev_div_result_valid = uses_rd_issue_stage & ((rd_addr_issue_stage == (unit_needed_issue_stage[DIV_UNIT_WB_ID] ? rs1_addr_issue_stage : prev_div_rs1_addr)) || (rd_addr_issue_stage == (unit_needed_issue_stage[DIV_UNIT_WB_ID] ? rs2_addr_issue_stage : prev_div_rs2_addr)));
+        assign clear_prev_div_result_valid = issue.uses_rd & ((issue.rd_addr == (unit_needed_issue_stage[DIV_UNIT_WB_ID] ? issue.rs1_addr : prev_div_rs1_addr)) || (issue.rd_addr == (unit_needed_issue_stage[DIV_UNIT_WB_ID] ? issue.rs2_addr : prev_div_rs2_addr)));
 
         set_clr_reg_with_rst #(.SET_OVER_CLR(0), .WIDTH(1), .RST_VALUE(0)) prev_div_result_valid_m (
             .clk, .rst,
@@ -538,7 +497,7 @@ module decode_and_issue (
 
         assign div_inputs.rs1 = rs1_data;
         assign div_inputs.rs2 = rs2_data;
-        assign div_inputs.op = fn3_issue_stage[1:0];
+        assign div_inputs.op = issue.fn3[1:0];
         assign div_inputs.reuse_result = prev_div_result_valid & current_op_resuses_rs1_rs2;
     end endgenerate
 
@@ -547,7 +506,7 @@ module decode_and_issue (
     generate for (i = 0; i < NUM_UNITS; i++) begin
         assign unit_issue[i].possible_issue = unit_needed_issue_stage[i] & unit_ready[i];
         assign unit_issue[i].new_request = issue_to[i];
-        assign unit_issue[i].id = issue_id;
+        assign unit_issue[i].id = issue.id;
         always_ff @(posedge clk) begin
             unit_issue[i].new_request_r <= issue_to[i];
         end
@@ -569,7 +528,7 @@ module decode_and_issue (
 
 
         //Illegal instruction if the instruction is invalid, but could otherwise be issued
-        assign illegal_instruction = illegal_instruction_pattern_r & issue_stage_valid & ~gc_issue_hold & ~gc_fetch_flush;
+        assign illegal_instruction = illegal_instruction_pattern_r & issue.stage_valid & ~gc_issue_hold & ~gc_fetch_flush;
     end endgenerate
     ////////////////////////////////////////////////////
     //End of Implementation
@@ -584,8 +543,8 @@ module decode_and_issue (
         assign tr_operand_stall = |(unit_needed_issue_stage & unit_ready) & issue_valid & ~|(unit_operands_ready & issue_ready);
         assign tr_unit_stall = ~|(unit_needed_issue_stage & unit_ready) & issue_valid & |(unit_operands_ready & issue_ready);
         assign tr_no_id_stall = 0;
-        assign tr_no_instruction_stall = ~issue_stage_valid | gc_fetch_flush;
-        assign tr_other_stall = issue_stage_valid & ~instruction_issued & ~(tr_operand_stall | tr_unit_stall | tr_no_id_stall | tr_no_instruction_stall);
+        assign tr_no_instruction_stall = ~issue.stage_valid | gc_fetch_flush;
+        assign tr_other_stall = issue.stage_valid & ~instruction_issued & ~(tr_operand_stall | tr_unit_stall | tr_no_id_stall | tr_no_instruction_stall);
         assign tr_branch_operand_stall = tr_operand_stall & unit_needed_issue_stage[BRANCH_UNIT_ID];
         assign tr_alu_operand_stall = tr_operand_stall & unit_needed_issue_stage[ALU_UNIT_WB_ID] & ~unit_needed_issue_stage[BRANCH_UNIT_ID];
         assign tr_ls_operand_stall = tr_operand_stall & unit_needed_issue_stage[LS_UNIT_WB_ID];
@@ -605,8 +564,8 @@ module decode_and_issue (
         end
 
         assign tr_instruction_issued_dec = instruction_issued;
-        assign tr_instruction_pc_dec = pc_issue_stage;
-        assign tr_instruction_data_dec = instruction_issue_stage;
+        assign tr_instruction_pc_dec = issue.pc;
+        assign tr_instruction_data_dec = issue.instruction;
     end endgenerate
 
 endmodule

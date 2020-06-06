@@ -33,7 +33,6 @@ module gc_unit(
         //Decode
         unit_issue_interface.unit issue,
         input gc_inputs_t gc_inputs,
-        input logic instruction_issued_no_rd,
         input logic gc_flush_required,
         //Branch miss predict
         input logic branch_flush,

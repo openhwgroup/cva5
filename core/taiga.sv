@@ -74,7 +74,6 @@ module taiga (
     exception_packet_t  ls_exception;
 
     unit_writeback_interface unit_wb  [NUM_WB_UNITS]();
-    register_file_writeback_interface rf_wb();
 
     mmu_interface immu();
     mmu_interface dmmu();
@@ -130,9 +129,7 @@ module taiga (
     logic gc_fetch_flush;
     logic gc_fetch_pc_override;
     logic gc_supress_writeback;
-    id_t oldest_id;
     logic [31:0] gc_fetch_pc;
-    logic ls_exception_ack;
 
     logic[31:0] csr_rd;
     id_t csr_id;
@@ -141,12 +138,7 @@ module taiga (
 
     //Decode Unit and Fetch Unit
     logic illegal_instruction;
-    logic instruction_queue_empty;
-
-    logic id_issued;
     logic instruction_issued;
-    logic instruction_issued_no_rd;
-    logic instruction_issued_with_rd;
     logic gc_flush_required;
 
     //LS

@@ -45,6 +45,7 @@ module instruction_metadata
 
         //Issue stage
         input issue_packet_t issue,
+        input logic instruction_issued,
         output id_t rs1_id,
         output id_t rs2_id,
         output logic rs1_inuse,
@@ -98,13 +99,13 @@ module instruction_metadata
     //Operand inuse determination
     initial uses_rd = '{default: 0};
     always_ff @ (posedge clk) begin
-        if (issue.issued)
-            uses_rd[issue.id] <= issue.uses_rd;
+        if (instruction_issued)
+            uses_rd[issue.id] <= issue.uses_rd & |issue.rd_addr;
     end
 
     initial rd_to_id_table = '{default: 0};
     always_ff @ (posedge clk) begin
-        if (issue.issued & issue.uses_rd)//tracks most recently issued instruction that writes to the register file
+        if (instruction_issued & issue.uses_rd)//tracks most recently issued instruction that writes to the register file
             rd_to_id_table[issue.rd_addr] <= issue.id;
     end
 

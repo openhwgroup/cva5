@@ -117,45 +117,6 @@ interface exception_interface;
     modport unit (input valid, code, pc, addr, id, output ack);
 endinterface
 
-interface register_file_issue_interface;
-    logic[4:0] rd_addr; //if not a storing instruction required to be zero
-    logic[4:0] rs1_addr;
-    logic[XLEN-1:0] rs1_data;
-    logic[4:0] rs2_addr; //if not used required to be zero
-    logic[XLEN-1:0] rs2_data;
-    id_t id;
-
-    logic uses_rs1;
-    logic uses_rs2;
-    logic rs1_conflict;
-    logic rs2_conflict;
-    id_t rs2_id;
-    logic instruction_issued;
-
-    modport issue (output rd_addr, rs1_addr, rs2_addr, instruction_issued, id, uses_rs1, uses_rs2, input rs1_conflict, rs2_conflict, rs1_data, rs2_data, rs2_id);
-    modport rf (input rd_addr, rs1_addr, rs2_addr, instruction_issued, id, uses_rs1, uses_rs2, output rs1_conflict, rs2_conflict, rs1_data, rs2_data, rs2_id);
-endinterface
-
-
-interface register_file_writeback_interface;
-    //Writeback data
-    logic retiring;
-    id_t id;
-    logic[XLEN-1:0] rd_data;
-
-    //Forwarding signals
-    id_t rs1_id;
-    id_t rs2_id;
-    logic[XLEN-1:0] rs1_data;
-    logic[XLEN-1:0] rs2_data;
-    logic rs1_valid;
-    logic rs2_valid;
-    
-    modport writeback (output retiring, rd_data, id, rs1_data, rs2_data, rs1_valid, rs2_valid,  input rs1_id, rs2_id);
-    modport rf (input retiring, rd_data, id, rs1_data, rs2_data, rs1_valid, rs2_valid, output rs1_id, rs2_id);
-
-endinterface
-
 interface fifo_interface #(parameter DATA_WIDTH = 42);//#(parameter type data_type = logic[31:0]);
     logic push;
     logic pop;

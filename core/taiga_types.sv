@@ -75,15 +75,27 @@ package taiga_types;
     } branch_metadata_t;
 
     typedef struct packed{
-        logic[4:0] rs1_addr;
-        logic[4:0] rs2_addr;
-        logic[4:0] rd_addr;
+        id_t id;
+        logic [31:0] pc;
+        logic [31:0] instruction;
+        logic valid;
+    } decode_packet_t;
+
+    typedef struct packed{
+        logic [31:0] pc;
+        logic [31:0] instruction;
+        logic [2:0] fn3;
+        logic [6:0] opcode;
+
+        logic [4:0] rs1_addr;
+        logic [4:0] rs2_addr;
+        logic [4:0] rd_addr;
+
         logic uses_rs1;
         logic uses_rs2;
         logic uses_rd;
         id_t id;
         logic stage_valid;
-        logic issued;
     } issue_packet_t;
 
     typedef struct packed{
