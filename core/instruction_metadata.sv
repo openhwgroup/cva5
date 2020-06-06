@@ -72,7 +72,6 @@ module instruction_metadata
     logic [31:0] rd_table [MAX_IDS];
 
     //Writes to register file
-    logic uses_rd [MAX_IDS];
     id_t rd_to_id_table [32];
     ////////////////////////////////////////////////////
     //Implementation
@@ -97,12 +96,6 @@ module instruction_metadata
 
     ////////////////////////////////////////////////////
     //Operand inuse determination
-    initial uses_rd = '{default: 0};
-    always_ff @ (posedge clk) begin
-        if (instruction_issued)
-            uses_rd[issue.id] <= issue.uses_rd & |issue.rd_addr;
-    end
-
     initial rd_to_id_table = '{default: 0};
     always_ff @ (posedge clk) begin
         if (instruction_issued & issue.uses_rd)//tracks most recently issued instruction that writes to the register file
@@ -120,11 +113,16 @@ module instruction_metadata
     assign branch_metadata_ex = branch_metadata_table[branch_id];
 
     //Issue
+    logic [4:0] rs1_id_rd_addr;
+    logic [4:0] rs2_id_rd_addr;
     assign rs1_id = rd_to_id_table[issue.rs1_addr];
     assign rs2_id = rd_to_id_table[issue.rs2_addr];
 
-    assign rs1_inuse = uses_rd[rs1_id];
-    assign rs2_inuse = uses_rd[rs2_id];
+    assign rs1_id_rd_addr = instruction_table[rs1_id][11:7];
+    assign rs2_id_rd_addr = instruction_table[rs2_id][11:7];
+
+    assign rs1_inuse = (issue.rs1_addr == rs1_id_rd_addr);
+    assign rs2_inuse = (issue.rs2_addr == rs2_id_rd_addr);
 
     //Writeback support
     always_comb begin
