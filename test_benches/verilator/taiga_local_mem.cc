@@ -69,7 +69,7 @@ int main(int argc, char **argv) {
 	#endif
 	taigaTracer->reset();
 	cout << "--------------------------------------------------------------\n";
-	cout << "   Starting Simulation, logging to: " << argv[1] << "\n";
+	cout << "   Starting Simulation, logging to " << argv[1] << "\n";
 	cout << "--------------------------------------------------------------\n";
     cout << flush;
 
@@ -86,7 +86,7 @@ int main(int argc, char **argv) {
 	}
 
 	cout << "--------------------------------------------------------------\n";
-	cout << "   Simulation Completed:  " << taigaTracer->get_cycle_count() << " cycles.\n";
+	cout << "   Simulation Completed  " << taigaTracer->get_cycle_count() << " cycles.\n";
     taigaTracer->print_stats();
 
 	logFile.close();
