@@ -194,8 +194,7 @@ module taiga (
 
     ////////////////////////////////////////////////////
     // ID support
-    id_management id_management_block (.*);
-    instruction_metadata id_metadata_block (.*);
+    instruction_metadata_and_id_management id_block (.*);
 
     ////////////////////////////////////////////////////
     // Fetch

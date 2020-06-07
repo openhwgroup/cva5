@@ -110,8 +110,7 @@
 ../l2_arbiter/l2_arbiter.sv
 
 ../core/toggle_memory.sv
-../core/id_management.sv
-../core/instruction_metadata.sv
+../core/instruction_metadata_and_id_management.sv
 
 ../core/taiga.sv
 
