@@ -29,11 +29,8 @@ module decode_and_issue (
         input logic rst,
 
         //ID Management
+        input decode_packet_t decode,
         output logic decode_advance,
-        input id_t decode_id,
-        input logic decode_id_valid,
-        input logic [31:0] decode_pc,
-        input logic [31:0] decode_instruction,
 
         output issue_packet_t issue,
         input logic [31:0] rs_data [REGFILE_READ_PORTS],
@@ -124,15 +121,15 @@ module decode_and_issue (
     ////////////////////////////////////////////////////
     //Implementation
     assign issue_stage_ready = (~issue.stage_valid) | instruction_issued;
-    assign decode_advance = decode_id_valid & issue_stage_ready;
+    assign decode_advance = decode.valid & issue_stage_ready;
 
     //Instruction aliases
-    assign opcode = decode_instruction[6:0];
+    assign opcode = decode.instruction[6:0];
     assign opcode_trim = opcode[6:2];
-    assign fn3 = decode_instruction[14:12];
-    assign rs1_addr = decode_instruction[19:15];
-    assign rs2_addr = decode_instruction[24:20];
-    assign rd_addr = decode_instruction[11:7];
+    assign fn3 = decode.instruction[14:12];
+    assign rs1_addr = decode.instruction[19:15];
+    assign rs2_addr = decode.instruction[24:20];
+    assign rd_addr = decode.instruction[11:7];
 
     assign csr_imm_op = (opcode_trim == SYSTEM_T) && fn3[2];
     assign environment_op = (opcode_trim == SYSTEM_T) && (fn3 == 0);
@@ -147,19 +144,19 @@ module decode_and_issue (
         if (rst | gc_fetch_flush)
             issue.stage_valid <= 0;
         else if (issue_stage_ready)
-            issue.stage_valid <= decode_id_valid;
+            issue.stage_valid <= decode.valid;
     end
 
     always_ff @(posedge clk) begin
         if (issue_stage_ready) begin
-            issue.pc <= decode_pc;
-            issue.instruction <= decode_instruction;
+            issue.pc <= decode.pc;
+            issue.instruction <= decode.instruction;
             issue.fn3 <= fn3;
             issue.opcode <= opcode;
             issue.rs_addr[RS1] <= rs1_addr;
             issue.rs_addr[RS2] <= rs2_addr;
             issue.rd_addr <= rd_addr;
-            issue.id <= decode_id;
+            issue.id <= decode.id;
             issue.uses_rs1 <= uses_rs1;
             issue.uses_rs2 <= uses_rs2;
             issue.uses_rd <= uses_rd;
@@ -169,11 +166,11 @@ module decode_and_issue (
     ////////////////////////////////////////////////////
     //Unit Determination
     assign unit_needed[BRANCH_UNIT_ID] = opcode_trim inside {BRANCH_T, JAL_T, JALR_T};
-    assign unit_needed[ALU_UNIT_WB_ID] =  ((opcode_trim == ARITH_T) && ~decode_instruction[25]) || (opcode_trim inside {ARITH_IMM_T, AUIPC_T, LUI_T, JAL_T, JALR_T});
+    assign unit_needed[ALU_UNIT_WB_ID] =  ((opcode_trim == ARITH_T) && ~decode.instruction[25]) || (opcode_trim inside {ARITH_IMM_T, AUIPC_T, LUI_T, JAL_T, JALR_T});
     assign unit_needed[LS_UNIT_WB_ID] = opcode_trim inside {LOAD_T, STORE_T, AMO_T};
     assign unit_needed[GC_UNIT_ID] = opcode_trim inside {SYSTEM_T, FENCE_T};
 
-    assign mult_div_op = (opcode_trim == ARITH_T) && decode_instruction[25];
+    assign mult_div_op = (opcode_trim == ARITH_T) && decode.instruction[25];
     generate if (USE_MUL)
         assign unit_needed[MUL_UNIT_WB_ID] = mult_div_op && ~fn3[2];
     endgenerate
@@ -225,9 +222,9 @@ module decode_and_issue (
 
     always_comb begin
         if (opcode_trim inside {LUI_T, AUIPC_T}) //LUI or AUIPC
-            pre_alu_rs2 = {decode_instruction[31:12], 12'b0};
+            pre_alu_rs2 = {decode.instruction[31:12], 12'b0};
         else if (opcode_trim == ARITH_IMM_T) //ARITH_IMM
-            pre_alu_rs2 = 32'(signed'(decode_instruction[31:20]));
+            pre_alu_rs2 = 32'(signed'(decode.instruction[31:20]));
         else //JAL JALR
             pre_alu_rs2 = 4;
     end
@@ -237,7 +234,7 @@ module decode_and_issue (
             if (opcode_trim inside {LUI_T})
                 pre_alu_rs1_r <= '0;
             else
-                pre_alu_rs1_r <= decode_pc;
+                pre_alu_rs1_r <= decode.pc;
         end
     end
 
@@ -252,7 +249,7 @@ module decode_and_issue (
     //Add cases: JAL, JALR, LUI, AUIPC, ADD[I], all logic ops
     //sub cases: SUB, SLT[U][I]
     logic sub_instruction;
-    assign sub_instruction = (fn3 == ADD_SUB_fn3) && decode_instruction[30] && opcode[5];//If ARITH instruction
+    assign sub_instruction = (fn3 == ADD_SUB_fn3) && decode.instruction[30] && opcode[5];//If ARITH instruction
 
     alu_logic_op_t alu_logic_op;
     always_comb begin
@@ -312,7 +309,7 @@ module decode_and_issue (
     logic [4:0] amo_type;
 
     assign amo_op =  USE_AMO ? (opcode_trim == AMO_T) : 1'b0;
-    assign amo_type = decode_instruction[31:27];
+    assign amo_type = decode.instruction[31:27];
     assign store_conditional = (amo_type == AMO_SC);
     assign load_reserve = (amo_type == AMO_LR);
 
@@ -335,7 +332,7 @@ module decode_and_issue (
     logic is_store_r;
     always_ff @(posedge clk) begin
         if (issue_stage_ready) begin
-            ls_offset <= opcode[5] ? {decode_instruction[31:25], decode_instruction[11:7]} : decode_instruction[31:20];
+            ls_offset <= opcode[5] ? {decode.instruction[31:25], decode.instruction[11:7]} : decode.instruction[31:20];
             is_load_r <= is_load;
             is_store_r <= is_store;
         end
@@ -380,9 +377,9 @@ module decode_and_issue (
 
     logic [20:0] pc_offset;
     logic [20:0] pc_offset_r;
-    assign jal_imm = {decode_instruction[31], decode_instruction[19:12], decode_instruction[20], decode_instruction[30:21]};
-    assign jalr_imm = decode_instruction[31:20];
-    assign br_imm = {decode_instruction[31], decode_instruction[7], decode_instruction[30:25], decode_instruction[11:8]};
+    assign jal_imm = {decode.instruction[31], decode.instruction[19:12], decode.instruction[20], decode.instruction[30:21]};
+    assign jalr_imm = decode.instruction[31:20];
+    assign br_imm = {decode.instruction[31], decode.instruction[7], decode.instruction[30:25], decode.instruction[11:8]};
 
 
     always_comb begin
@@ -419,7 +416,7 @@ module decode_and_issue (
     logic is_csr;
     logic is_csr_r;
     logic potential_flush;
-    assign sfence = decode_instruction[25];
+    assign sfence = decode.instruction[25];
     assign ifence =  (opcode_trim == FENCE_T) && fn3[0];
     assign is_csr = (opcode_trim == SYSTEM_T) && (fn3 != 0);
 
@@ -432,9 +429,9 @@ module decode_and_issue (
     always_ff @(posedge clk) begin
         if (issue_stage_ready) begin
             is_csr_r <= is_csr;
-            is_ecall <= ENABLE_M_MODE && environment_op && (decode_instruction[21:20] == 0);
-            is_ebreak <= ENABLE_M_MODE && environment_op && (decode_instruction[21:20] == 2'b01);
-            is_ret <= ENABLE_M_MODE && environment_op && (decode_instruction[21:20] == 2'b10);
+            is_ecall <= ENABLE_M_MODE && environment_op && (decode.instruction[21:20] == 0);
+            is_ebreak <= ENABLE_M_MODE && environment_op && (decode.instruction[21:20] == 2'b01);
+            is_ret <= ENABLE_M_MODE && environment_op && (decode.instruction[21:20] == 2'b10);
             is_fence <= ENABLE_M_MODE && (opcode_trim == FENCE_T) && ~fn3[0];
             is_ifence_r <= ifence;
             potential_flush <= (environment_op | ifence);
@@ -514,7 +511,7 @@ module decode_and_issue (
     logic illegal_instruction_pattern_r;
     generate if (ENABLE_M_MODE) begin
         illegal_instruction_checker illegal_op_check (
-            .instruction(decode_instruction), .illegal_instruction(illegal_instruction_pattern)
+            .instruction(decode.instruction), .illegal_instruction(illegal_instruction_pattern)
         );
         always_ff @(posedge clk) begin
             if (rst)

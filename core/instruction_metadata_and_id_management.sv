@@ -42,11 +42,8 @@ module instruction_metadata_and_id_management
         input logic [31:0] fetch_instruction,
 
         //Decode ID
+        output decode_packet_t decode,
         input logic decode_advance,
-        output id_t decode_id,
-        output logic decode_id_valid,
-        output logic [31:0] decode_pc,
-        output logic [31:0] decode_instruction,
 
         //Issue stage
         input issue_packet_t issue,
@@ -158,7 +155,7 @@ module instruction_metadata_and_id_management
         if (rst)
             pc_id <= 0;
         else if (gc_fetch_flush)
-            pc_id <= decode_id_valid ? decode_id : pc_id;
+            pc_id <= decode.valid ? decode.id : pc_id;
         else
             pc_id <= pc_id_i;
     end
@@ -167,7 +164,7 @@ module instruction_metadata_and_id_management
         if (rst)
             fetch_id <= 0;
         else if (gc_fetch_flush)
-            fetch_id <= decode_id_valid ? decode_id : pc_id;
+            fetch_id <= decode.valid ? decode.id : pc_id;
         else
             fetch_id <= fetch_id + LOG2_MAX_IDS'(fetch_complete);
     end
@@ -185,9 +182,6 @@ module instruction_metadata_and_id_management
         .clk
     );
 
-    assign decode_id = fetch_fifo.data_out;
-    assign decode_id_valid = fetch_fifo.valid;
-
     ////////////////////////////////////////////////////
     //Issue Tracking
     //As there are multiple completion sources, each source toggles a bit in its own LUTRAM.
@@ -198,7 +192,7 @@ module instruction_metadata_and_id_management
     toggle_memory decode_toggle_mem (
         .clk, .rst,
         .toggle(decode_advance & ~gc_fetch_flush),
-        .toggle_id(decode_id),
+        .toggle_id(decode.id),
         .read_id(pc_id_i),
         .read_data(decoded_status)
     );
@@ -330,8 +324,10 @@ module instruction_metadata_and_id_management
     end
 
     //Decode
-    assign decode_pc = pc_table[decode_id];
-    assign decode_instruction = instruction_table[decode_id];
+    assign decode.id = fetch_fifo.data_out;
+    assign decode.valid = fetch_fifo.valid;
+    assign decode.pc = pc_table[fetch_fifo.data_out];
+    assign decode.instruction = instruction_table[fetch_fifo.data_out];
 
     //Branch Predictor
     assign branch_metadata_ex = branch_metadata_table[branch_id];
@@ -368,7 +364,7 @@ module instruction_metadata_and_id_management
         else $error("ID assigned without any ID available");
 
     decode_advanced_without_id_assertion:
-        assert property (@(posedge clk) disable iff (rst) !(~decode_id_valid & decode_advance))
+        assert property (@(posedge clk) disable iff (rst) !(~decode.valid & decode_advance))
         else $error("Decode advanced without ID");
 
 endmodule

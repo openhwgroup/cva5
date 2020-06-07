@@ -95,10 +95,7 @@ module taiga (
     logic [31:0] fetch_instruction;
         //Decode stage
     logic decode_advance;
-    id_t decode_id;
-    logic decode_id_valid;
-    logic [31:0] decode_pc;
-    logic [31:0] decode_instruction;
+    decode_packet_t decode;
         //Issue stage
     id_t rs_id [REGFILE_READ_PORTS];
     logic rs_inuse [REGFILE_READ_PORTS];
