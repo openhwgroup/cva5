@@ -31,9 +31,7 @@ module register_file_and_writeback
         //Issue interface
         input issue_packet_t issue,
         input logic alu_issued,
-        output logic [31:0] rs1_data,
-        output logic [31:0] rs2_data,
-
+        output logic [31:0] rs_data [REGFILE_READ_PORTS],
         //ID Metadata
         output id_t ids_retiring [COMMIT_PORTS],
         output logic retired [COMMIT_PORTS],
@@ -63,9 +61,10 @@ module register_file_and_writeback
     logic [XLEN-1:0] unit_rd [NUM_WB_UNITS];
     //Per-ID muxes for commit buffer
     logic [$clog2(NUM_WB_UNITS)-1:0] retiring_unit_select [COMMIT_PORTS];
-    logic [31:0] rs1_data_set [COMMIT_PORTS];
-    logic [31:0] rs2_data_set [COMMIT_PORTS];
     logic [31:0] retiring_data [COMMIT_PORTS];
+
+    typedef logic [31:0] rs_data_set_t [REGFILE_READ_PORTS];
+    rs_data_set_t rs_data_set [COMMIT_PORTS];
 
     genvar i;
     ////////////////////////////////////////////////////
@@ -110,14 +109,13 @@ module register_file_and_writeback
     //Implemented in seperate module as there is not universal tool support for inferring
     //arrays of memory blocks.
     generate for (i = 0; i < COMMIT_PORTS; i++) begin
-        register_file register_file_blocks (
+        register_file #(.NUM_READ_PORTS(REGFILE_READ_PORTS)) register_file_blocks (
             .clk, .rst,
-            .issue,
             .rd_addr(retired_rd_addr[i]),
             .new_data(retiring_data[i]),
             .commit(retired[i] & (|retired_rd_addr[i])),
-            .rs1_data(rs1_data_set[i]),
-            .rs2_data(rs2_data_set[i])
+            .read_addr(issue.rs_addr),
+            .data(rs_data_set[i])
         );
     end endgenerate
 
@@ -134,7 +132,7 @@ module register_file_and_writeback
 
     regfile_bank_sel regfile_lvt (
         .clk, .rst,
-        .rs1_addr(issue.rs1_addr), .rs2_addr(issue.rs2_addr),
+        .rs1_addr(issue.rs_addr[RS1]), .rs2_addr(issue.rs_addr[RS2]),
         .rs1_sel,
         .rs2_sel,
         .rd_addr(retired_rd_addr),
@@ -143,8 +141,8 @@ module register_file_and_writeback
 
     ////////////////////////////////////////////////////
     //Register File Muxing
-    assign rs1_data = rs1_data_set[rs1_sel];
-    assign rs2_data = rs2_data_set[rs2_sel];
+    assign rs_data[RS1] = rs_data_set[rs1_sel][RS1];
+    assign rs_data[RS2] = rs_data_set[rs2_sel][RS2];
 
     ////////////////////////////////////////////////////
     //End of Implementation

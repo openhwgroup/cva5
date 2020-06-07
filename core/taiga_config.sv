@@ -158,18 +158,23 @@ package taiga_config;
     //Branch Predictor Options
     parameter USE_BRANCH_PREDICTOR = 1;
     parameter BRANCH_PREDICTOR_WAYS = 2;
-    parameter BRANCH_TABLE_ENTRIES = 512;//min 512
+    parameter BRANCH_TABLE_ENTRIES = 512; //min 512
     parameter RAS_DEPTH = 8;
 
 
     ////////////////////////////////////////////////////
     //ID limit
     //MAX_IDS restricted to a power of 2
-    parameter MAX_IDS = 64;
+    parameter MAX_IDS = 8; //8 sufficient for rv32im configs
 
     ////////////////////////////////////////////////////
     //Number of commit ports
-    parameter COMMIT_PORTS = 3;
+    parameter COMMIT_PORTS = 2; //min 2
+    parameter REGFILE_READ_PORTS = 2; //min 2, for RS1 and RS2
+    typedef enum logic {
+        RS1 = 0,
+        RS2 = 1
+    } rs1_index_t;
 
     ////////////////////////////////////////////////////
     //Trace Options

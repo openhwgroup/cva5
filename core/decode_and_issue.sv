@@ -36,9 +36,7 @@ module decode_and_issue (
         input logic [31:0] decode_instruction,
 
         output issue_packet_t issue,
-        input logic [31:0] rs1_data,
-        input logic [31:0] rs2_data,
-        input id_t rs2_id,
+        input logic [31:0] rs_data [REGFILE_READ_PORTS],
 
         output alu_inputs_t alu_inputs,
         output load_store_inputs_t ls_inputs,
@@ -56,10 +54,9 @@ module decode_and_issue (
         output logic gc_flush_required,
 
         //ID Management
-        input logic rs1_inuse,
-        input logic rs2_inuse,
-        input logic rs1_id_inuse,
-        input logic rs2_id_inuse,
+        input logic rs_inuse [REGFILE_READ_PORTS],
+        input id_t rs_id [REGFILE_READ_PORTS],
+        input logic rs_id_inuse [REGFILE_READ_PORTS],
 
         output logic instruction_issued,
         output logic illegal_instruction,
@@ -159,8 +156,8 @@ module decode_and_issue (
             issue.instruction <= decode_instruction;
             issue.fn3 <= fn3;
             issue.opcode <= opcode;
-            issue.rs1_addr <= rs1_addr;
-            issue.rs2_addr <= rs2_addr;
+            issue.rs_addr[RS1] <= rs1_addr;
+            issue.rs_addr[RS2] <= rs2_addr;
             issue.rd_addr <= rd_addr;
             issue.id <= decode_id;
             issue.uses_rs1 <= uses_rs1;
@@ -200,8 +197,8 @@ module decode_and_issue (
     //Issue Determination
     assign issue_valid = issue.stage_valid & ~gc_issue_hold & ~gc_fetch_flush;
 
-    assign rs1_conflict = rs1_inuse & rs1_id_inuse & issue.uses_rs1;
-    assign rs2_conflict = rs2_inuse & rs2_id_inuse & issue.uses_rs2;
+    assign rs1_conflict = rs_inuse[RS1] & rs_id_inuse[RS1] & issue.uses_rs1;
+    assign rs2_conflict = rs_inuse[RS2] & rs_id_inuse[RS2] & issue.uses_rs2;
 
     assign operands_ready = ~rs1_conflict & ~rs2_conflict;
 
@@ -295,13 +292,13 @@ module decode_and_issue (
     assign alu_inputs.shifter_path = alu_shifter_path;
     assign alu_inputs.slt_path = alu_slt_path;
 
-    assign alu_rs1_data = rs1_use_regfile ? rs1_data : pre_alu_rs1_r;
-    assign alu_rs2_data = rs2_use_regfile ? rs2_data : pre_alu_rs2_r;
+    assign alu_rs1_data = rs1_use_regfile ? rs_data[RS1] : pre_alu_rs1_r;
+    assign alu_rs2_data = rs2_use_regfile ? rs_data[RS2] : pre_alu_rs2_r;
 
-    assign alu_inputs.in1 = {(rs1_data[XLEN-1] & ~issue.fn3[0]), alu_rs1_data};//(fn3[0]  is SLTU_fn3);
+    assign alu_inputs.in1 = {(rs_data[RS1][XLEN-1] & ~issue.fn3[0]), alu_rs1_data};//(fn3[0]  is SLTU_fn3);
     assign alu_inputs.in2 = {(alu_rs2_data[XLEN-1] & ~issue.fn3[0]), alu_rs2_data};
-    assign alu_inputs.shifter_in = rs1_data;
-    assign alu_inputs.shift_amount = issue.opcode[5] ? rs2_data[4:0] : issue.rs2_addr;
+    assign alu_inputs.shifter_in = rs_data[RS1];
+    assign alu_inputs.shift_amount = issue.opcode[5] ? rs_data[RS2][4:0] : issue.rs_addr[RS2];
 
     assign alu_issued = issue_to[ALU_UNIT_WB_ID];
 
@@ -348,10 +345,10 @@ module decode_and_issue (
     assign ls_inputs.load = is_load_r;
     assign ls_inputs.store = is_store_r;
     assign ls_inputs.fn3 = amo_op ? LS_W_fn3 : issue.fn3;
-    assign ls_inputs.rs1 = rs1_data;
-    assign ls_inputs.rs2 = rs2_data;
+    assign ls_inputs.rs1 = rs_data[RS1];
+    assign ls_inputs.rs2 = rs_data[RS2];
     assign ls_inputs.forwarded_store = 0;//rs2_conflict;
-    assign ls_inputs.store_forward_id = rs2_id;
+    assign ls_inputs.store_forward_id = rs_id[RS2];
 
     ////////////////////////////////////////////////////
     //Branch unit inputs
@@ -411,8 +408,8 @@ module decode_and_issue (
 
     assign branch_inputs.issue_pc = issue.pc;
     assign branch_inputs.issue_pc_valid = issue.stage_valid;
-    assign branch_inputs.rs1 = rs1_data;
-    assign branch_inputs.rs2 = rs2_data;
+    assign branch_inputs.rs1 = rs_data[RS1];
+    assign branch_inputs.rs2 = rs_data[RS2];
 
 
     ////////////////////////////////////////////////////
@@ -453,15 +450,15 @@ module decode_and_issue (
     assign gc_inputs.is_fence = is_fence;
     assign gc_inputs.is_i_fence = ENABLE_M_MODE & issue_to[GC_UNIT_ID] & is_ifence_r;
 
-    assign gc_inputs.rs1 = rs1_data;
-    assign gc_inputs.rs2 = rs2_data;
+    assign gc_inputs.rs1 = rs_data[RS1];
+    assign gc_inputs.rs2 = rs_data[RS2];
     assign gc_flush_required = ENABLE_M_MODE && issue_to[GC_UNIT_ID] && potential_flush;
 
     ////////////////////////////////////////////////////
     //Mul unit inputs
     generate if (USE_MUL) begin
-        assign mul_inputs.rs1 = rs1_data;
-        assign mul_inputs.rs2 = rs2_data;
+        assign mul_inputs.rs1 = rs_data[RS1];
+        assign mul_inputs.rs2 = rs_data[RS2];
         assign mul_inputs.op = issue.fn3[1:0];
     end endgenerate
 
@@ -482,11 +479,11 @@ module decode_and_issue (
             end
         end
 
-        assign current_op_resuses_rs1_rs2 = (prev_div_rs1_addr == issue.rs1_addr) && (prev_div_rs2_addr == issue.rs2_addr);
+        assign current_op_resuses_rs1_rs2 = (prev_div_rs1_addr == issue.rs_addr[RS1]) && (prev_div_rs2_addr == issue.rs_addr[RS2]);
         assign set_prev_div_result_valid = unit_needed_issue_stage[DIV_UNIT_WB_ID];
 
         //If current div operation overwrites an input register OR any other instruction overwrites the last div operations input registers
-        assign clear_prev_div_result_valid = issue.uses_rd & ((issue.rd_addr == (unit_needed_issue_stage[DIV_UNIT_WB_ID] ? issue.rs1_addr : prev_div_rs1_addr)) || (issue.rd_addr == (unit_needed_issue_stage[DIV_UNIT_WB_ID] ? issue.rs2_addr : prev_div_rs2_addr)));
+        assign clear_prev_div_result_valid = issue.uses_rd & ((issue.rd_addr == (unit_needed_issue_stage[DIV_UNIT_WB_ID] ? issue.rs_addr[RS1] : prev_div_rs1_addr)) || (issue.rd_addr == (unit_needed_issue_stage[DIV_UNIT_WB_ID] ? issue.rs_addr[RS2] : prev_div_rs2_addr)));
 
         set_clr_reg_with_rst #(.SET_OVER_CLR(0), .WIDTH(1), .RST_VALUE(0)) prev_div_result_valid_m (
             .clk, .rst,
@@ -495,8 +492,8 @@ module decode_and_issue (
             .result(prev_div_result_valid)
         );
 
-        assign div_inputs.rs1 = rs1_data;
-        assign div_inputs.rs2 = rs2_data;
+        assign div_inputs.rs1 = rs_data[RS1];
+        assign div_inputs.rs2 = rs_data[RS2];
         assign div_inputs.op = issue.fn3[1:0];
         assign div_inputs.reuse_result = prev_div_result_valid & current_op_resuses_rs1_rs2;
     end endgenerate

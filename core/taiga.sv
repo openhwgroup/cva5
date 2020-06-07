@@ -58,8 +58,8 @@ module taiga (
     ras_interface ras();
 
     issue_packet_t issue;
-    logic [31:0] rs1_data;
-    logic [31:0] rs2_data;
+    logic [31:0] rs_data [REGFILE_READ_PORTS];
+
 
     alu_inputs_t alu_inputs;
     load_store_inputs_t ls_inputs;
@@ -100,12 +100,9 @@ module taiga (
     logic [31:0] decode_pc;
     logic [31:0] decode_instruction;
         //Issue stage
-    id_t rs1_id;
-    id_t rs2_id;
-    logic rs1_inuse;
-    logic rs2_inuse;
-    logic rs1_id_inuse;
-    logic rs2_id_inuse;
+    id_t rs_id [REGFILE_READ_PORTS];
+    logic rs_inuse [REGFILE_READ_PORTS];
+    logic rs_id_inuse [REGFILE_READ_PORTS];
         //Branch predictor
     branch_metadata_t branch_metadata_if;
     branch_metadata_t branch_metadata_ex;

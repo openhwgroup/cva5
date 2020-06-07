@@ -46,10 +46,8 @@ module instruction_metadata
         //Issue stage
         input issue_packet_t issue,
         input logic instruction_issued,
-        output id_t rs1_id,
-        output id_t rs2_id,
-        output logic rs1_inuse,
-        output logic rs2_inuse,
+        output id_t rs_id [REGFILE_READ_PORTS],
+        output logic rs_inuse [REGFILE_READ_PORTS],
 
         //Branch Predictor
         input branch_metadata_t branch_metadata_if,
@@ -113,16 +111,12 @@ module instruction_metadata
     assign branch_metadata_ex = branch_metadata_table[branch_id];
 
     //Issue
-    logic [4:0] rs1_id_rd_addr;
-    logic [4:0] rs2_id_rd_addr;
-    assign rs1_id = rd_to_id_table[issue.rs1_addr];
-    assign rs2_id = rd_to_id_table[issue.rs2_addr];
-
-    assign rs1_id_rd_addr = instruction_table[rs1_id][11:7];
-    assign rs2_id_rd_addr = instruction_table[rs2_id][11:7];
-
-    assign rs1_inuse = (issue.rs1_addr == rs1_id_rd_addr);
-    assign rs2_inuse = (issue.rs2_addr == rs2_id_rd_addr);
+    always_comb begin
+        for (int i = 0; i < REGFILE_READ_PORTS; i++) begin
+            rs_id[i] = rd_to_id_table[issue.rs_addr[i]];
+            rs_inuse[i] = (issue.rs_addr[i] == instruction_table[rs_id[i]][11:7]);//11:7 is rd_addr
+        end
+    end
 
     //Writeback support
     always_comb begin

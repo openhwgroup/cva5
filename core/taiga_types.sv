@@ -30,7 +30,6 @@ package taiga_types;
     localparam LOG2_COMMIT_PORTS = $clog2(COMMIT_PORTS);
 
     typedef logic[$clog2(MAX_IDS)-1:0] id_t;
-
     typedef logic[WB_UNITS_WIDTH-1:0] unit_id_t;
     typedef logic[1:0] branch_predictor_metadata_t;
 
@@ -87,8 +86,7 @@ package taiga_types;
         logic [2:0] fn3;
         logic [6:0] opcode;
 
-        logic [4:0] rs1_addr;
-        logic [4:0] rs2_addr;
+        rs_addr_t [REGFILE_READ_PORTS-1:0] rs_addr;//packed style instead of unpacked due to tool limitations
         logic [4:0] rd_addr;
 
         logic uses_rs1;

@@ -48,10 +48,8 @@ module id_management
         //Issue stage
         input issue_packet_t issue,
         input logic instruction_issued,
-        input id_t rs1_id,
-        input id_t rs2_id,
-        output logic rs1_id_inuse,
-        output logic rs2_id_inuse,
+        input id_t rs_id[REGFILE_READ_PORTS],
+        output logic rs_id_inuse[REGFILE_READ_PORTS],
 
         //ID freeing
         input logic store_complete,
@@ -81,23 +79,19 @@ module id_management
     logic decoded_issued_status;
 
     logic issued_status;
-    logic issued_status_rs1;
-    logic issued_status_rs2;
-    logic branch_complete_status;
-    logic branch_complete_status_rs1;
-    logic branch_complete_status_rs2;
-    logic store_complete_status;
-    logic store_complete_status_rs1;
-    logic store_complete_status_rs2;
-    logic system_op_or_exception_complete_status;
-    logic exception_with_rd_complete_status_rs1;
-    logic exception_with_rd_complete_status_rs2;
-    logic [COMMIT_PORTS-1:0] retired_status;
-    logic [COMMIT_PORTS-1:0] retired_status_rs1;
-    logic [COMMIT_PORTS-1:0] retired_status_rs2;
+    logic issued_status_rs [REGFILE_READ_PORTS];
 
+    logic branch_complete_status;
+    logic store_complete_status;
+
+    logic system_op_or_exception_complete_status;
+    logic exception_with_rd_complete_status_rs [REGFILE_READ_PORTS];
+
+    logic [COMMIT_PORTS-1:0] retired_status;
+    logic [COMMIT_PORTS-1:0] retired_status_rs [REGFILE_READ_PORTS];
 
     logic [$clog2(MAX_COMPLETE_COUNT)-1:0] complete_count;
+    genvar i;
     ////////////////////////////////////////////////////
     //Implementation
 
@@ -171,20 +165,15 @@ module id_management
         .read_id(pc_id_i),
         .read_data(issued_status)
     );
-    toggle_memory issued_toggle_mem_rs1 (
-        .clk, .rst,
-        .toggle(instruction_issued & issue.uses_rd),
-        .toggle_id(issue.id),
-        .read_id(rs1_id),
-        .read_data(issued_status_rs1)
-    );
-    toggle_memory issued_toggle_mem_rs2 (
-        .clk, .rst,
-        .toggle(instruction_issued & issue.uses_rd),
-        .toggle_id(issue.id),
-        .read_id(rs2_id),
-        .read_data(issued_status_rs2)
-    );
+    generate for (i = 0; i < REGFILE_READ_PORTS; i++) begin
+        toggle_memory issued_toggle_mem_rs (
+            .clk, .rst,
+            .toggle(instruction_issued & issue.uses_rd),
+            .toggle_id(issue.id),
+            .read_id(rs_id[i]),
+            .read_data(issued_status_rs[i])
+        );
+    end endgenerate
 
     toggle_memory branch_toggle_mem (
         .clk, .rst,
@@ -209,22 +198,19 @@ module id_management
         .read_id(pc_id_i),
         .read_data(system_op_or_exception_complete_status)
     );
-    toggle_memory exception_complete_toggle_mem_rs1 (
-        .clk, .rst,
-        .toggle(exception_with_rd_complete),
-        .toggle_id(system_op_or_exception_id),
-        .read_id(rs1_id),
-        .read_data(exception_with_rd_complete_status_rs1)
-    );
-    toggle_memory xception_complete_toggle_mem_rs2 (
-        .clk, .rst,
-        .toggle(exception_with_rd_complete),
-        .toggle_id(system_op_or_exception_id),
-        .read_id(rs2_id),
-        .read_data(exception_with_rd_complete_status_rs2)
-    );
+
+    generate for (i = 0; i < REGFILE_READ_PORTS; i++) begin
+        toggle_memory exception_complete_toggle_mem_rs (
+            .clk, .rst,
+            .toggle(exception_with_rd_complete),
+            .toggle_id(system_op_or_exception_id),
+            .read_id(rs_id[i]),
+            .read_data(exception_with_rd_complete_status_rs[i])
+        );
+    end endgenerate
+
     //One memory per commit port
-    genvar i;
+    genvar j;
     generate for (i = 0; i < COMMIT_PORTS; i++) begin
         toggle_memory retired_toggle_mem (
             .clk, .rst,
@@ -233,20 +219,15 @@ module id_management
             .read_id(pc_id_i),
             .read_data(retired_status[i])
         );
-        toggle_memory retired_toggle_mem_rs1 (
-            .clk, .rst,
-            .toggle(retired[i]),
-            .toggle_id(ids_retiring[i]),
-            .read_id(rs1_id),
-            .read_data(retired_status_rs1[i])
-        );
-        toggle_memory retired_toggle_mem_rs2 (
-            .clk, .rst,
-            .toggle(retired[i]),
-            .toggle_id(ids_retiring[i]),
-            .read_id(rs2_id),
-            .read_data(retired_status_rs2[i])
-        );
+        for (j = 0; j < REGFILE_READ_PORTS; j++) begin
+            toggle_memory retired_toggle_mem_rs (
+                .clk, .rst,
+                .toggle(retired[i]),
+                .toggle_id(ids_retiring[i]),
+                .read_id(rs_id[j]),
+                .read_data(retired_status_rs[j][i])
+            );
+        end
     end endgenerate
 
     //Computed one cycle in advance using pc_id_i
@@ -263,17 +244,15 @@ module id_management
 
     //rs1/rs2 conflicts don't check branch or store memories as the only
     //IDs stored in the rs to ID table are instructions that write to the register file
-     assign rs1_id_inuse = (
-        issued_status_rs1 ^
-        exception_with_rd_complete_status_rs1 ^
-        (^retired_status_rs1)
-    );
-
-     assign rs2_id_inuse = (
-        issued_status_rs2 ^
-        exception_with_rd_complete_status_rs2 ^
-        (^retired_status_rs2)
-     );
+    always_comb begin
+        for (int i = 0; i < REGFILE_READ_PORTS; i++) begin
+            rs_id_inuse[i] = (
+                issued_status_rs[i] ^
+                exception_with_rd_complete_status_rs[i] ^
+                (^retired_status_rs[i])
+            );
+        end
+    end
 
     always_ff @ (posedge clk) begin
         if (rst)

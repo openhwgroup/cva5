@@ -24,22 +24,24 @@ module register_file
     import taiga_config::*;
     import riscv_types::*;
     import taiga_types::*;
+    #(
+        parameter NUM_READ_PORTS = 2
+    )
     (
         input logic clk,
         input logic rst,
 
-        //Issue interface
-        input issue_packet_t issue,
+        //Writeback
         input logic [4:0] rd_addr,
         input logic [31:0] new_data,
         input logic commit,
 
-        output logic [31:0] rs1_data,
-        output logic [31:0] rs2_data
+        //Issue
+        input  rs_addr_t [NUM_READ_PORTS-1:0] read_addr,
+        output logic [31:0] data [NUM_READ_PORTS]
     );
 
     logic [31:0] register_file [32];
-    genvar i;
     ////////////////////////////////////////////////////
     //Implementation
 
@@ -52,8 +54,10 @@ module register_file
         if (commit)
             register_file[rd_addr] <= new_data;
     end
-    assign rs1_data = register_file[issue.rs1_addr];
-    assign rs2_data = register_file[issue.rs2_addr];
+    always_comb begin
+        foreach(read_addr[i])
+            data[i] = register_file[read_addr[i]];
+    end
 
     ////////////////////////////////////////////////////
     //Assertions

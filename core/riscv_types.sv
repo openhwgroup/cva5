@@ -27,6 +27,8 @@ package riscv_types;
     parameter PAGE_ADDR_W = 12;
     parameter ECODE_W = 5;
 
+    typedef logic [4:0] rs_addr_t;
+
     typedef struct packed {
         logic [6:0] fn7;
         logic [4:0] rs2_addr;
