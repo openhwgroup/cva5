@@ -23,17 +23,15 @@
 
 module regfile_bank_sel
     import taiga_config::*;
+    import riscv_types::*;
     import taiga_types::*;
     (
         input logic clk,
         input logic rst,
 
         //Register file
-        input logic [4:0] rs1_addr,
-        input logic [4:0] rs2_addr,
-
-        output logic [LOG2_COMMIT_PORTS-1:0] rs1_sel,
-        output logic [LOG2_COMMIT_PORTS-1:0] rs2_sel,
+        input rs_addr_t [REGFILE_READ_PORTS-1:0] rs_addr,
+        output logic [LOG2_COMMIT_PORTS-1:0] rs_sel [REGFILE_READ_PORTS],
 
         //Writeback
         input logic[4:0] rd_addr [COMMIT_PORTS],
@@ -75,11 +73,11 @@ module regfile_bank_sel
     ////////////////////////////////////////////////////
     //Outputs
     always_comb begin
-        rs1_sel = 0;
-        rs2_sel = 0;
-        for (int i = 0; i < COMMIT_PORTS; i++) begin
-            rs1_sel ^= sel_bank[i][rs1_addr];
-            rs2_sel ^= sel_bank[i][rs2_addr];
+        for (int i = 0; i < REGFILE_READ_PORTS; i++) begin
+            rs_sel[i] = 0;
+            for (int j = 0; j < COMMIT_PORTS; j++) begin
+                rs_sel[i] ^= sel_bank[j][rs_addr[i]];
+            end
         end
     end
 

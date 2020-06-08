@@ -49,11 +49,10 @@ module register_file_and_writeback
     //Register File
     typedef logic [XLEN-1:0] register_file_t [32];
     register_file_t register_file [COMMIT_PORTS];
-
-    logic [LOG2_COMMIT_PORTS-1:0] rs1_sel;
-    logic [LOG2_COMMIT_PORTS-1:0] rs2_sel;
+    logic [LOG2_COMMIT_PORTS-1:0] rs_sel [REGFILE_READ_PORTS];
 
     //Writeback
+    logic alu_selected;
     logic unit_ack [NUM_WB_UNITS];
     //aliases for write-back-interface signals
     id_t unit_instruction_id [NUM_WB_UNITS];
@@ -101,7 +100,8 @@ module register_file_and_writeback
             retiring_data[i] = unit_rd[retiring_unit_select[i]];
         end
         //Late cycle abort for when ALU is not issued to
-        if (retiring_unit_select[0] == ALU_UNIT_WB_ID) retired[0] &= alu_issued;
+        alu_selected = (retiring_unit_select[0] == ALU_UNIT_WB_ID);
+        if (alu_selected) retired[0] &= alu_issued;
     end
 
     ////////////////////////////////////////////////////
@@ -113,7 +113,7 @@ module register_file_and_writeback
             .clk, .rst,
             .rd_addr(retired_rd_addr[i]),
             .new_data(retiring_data[i]),
-            .commit(retired[i] & (|retired_rd_addr[i])),
+            .commit(update_lvt[i] & (|retired_rd_addr[i])),
             .read_addr(issue.rs_addr),
             .data(rs_data_set[i])
         );
@@ -123,27 +123,31 @@ module register_file_and_writeback
     //Register File LVT
 
     //Only update lvt if the retiring instrucion is the most recently issued
-    //write to a given register.
+    //write to a given register.  This check allows multiple oustanding writes
+    //to the same register.  As instructions can complete out-of-order, only
+    //the most recently issued write to any given register will be committed
     logic update_lvt [COMMIT_PORTS];
     always_comb begin
-        for (int i = 0; i < COMMIT_PORTS; i++)
-            update_lvt[i] = retired[i];// & (id_for_rd[i] == ids_retiring[i]) OR unit is ALU or other single issue
+        update_lvt[0] = retired[0] & (alu_selected ? alu_issued : (id_for_rd[0] == ids_retiring[0]));
+        for (int i = 1; i < COMMIT_PORTS; i++)
+            update_lvt[i] = retired[i] & (id_for_rd[i] == ids_retiring[i]);
     end
 
     regfile_bank_sel regfile_lvt (
         .clk, .rst,
-        .rs1_addr(issue.rs_addr[RS1]), .rs2_addr(issue.rs_addr[RS2]),
-        .rs1_sel,
-        .rs2_sel,
+        .rs_addr(issue.rs_addr),
+        .rs_sel,
         .rd_addr(retired_rd_addr),
         .rd_retired(update_lvt)
     );
 
     ////////////////////////////////////////////////////
     //Register File Muxing
-    assign rs_data[RS1] = rs_data_set[rs1_sel][RS1];
-    assign rs_data[RS2] = rs_data_set[rs2_sel][RS2];
-
+    always_comb begin
+        for (int i = 0; i < REGFILE_READ_PORTS; i++) begin
+            rs_data[i] = rs_data_set[rs_sel[i]][i];
+        end
+    end
     ////////////////////////////////////////////////////
     //End of Implementation
     ////////////////////////////////////////////////////
