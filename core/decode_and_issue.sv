@@ -498,7 +498,7 @@ module decode_and_issue (
     ////////////////////////////////////////////////////
     //Unit EX signals
     generate for (i = 0; i < NUM_UNITS; i++) begin
-        assign unit_issue[i].possible_issue = unit_needed_issue_stage[i] & unit_ready[i];
+        assign unit_issue[i].possible_issue = issue.stage_valid & unit_needed_issue_stage[i] & unit_ready[i];
         assign unit_issue[i].new_request = issue_to[i];
         assign unit_issue[i].id = issue.id;
         always_ff @(posedge clk) begin
