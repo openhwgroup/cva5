@@ -31,6 +31,7 @@ module div_quick_clz
 
     logic running;
     logic terminate;
+    logic [div.DATA_WIDTH-1:0] divisor_r;
 
     logic [div.DATA_WIDTH-1:0] normalized_divisor;
 
@@ -79,13 +80,16 @@ module div_quick_clz
         div.done <= (running & terminate) | (div.start & divisor_is_zero_first_cycle);
     end
 
-    assign terminate = div.remainder < div.divisor;
+    assign terminate = div.remainder < divisor_r;
 
     ////////////////////////////////////////////////////
     //Divisor Pre-processing
     always_ff @ (posedge clk) begin
-        divisor_CLZ_r <= divisor_CLZ;
-        normalized_divisor <= div.divisor << divisor_CLZ;
+        if (div.start) begin
+            divisor_r <= div.divisor;
+            divisor_CLZ_r <= divisor_CLZ;
+            normalized_divisor <= div.divisor << divisor_CLZ;
+        end
     end
 
     ////////////////////////////////////////////////////

@@ -31,6 +31,7 @@ module div_radix2
 
     logic terminate;
 
+    logic [div.DATA_WIDTH-1:0] divisor_r;
     logic [div.DATA_WIDTH:0] new_PR;
     logic [div.DATA_WIDTH:0] PR;
     logic [div.DATA_WIDTH-1:0] shift_count;
@@ -38,7 +39,7 @@ module div_radix2
 
     //implementation
     ////////////////////////////////////////////////////
-    assign new_PR = PR - {1'b0, div.divisor};
+    assign new_PR = PR - {1'b0, divisor_r};
     assign negative_sub_rst = new_PR[div.DATA_WIDTH];
 
     //Shift reg for
@@ -48,6 +49,7 @@ module div_radix2
 
     always_ff @ (posedge clk) begin
         if (div.start) begin
+            divisor_r <= div.divisor;
             PR <= {(div.DATA_WIDTH)'(1'b0), div.dividend[div.DATA_WIDTH-1]};
             div.quotient <= {div.dividend[div.DATA_WIDTH-2:0], 1'b0};
         end

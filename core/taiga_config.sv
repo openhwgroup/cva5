@@ -51,19 +51,8 @@ package taiga_config;
 
     //Division algorithm selection
     typedef enum {
-        RADIX_2,
-        RADIX_2_EARLY_TERMINATE,
-        RADIX_2_EARLY_TERMINATE_FULL,
-        RADIX_4,
-        RADIX_4_EARLY_TERMINATE,
-        RADIX_4_EARLY_TERMINATE_FULL,
-        RADIX_8,
-        RADIX_8_EARLY_TERMINATE,
-        RADIX_16,
-        QUICK_NAIVE,
-        QUICK_CLZ,
-        QUICK_CLZ_MK2,
-        QUICK_RADIX_4
+        RADIX_2,//Smallest
+        QUICK_CLZ//Highest performance and best performance per LUT
     } div_type;
     parameter div_type DIV_ALGORITHM = QUICK_CLZ;
 

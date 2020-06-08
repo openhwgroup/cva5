@@ -62,21 +62,8 @@
 
 
 ../core/div_algorithms/div_radix2.sv
-../core/div_algorithms/div_radix2_ET.sv
-../core/div_algorithms/div_radix2_ET_full.sv
-../core/div_algorithms/div_radix4.sv
-../core/div_algorithms/div_radix8.sv
-../core/div_algorithms/div_radix8_ET.sv
-../core/div_algorithms/div_radix4_ET.sv
-../core/div_algorithms/div_radix4_ET_full.sv
-../core/div_algorithms/div_radix16.sv
-../core/msb.sv
-../core/msb_naive.sv
 ../core/clz.sv
-../core/div_algorithms/div_quick_clz_mk2.sv
 ../core/div_algorithms/div_quick_clz.sv
-../core/div_algorithms/div_quick_radix4.sv
-../core/div_algorithms/div_quick_naive.sv
 ../core/div_algorithms/div_algorithm.sv  
 ../core/div_unit.sv  
 
