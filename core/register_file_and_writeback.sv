@@ -130,7 +130,7 @@ module register_file_and_writeback
     always_comb begin
         update_lvt[0] = retired[0] & (alu_selected ? alu_issued : (id_for_rd[0] == ids_retiring[0]));
         for (int i = 1; i < COMMIT_PORTS; i++)
-            update_lvt[i] = retired[i] & (id_for_rd[i] == ids_retiring[i]);
+            update_lvt[i] = retired[i] & (id_for_rd[i] == ids_retiring[i]) & ~(alu_selected & retired[0] & retired_rd_addr[0] == retired_rd_addr[i]);
     end
 
     regfile_bank_sel regfile_lvt (
