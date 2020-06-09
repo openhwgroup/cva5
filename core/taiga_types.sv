@@ -128,7 +128,9 @@ package taiga_types;
         logic [31:0] new_pc;
         logic branch_taken;
         logic branch_ex;
+        logic is_branch_ex;
         logic is_return_ex;
+        logic is_call_ex;
     } branch_results_t;
 
     typedef struct packed{

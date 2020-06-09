@@ -36,14 +36,16 @@ interface branch_predictor_interface;
     logic [31:0] branch_flush_pc;
     logic [31:0] predicted_pc;
     logic use_prediction;
-    logic use_ras;
+    logic is_return;
+    logic is_call;
+    logic is_branch;
 
     modport branch_predictor (
         input if_pc, if_id, new_mem_request, next_pc,
-        output branch_flush_pc, predicted_pc, use_prediction, use_ras
+        output branch_flush_pc, predicted_pc, use_prediction, is_return, is_call, is_branch
     );
     modport fetch (
-        input branch_flush_pc, predicted_pc, use_prediction, use_ras,
+        input branch_flush_pc, predicted_pc, use_prediction, is_return, is_call, is_branch,
         output if_pc, if_id, new_mem_request, next_pc
      );
 
@@ -81,13 +83,15 @@ endinterface
 interface ras_interface;
     logic push;
     logic pop;
+    logic branch_fetched;
+    logic branch_retired;
+
     logic [31:0] new_addr;
     logic [31:0] addr;
-    logic valid;
 
-    modport branch_unit (output push, pop, new_addr);
-    modport self (input push, pop, new_addr, output addr, valid);
-    modport fetch (input addr, valid);
+    modport branch_unit (output branch_retired);
+    modport self (input push, pop, new_addr, branch_fetched, branch_retired, output addr);
+    modport fetch (input addr, output pop, push, new_addr, branch_fetched);
 endinterface
 
 interface csr_exception_interface;

@@ -56,7 +56,9 @@ module branch_predictor (
     typedef struct packed {
         logic valid;
         logic [BTAG_W-1:0] tag;
-        logic use_ras;
+        logic is_branch;
+        logic is_return;
+        logic is_call;
         branch_predictor_metadata_t metadata;
     } branch_table_entry_t;
 
@@ -116,13 +118,18 @@ module branch_predictor (
     //Predicted PC and whether the prediction is valid
     assign bp.predicted_pc = predicted_pc[hit_way];
     assign bp.use_prediction = use_predicted_pc;
-    assign bp.use_ras = if_entry[hit_way].use_ras;
+    assign bp.is_branch = if_entry[hit_way].is_branch;
+    assign bp.is_return = if_entry[hit_way].is_return;
+    assign bp.is_call = if_entry[hit_way].is_call;
 
     ////////////////////////////////////////////////////
     //Execution stage update
     assign ex_entry.valid = 1;
     assign ex_entry.tag = get_tag(br_results.pc_ex);
-    assign ex_entry.use_ras = br_results.is_return_ex;
+    assign ex_entry.is_branch = br_results.is_branch_ex;
+    assign ex_entry.is_return = br_results.is_return_ex;
+    assign ex_entry.is_call = br_results.is_call_ex;
+
 
     //2-bit saturating counter
     always_comb begin

@@ -218,7 +218,7 @@ module taiga (
 
     ////////////////////////////////////////////////////
     //Execution Units
-    branch_unit branch_unit_block (.*, .issue(unit_issue[BRANCH_UNIT_ID]), .issue_pc_plus_4(unit_wb[ALU_UNIT_WB_ID].rd));
+    branch_unit branch_unit_block (.*, .issue(unit_issue[BRANCH_UNIT_ID]));
     alu_unit alu_unit_block (.*, .issue(unit_issue[ALU_UNIT_WB_ID]), .wb(unit_wb[ALU_UNIT_WB_ID]));
     load_store_unit load_store_unit_block (.*, .dcache_on(1'b1), .clear_reservation(1'b0), .tlb(dtlb), .issue(unit_issue[LS_UNIT_WB_ID]), .wb(unit_wb[LS_UNIT_WB_ID]), .l1_request(l1_request[L1_DCACHE_ID]), .l1_response(l1_response[L1_DCACHE_ID]));
     generate if (ENABLE_S_MODE) begin

@@ -30,13 +30,13 @@ module branch_unit(
 
         unit_issue_interface.unit issue,
         input branch_inputs_t branch_inputs,
-        input logic [31:0] issue_pc_plus_4,//Sourced from ALU datapath on jal/jalr
         output branch_results_t br_results,
         ras_interface.branch_unit ras,
         output logic branch_flush,
 
         output logic branch_complete,
         output id_t branch_id,
+        input branch_metadata_t branch_metadata_ex,
 
         output logic potential_branch_exception,
         output logic branch_exception_is_jump,
@@ -140,11 +140,17 @@ module branch_unit(
     assign branch_id = id_ex;
 
     ////////////////////////////////////////////////////
+    //RAS support
+    assign ras.branch_retired = branch_complete & branch_metadata_ex.branch_prediction_used;
+
+    ////////////////////////////////////////////////////
     //Predictor support
     logic is_return;
+    logic is_call;
     always_ff @(posedge clk) begin
         if (instruction_is_completing | ~branch_issued_r) begin
             is_return <= branch_inputs.is_return;
+            is_call <= branch_inputs.is_call;
             pc_ex <= branch_inputs.issue_pc;
         end
     end
@@ -153,19 +159,12 @@ module branch_unit(
     assign br_results.new_pc = new_pc_ex;
     assign br_results.branch_taken = branch_taken_ex;
     assign br_results.branch_ex = instruction_is_completing;
+    assign br_results.is_branch_ex = ~jal_jalr_ex;
     assign br_results.is_return_ex = is_return;
+    assign br_results.is_call_ex = is_call;
 
     assign branch_flush = instruction_is_completing && (branch_inputs.issue_pc[31:1] != new_pc_ex[31:1]);
 
-    ////////////////////////////////////////////////////
-    //RAS support
-    generate if (USE_BRANCH_PREDICTOR) begin
-        always_ff @(posedge clk) begin
-            ras.push <= branch_inputs.is_call & issue.new_request;
-            ras.pop <= branch_inputs.is_return & issue.new_request;
-            ras.new_addr <= issue_pc_plus_4;
-        end
-    end endgenerate
     ////////////////////////////////////////////////////
     //End of Implementation
     ////////////////////////////////////////////////////

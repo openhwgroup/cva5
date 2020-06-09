@@ -94,20 +94,27 @@ module fetch(
             pc <= {next_pc[31:2], 2'b0};
     end
 
+    logic [31:0] pc_plus_4;
+    assign pc_plus_4 = pc + 4;
     always_comb begin
         if (gc_fetch_pc_override)
             next_pc = gc_fetch_pc;
         else if (branch_flush)
             next_pc = bp.branch_flush_pc;
         else if (bp.use_prediction)
-            next_pc = (bp.use_ras & ras.valid) ? ras.addr : bp.predicted_pc;
+            next_pc = bp.is_return ? ras.addr : bp.predicted_pc;
         else
-            next_pc = pc + 4;
+            next_pc = pc_plus_4;
     end
 
     assign bp.new_mem_request = new_mem_request | gc_fetch_flush;
     assign bp.next_pc = next_pc;
     assign bp.if_pc = pc;
+
+    assign ras.pop = bp.use_prediction & bp.is_return & ~branch_flush & ~gc_fetch_pc_override & new_mem_request;
+    assign ras.push = bp.use_prediction & bp.is_call & ~branch_flush & ~gc_fetch_pc_override & new_mem_request;
+    assign ras.new_addr = pc_plus_4;
+    assign ras.branch_fetched = bp.use_prediction & bp.is_branch & new_mem_request; //flush not needed as FIFO resets inside of RAS
 
     ////////////////////////////////////////////////////
     //TLB
