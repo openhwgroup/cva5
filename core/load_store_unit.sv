@@ -241,7 +241,7 @@ endgenerate
 
     assign load_attributes.data_in = load_attributes_in;
     assign load_attributes.push = issue_request & shared_inputs.load;
-    assign load_attributes.potential_push = 1;
+    assign load_attributes.potential_push = ~load_attributes.full;
     assign load_attributes.pop = load_complete;
 
     assign stage2_attr = load_attributes.data_out;
