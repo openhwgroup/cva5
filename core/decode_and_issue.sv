@@ -202,7 +202,7 @@ module decode_and_issue (
     //All units share the same operand ready logic except load-store which has an internal forwarding path
     always_comb begin
         unit_operands_ready = {NUM_UNITS{operands_ready}};
-        //unit_operands_ready[LS_UNIT_WB_ID] = ~rs1_conflict;
+        unit_operands_ready[LS_UNIT_WB_ID] = ~rs1_conflict;
     end
 
     assign issue_ready = unit_needed_issue_stage & unit_ready;
@@ -344,7 +344,7 @@ module decode_and_issue (
     assign ls_inputs.fn3 = amo_op ? LS_W_fn3 : issue.fn3;
     assign ls_inputs.rs1 = rs_data[RS1];
     assign ls_inputs.rs2 = rs_data[RS2];
-    assign ls_inputs.forwarded_store = 0;//rs2_conflict;
+    assign ls_inputs.forwarded_store = rs2_conflict;
     assign ls_inputs.store_forward_id = rs_id[RS2];
 
     ////////////////////////////////////////////////////

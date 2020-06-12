@@ -120,7 +120,7 @@ module load_store_unit (
 
     logic [31:0] compare_addr;
     logic address_conflict;
-
+    logic ready_for_forwarded_store;
     ////////////////////////////////////////////////////
     //Implementation
     ////////////////////////////////////////////////////
@@ -190,7 +190,7 @@ endgenerate
     assign lsq.new_issue = issue.new_request & ~unaligned_addr;
 
     logic [MAX_IDS-1:0] wb_hold_for_store_ids;
-    load_store_queue lsq_block (.*, .writeback_valid(wb_store.forwarding_data_ready), .writeback_data(wb_store.forwarded_data));
+    load_store_queue lsq_block (.*);
     assign shared_inputs = lsq.transaction_out;
 
     assign lsq.accepted = lsq.transaction_ready & ready_for_issue;
@@ -228,7 +228,7 @@ endgenerate
 
     assign ready_for_issue = units_ready & (~unit_switch_stall);
 
-    assign issue.ready = lsq.ready;
+    assign issue.ready = lsq.ready & ~(ls_inputs.forwarded_store & ~ready_for_forwarded_store);
     assign issue_request = lsq.accepted;
 
     ////////////////////////////////////////////////////

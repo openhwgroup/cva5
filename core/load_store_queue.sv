@@ -33,15 +33,12 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
         input logic gc_issue_flush,
 
         load_store_queue_interface.queue lsq,
-        output logic [MAX_IDS-1:0] wb_hold_for_store_ids,
-        //Writeback data
-        input logic [31:0] writeback_data,
-        input logic writeback_valid
+        writeback_store_interface.ls wb_store,
+
+        output logic ready_for_forwarded_store
     );
 
     logic [MAX_IDS-1:0] valid;
-    logic [$clog2(MAX_IDS)-1:0] hold_for_store_ids [MAX_IDS];
-    logic [$clog2(MAX_IDS)-1:0] hold_for_store_ids_r [MAX_IDS];
     id_t oldest_id;
 
     typedef struct packed {
@@ -122,40 +119,46 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
     // );
 
     ////////////////////////////////////////////////////
-    //Counters for determining if an existing ID's data is needed for a store
-    //As mutiple stores could need the same ID, there is a counter for each ID.
+    //Store Forwarding Support
+    //Only a single store can be forwarded at any given time
+    //The needed result is registered at the writeback stage when the 
+    //needed ID is retired.
+    logic possible_new_forwarded_store;//To help shorten logic path for registering results in the writeback stage
     logic new_forwarded_store;
     logic forwarded_store_complete;
+    id_t needed_id_r;
+    logic waiting_r;
 
+    assign possible_new_forwarded_store = lsq.possible_issue & lsq.forwarded_store;
     assign new_forwarded_store = lsq.new_issue & lsq.forwarded_store;
     assign forwarded_store_complete = lsq.accepted & oldest_lsq_entry.forwarded_store;
 
-    always_comb begin
-        hold_for_store_ids = hold_for_store_ids_r;
-        if (new_forwarded_store)
-            hold_for_store_ids[lsq.data_id] = hold_for_store_ids_r[lsq.data_id] + 1;
-        if (forwarded_store_complete)
-            hold_for_store_ids[oldest_lsq_entry.data_id] = hold_for_store_ids_r[oldest_lsq_entry.data_id] - 1;
+    always_ff @ (posedge clk) begin
+        if (rst)
+            waiting_r <= 0;
+        else
+            waiting_r <= new_forwarded_store | (waiting_r & ~wb_store.id_done);
     end
+    assign wb_store.waiting = new_forwarded_store | waiting_r;
+    assign wb_store.possibly_waiting = possible_new_forwarded_store | waiting_r;
+
+    assign wb_store.ack = forwarded_store_complete;
+    assign ready_for_forwarded_store = ~(waiting_r | wb_store.id_done);
 
     always_ff @ (posedge clk) begin
-        if (rst | gc_issue_flush)
-            hold_for_store_ids_r <= '{default: 0};
-        else
-            hold_for_store_ids_r <= hold_for_store_ids;
+        if (new_forwarded_store)
+            needed_id_r <= lsq.data_id;
     end
+    assign wb_store.id_needed = possible_new_forwarded_store ? lsq.data_id : needed_id_r;
 
-    always_comb begin
-        foreach (hold_for_store_ids_r[i])
-            wb_hold_for_store_ids[i] = (hold_for_store_ids_r[i] != 0);
-    end
+
 
     ////////////////////////////////////////////////////
     //Output
     logic [31:0] data_for_alignment;
 
     assign oldest_lsq_entry = lsq_entries[oldest_id];
-    assign lsq.transaction_ready =  oldest_fifo.valid & (~oldest_lsq_entry.forwarded_store | writeback_valid);
+    assign lsq.transaction_ready =  oldest_fifo.valid & (~oldest_lsq_entry.forwarded_store | wb_store.id_done);
     assign lsq.id_needed_by_store = oldest_lsq_entry.data_id;
 
     always_comb begin
@@ -166,7 +169,7 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
         lsq.transaction_out.fn3 = oldest_lsq_entry.fn3;
         lsq.transaction_out.id = oldest_id;
 
-        data_for_alignment = oldest_lsq_entry.forwarded_store ? writeback_data : oldest_lsq_entry.data_in;
+        data_for_alignment = oldest_lsq_entry.forwarded_store ? wb_store.data : oldest_lsq_entry.data_in;
         //Input: ABCD
         //Assuming aligned requests,
         //Possible byte selections: (A/C/D, B/D, C/D, D)

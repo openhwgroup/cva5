@@ -202,17 +202,22 @@ interface load_store_queue_interface;
 endinterface
 
 interface writeback_store_interface;
-        id_t id_needed_at_issue;
-        id_t id_needed_at_commit;
-        id_t commit_id;
-        logic commit;
-        logic [MAX_IDS-1:0] hold_for_store_ids;
+        id_t id_needed;
+        logic possibly_waiting;
+        logic waiting;
+        logic ack;
 
-        logic forwarding_data_ready;
-        logic [31:0] forwarded_data;
+        logic id_done;
+        logic [31:0] data;
 
-        modport ls (input forwarding_data_ready, forwarded_data, output id_needed_at_issue, id_needed_at_commit, commit_id, commit, hold_for_store_ids);
-        modport wb (output forwarding_data_ready, forwarded_data, input id_needed_at_issue, id_needed_at_commit, commit_id, commit, hold_for_store_ids);
+        modport ls (
+            input id_done, data,
+            output id_needed, possibly_waiting ,waiting, ack
+        );
+        modport wb (
+            input id_needed, possibly_waiting, waiting, ack,
+            output id_done, data
+        );
 endinterface
 
 interface ls_sub_unit_interface #(parameter BASE_ADDR = 32'h00000000, parameter UPPER_BOUND = 32'hFFFFFFFF, parameter BIT_CHECK = 4);
