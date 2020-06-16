@@ -29,6 +29,7 @@ module branch_comparator(
             input logic less_than,
             input logic [31:0] a,
             input logic [31:0] b,
+            input logic xor_result,
             output logic result
         );
 
@@ -45,6 +46,7 @@ module branch_comparator(
     logic [15:0] sub_eq_a;
 
     logic [15:0] sub_toss;
+    logic carry_out;
 
     logic eq_carry_in;
     logic ls_carry_in;
@@ -87,6 +89,11 @@ module branch_comparator(
 
             sub_eq_a[i] = (eq_a[2*i] | eq_b[2*i]) & (eq_a[2*i + 1] | eq_b[2*i + 1]); //bits are equal
         end
+        //branch_inputs.fn3[0] is xor_result and selects the inverse result
+        //i.e. (not eq, greater than).  Included here to reduce the number of inputs
+        //in the branch target adder
+        sub_ls_a[15] ^= xor_result;
+        sub_eq_a[15] ^= xor_result;
     end
 
 

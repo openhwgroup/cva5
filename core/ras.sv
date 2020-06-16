@@ -27,47 +27,44 @@ import taiga_types::*;
 module ras (
         input logic clk,
         input logic rst,
+        input logic gc_fetch_flush,
         ras_interface.self ras
         );
 
-    (* ramstyle = "MLAB, no_rw_check" *) logic[31:0] lut_ram [RAS_DEPTH-1:0];
+    (* ramstyle = "MLAB, no_rw_check" *) logic[31:0] lut_ram [RAS_DEPTH];
 
     localparam RAS_DEPTH_W = $clog2(RAS_DEPTH);
-    logic[RAS_DEPTH_W-1:0] read_index;
-    logic[RAS_DEPTH_W-1:0] write_index;
-    (* ramstyle = "MLAB, no_rw_check" *) logic valid_chain [RAS_DEPTH-1:0];
-    logic valid_chain_update;
+    logic [RAS_DEPTH_W-1:0] read_index;
+    logic [RAS_DEPTH_W-1:0] new_index;
+    fifo_interface #(.DATA_WIDTH(RAS_DEPTH_W)) ri_fifo();
     ///////////////////////////////////////////////////////
     //For simulation purposes
     initial lut_ram = '{default: 0};
-    initial valid_chain = '{default: 0};
      ///////////////////////////////////////////////////////
     assign ras.addr = lut_ram[read_index];
-    assign ras.valid = valid_chain[read_index];
     
+    //On a speculative branch, save the current stack pointer
+    //Restored if branch is misspredicted (gc_fetch_flush)
+    taiga_fifo #(.DATA_WIDTH(RAS_DEPTH_W), .FIFO_DEPTH(MAX_IDS))
+        read_index_fifo (.clk, .rst(rst | gc_fetch_flush), .fifo(ri_fifo));
+
+    assign ri_fifo.data_in = read_index;
+    assign ri_fifo.push = ras.branch_fetched;
+    assign ri_fifo.potential_push = ras.branch_fetched;
+    assign ri_fifo.pop = ras.branch_retired;
+
     always_ff @ (posedge clk) begin
         if (ras.push)
-            lut_ram[write_index] <= ras.new_addr;
+            lut_ram[new_index] <= ras.new_addr;
     end
     
     //Rolls over when full, most recent calls will be correct, but calls greater than depth
     //will be lost.
+    logic [RAS_DEPTH_W-1:0] new_index_base;
+    assign new_index_base = (gc_fetch_flush & ri_fifo.valid) ? ri_fifo.data_out : read_index;
+    assign new_index = new_index_base + RAS_DEPTH_W'(ras.push) - RAS_DEPTH_W'(ras.pop);
     always_ff @ (posedge clk) begin
-        if (rst)
-            read_index <= 0;
-        else if (ras.push & ~ras.pop)
-            read_index <= write_index;
-        else if (ras.pop & ~ras.push)
-            read_index <= read_index - 1;
+        read_index <= new_index;
     end
-    assign write_index = (ras.push & ~ras.pop) ? (read_index + RAS_DEPTH_W'(valid_chain[read_index])) : read_index;
-    
-    assign valid_chain_update = ras.push | ras.pop;
-    always_ff @ (posedge clk) begin
-        if (valid_chain_update)
-            valid_chain[write_index] <= ras.push;
-    end    
-        
+
 endmodule
-
-

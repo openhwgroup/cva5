@@ -34,19 +34,7 @@ module div_algorithm
     generate
         case(DIV_ALGORITHM)
              RADIX_2 : div_radix2 div_block (.*);
-             RADIX_2_EARLY_TERMINATE : div_radix2_ET div_block (.*);
-             RADIX_2_EARLY_TERMINATE_FULL : div_radix2_ET_full div_block (.*);
-             RADIX_4 : div_radix4 div_block (.*);
-             RADIX_4_EARLY_TERMINATE : div_radix4_ET div_block (.*);
-             RADIX_4_EARLY_TERMINATE_FULL: div_radix4_ET_full div_block (.*);
-             RADIX_8 : div_radix8 div_block (.*);
-             RADIX_8_EARLY_TERMINATE : div_radix8_ET div_block (.*);
-             RADIX_16 : div_radix16 div_block (.*);
-             QUICK_NAIVE : div_quick_naive div_block (.*);
              QUICK_CLZ : div_quick_clz div_block (.*);
-             QUICK_CLZ_MK2 : div_quick_clz_mk2 div_block (.*);
-             QUICK_RADIX_4 : div_quick_radix_4 div_block (.*);
-            default : $error("invalid div selection");
         endcase
     endgenerate
 

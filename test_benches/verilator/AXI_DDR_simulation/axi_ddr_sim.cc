@@ -46,7 +46,7 @@ axi_ddr_sim<TB>::axi_ddr_sim(string filepath, uint32_t starting_memory_location,
        write_distribution = uniform_int_distribution<int>(MIN_DELAY_WR,MAX_DELAY_WR);
     this->tb = tb;
     init_signals();
-    printf("Done AXI Initialization: %d Pages intialized\n", page_index);
+    //printf("Done AXI Initialization. %d Pages intialized\n", page_index);
     fflush(stdout);
 }
 
@@ -80,7 +80,7 @@ axi_ddr_sim<TB>::axi_ddr_sim(ifstream & input_memory_file, TB * tb){
        write_distribution = uniform_int_distribution<int>(MIN_DELAY_WR,MAX_DELAY_WR);
     this->tb = tb;
     init_signals();
-    printf("Done AXI Initialization: Started from %u\n", starting_location);
+    //printf("Done AXI Initialization. Started from: %u\n", starting_location);
     fflush(stdout);
 }
 

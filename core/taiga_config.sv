@@ -29,7 +29,7 @@ package taiga_config;
     //Privileged ISA Options
 
     //Enable Machine level privilege spec
-    parameter ENABLE_M_MODE = 0;
+    parameter ENABLE_M_MODE = 1;
     //Enable Supervisor level privilege spec
     parameter ENABLE_S_MODE = 0;
     //Enable User level privilege spec
@@ -51,19 +51,8 @@ package taiga_config;
 
     //Division algorithm selection
     typedef enum {
-        RADIX_2,
-        RADIX_2_EARLY_TERMINATE,
-        RADIX_2_EARLY_TERMINATE_FULL,
-        RADIX_4,
-        RADIX_4_EARLY_TERMINATE,
-        RADIX_4_EARLY_TERMINATE_FULL,
-        RADIX_8,
-        RADIX_8_EARLY_TERMINATE,
-        RADIX_16,
-        QUICK_NAIVE,
-        QUICK_CLZ,
-        QUICK_CLZ_MK2,
-        QUICK_RADIX_4
+        RADIX_2,//Smallest
+        QUICK_CLZ//Highest performance and best performance per LUT
     } div_type;
     parameter div_type DIV_ALGORITHM = QUICK_CLZ;
 
@@ -158,15 +147,23 @@ package taiga_config;
     //Branch Predictor Options
     parameter USE_BRANCH_PREDICTOR = 1;
     parameter BRANCH_PREDICTOR_WAYS = 2;
-    parameter BRANCH_TABLE_ENTRIES = 512;
+    parameter BRANCH_TABLE_ENTRIES = 512; //min 512
     parameter RAS_DEPTH = 8;
 
 
     ////////////////////////////////////////////////////
-    //FIFO/Buffer Depths
-    //All parameters restricted to powers of two
-    parameter MAX_INFLIGHT_COUNT = 4;
-    parameter FETCH_BUFFER_DEPTH = 4;
+    //ID limit
+    //MAX_IDS restricted to a power of 2
+    parameter MAX_IDS = 8; //8 sufficient for rv32im configs
+
+    ////////////////////////////////////////////////////
+    //Number of commit ports
+    parameter COMMIT_PORTS = 2; //min 2
+    parameter REGFILE_READ_PORTS = 2; //min 2, for RS1 and RS2
+    typedef enum logic {
+        RS1 = 0,
+        RS2 = 1
+    } rs1_index_t;
 
     ////////////////////////////////////////////////////
     //Trace Options
@@ -184,13 +181,13 @@ package taiga_config;
 
     ////////////////////////////////////////////////////
     //Write-Back Unit IDs
-    parameter NUM_WB_UNITS = 2 + USE_MUL + USE_DIV;
-    parameter NUM_UNITS = NUM_WB_UNITS + 2;
+    parameter NUM_WB_UNITS = 2 + USE_MUL + USE_DIV;//ALU and LS
+    parameter NUM_UNITS = NUM_WB_UNITS + 2;//Branch and CSRs
 
     parameter ALU_UNIT_WB_ID = 0;
     parameter LS_UNIT_WB_ID = 1;
     parameter DIV_UNIT_WB_ID = LS_UNIT_WB_ID + USE_DIV;
-    parameter MUL_UNIT_WB_ID = DIV_UNIT_WB_ID + USE_MUL;
+    parameter MUL_UNIT_WB_ID = DIV_UNIT_WB_ID + 1;
     //Non-writeback units
     parameter BRANCH_UNIT_ID = MUL_UNIT_WB_ID + 1;
     parameter GC_UNIT_ID = BRANCH_UNIT_ID + 1;

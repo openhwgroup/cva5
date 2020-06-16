@@ -56,7 +56,8 @@ module tlb_lut_ram #(
     logic [WAYS-1:0] tag_hit;
     logic [WAYS-1:0] replacement_way;
 
-    tlb_entry_t ram_data [WAYS-1:0];
+    logic [$bits(tlb_entry_t)-1:0] ram_data [WAYS-1:0][1];
+    tlb_entry_t ram_entry [WAYS-1:0];
     tlb_entry_t new_entry;
 
     logic flush_in_progress;
@@ -79,9 +80,11 @@ module tlb_lut_ram #(
     genvar i;
     generate
         for (i=0; i<WAYS; i=i+1) begin : lut_rams
-            lut_ram #(.WIDTH($bits(tlb_entry_t)), .DEPTH(DEPTH)) ram_block (.clk(clk),
+            lut_ram #(.WIDTH($bits(tlb_entry_t)), .DEPTH(DEPTH), .READ_PORTS(1))
+            ram_block (.clk(clk),
                     .waddr(tlb_write_addr), .ram_write(tlb_write[i]), .new_ram_data(new_entry),
-                    .raddr(tlb_read_addr),  .ram_data_out(ram_data[i]));
+                    .raddr({tlb_read_addr}), .ram_data_out(ram_data[i]));
+            assign ram_entry[i] = ram_data[i][0];
         end
     endgenerate
 
@@ -114,7 +117,7 @@ module tlb_lut_ram #(
 
     always_comb begin
         for (int i=0; i<WAYS; i=i+1) begin
-            tag_hit[i] = {ram_data[i].valid, ram_data[i].tag} == {1'b1, virtual_tag};
+            tag_hit[i] = {ram_entry[i].valid, ram_entry[i].tag} == {1'b1, virtual_tag};
         end
     end
 
@@ -138,7 +141,7 @@ module tlb_lut_ram #(
         tlb.physical_address[11:0] = tlb.virtual_address[11:0];
         tlb.physical_address[31:12] = tlb.virtual_address[31:12];
         for (int i=0; i<WAYS; i=i+1) begin
-            if(tag_hit[i] & tlb_on)  tlb.physical_address[31:12] = ram_data[i].phys_addr;
+            if(tag_hit[i] & tlb_on)  tlb.physical_address[31:12] = ram_entry[i].phys_addr;
         end
     end
 

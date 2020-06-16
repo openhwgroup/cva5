@@ -33,20 +33,19 @@ module gc_unit(
         //Decode
         unit_issue_interface.unit issue,
         input gc_inputs_t gc_inputs,
-        input logic instruction_issued_no_rd,
         input logic gc_flush_required,
         //Branch miss predict
         input logic branch_flush,
         //instruction misalignement
         input logic potential_branch_exception,
-        input exception_packet_t br_exception,
         input logic branch_exception_is_jump,
+        input exception_packet_t br_exception,
         //Illegal instruction
         input logic illegal_instruction,
 
         //Load Store Unit
         input exception_packet_t ls_exception,
-        input logic ls_exception_valid,
+        input logic ls_exception_is_store,
 
         //TLBs
         output logic tlb_on,
@@ -56,10 +55,17 @@ module gc_unit(
         mmu_interface.csr immu,
         mmu_interface.csr dmmu,
 
+        //ID Management
+        output logic system_op_or_exception_complete,
+        output logic exception_with_rd_complete,
+        output id_t system_op_or_exception_id,
+
+        //Exception
+        input logic [31:0] exception_pc,
+
         //WB
-        input logic instruction_complete,
-        input logic instruction_queue_empty,
-        input instruction_id_t oldest_id,
+        input logic [$clog2(MAX_COMPLETE_COUNT)-1:0] retire_inc,
+        input logic instruction_retired,
         //unit_writeback_interface.unit gc_wb,
 
         //External
@@ -73,14 +79,13 @@ module gc_unit(
         output logic gc_fetch_pc_override,
         output logic gc_supress_writeback,
 
-        output logic ls_exception_ack,
-
         output logic [31:0] gc_fetch_pc,
 
         //Write-back to Load-Store Unit
         output logic[31:0] csr_rd,
-        output instruction_id_t csr_id,
-        output logic csr_done
+        output id_t csr_id,
+        output logic csr_done,
+        input logic ls_is_idle
         );
 
     //Largest depth for TLBs
@@ -100,42 +105,27 @@ module gc_unit(
     //SFENCE
     //    flush and hold fetch, wait until L/S input FIFO empty, hold fetch until TLB update complete
     //ECALL, EBREAK, SRET, MRET:
-    //    flush fetch, update CSRs (could be illegal instruction exception as well)
+    //    flush fetch, update to CSRs is pipelined
 
     //Interrupt
-    //Hold issue, wait until IDLE state, flush fetch, take exception
+    //wait until issue/execute exceptions are no longer possible, flush fetch, take exception
 
-    //Fetch Exception
-    //flush fetch, wait until IDLE state, take exception.  If decode stage or later exception occurs first, exception is overridden
+    //Fetch Exception (TLB and MMU) (fetch stage)
+    //flush fetch, wait until issue/execute exceptions are no longer possible, take exception.  If decode stage or later exception occurs first, exception is overridden
 
-    //Illegal opcode (decode stage)
-    //fetch flush, issue hold, wait until IDLE state, take exception.  If execute or later exception occurs first, exception is overridden
+    //Illegal opcode (issue stage)
+    //fetch flush, take exception.  If execute or later exception occurs first, exception is overridden
 
-    //CSR exceptions
-    //fetch flush, issue hold, capture ID/rd_non_zero and drain instruction queue, take exception.
+    //Branch exceptions (issue/execute stage)
+    //fetch flush, take exception.
 
-    //LS exceptions (miss-aligned, TLB and MMU)
-    //fetch flush, issue hold, capture ID/rd_non_zero and drain instruction queue, take exception.
+    //CSR exceptions (issue/execute stage)
+    //fetch flush, take exception.
 
-    //Instruction queue drain:
-    //  Two possibilities:
-    //      1. Instruction stores to reg file.  ID in instruction queue, wait until that ID is oldest (either find oldest valid, or for small cycle penalty just look at last entry and wait for ID and valid)
-    //      2. Instruction does not store to reg file.  If IQ not empty, wait for previously issued ID to complete, if empty no waiting required.
-    //
-    //      After all preceding instructions have been committed, continue popping instructions from queue but supress write-back operation until queue is drained.
+    //LS exceptions (miss-aligned, TLB and MMU) (issue stage)
+    //fetch flush, take exception. If execute or later exception occurs first, exception is overridden
 
-    //In-order mode:
-    //  Turn on when an instruction in the execute phase could cause an interrupt (L/S or CSR)
-    //  Turn off when exception can no-longer occur (after one cycle for CSR, when L/S input FIFO will be empty)
-
-    //*Complete issued instructions before exception
-    //*Drain L/S FIFO then Hold fetch/issue during TLB clear
-    //*Hold fetch until all stores committed
-    //*Turn on inorder mode when L/S issued, turn off when no instruction can cause interrupt
-    //     *If in-order mode and inflight queue empty, disable zero cycle write-back (eg. ALU)
-    //*Hold fetch during potential fetch exception, when fetch buffer drained, if no other exceptions trigger exception
-
-    typedef enum {RST_STATE, IDLE_STATE, TLB_CLEAR_STATE, IQ_DRAIN, IQ_DISCARD} gc_state;
+    typedef enum {RST_STATE, IDLE_STATE, TLB_CLEAR_STATE, IQ_DRAIN} gc_state;
     gc_state state;
     gc_state next_state;
     gc_state prev_state;
@@ -152,6 +142,9 @@ module gc_unit(
     logic [XLEN-1:0] wb_csr;
     csr_inputs_t csr_inputs;
     exception_packet_t gc_exception;
+    exception_packet_t gc_exception_r;
+    id_t exception_or_system_id;
+
     exception_packet_t csr_exception;
     logic [1:0] current_privilege;
     logic [31:0] trap_pc;
@@ -171,17 +164,25 @@ module gc_unit(
     logic processing_csr;
     logic csr_ready_to_complete;
     logic csr_ready_to_complete_r;
-    instruction_id_t instruction_id;
+    id_t instruction_id;
 
-    instruction_id_t exception_id;
-    instruction_id_t exception_id_r;
-
-    //implementation
     ////////////////////////////////////////////////////
+    //Implementation
+    //Input registering
     always_ff @(posedge clk) begin
-        if (issue.possible_issue) begin
+        if (issue.possible_issue & ~gc_issue_hold) begin
             stage1 <= gc_inputs;
         end
+    end
+
+    ////////////////////////////////////////////////////
+    //ID Management
+    always_ff @(posedge clk) begin
+        system_op_or_exception_complete <=
+                (issue.new_request & (gc_inputs.is_ret | gc_inputs.is_fence | gc_inputs.is_i_fence)) |
+                gc_exception.valid;
+        system_op_or_exception_id <= exception_or_system_id;
+        exception_with_rd_complete <= (ls_exception.valid & ~ls_exception_is_store) | (br_exception.valid & branch_exception_is_jump);
     end
 
     //Instruction decode
@@ -196,15 +197,11 @@ module gc_unit(
     assign gc_fetch_flush = branch_flush | gc_fetch_pc_override;
 
     always_ff @ (posedge clk) begin
-        gc_issue_hold <= issue.new_request || processing_csr || (next_state inside {TLB_CLEAR_STATE, IQ_DRAIN, IQ_DISCARD}) || potential_branch_exception;
+        gc_issue_hold <= issue.new_request || second_cycle_flush || processing_csr || (next_state inside {TLB_CLEAR_STATE, IQ_DRAIN}) || potential_branch_exception;
     end
 
     always_ff @ (posedge clk) begin
-        gc_issue_flush <= (next_state == IQ_DISCARD);
-    end
-
-    always_ff @ (posedge clk) begin
-        gc_supress_writeback <= next_state inside {TLB_CLEAR_STATE, IQ_DISCARD} ? 1 : 0;
+        gc_supress_writeback <= next_state inside {TLB_CLEAR_STATE} ? 1 : 0;
     end
 
     ////////////////////////////////////////////////////
@@ -228,13 +225,12 @@ module gc_unit(
         case (state)
             RST_STATE : next_state = IDLE_STATE;
             IDLE_STATE : begin
-                if (ls_exception.valid | (branch_exception_is_jump & potential_branch_exception)) begin
-                    next_state = (exception_id == oldest_id) ? IQ_DISCARD : IQ_DRAIN;
+                if (ls_exception.valid | potential_branch_exception) begin
+                    next_state = IQ_DRAIN;
                 end
             end
             TLB_CLEAR_STATE : if (tlb_clear_done) next_state = IDLE_STATE;
-            IQ_DRAIN : if (exception_id_r == oldest_id) next_state = IQ_DISCARD;
-            IQ_DISCARD : if (instruction_queue_empty) next_state = IDLE_STATE;
+            IQ_DRAIN : next_state = IDLE_STATE;
             default : next_state = RST_STATE;
         endcase
     end
@@ -250,7 +246,6 @@ module gc_unit(
     end
     ////////////////////////////////////////////////////
     //Exception handling
-    logic processing_ls_exception;
 
     //The type of call instruction is depedent on the current privilege level
     always_comb begin
@@ -262,43 +257,27 @@ module gc_unit(
         endcase
     end
 
-    always_ff @(posedge clk) begin
-        if (gc_exception.valid)
-            processing_ls_exception <= ls_exception.valid;
-    end
-
-    assign ls_exception_ack = processing_ls_exception && (prev_state inside {IDLE_STATE, IQ_DRAIN}) && (state == IQ_DISCARD);
-
-    assign exception_id =
-        potential_branch_exception ? br_exception.id :
-        (ls_exception.valid ? ls_exception.id : issue.instruction_id);
-
-    always_ff @(posedge clk) begin
-        if (gc_exception.valid)
-            exception_id_r <= exception_id;
-    end
+    assign exception_or_system_id =
+        br_exception.valid ? br_exception.id :
+        (ls_exception.valid ? ls_exception.id : issue.id);
 
     //TODO: check if possible to convert to unique if, verify potential for overlap
     always_comb begin
+        //PC sourced from instruction metadata table
         if (br_exception.valid) begin
             gc_exception.code = br_exception.code;
-            gc_exception.pc = br_exception.pc;
             gc_exception.tval = br_exception.tval;
         end else if (illegal_instruction) begin
             gc_exception.code = ILLEGAL_INST;
-            gc_exception.pc = gc_inputs.pc;
             gc_exception.tval = gc_inputs.instruction;//optional, can be zero instead
         end else if (ls_exception.valid) begin
             gc_exception.code = ls_exception.code;
-            gc_exception.pc = ls_exception.pc;
             gc_exception.tval = ls_exception.tval;
         end else if (gc_inputs.is_ecall) begin
             gc_exception.code = ecall_code;
-            gc_exception.pc = gc_inputs.pc;
             gc_exception.tval = '0;
         end else begin
             gc_exception.code = BREAK;
-            gc_exception.pc = gc_inputs.pc;
             gc_exception.tval = '0;
         end
     end
@@ -310,6 +289,7 @@ module gc_unit(
     //Two cycles: on first cycle the processor front end is flushed,
     //on the second cycle the new PC is fetched
     always_ff @ (posedge clk) begin
+        gc_exception_r <= gc_exception;
         second_cycle_flush <= gc_flush_required;
         gc_fetch_pc_override <= gc_flush_required | second_cycle_flush | ls_exception.valid | br_exception.valid;
         if (gc_exception.valid | stage1.is_i_fence | (issue.new_request & gc_inputs.is_ret)) begin
@@ -327,7 +307,30 @@ module gc_unit(
     assign csr_inputs.rs1_is_zero = (rs1_addr == 0);
     assign csr_inputs.rd_is_zero = (rd_addr == 0);
 
-    csr_regs csr_registers (.*, .new_request(stage1.is_csr), .read_regs(csr_ready_to_complete), .commit(csr_ready_to_complete_r));
+    csr_regs csr_registers (
+        .clk(clk), .rst(rst),
+        .csr_inputs(csr_inputs),
+        .new_request(stage1.is_csr),
+        .read_regs(csr_ready_to_complete),
+        .commit(csr_ready_to_complete_r),
+        .gc_exception(gc_exception_r),
+        .csr_exception(csr_exception),
+        .current_privilege(current_privilege),
+        .exception_pc(exception_pc),
+        .mret(mret),
+        .sret(sret),
+        .tlb_on(tlb_on),
+        .asid(asid),
+        .immu(immu),
+        .dmmu(dmmu),
+        .retire_inc(retire_inc),
+        .interrupt(interrupt),
+        .timer_interrupt(timer_interrupt),
+        .wb_csr(wb_csr),
+        .trap_pc(trap_pc),
+        .csr_mepc(csr_mepc),
+        .csr_sepc(csr_sepc)
+    );
 
     ////////////////////////////////////////////////////
     //Decode / Write-back Handshaking
@@ -343,12 +346,12 @@ module gc_unit(
       .result(processing_csr)
     );
 
-    assign csr_ready_to_complete = processing_csr && (oldest_id == instruction_id);
+    assign csr_ready_to_complete = processing_csr & ls_is_idle;
     always_ff @(posedge clk) begin
         csr_ready_to_complete_r <= csr_ready_to_complete;
         csr_id <= instruction_id;
         if (issue.new_request) begin
-            instruction_id <= issue.instruction_id;
+            instruction_id <= issue.id;
         end
     end
 

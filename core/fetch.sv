@@ -34,23 +34,23 @@ module fetch(
         input logic exception,
         input logic [31:0] gc_fetch_pc,
 
+        //ID Support
+        input logic pc_id_available,
+        output logic pc_id_assigned,
+        output logic fetch_complete,
+
         branch_predictor_interface.fetch bp,
         ras_interface.fetch ras,
+
+        //Instruction Metadata
+        output logic [31:0] if_pc,
+        output logic [31:0] fetch_instruction,
 
         tlb_interface.mem tlb,
         local_memory_interface.master instruction_bram,
         input logic icache_on,
         l1_arbiter_request_interface.master l1_request,
-        l1_arbiter_return_interface.master l1_response,
-
-        input logic pre_decode_pop,
-
-        output logic [31:0] pre_decode_instruction,
-        output logic [31:0] pre_decode_pc,
-        output branch_predictor_metadata_t branch_metadata,
-        output logic branch_prediction_used,
-        output logic [BRANCH_PREDICTOR_WAYS-1:0] bp_update_way,
-        output logic pre_decode_push
+        l1_arbiter_return_interface.master l1_response
         );
 
     localparam NUM_SUB_UNITS = USE_I_SCRATCH_MEM + USE_ICACHE;
@@ -59,7 +59,6 @@ module fetch(
     localparam BRAM_ID = 0;
     localparam ICACHE_ID = USE_I_SCRATCH_MEM;
 
-    localparam FETCH_BUFFER_DEPTH_W = $clog2(FETCH_BUFFER_DEPTH);
     localparam NEXT_ID_DEPTH = USE_ICACHE ? 2 : 1;
 
     //Subunit signals
@@ -76,9 +75,8 @@ module fetch(
     logic [31:0] pc;
 
     logic flush_or_rst;
-    logic [FETCH_BUFFER_DEPTH_W:0] inflight_count;
     fifo_interface #(.DATA_WIDTH(NUM_SUB_UNITS_W)) next_unit();
-    logic space_in_inst_buffer;
+
     logic new_mem_request;
 
     //Cache related
@@ -96,21 +94,27 @@ module fetch(
             pc <= {next_pc[31:2], 2'b0};
     end
 
+    logic [31:0] pc_plus_4;
+    assign pc_plus_4 = pc + 4;
     always_comb begin
-        if (branch_flush)
-            next_pc = bp.branch_flush_pc;
-        else if (gc_fetch_pc_override)
+        if (gc_fetch_pc_override)
             next_pc = gc_fetch_pc;
+        else if (branch_flush)
+            next_pc = bp.branch_flush_pc;
         else if (bp.use_prediction)
-            next_pc = (bp.use_ras & ras.valid) ? ras.addr : bp.predicted_pc;
+            next_pc = bp.is_return ? ras.addr : bp.predicted_pc;
         else
-            next_pc = pc + 4;
+            next_pc = pc_plus_4;
     end
 
     assign bp.new_mem_request = new_mem_request | gc_fetch_flush;
     assign bp.next_pc = next_pc;
-
     assign bp.if_pc = pc;
+
+    assign ras.pop = bp.use_prediction & bp.is_return & ~branch_flush & ~gc_fetch_pc_override & new_mem_request;
+    assign ras.push = bp.use_prediction & bp.is_call & ~branch_flush & ~gc_fetch_pc_override & new_mem_request;
+    assign ras.new_addr = pc_plus_4;
+    assign ras.branch_fetched = bp.use_prediction & bp.is_branch & new_mem_request; //flush not needed as FIFO resets inside of RAS
 
     ////////////////////////////////////////////////////
     //TLB
@@ -127,19 +131,13 @@ module fetch(
     //Issue Control Signals
     assign flush_or_rst = (rst | gc_fetch_flush);
 
-    always_ff @(posedge clk) begin
-        if (flush_or_rst)
-            inflight_count <= '1;
-        else
-            inflight_count <= inflight_count - (FETCH_BUFFER_DEPTH_W+1)'(new_mem_request) + (FETCH_BUFFER_DEPTH_W+1)'(pre_decode_pop);
-    end
-
-    assign space_in_inst_buffer = inflight_count[FETCH_BUFFER_DEPTH_W];
-    assign new_mem_request = tlb.complete & space_in_inst_buffer & units_ready;
+    assign new_mem_request = tlb.complete & pc_id_available & units_ready;
+    assign pc_id_assigned = new_mem_request & ~gc_fetch_flush;
 
     //////////////////////////////////////////////
     //Subunit Tracking
     assign next_unit.push = new_mem_request;
+    assign next_unit.potential_push = new_mem_request;
     assign next_unit.pop = units_data_valid;
     one_hot_to_integer #(NUM_SUB_UNITS) hit_way_conv (.*, .one_hot(sub_unit_address_match), .int_out(next_unit.data_in));
     taiga_fifo #(.DATA_WIDTH(NUM_SUB_UNITS_W), .FIFO_DEPTH(NEXT_ID_DEPTH))
@@ -147,6 +145,9 @@ module fetch(
 
     ////////////////////////////////////////////////////
     //Subunit Interfaces
+    //In the case of a gc_fetch_flush, a request may already be in progress
+    //for any sub unit.  That request can either be completed or aborted.
+    //In either case, data_valid must NOT be asserted.
     logic cache_address_match;
     generate
         for (i = 0; i < NUM_SUB_UNITS; i++) begin
@@ -175,17 +176,9 @@ module fetch(
     endgenerate
 
     ////////////////////////////////////////////////////
-    //Pre-Decode Output
-    assign pre_decode_instruction = unit_data_array[next_unit.data_out];
-    assign pre_decode_pc = stage2_phys_address;
-    assign pre_decode_push = units_data_valid;//FIFO is cleared on gc_fetch_flush
-
-    always_ff @(posedge clk) begin
-        if (new_mem_request) begin
-            branch_metadata <= bp.metadata;
-            branch_prediction_used <= bp.use_prediction;
-            bp_update_way <= bp.update_way;
-        end
-    end
+    //Instruction metada updates
+    assign if_pc = pc;
+    assign fetch_instruction = unit_data_array[next_unit.data_out];
+    assign fetch_complete = units_data_valid;
 
 endmodule

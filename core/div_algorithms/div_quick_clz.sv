@@ -31,6 +31,7 @@ module div_quick_clz
 
     logic running;
     logic terminate;
+    logic [div.DATA_WIDTH-1:0] divisor_r;
 
     logic [div.DATA_WIDTH-1:0] normalized_divisor;
 
@@ -52,6 +53,7 @@ module div_quick_clz
     logic [CLZ_W-1:0] divisor_CLZ;
     logic [CLZ_W-1:0] divisor_CLZ_r;
     logic [CLZ_W-1:0] CLZ_delta;
+    logic divisor_is_zero_first_cycle;
     ////////////////////////////////////////////////////
     //Implementation
     clz remainder_clz_block (.clz_input(div.remainder), .clz(remainder_CLZ));
@@ -59,28 +61,35 @@ module div_quick_clz
 
     ////////////////////////////////////////////////////
     //Control Signals
-    assign div.divisor_is_zero = (&divisor_CLZ) & ~div.divisor[0];
+    assign divisor_is_zero_first_cycle = (&divisor_CLZ) & ~div.divisor[0];
+    always @ (posedge clk) begin
+        if (div.start)
+            div.divisor_is_zero <= divisor_is_zero_first_cycle;
+    end
 
     always_ff @ (posedge clk) begin
         if (rst)
             running <= 0;
-        else if (div.start & ~div.divisor_is_zero)
+        else if (div.start & ~divisor_is_zero_first_cycle)
             running <= 1;
         else if (terminate)
             running <= 0;
     end
 
     always_ff @ (posedge clk) begin
-        div.done <= (running & terminate) | (div.start & div.divisor_is_zero);
+        div.done <= (running & terminate) | (div.start & divisor_is_zero_first_cycle);
     end
 
-    assign terminate = div.remainder < div.divisor;
+    assign terminate = div.remainder < divisor_r;
 
     ////////////////////////////////////////////////////
     //Divisor Pre-processing
     always_ff @ (posedge clk) begin
-        divisor_CLZ_r <= divisor_CLZ;
-        normalized_divisor <= div.divisor << divisor_CLZ;
+        if (div.start) begin
+            divisor_r <= div.divisor;
+            divisor_CLZ_r <= divisor_CLZ;
+            normalized_divisor <= div.divisor << divisor_CLZ;
+        end
     end
 
     ////////////////////////////////////////////////////

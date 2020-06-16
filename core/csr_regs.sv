@@ -39,10 +39,7 @@ module csr_regs
         input exception_packet_t gc_exception,
         output exception_packet_t csr_exception,
         output logic [1:0] current_privilege,
-        input logic gc_supress_writeback,
-
-        //Decode
-        input logic instruction_issued_no_rd,
+        input logic [31:0] exception_pc,
 
         //exception_control
         input logic mret,
@@ -57,8 +54,7 @@ module csr_regs
         mmu_interface.csr dmmu,
 
         //WB
-        input logic instruction_complete,
-
+        input logic [$clog2(MAX_COMPLETE_COUNT)-1:0] retire_inc,
 
         //External
         input logic interrupt,
@@ -126,14 +122,13 @@ module csr_regs
 
     //convert addr into packed struct form
     assign csr_addr = csr_inputs.csr_addr;
+    assign supervisor_write = commit && (csr_addr.rw_bits != CSR_READ_ONLY && csr_addr.privilege == SUPERVISOR_PRIVILEGE);
+    assign machine_write = commit && (csr_addr.rw_bits != CSR_READ_ONLY && csr_addr.privilege == MACHINE_PRIVILEGE);
+
+    ////////////////////////////////////////////////////
+    //Exception Check
     assign privilege_exception = new_request & (csr_addr.privilege > privilege_level);
-
-    assign supervisor_write = commit && !privilege_exception && (csr_addr.rw_bits != CSR_READ_ONLY && csr_addr.privilege == SUPERVISOR_PRIVILEGE);
-    assign machine_write = commit && !privilege_exception && (csr_addr.rw_bits != CSR_READ_ONLY && csr_addr.privilege == MACHINE_PRIVILEGE);
-
-    logic illegal_instruction;
-    assign illegal_instruction = invalid_addr | privilege_exception;
-    assign csr_exception.valid = new_request & illegal_instruction;
+    assign csr_exception.valid = new_request & (invalid_addr | privilege_exception);
 
     always_comb begin
         case (csr_inputs.csr_op)
@@ -382,7 +377,7 @@ generate if (ENABLE_M_MODE) begin
     always_ff @(posedge clk) begin
         mepc[1:0] <= '0;
         if (mwrite_decoder[MEPC[7:0]] | gc_exception.valid)
-            mepc[XLEN-1:2] <= gc_exception.valid ? gc_exception.pc[XLEN-1:2] : updated_csr[XLEN-1:2];
+            mepc[XLEN-1:2] <= gc_exception.valid ? exception_pc[XLEN-1:2] : updated_csr[XLEN-1:2];
     end
     assign csr_mepc = mepc;
 
@@ -490,22 +485,13 @@ endgenerate
     ////////////////////////////////////////////////////
     //Timers and Counters
     //Register increment for instructions completed
-    logic instruction_retired;
-    assign instruction_retired = instruction_complete & ~gc_supress_writeback;
-    always_ff @(posedge clk) begin
-        if (rst)
-            inst_ret_inc <= 0;
-        else
-            inst_ret_inc <= INST_RET_INC_W'(instruction_retired) + INST_RET_INC_W'(instruction_issued_no_rd);
-    end
-
     always_ff @(posedge clk) begin
         if (rst) begin
             mcycle <= 0;
             minst_ret <= 0;
         end else begin
             mcycle <= mcycle + 1;
-            minst_ret <= minst_ret + COUNTER_W'(inst_ret_inc);
+            minst_ret <= minst_ret + COUNTER_W'(retire_inc);
         end
     end
 

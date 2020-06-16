@@ -34,6 +34,10 @@ module branch_unit(
         ras_interface.branch_unit ras,
         output logic branch_flush,
 
+        output logic branch_complete,
+        output id_t branch_id,
+        input branch_metadata_t branch_metadata_ex,
+
         output logic potential_branch_exception,
         output logic branch_exception_is_jump,
         output exception_packet_t br_exception,
@@ -47,41 +51,23 @@ module branch_unit(
 
     logic branch_issued_r;
 
-    logic[19:0] jal_imm;
-    logic[11:0] jalr_imm;
-    logic[11:0] br_imm;
-
-    logic [31:0] pc_offset;
     logic [31:0] jump_base;
-    logic [31:0] jump_pc_dec;
-
     logic result;
-    logic result_ex;
-
-    logic [2:0] fn3_ex;
-    logic jump_ex;
 
     //Branch Predictor
     logic branch_taken;
-    logic branch_correctly_taken;
-    logic branch_correclty_not_taken;
-    logic miss_predict;
+    logic branch_taken_ex;
+
+    id_t id_ex;
+    logic [31:0] new_pc;
+    logic [31:0] new_pc_ex;
 
     logic [31:0] pc_ex;
-    logic [31:0] jump_pc;
-    logic [31:0] njump_pc;
-    logic [1:0] branch_metadata;
-    logic branch_prediction_used;
-    logic [BRANCH_PREDICTOR_WAYS-1:0] bp_update_way;
-
     logic instruction_is_completing;
 
-    //RAS
-    logic is_call;
-    logic is_return;
-
-    //implementation
+    logic jal_jalr_ex;
     ////////////////////////////////////////////////////
+    //Implementation
     //Only stall condition is if the following instruction is not valid for pc comparisons.
     //If the next instruction isn't valid, no instruction can be issued anyways, so it
     //is safe to hardcode this to one.
@@ -91,122 +77,93 @@ module branch_unit(
     set_clr_reg_with_rst #(.SET_OVER_CLR(1), .WIDTH(1), .RST_VALUE(0)) branch_issued_m (
       .clk, .rst,
       .set(issue.new_request),
-      .clr(branch_inputs.dec_pc_valid | br_exception.valid),
+      .clr(branch_inputs.issue_pc_valid | br_exception.valid),
       .result(branch_issued_r)
     );
 
-    assign instruction_is_completing = branch_issued_r & branch_inputs.dec_pc_valid;
+    //To determine if the branch was predicted correctly we need to wait until the
+    //subsequent instruction has reached the issue stage
+    assign instruction_is_completing = branch_issued_r & branch_inputs.issue_pc_valid;
 
+    ////////////////////////////////////////////////////
+    //Branch/Jump target determination
+    //Branch comparison and final address calculation
+    //are performed in the issue stage
     branch_comparator bc (
             .use_signed(branch_inputs.use_signed),
             .less_than(branch_inputs.fn3[2]),
             .a(branch_inputs.rs1),
             .b(branch_inputs.rs2),
+            .xor_result(branch_inputs.fn3[0]),
             .result(result)
         );
 
-    assign branch_taken = (~jump_ex & (result_ex ^ fn3_ex[0])) | jump_ex;
+    assign branch_taken = result | branch_inputs.jalr | branch_inputs.jal;
 
-    assign jal_imm = {branch_inputs.instruction[31], branch_inputs.instruction[19:12], branch_inputs.instruction[20], branch_inputs.instruction[30:21]};
-    assign jalr_imm = branch_inputs.instruction[31:20];
-    assign br_imm = {branch_inputs.instruction[31], branch_inputs.instruction[7], branch_inputs.instruction[30:25], branch_inputs.instruction[11:8]};
-
-    always_comb begin
-        unique if (branch_inputs.jalr)
-            pc_offset = 32'(signed'(jalr_imm));
-        else if (branch_inputs.jal)
-            pc_offset = 32'(signed'({jal_imm, 1'b0}));
-        else
-            pc_offset = 32'(signed'({br_imm, 1'b0}));
-    end
-
-    always_comb begin
-        if (branch_inputs.jalr)
-            jump_base = branch_inputs.rs1;
-        else
-            jump_base = branch_inputs.dec_pc;
-    end
-
-    assign jump_pc_dec = jump_base + pc_offset;
+    assign jump_base = branch_inputs.jalr ? branch_inputs.rs1 : branch_inputs.issue_pc;
+    assign new_pc = jump_base + (branch_taken ? 32'(signed'(branch_inputs.pc_offset)) : 4);
 
     always_ff @(posedge clk) begin
         if (instruction_is_completing | ~branch_issued_r) begin
-            fn3_ex <= branch_inputs.fn3;
-            result_ex <= result;
-            jump_ex <= (branch_inputs.jal | branch_inputs.jalr);
+            branch_taken_ex <= branch_taken;
+            new_pc_ex[31:1] <= new_pc[31:1];
+            new_pc_ex[0] <= new_pc[0] & ~branch_inputs.jalr;
+            id_ex <= issue.id;
+            jal_jalr_ex <= branch_inputs.jal | branch_inputs.jalr;
         end
     end
 
     ////////////////////////////////////////////////////
     //Exception support
-    instruction_id_t jmp_instruction_id;
+    id_t jmp_id;
 
     generate if (ENABLE_M_MODE) begin
         always_ff @(posedge clk) begin
-            if (instruction_is_completing | ~branch_issued_r)
-                jmp_instruction_id <= issue.instruction_id;
+            if (instruction_is_completing | ~branch_issued_r) begin
+                jmp_id <= issue.id;
+                branch_exception_is_jump <= (branch_inputs.jal | branch_inputs.jalr);
+            end
         end
 
-        assign potential_branch_exception = jump_pc_dec[1] & issue.new_request;
-
-        assign br_exception.valid = (jump_pc[1] & branch_taken) & branch_issued_r;
+        assign potential_branch_exception = new_pc[1] & issue.new_request;
+        assign br_exception.valid = new_pc_ex[1] & branch_taken_ex & branch_issued_r;
         assign br_exception.code = INST_ADDR_MISSALIGNED;
-        assign br_exception.pc = pc_ex;
-        assign br_exception.tval = jump_pc;
-        assign br_exception.id = jmp_instruction_id;
-
-        assign branch_exception_is_jump = (branch_inputs.jal | branch_inputs.jalr);
+        assign br_exception.tval = new_pc_ex;
+        assign br_exception.id = jmp_id;
     end
     endgenerate
 
     ////////////////////////////////////////////////////
+    //ID Management
+    assign branch_complete = instruction_is_completing & (~jal_jalr_ex) & (~br_exception.valid);
+    assign branch_id = id_ex;
+
+    ////////////////////////////////////////////////////
+    //RAS support
+    assign ras.branch_retired = branch_complete & branch_metadata_ex.branch_prediction_used;
+
+    ////////////////////////////////////////////////////
     //Predictor support
+    logic is_return;
+    logic is_call;
     always_ff @(posedge clk) begin
         if (instruction_is_completing | ~branch_issued_r) begin
-            pc_ex <= branch_inputs.dec_pc;
-            jump_pc <= {jump_pc_dec[31:1], 1'b0};
-            njump_pc <= branch_inputs.dec_pc + 4;
-            branch_metadata <= branch_inputs.branch_metadata;
-            branch_prediction_used <= branch_inputs.branch_prediction_used;
-            bp_update_way <= branch_inputs.bp_update_way;
+            is_return <= branch_inputs.is_return;
+            is_call <= branch_inputs.is_call;
+            pc_ex <= branch_inputs.issue_pc;
         end
     end
 
     assign br_results.pc_ex = pc_ex;
-    assign br_results.jump_pc = jump_pc;
-    assign br_results.njump_pc = njump_pc;
-    assign br_results.branch_ex_metadata = branch_metadata;
-
-    assign br_results.branch_taken = branch_taken;
+    assign br_results.new_pc = new_pc_ex;
+    assign br_results.branch_taken = branch_taken_ex;
     assign br_results.branch_ex = instruction_is_completing;
+    assign br_results.is_branch_ex = ~jal_jalr_ex;
     assign br_results.is_return_ex = is_return;
-    assign br_results.branch_prediction_used = branch_prediction_used;
-    assign br_results.bp_update_way = bp_update_way;
+    assign br_results.is_call_ex = is_call;
 
+    assign branch_flush = instruction_is_completing && (branch_inputs.issue_pc[31:1] != new_pc_ex[31:1]);
 
-    assign branch_correctly_taken = {branch_taken, branch_inputs.dec_pc[31:1]} == {1'b1, jump_pc[31:1]};
-    assign branch_correclty_not_taken = {branch_taken, branch_inputs.dec_pc[31:1]} == {1'b0, njump_pc[31:1]};
-    assign miss_predict = ~(branch_correctly_taken | branch_correclty_not_taken);
-
-    assign branch_flush = USE_BRANCH_PREDICTOR ?
-        instruction_is_completing & miss_predict:
-        instruction_is_completing & branch_taken;
-
-    ////////////////////////////////////////////////////
-    //RAS support
-    generate if (USE_BRANCH_PREDICTOR) begin
-            always_ff @(posedge clk) begin
-                if (instruction_is_completing | ~branch_issued_r) begin
-                    is_call <= branch_inputs.is_call;
-                    is_return <= branch_inputs.is_return;
-                end
-            end
-
-            assign ras.push = instruction_is_completing & is_call;
-            assign ras.pop = instruction_is_completing & is_return;
-            assign ras.new_addr = njump_pc;
-        end
-    endgenerate
     ////////////////////////////////////////////////////
     //End of Implementation
     ////////////////////////////////////////////////////
@@ -217,10 +174,10 @@ module branch_unit(
     ////////////////////////////////////////////////////
     //Trace Interface
     generate if (ENABLE_TRACE_INTERFACE) begin
-        assign tr_branch_correct = instruction_is_completing & ~is_return & ~miss_predict;
-        assign tr_branch_misspredict = instruction_is_completing & ~is_return & miss_predict;
-        assign tr_return_correct = instruction_is_completing & is_return & ~miss_predict;
-        assign tr_return_misspredict = instruction_is_completing & is_return & miss_predict;
+        assign tr_branch_correct = instruction_is_completing & ~is_return & ~branch_flush;
+        assign tr_branch_misspredict = instruction_is_completing & ~is_return & branch_flush;
+        assign tr_return_correct = instruction_is_completing & is_return & ~branch_flush;
+        assign tr_return_misspredict = instruction_is_completing & is_return & branch_flush;
     end
     endgenerate
 

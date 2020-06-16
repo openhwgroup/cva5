@@ -57,7 +57,9 @@ module taiga (
 
     ras_interface ras();
 
-    register_file_issue_interface rf_issue();
+    issue_packet_t issue;
+    logic [31:0] rs_data [REGFILE_READ_PORTS];
+
 
     alu_inputs_t alu_inputs;
     load_store_inputs_t ls_inputs;
@@ -66,14 +68,13 @@ module taiga (
     div_inputs_t div_inputs;
     gc_inputs_t gc_inputs;
 
-    unit_issue_interface unit_issue [NUM_UNITS-1:0]();
+    unit_issue_interface unit_issue [NUM_UNITS]();
+    logic alu_issued;
 
     exception_packet_t  ls_exception;
-    logic ls_exception_valid;
+    logic ls_exception_is_store;
 
-    tracking_interface ti();
-    unit_writeback_t unit_wb [NUM_WB_UNITS-1:0];
-    register_file_writeback_interface rf_wb();
+    unit_writeback_interface unit_wb  [NUM_WB_UNITS]();
 
     mmu_interface immu();
     mmu_interface dmmu();
@@ -83,16 +84,39 @@ module taiga (
     logic tlb_on;
     logic [ASIDLEN-1:0] asid;
 
-    //Pre-Decode
-    logic pre_decode_push;
-    logic pre_decode_pop;
-    logic [31:0] pre_decode_instruction;
-    logic [31:0] pre_decode_pc;
-    branch_predictor_metadata_t branch_metadata;
-    logic branch_prediction_used;
-    logic [BRANCH_PREDICTOR_WAYS-1:0] bp_update_way;
-    logic fb_valid;
-    fetch_buffer_packet_t fb;
+    //Instruction ID/Metadata
+        //ID issuing
+    id_t pc_id;
+    logic pc_id_available;
+    logic pc_id_assigned;
+    logic [31:0] if_pc;
+        //Fetch stage
+    id_t fetch_id;
+    logic fetch_complete;
+    logic [31:0] fetch_instruction;
+        //Decode stage
+    logic decode_advance;
+    decode_packet_t decode;
+        //Issue stage
+    id_t rs_id [REGFILE_READ_PORTS];
+    logic rs_inuse [REGFILE_READ_PORTS];
+    logic rs_id_inuse [REGFILE_READ_PORTS];
+        //Branch predictor
+    branch_metadata_t branch_metadata_if;
+    branch_metadata_t branch_metadata_ex;
+        //ID freeing
+    logic store_complete;
+    id_t store_id;
+    logic branch_complete;
+    id_t branch_id;
+    logic system_op_or_exception_complete;
+    logic exception_with_rd_complete;
+    id_t system_op_or_exception_id;
+    logic instruction_retired;
+    logic [$clog2(MAX_COMPLETE_COUNT)-1:0] retire_inc;
+        //Exception
+    id_t exception_id;
+    logic [31:0] exception_pc;
 
     //Global Control
     logic gc_issue_hold;
@@ -100,31 +124,26 @@ module taiga (
     logic gc_fetch_flush;
     logic gc_fetch_pc_override;
     logic gc_supress_writeback;
-    instruction_id_t oldest_id;
-    logic load_store_issue;
     logic [31:0] gc_fetch_pc;
-    logic ls_exception_ack;
 
     logic[31:0] csr_rd;
-    instruction_id_t csr_id;
+    id_t csr_id;
     logic csr_done;
+    logic ls_is_idle;
 
     //Decode Unit and Fetch Unit
     logic illegal_instruction;
-    logic instruction_queue_empty;
-
     logic instruction_issued;
-    logic instruction_issued_no_rd;
-    logic instruction_issued_with_rd;
-    logic instruction_complete;
     logic gc_flush_required;
 
     //LS
     writeback_store_interface wb_store();
 
-    logic load_store_exception_clear;
-    instruction_id_t load_store_exception_id;
-    logic potential_exception;
+    //WB
+    id_t ids_retiring [COMMIT_PORTS];
+    logic retired [COMMIT_PORTS];
+    logic [4:0] retired_rd_addr [COMMIT_PORTS];
+    id_t id_for_rd [COMMIT_PORTS];
 
     //Trace Interface Signals
     logic tr_operand_stall;
@@ -159,8 +178,8 @@ module taiga (
     logic tr_rs1_and_rs2_forwarding_needed;
 
     unit_id_t tr_num_instructions_completing;
-    instruction_id_t tr_num_instructions_in_flight;
-    instruction_id_t tr_num_of_instructions_pending_writeback;
+    id_t tr_num_instructions_in_flight;
+    id_t tr_num_of_instructions_pending_writeback;
     ////////////////////////////////////////////////////
     //Implementation
 
@@ -172,7 +191,11 @@ module taiga (
     endgenerate
 
     ////////////////////////////////////////////////////
-    // Fetch and Pre-Decode
+    // ID support
+    instruction_metadata_and_id_management id_block (.*);
+
+    ////////////////////////////////////////////////////
+    // Fetch
     fetch fetch_block (.*, .icache_on('1), .tlb(itlb), .l1_request(l1_request[L1_ICACHE_ID]), .l1_response(l1_response[L1_ICACHE_ID]), .exception(1'b0));
     branch_predictor bp_block (.*);
     ras ras_block(.*);
@@ -185,12 +208,14 @@ module taiga (
             assign itlb.physical_address = itlb.virtual_address;
         end
     endgenerate
-    pre_decode pre_decode_block(.*);
 
     ////////////////////////////////////////////////////
     //Decode/Issue
     decode_and_issue decode_and_issue_block (.*);
-    register_file register_file_block (.*, .issue(rf_issue), .wb(rf_wb));
+
+    ////////////////////////////////////////////////////
+    //Register File and Writeback
+    register_file_and_writeback register_file_and_writeback_block (.*);
 
     ////////////////////////////////////////////////////
     //Execution Units
@@ -214,11 +239,6 @@ module taiga (
     generate if (USE_DIV)
             div_unit div_unit_block (.*, .issue(unit_issue[DIV_UNIT_WB_ID]), .wb(unit_wb[DIV_UNIT_WB_ID]));
     endgenerate
-
-    ////////////////////////////////////////////////////
-    //Writeback Mux and Instruction Tracking
-    write_back write_back_mux (.*);
-
 
     ////////////////////////////////////////////////////
     //End of Implementation

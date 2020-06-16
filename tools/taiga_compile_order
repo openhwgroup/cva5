@@ -62,21 +62,8 @@
 
 
 ../core/div_algorithms/div_radix2.sv
-../core/div_algorithms/div_radix2_ET.sv
-../core/div_algorithms/div_radix2_ET_full.sv
-../core/div_algorithms/div_radix4.sv
-../core/div_algorithms/div_radix8.sv
-../core/div_algorithms/div_radix8_ET.sv
-../core/div_algorithms/div_radix4_ET.sv
-../core/div_algorithms/div_radix4_ET_full.sv
-../core/div_algorithms/div_radix16.sv
-../core/msb.sv
-../core/msb_naive.sv
 ../core/clz.sv
-../core/div_algorithms/div_quick_clz_mk2.sv
 ../core/div_algorithms/div_quick_clz.sv
-../core/div_algorithms/div_quick_radix4.sv
-../core/div_algorithms/div_quick_naive.sv
 ../core/div_algorithms/div_algorithm.sv  
 ../core/div_unit.sv  
 
@@ -93,17 +80,14 @@
 ../core/ras.sv  
 ../core/branch_predictor_ram.sv
 ../core/branch_predictor.sv  
-../core/fetch.sv  
-../core/pre_decode.sv
+../core/fetch.sv
+
 ../core/illegal_instruction_checker.sv
 ../core/decode_and_issue.sv
 
-../core/id_inuse.sv
-../core/reg_inuse.sv
-../core/register_file.sv  
-
-../core/id_tracking.sv
-../core/write_back.sv  
+../core/regfile_bank_sel.sv
+../core/register_file.sv
+../core/register_file_and_writeback.sv
 
 ../core/placer_randomizer.sv
 
@@ -111,6 +95,9 @@
 ../l2_arbiter/l2_reservation_logic.sv
 ../l2_arbiter/l2_round_robin.sv
 ../l2_arbiter/l2_arbiter.sv
+
+../core/toggle_memory.sv
+../core/instruction_metadata_and_id_management.sv
 
 ../core/taiga.sv
 

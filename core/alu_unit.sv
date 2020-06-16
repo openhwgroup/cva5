@@ -1,5 +1,5 @@
 /*
- * Copyright © 2017 Eric Matthews,  Lesley Shannon
+ * Copyright © 2017-2020 Eric Matthews,  Lesley Shannon
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@ module alu_unit(
         input logic rst,
         unit_issue_interface.unit issue,
         input alu_inputs_t alu_inputs,
-        output unit_writeback_t wb
+        unit_writeback_interface.unit wb
         );
 
     logic[XLEN:0] add_sub_result;
@@ -79,8 +79,8 @@ module alu_unit(
     //Output
     assign issue.ready = 1;
     assign wb.rd = result;
-    assign wb.done = issue.new_request;
-    assign wb.id = issue.instruction_id;
+    assign wb.done = issue.possible_issue;
+    assign wb.id = issue.id;
 
     ////////////////////////////////////////////////////
     //Assertions

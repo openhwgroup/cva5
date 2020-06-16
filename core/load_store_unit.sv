@@ -48,23 +48,23 @@ module load_store_unit (
 
         local_memory_interface.master data_bram,
 
+        //ID Management
+        output logic store_complete,
+        output id_t store_id,
+
         //Writeback-Store Interface
         writeback_store_interface.ls wb_store,
 
-        input instruction_id_t oldest_id,
-        output logic load_store_exception_clear,
-        output instruction_id_t load_store_exception_id,
-        input logic potential_exception,
-
+        //CSR support
         input logic[31:0] csr_rd,
-        input instruction_id_t csr_id,
+        input id_t csr_id,
         input logic csr_done,
+        output logic ls_is_idle,
 
         output exception_packet_t ls_exception,
-        output logic ls_exception_valid,
-        input logic ls_exception_ack,
+        output logic ls_exception_is_store,
 
-        output unit_writeback_t wb
+        unit_writeback_interface.unit wb
         );
 
     localparam NUM_SUB_UNITS = USE_D_SCRATCH_MEM+USE_BUS+USE_DCACHE;
@@ -108,7 +108,7 @@ module load_store_unit (
     typedef struct packed{
         logic [2:0] fn3;
         logic [1:0] byte_addr;
-        instruction_id_t instruction_id;
+        id_t id;
         logic [NUM_SUB_UNITS_W-1:0] subunit_id;
     } load_attributes_t;
     load_attributes_t  load_attributes_in, stage2_attr;
@@ -121,7 +121,7 @@ module load_store_unit (
 
     logic [31:0] compare_addr;
     logic address_conflict;
-
+    logic ready_for_forwarded_store;
     ////////////////////////////////////////////////////
     //Implementation
     ////////////////////////////////////////////////////
@@ -129,12 +129,7 @@ module load_store_unit (
 
     ////////////////////////////////////////////////////
     //Alignment Exception
-    instruction_id_t exception_id;
-    logic exception_is_store;
-
 generate if (ENABLE_M_MODE) begin
-    assign load_store_exception_clear = issue.new_request;
-    assign load_store_exception_id = issue.instruction_id;
 
     always_comb begin
         case(ls_inputs.fn3)
@@ -144,19 +139,12 @@ generate if (ENABLE_M_MODE) begin
             default : unaligned_addr = 0;
         endcase
     end
-
+    assign ls_exception_is_store = ls_inputs.store;
    assign ls_exception.valid = unaligned_addr & issue.new_request;
    assign ls_exception.code = ls_inputs.store ? STORE_AMO_ADDR_MISSALIGNED : LOAD_ADDR_MISSALIGNED;
-   assign ls_exception.pc = ls_inputs.pc;
    assign ls_exception.tval = virtual_address;
-   assign ls_exception.id = issue.instruction_id;
+   assign ls_exception.id = issue.id;
 
-    always_ff @ (posedge clk) begin
-        if (ls_exception.valid) begin
-            exception_is_store <= ls_inputs.store;
-            exception_id <= issue.instruction_id;
-        end
-    end
 end
 endgenerate
     ////////////////////////////////////////////////////
@@ -195,26 +183,24 @@ endgenerate
     assign lsq.data_in = ls_inputs.rs2;
     assign lsq.load = ls_inputs.load;
     assign lsq.store = ls_inputs.store;
-    assign lsq.id = issue.instruction_id;
+    assign lsq.id = issue.id;
     assign lsq.forwarded_store = ls_inputs.forwarded_store;
     assign lsq.data_id = ls_inputs.store_forward_id;
 
-    assign lsq.possible_issue = issue.possible_issue & ~unaligned_addr;
+    assign lsq.possible_issue = issue.possible_issue;
     assign lsq.new_issue = issue.new_request & ~unaligned_addr;
 
-    logic [MAX_INFLIGHT_COUNT-1:0] wb_hold_for_store_ids;
-    load_store_queue lsq_block (.*, .writeback_valid(wb_store.forwarding_data_ready), .writeback_data(wb_store.forwarded_data));
+    logic [MAX_IDS-1:0] wb_hold_for_store_ids;
+    load_store_queue lsq_block (.*);
     assign shared_inputs = lsq.transaction_out;
 
     assign lsq.accepted = lsq.transaction_ready & ready_for_issue;
 
     ////////////////////////////////////////////////////
-    //Writeback-Store interface
-    assign wb_store.id_needed_at_issue = ls_inputs.store_forward_id;
-    assign wb_store.id_needed_at_commit = lsq.id_needed_by_store;
-    assign wb_store.commit_id = ls_exception_ack ? exception_id : lsq.transaction_out.id;
-    assign wb_store.commit = (lsq.accepted & lsq.transaction_out.store) | (ls_exception_ack & exception_is_store);
-    assign wb_store.hold_for_store_ids = wb_hold_for_store_ids;
+    //ID Management
+    assign store_complete = lsq.accepted & lsq.transaction_out.store;
+    assign store_id = lsq.transaction_out.id;
+
     ////////////////////////////////////////////////////
     //Unit tracking
     assign current_unit = sub_unit_address_match;
@@ -236,12 +222,14 @@ endgenerate
 
     ////////////////////////////////////////////////////
     //Primary Control Signals
+    assign ls_is_idle = lsq.empty & (~load_attributes.valid);
+
     assign units_ready = &unit_ready;
     assign load_complete = |unit_data_valid;
 
     assign ready_for_issue = units_ready & (~unit_switch_stall);
 
-    assign issue.ready = lsq.ready;
+    assign issue.ready = ls_inputs.forwarded_store ? lsq.ready & ready_for_forwarded_store : lsq.ready;
     assign issue_request = lsq.accepted;
 
     ////////////////////////////////////////////////////
@@ -250,12 +238,12 @@ endgenerate
     taiga_fifo #(.DATA_WIDTH($bits(load_attributes_t)), .FIFO_DEPTH(ATTRIBUTES_DEPTH)) attributes_fifo (.fifo(load_attributes), .*);
     assign load_attributes_in.fn3 = shared_inputs.fn3;
     assign load_attributes_in.byte_addr = shared_inputs.addr[1:0];
-    assign load_attributes_in.instruction_id = shared_inputs.id;
+    assign load_attributes_in.id = shared_inputs.id;
 
     assign load_attributes.data_in = load_attributes_in;
     assign load_attributes.push = issue_request & shared_inputs.load;
+    assign load_attributes.potential_push = issue_request & shared_inputs.load;
     assign load_attributes.pop = load_complete;
-    assign load_attributes.supress_push = 0;
 
     assign stage2_attr = load_attributes.data_out;
 
@@ -330,8 +318,8 @@ endgenerate
     ////////////////////////////////////////////////////
     //Output bank
     assign wb.rd = csr_done ? csr_rd : final_load_data;
-    assign wb.done = csr_done | load_complete | (ls_exception_ack & ~exception_is_store);
-    assign wb.id = csr_done ? csr_id : (ls_exception_ack ? exception_id : stage2_attr.instruction_id);
+    assign wb.done = csr_done | load_complete;
+    assign wb.id = csr_done ? csr_id : stage2_attr.id;
 
     ////////////////////////////////////////////////////
     //End of Implementation
