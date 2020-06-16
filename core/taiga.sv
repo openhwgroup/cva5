@@ -72,6 +72,7 @@ module taiga (
     logic alu_issued;
 
     exception_packet_t  ls_exception;
+    logic ls_exception_is_store;
 
     unit_writeback_interface unit_wb  [NUM_WB_UNITS]();
 

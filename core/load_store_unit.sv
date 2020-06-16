@@ -62,6 +62,7 @@ module load_store_unit (
         output logic ls_is_idle,
 
         output exception_packet_t ls_exception,
+        output logic ls_exception_is_store,
 
         unit_writeback_interface.unit wb
         );
@@ -138,7 +139,7 @@ generate if (ENABLE_M_MODE) begin
             default : unaligned_addr = 0;
         endcase
     end
-
+    assign ls_exception_is_store = ls_inputs.store;
    assign ls_exception.valid = unaligned_addr & issue.new_request;
    assign ls_exception.code = ls_inputs.store ? STORE_AMO_ADDR_MISSALIGNED : LOAD_ADDR_MISSALIGNED;
    assign ls_exception.tval = virtual_address;
@@ -228,7 +229,7 @@ endgenerate
 
     assign ready_for_issue = units_ready & (~unit_switch_stall);
 
-    assign issue.ready = lsq.ready & ~(ls_inputs.forwarded_store & ~ready_for_forwarded_store);
+    assign issue.ready = ls_inputs.forwarded_store ? lsq.ready & ready_for_forwarded_store : lsq.ready;
     assign issue_request = lsq.accepted;
 
     ////////////////////////////////////////////////////
@@ -241,7 +242,7 @@ endgenerate
 
     assign load_attributes.data_in = load_attributes_in;
     assign load_attributes.push = issue_request & shared_inputs.load;
-    assign load_attributes.potential_push = ~load_attributes.full;
+    assign load_attributes.potential_push = issue_request & shared_inputs.load;
     assign load_attributes.pop = load_complete;
 
     assign stage2_attr = load_attributes.data_out;

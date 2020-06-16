@@ -75,7 +75,6 @@ module instruction_metadata_and_id_management
         output logic [4:0] retired_rd_addr [COMMIT_PORTS],
         output id_t id_for_rd [COMMIT_PORTS],
         //Exception
-        input id_t exception_id,
         output logic [31:0] exception_pc
 
     );
@@ -336,7 +335,7 @@ module instruction_metadata_and_id_management
     always_comb begin
         for (int i = 0; i < REGFILE_READ_PORTS; i++) begin
             rs_id[i] = rd_to_id_table[issue.rs_addr[i]];
-            rs_inuse[i] = (issue.rs_addr[i] == instruction_table[rs_id[i]][11:7]);//11:7 is rd_addr
+            rs_inuse[i] = (|issue.rs_addr[i]) & (issue.rs_addr[i] == instruction_table[rs_id[i]][11:7]);//11:7 is rd_addr
         end
     end
 
@@ -350,7 +349,7 @@ module instruction_metadata_and_id_management
 
     //Exception Support
      generate if (ENABLE_M_MODE) begin
-         assign exception_pc = pc_table[exception_id];
+         assign exception_pc = pc_table[system_op_or_exception_id];
      end endgenerate
 
     ////////////////////////////////////////////////////

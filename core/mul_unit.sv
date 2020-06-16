@@ -52,7 +52,7 @@ module mul_unit(
     assign rs1_ext = signed'({mul_inputs.rs1[31] & rs1_signed, mul_inputs.rs1});
     assign rs2_ext = signed'({mul_inputs.rs2[31] & rs2_signed, mul_inputs.rs2});
 
-    assign issue.ready = stage1_advance;
+    assign issue.ready = (~done[0] | ~done[1]);//stage1_advance;
     assign stage1_advance = ~done[0] | stage2_advance;
     assign stage2_advance = ~done[1] | wb.ack;
 

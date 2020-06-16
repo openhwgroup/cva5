@@ -38,13 +38,14 @@ module gc_unit(
         input logic branch_flush,
         //instruction misalignement
         input logic potential_branch_exception,
-        input exception_packet_t br_exception,
         input logic branch_exception_is_jump,
+        input exception_packet_t br_exception,
         //Illegal instruction
         input logic illegal_instruction,
 
         //Load Store Unit
         input exception_packet_t ls_exception,
+        input logic ls_exception_is_store,
 
         //TLBs
         output logic tlb_on,
@@ -60,7 +61,6 @@ module gc_unit(
         output id_t system_op_or_exception_id,
 
         //Exception
-        output id_t exception_id,
         input logic [31:0] exception_pc,
 
         //WB
@@ -105,40 +105,25 @@ module gc_unit(
     //SFENCE
     //    flush and hold fetch, wait until L/S input FIFO empty, hold fetch until TLB update complete
     //ECALL, EBREAK, SRET, MRET:
-    //    flush fetch, update CSRs (could be illegal instruction exception as well)
+    //    flush fetch, update to CSRs is pipelined
 
     //Interrupt
-    //Hold issue, wait until IDLE state, flush fetch, take exception
+    //wait until issue/execute exceptions are no longer possible, flush fetch, take exception
 
-    //Fetch Exception
-    //flush fetch, wait until IDLE state, take exception.  If decode stage or later exception occurs first, exception is overridden
+    //Fetch Exception (TLB and MMU) (fetch stage)
+    //flush fetch, wait until issue/execute exceptions are no longer possible, take exception.  If decode stage or later exception occurs first, exception is overridden
 
-    //Illegal opcode (decode stage)
-    //fetch flush, issue hold, wait until IDLE state, take exception.  If execute or later exception occurs first, exception is overridden
+    //Illegal opcode (issue stage)
+    //fetch flush, take exception.  If execute or later exception occurs first, exception is overridden
 
-    //CSR exceptions
-    //fetch flush, issue hold, capture ID/rd_non_zero and drain instruction queue, take exception.
+    //Branch exceptions (issue/execute stage)
+    //fetch flush, take exception.
 
-    //LS exceptions (miss-aligned, TLB and MMU)
-    //fetch flush, issue hold, capture ID/rd_non_zero and drain instruction queue, take exception.
+    //CSR exceptions (issue/execute stage)
+    //fetch flush, take exception.
 
-    //Instruction queue drain:
-    //  Two possibilities:
-    //      1. Instruction stores to reg file.  ID in instruction queue, wait until that ID is oldest (either find oldest valid, or for small cycle penalty just look at last entry and wait for ID and valid)
-    //      2. Instruction does not store to reg file.  If IQ not empty, wait for previously issued ID to complete, if empty no waiting required.
-    //
-    //      After all preceding instructions have been committed, continue popping instructions from queue but supress write-back operation until queue is drained.
-
-    //In-order mode:
-    //  Turn on when an instruction in the execute phase could cause an interrupt (L/S or CSR)
-    //  Turn off when exception can no-longer occur (after one cycle for CSR, when L/S input FIFO will be empty)
-
-    //*Complete issued instructions before exception
-    //*Drain L/S FIFO then Hold fetch/issue during TLB clear
-    //*Hold fetch until all stores committed
-    //*Turn on inorder mode when L/S issued, turn off when no instruction can cause interrupt
-    //     *If in-order mode and inflight queue empty, disable zero cycle write-back (eg. ALU)
-    //*Hold fetch during potential fetch exception, when fetch buffer drained, if no other exceptions trigger exception
+    //LS exceptions (miss-aligned, TLB and MMU) (issue stage)
+    //fetch flush, take exception. If execute or later exception occurs first, exception is overridden
 
     typedef enum {RST_STATE, IDLE_STATE, TLB_CLEAR_STATE, IQ_DRAIN} gc_state;
     gc_state state;
@@ -157,6 +142,9 @@ module gc_unit(
     logic [XLEN-1:0] wb_csr;
     csr_inputs_t csr_inputs;
     exception_packet_t gc_exception;
+    exception_packet_t gc_exception_r;
+    id_t exception_or_system_id;
+
     exception_packet_t csr_exception;
     logic [1:0] current_privilege;
     logic [31:0] trap_pc;
@@ -178,21 +166,24 @@ module gc_unit(
     logic csr_ready_to_complete_r;
     id_t instruction_id;
 
-    //implementation
     ////////////////////////////////////////////////////
+    //Implementation
+    //Input registering
     always_ff @(posedge clk) begin
-        if (issue.possible_issue) begin
+        if (issue.possible_issue & ~gc_issue_hold) begin
             stage1 <= gc_inputs;
         end
     end
 
     ////////////////////////////////////////////////////
     //ID Management
-    assign system_op_or_exception_complete =
-        (issue.new_request & (gc_inputs.is_fence | gc_inputs.is_i_fence)) |
-        gc_exception.valid;
-    assign exception_with_rd_complete = ls_exception.valid;
-    assign system_op_or_exception_id = issue.new_request ? issue.id : exception_id;
+    always_ff @(posedge clk) begin
+        system_op_or_exception_complete <=
+                (issue.new_request & (gc_inputs.is_ret | gc_inputs.is_fence | gc_inputs.is_i_fence)) |
+                gc_exception.valid;
+        system_op_or_exception_id <= exception_or_system_id;
+        exception_with_rd_complete <= (ls_exception.valid & ~ls_exception_is_store) | (br_exception.valid & branch_exception_is_jump);
+    end
 
     //Instruction decode
     assign opcode = stage1.instruction[6:0];
@@ -206,7 +197,7 @@ module gc_unit(
     assign gc_fetch_flush = branch_flush | gc_fetch_pc_override;
 
     always_ff @ (posedge clk) begin
-        gc_issue_hold <= issue.new_request || processing_csr || (next_state inside {TLB_CLEAR_STATE, IQ_DRAIN}) || potential_branch_exception;
+        gc_issue_hold <= issue.new_request || second_cycle_flush || processing_csr || (next_state inside {TLB_CLEAR_STATE, IQ_DRAIN}) || potential_branch_exception;
     end
 
     always_ff @ (posedge clk) begin
@@ -234,7 +225,7 @@ module gc_unit(
         case (state)
             RST_STATE : next_state = IDLE_STATE;
             IDLE_STATE : begin
-                if (ls_exception.valid | (branch_exception_is_jump & potential_branch_exception)) begin
+                if (ls_exception.valid | potential_branch_exception) begin
                     next_state = IQ_DRAIN;
                 end
             end
@@ -266,8 +257,8 @@ module gc_unit(
         endcase
     end
 
-    assign exception_id =
-        potential_branch_exception ? br_exception.id :
+    assign exception_or_system_id =
+        br_exception.valid ? br_exception.id :
         (ls_exception.valid ? ls_exception.id : issue.id);
 
     //TODO: check if possible to convert to unique if, verify potential for overlap
@@ -298,6 +289,7 @@ module gc_unit(
     //Two cycles: on first cycle the processor front end is flushed,
     //on the second cycle the new PC is fetched
     always_ff @ (posedge clk) begin
+        gc_exception_r <= gc_exception;
         second_cycle_flush <= gc_flush_required;
         gc_fetch_pc_override <= gc_flush_required | second_cycle_flush | ls_exception.valid | br_exception.valid;
         if (gc_exception.valid | stage1.is_i_fence | (issue.new_request & gc_inputs.is_ret)) begin
@@ -315,7 +307,30 @@ module gc_unit(
     assign csr_inputs.rs1_is_zero = (rs1_addr == 0);
     assign csr_inputs.rd_is_zero = (rd_addr == 0);
 
-    csr_regs csr_registers (.*, .new_request(stage1.is_csr), .read_regs(csr_ready_to_complete), .commit(csr_ready_to_complete_r));
+    csr_regs csr_registers (
+        .clk(clk), .rst(rst),
+        .csr_inputs(csr_inputs),
+        .new_request(stage1.is_csr),
+        .read_regs(csr_ready_to_complete),
+        .commit(csr_ready_to_complete_r),
+        .gc_exception(gc_exception_r),
+        .csr_exception(csr_exception),
+        .current_privilege(current_privilege),
+        .exception_pc(exception_pc),
+        .mret(mret),
+        .sret(sret),
+        .tlb_on(tlb_on),
+        .asid(asid),
+        .immu(immu),
+        .dmmu(dmmu),
+        .retire_inc(retire_inc),
+        .interrupt(interrupt),
+        .timer_interrupt(timer_interrupt),
+        .wb_csr(wb_csr),
+        .trap_pc(trap_pc),
+        .csr_mepc(csr_mepc),
+        .csr_sepc(csr_sepc)
+    );
 
     ////////////////////////////////////////////////////
     //Decode / Write-back Handshaking

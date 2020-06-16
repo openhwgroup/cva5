@@ -149,7 +149,7 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
         if (new_forwarded_store)
             needed_id_r <= lsq.data_id;
     end
-    assign wb_store.id_needed = possible_new_forwarded_store ? lsq.data_id : needed_id_r;
+    assign wb_store.id_needed = waiting_r ? needed_id_r : lsq.data_id;
 
 
 
@@ -159,7 +159,6 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
 
     assign oldest_lsq_entry = lsq_entries[oldest_id];
     assign lsq.transaction_ready =  oldest_fifo.valid & (~oldest_lsq_entry.forwarded_store | wb_store.id_done);
-    assign lsq.id_needed_by_store = oldest_lsq_entry.data_id;
 
     always_comb begin
         lsq.transaction_out.addr = oldest_lsq_entry.addr;

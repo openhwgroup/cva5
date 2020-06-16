@@ -43,6 +43,7 @@ module decode_and_issue (
         output div_inputs_t div_inputs,
 
         unit_issue_interface.decode unit_issue [NUM_UNITS-1:0],
+        input logic potential_branch_exception,
         output logic alu_issued,
 
         input logic gc_issue_hold,
@@ -297,7 +298,7 @@ module decode_and_issue (
     assign alu_inputs.shifter_in = rs_data[RS1];
     assign alu_inputs.shift_amount = issue.opcode[5] ? rs_data[RS2][4:0] : issue.rs_addr[RS2];
 
-    assign alu_issued = issue_to[ALU_UNIT_WB_ID];
+    assign alu_issued = issue_to[ALU_UNIT_WB_ID] & ~potential_branch_exception;
 
     ////////////////////////////////////////////////////
     //Load Store unit inputs
@@ -534,8 +535,8 @@ module decode_and_issue (
     ////////////////////////////////////////////////////
     //Trace Interface
     generate if (ENABLE_TRACE_INTERFACE) begin
-        assign tr_operand_stall = |(unit_needed_issue_stage & unit_ready) & issue_valid & ~|(unit_operands_ready & issue_ready);
-        assign tr_unit_stall = ~|(unit_needed_issue_stage & unit_ready) & issue_valid & |(unit_operands_ready & issue_ready);
+        assign tr_operand_stall = |(unit_needed_issue_stage & unit_ready) & issue_valid & ~|(unit_operands_ready & unit_needed_issue_stage);
+        assign tr_unit_stall = ~|(unit_needed_issue_stage & unit_ready) & issue_valid & |(unit_operands_ready & unit_needed_issue_stage);
         assign tr_no_id_stall = 0;
         assign tr_no_instruction_stall = ~issue.stage_valid | gc_fetch_flush;
         assign tr_other_stall = issue.stage_valid & ~instruction_issued & ~(tr_operand_stall | tr_unit_stall | tr_no_id_stall | tr_no_instruction_stall);

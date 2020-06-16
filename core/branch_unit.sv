@@ -119,24 +119,23 @@ module branch_unit(
 
     generate if (ENABLE_M_MODE) begin
         always_ff @(posedge clk) begin
-            if (instruction_is_completing | ~branch_issued_r)
+            if (instruction_is_completing | ~branch_issued_r) begin
                 jmp_id <= issue.id;
+                branch_exception_is_jump <= (branch_inputs.jal | branch_inputs.jalr);
+            end
         end
 
         assign potential_branch_exception = new_pc[1] & issue.new_request;
-        assign branch_exception_is_jump = (branch_inputs.jal | branch_inputs.jalr);
-
         assign br_exception.valid = new_pc_ex[1] & branch_taken_ex & branch_issued_r;
         assign br_exception.code = INST_ADDR_MISSALIGNED;
         assign br_exception.tval = new_pc_ex;
         assign br_exception.id = jmp_id;
-
     end
     endgenerate
 
     ////////////////////////////////////////////////////
     //ID Management
-    assign branch_complete = (instruction_is_completing & ~jal_jalr_ex);
+    assign branch_complete = instruction_is_completing & (~jal_jalr_ex) & (~br_exception.valid);
     assign branch_id = id_ex;
 
     ////////////////////////////////////////////////////

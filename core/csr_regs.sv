@@ -39,7 +39,6 @@ module csr_regs
         input exception_packet_t gc_exception,
         output exception_packet_t csr_exception,
         output logic [1:0] current_privilege,
-        input logic gc_supress_writeback,
         input logic [31:0] exception_pc,
 
         //exception_control
@@ -55,7 +54,6 @@ module csr_regs
         mmu_interface.csr dmmu,
 
         //WB
-        input logic instruction_retired,
         input logic [$clog2(MAX_COMPLETE_COUNT)-1:0] retire_inc,
 
         //External
@@ -124,14 +122,13 @@ module csr_regs
 
     //convert addr into packed struct form
     assign csr_addr = csr_inputs.csr_addr;
+    assign supervisor_write = commit && (csr_addr.rw_bits != CSR_READ_ONLY && csr_addr.privilege == SUPERVISOR_PRIVILEGE);
+    assign machine_write = commit && (csr_addr.rw_bits != CSR_READ_ONLY && csr_addr.privilege == MACHINE_PRIVILEGE);
+
+    ////////////////////////////////////////////////////
+    //Exception Check
     assign privilege_exception = new_request & (csr_addr.privilege > privilege_level);
-
-    assign supervisor_write = commit && !privilege_exception && (csr_addr.rw_bits != CSR_READ_ONLY && csr_addr.privilege == SUPERVISOR_PRIVILEGE);
-    assign machine_write = commit && !privilege_exception && (csr_addr.rw_bits != CSR_READ_ONLY && csr_addr.privilege == MACHINE_PRIVILEGE);
-
-    logic illegal_instruction;
-    assign illegal_instruction = invalid_addr | privilege_exception;
-    assign csr_exception.valid = new_request & illegal_instruction;
+    assign csr_exception.valid = new_request & (invalid_addr | privilege_exception);
 
     always_comb begin
         case (csr_inputs.csr_op)
