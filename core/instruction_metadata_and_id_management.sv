@@ -84,11 +84,10 @@ module instruction_metadata_and_id_management
     logic [$bits(branch_metadata_t)-1:0] branch_metadata_table [MAX_IDS];
     logic [31:0] rd_table [MAX_IDS];
 
-    id_t pc_id_i;
     localparam LOG2_MAX_IDS = $clog2(MAX_IDS);
-
-    //FIFO to store IDs that have been fetched but not yet decoded
-    fifo_interface #(.DATA_WIDTH(LOG2_MAX_IDS)) fetch_fifo();
+    id_t pc_id_i;
+    id_t decode_id;
+    logic [LOG2_MAX_IDS:0] fetched_count; //MSB used as valid for decode stage
 
     //Toggle memory results for tracking completion after issue
     logic decoded_status;
@@ -149,37 +148,26 @@ module instruction_metadata_and_id_management
     //On a fetch buffer flush, the next ID is restored to the current decode ID.
     //This prevents a stall in the case where all  IDs are either in-flight or
     //in the fetch buffer at the point of a fetch flush.
-    assign pc_id_i = pc_id + LOG2_MAX_IDS'(pc_id_assigned);
+    assign pc_id_i = (gc_fetch_flush ? decode_id : pc_id) + LOG2_MAX_IDS'({pc_id_assigned & ~gc_fetch_flush});
     always_ff @ (posedge clk) begin
-        if (rst)
+        if (rst) begin
             pc_id <= 0;
-        else if (gc_fetch_flush)
-            pc_id <= decode.valid ? decode.id : pc_id;
-        else
+            fetch_id <= 0;
+            decode_id <= 0;
+        end
+        else begin
             pc_id <= pc_id_i;
+            fetch_id <= (gc_fetch_flush ? decode_id : fetch_id) + LOG2_MAX_IDS'({fetch_complete & ~gc_fetch_flush});
+            decode_id <= decode_id + LOG2_MAX_IDS'({decode_advance & ~gc_fetch_flush});
+        end
     end
 
     always_ff @ (posedge clk) begin
-        if (rst)
-            fetch_id <= 0;
-        else if (gc_fetch_flush)
-            fetch_id <= decode.valid ? decode.id : pc_id;
+        if (rst | gc_fetch_flush)
+            fetched_count <= 0;
         else
-            fetch_id <= fetch_id + LOG2_MAX_IDS'(fetch_complete);
+            fetched_count <= fetched_count + (LOG2_MAX_IDS+1)'(decode_advance) - (LOG2_MAX_IDS+1)'(fetch_complete);
     end
-
-    ////////////////////////////////////////////////////
-    //Fetch buffer
-    assign fetch_fifo.data_in = fetch_id;
-    assign fetch_fifo.push = fetch_complete;
-    assign fetch_fifo.potential_push = fetch_complete;
-    assign fetch_fifo.pop = decode_advance;
-
-    taiga_fifo #(.DATA_WIDTH(LOG2_MAX_IDS), .FIFO_DEPTH(MAX_IDS)) fetch_fifo_block (
-        .fifo(fetch_fifo),
-        .rst(rst | gc_fetch_flush),
-        .clk
-    );
 
     ////////////////////////////////////////////////////
     //Issue Tracking
@@ -323,10 +311,10 @@ module instruction_metadata_and_id_management
     end
 
     //Decode
-    assign decode.id = fetch_fifo.data_out;
-    assign decode.valid = fetch_fifo.valid;
-    assign decode.pc = pc_table[fetch_fifo.data_out];
-    assign decode.instruction = instruction_table[fetch_fifo.data_out];
+    assign decode.id = decode_id;
+    assign decode.valid = fetched_count[LOG2_MAX_IDS];
+    assign decode.pc = pc_table[decode_id];
+    assign decode.instruction = instruction_table[decode_id];
 
     //Branch Predictor
     assign branch_metadata_ex = branch_metadata_table[branch_id];
