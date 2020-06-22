@@ -23,27 +23,27 @@
 
 package l2_config_and_types;
 
-    parameter L2_NUM_PORTS = 2;
-    parameter L2_SUB_ID_W = 2;
+    localparam L2_NUM_PORTS = 2;
+    localparam L2_SUB_ID_W = 2;
 
 
-    //parameter int L2_INPUT_FIFO_DEPTHS [7 : 0]   = '{4, 4, 4, 4, 4, 4, 4, 4};
-    //parameter int L2_INVALIDATION_FIFO_DEPTHS [7 : 0]   = '{4, 4, 4, 4, 4, 4, 4, 4};
-    //parameter int L2_READ_RETURN_FIFO_DEPTHS [7 : 0]   = '{1, 1, 1, 1, 1, 1, 1, 1};//depth 1, rd_ack will be trimmed
+    //localparam int L2_INPUT_FIFO_DEPTHS [7 : 0]   = '{4, 4, 4, 4, 4, 4, 4, 4};
+    //localparam int L2_INVALIDATION_FIFO_DEPTHS [7 : 0]   = '{4, 4, 4, 4, 4, 4, 4, 4};
+    //localparam int L2_READ_RETURN_FIFO_DEPTHS [7 : 0]   = '{1, 1, 1, 1, 1, 1, 1, 1};//depth 1, rd_ack will be trimmed
 
-    parameter L2_INPUT_FIFO_DEPTHS = 4;
-    parameter L2_INVALIDATION_FIFO_DEPTHS = 4;
-    parameter L2_READ_RETURN_FIFO_DEPTHS = 1;//depth 1, rd_ack will be trimmed
+    localparam L2_INPUT_FIFO_DEPTHS = 4;
+    localparam L2_INVALIDATION_FIFO_DEPTHS = 4;
+    localparam L2_READ_RETURN_FIFO_DEPTHS = 1;//depth 1, rd_ack will be trimmed
 
 
-    parameter L2_MEM_ADDR_FIFO_DEPTH = 8;
+    localparam L2_MEM_ADDR_FIFO_DEPTH = 8;
 
-    parameter L2_DATA_ATTRIBUTES_FIFO_DEPTH = 16;//Sized larger to remove need to check full status
+    localparam L2_DATA_ATTRIBUTES_FIFO_DEPTH = 16;//Sized larger to remove need to check full status
 
 
 
     //Convenience derivative parameters
-    parameter L2_ID_W = $clog2(L2_NUM_PORTS) + L2_SUB_ID_W;
+    localparam L2_ID_W = $clog2(L2_NUM_PORTS) + L2_SUB_ID_W;
 
 
     typedef struct packed{

@@ -23,9 +23,9 @@
 package riscv_types;
     import taiga_config::*;
 
-    parameter XLEN = 32;
-    parameter PAGE_ADDR_W = 12;
-    parameter ECODE_W = 5;
+    localparam XLEN = 32;
+    localparam PAGE_ADDR_W = 12;
+    localparam ECODE_W = 5;
 
     typedef logic [4:0] rs_addr_t;
 
@@ -200,7 +200,7 @@ package riscv_types;
         SV32 = 5'd8
     } vm_t;
 
-    parameter ASIDLEN = 9;//pid
+    localparam ASIDLEN = 9;//pid
 
     typedef enum logic [ECODE_W-1:0] {
         INST_ADDR_MISSALIGNED = 5'd0,
