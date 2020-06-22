@@ -1,5 +1,5 @@
 /*
- * Copyright © 2017, 2018 Eric Matthews,  Lesley Shannon
+ * Copyright © 2017-2020 Eric Matthews,  Lesley Shannon
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,8 +33,8 @@ module div_algorithm
 
     generate
         case(DIV_ALGORITHM)
-             RADIX_2 : div_radix2 div_block (.*);
-             QUICK_CLZ : div_quick_clz div_block (.*);
+             RADIX_2 : div_radix2 #(.DIV_WIDTH(32)) div_block (.clk(clk), .rst(rst), .div(div));
+             QUICK_CLZ : div_quick_clz #(.DIV_WIDTH(32)) div_block (.clk(clk), .rst(rst), .div(div));
         endcase
     endgenerate
 

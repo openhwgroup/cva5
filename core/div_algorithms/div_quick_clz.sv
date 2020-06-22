@@ -1,5 +1,5 @@
 /*
- * Copyright © 2017-2019 Eric Matthews,  Lesley Shannon
+ * Copyright © 2017-2020 Eric Matthews,  Lesley Shannon
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,9 @@
 
 
 module div_quick_clz
+    #(
+        parameter DIV_WIDTH = 32
+    )
     (
         input logic clk,
         input logic rst,
@@ -31,24 +34,24 @@ module div_quick_clz
 
     logic running;
     logic terminate;
-    logic [div.DATA_WIDTH-1:0] divisor_r;
+    logic [DIV_WIDTH-1:0] divisor_r;
 
-    logic [div.DATA_WIDTH-1:0] normalized_divisor;
+    logic [DIV_WIDTH-1:0] normalized_divisor;
 
     logic overflow;
-    logic [div.DATA_WIDTH-1:0] subtraction1;
-    logic [div.DATA_WIDTH-1:0] subtraction2;
+    logic [DIV_WIDTH-1:0] subtraction1;
+    logic [DIV_WIDTH-1:0] subtraction2;
 
-    logic [div.DATA_WIDTH-1:0] new_remainder;
-    logic [div.DATA_WIDTH-1:0] new_quotient;
+    logic [DIV_WIDTH-1:0] new_remainder;
+    logic [DIV_WIDTH-1:0] new_quotient;
 
-    logic [div.DATA_WIDTH-1:0] new_Q_bit1;
-    logic [div.DATA_WIDTH-1:0] new_Q_bit2;
+    logic [DIV_WIDTH-1:0] new_Q_bit1;
+    logic [DIV_WIDTH-1:0] new_Q_bit2;
 
-    logic [div.DATA_WIDTH-1:0] test_multiple1;
-    logic [div.DATA_WIDTH-1:0] test_multiple2;
+    logic [DIV_WIDTH-1:0] test_multiple1;
+    logic [DIV_WIDTH-1:0] test_multiple2;
 
-    localparam CLZ_W = $clog2(div.DATA_WIDTH);
+    localparam CLZ_W = $clog2(DIV_WIDTH);
     logic [CLZ_W-1:0] remainder_CLZ;
     logic [CLZ_W-1:0] divisor_CLZ;
     logic [CLZ_W-1:0] divisor_CLZ_r;
