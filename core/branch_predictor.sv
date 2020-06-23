@@ -33,17 +33,18 @@ module branch_predictor (
         input branch_results_t br_results
         );
 
-    function int get_memory_width();
-        int width;
-        longint cache_range = 64'(MEMORY_ADDR_H) - 64'(MEMORY_ADDR_L) + 1;
-        longint scratch_range = 64'(SCRATCH_ADDR_H) - 64'(SCRATCH_ADDR_L) + 1;
+    //BP tag width can be reduced, based on memory size, when virtual address
+    //support is not enabled
+    localparam longint CACHE_RANGE = 64'(MEMORY_ADDR_H) - 64'(MEMORY_ADDR_L) + 1;
+    localparam longint SCRATCH_RANGE = 64'(SCRATCH_ADDR_H) - 64'(SCRATCH_ADDR_L) + 1;
 
+    function int get_memory_width();
         if(ENABLE_S_MODE)
             return 32;
-        else if (USE_ICACHE && cache_range > scratch_range)
-            return $clog2(cache_range);
+        else if (USE_ICACHE && CACHE_RANGE > SCRATCH_RANGE)
+            return $clog2(CACHE_RANGE);
         else
-            return $clog2(scratch_range);
+            return $clog2(SCRATCH_RANGE);
     endfunction
 
     localparam BRANCH_ADDR_W = $clog2(BRANCH_TABLE_ENTRIES);
