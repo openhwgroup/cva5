@@ -327,9 +327,16 @@ endgenerate
 
     ////////////////////////////////////////////////////
     //Assertions
-    always_ff @ (posedge clk) begin
-        assert ((issue_request & |sub_unit_address_match) || (!issue_request)) else $error("invalid L/S address");
-        assert ((issue_request & ready_for_issue) || (!issue_request)) else $error("L/S internal request issued without subunits ready");
-    end
+    spurious_load_complete_assertion:
+        assert property (@(posedge clk) disable iff (rst) load_complete |-> (load_attributes.valid && unit_data_valid[stage2_attr.subunit_id]))
+        else $error("Spurious load complete detected!");
+
+    csr_load_conflict_assertion:
+        assert property (@(posedge clk) disable iff (rst) csr_done |-> ls_is_idle)
+        else $error("CSR read completed without ls being idle");
+
+    invalid_ls_address_assertion:
+        assert property (@(posedge clk) disable iff (rst) issue_request |-> |sub_unit_address_match)
+        else $error("invalid L/S address");
 
 endmodule
