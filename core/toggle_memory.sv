@@ -40,8 +40,7 @@ module toggle_memory
 
     initial id_toggle_memory = '{default: 0};
     always_ff @ (posedge clk) begin
-        if (toggle)
-            id_toggle_memory[toggle_id] <= ~id_toggle_memory[toggle_id];
+        id_toggle_memory[toggle_id] <= toggle ^ id_toggle_memory[toggle_id];
     end
 
     assign read_data = id_toggle_memory[read_id];

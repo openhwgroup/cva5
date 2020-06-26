@@ -46,6 +46,7 @@ module decode_and_issue (
         input logic potential_branch_exception,
         output logic alu_issued,
 
+        input logic gc_fetch_hold,
         input logic gc_issue_hold,
         input logic gc_fetch_flush,
         input logic gc_issue_flush,
@@ -121,7 +122,7 @@ module decode_and_issue (
     genvar i;
     ////////////////////////////////////////////////////
     //Implementation
-    assign issue_stage_ready = (~issue.stage_valid) | instruction_issued;
+    assign issue_stage_ready = (~gc_fetch_hold) & ((~issue.stage_valid) | instruction_issued);
     assign decode_advance = decode.valid & issue_stage_ready;
 
     //Instruction aliases

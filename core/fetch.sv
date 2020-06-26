@@ -29,6 +29,7 @@ module fetch(
         input logic rst,
 
         input logic branch_flush,
+        input logic gc_fetch_hold,
         input logic gc_fetch_flush,
         input logic gc_fetch_pc_override,
         input logic exception,
@@ -131,7 +132,7 @@ module fetch(
     //Issue Control Signals
     assign flush_or_rst = (rst | gc_fetch_flush);
 
-    assign new_mem_request = tlb.complete & pc_id_available & units_ready;
+    assign new_mem_request = tlb.complete & pc_id_available & units_ready & ~gc_fetch_hold;
     assign pc_id_assigned = new_mem_request & ~gc_fetch_flush;
 
     //////////////////////////////////////////////

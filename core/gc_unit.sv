@@ -73,6 +73,8 @@ module gc_unit(
         input logic timer_interrupt,
 
         //Output controls
+        output logic gc_init_clear,
+        output logic gc_fetch_hold,
         output logic gc_issue_hold,
         output logic gc_issue_flush,
         output logic gc_fetch_flush,
@@ -90,8 +92,8 @@ module gc_unit(
 
     //Largest depth for TLBs
     localparam int TLB_CLEAR_DEPTH = (DTLB_DEPTH > ITLB_DEPTH) ? DTLB_DEPTH : ITLB_DEPTH;
-    //For general reset clear, greater of TLB depth or inuse memory block (32-bits)
-    localparam int CLEAR_DEPTH = ENABLE_S_MODE ? TLB_CLEAR_DEPTH : 32;
+    //For general reset clear, greater of TLB depth or id-flight memory blocks (MAX_IDS)
+    localparam int INIT_CLEAR_DEPTH = ENABLE_S_MODE ? (TLB_CLEAR_DEPTH > MAX_IDS ? TLB_CLEAR_DEPTH : MAX_IDS) : MAX_IDS;
 
     ////////////////////////////////////////////////////
     //Instructions
@@ -125,11 +127,12 @@ module gc_unit(
     //LS exceptions (miss-aligned, TLB and MMU) (issue stage)
     //fetch flush, take exception. If execute or later exception occurs first, exception is overridden
 
-    typedef enum {RST_STATE, IDLE_STATE, TLB_CLEAR_STATE, IQ_DRAIN} gc_state;
+    typedef enum {RST_STATE, PRE_CLEAR_STATE, INIT_CLEAR_STATE, IDLE_STATE, TLB_CLEAR_STATE, IQ_DRAIN} gc_state;
     gc_state state;
     gc_state next_state;
     gc_state prev_state;
 
+    logic init_clear_done;
     logic tlb_clear_done;
 
     logic i_fence_flush;
@@ -197,11 +200,10 @@ module gc_unit(
     assign gc_fetch_flush = branch_flush | gc_fetch_pc_override;
 
     always_ff @ (posedge clk) begin
-        gc_issue_hold <= issue.new_request || second_cycle_flush || processing_csr || (next_state inside {TLB_CLEAR_STATE, IQ_DRAIN}) || potential_branch_exception;
-    end
-
-    always_ff @ (posedge clk) begin
-        gc_supress_writeback <= next_state inside {TLB_CLEAR_STATE} ? 1 : 0;
+        gc_fetch_hold <=  next_state inside {PRE_CLEAR_STATE, INIT_CLEAR_STATE};
+        gc_issue_hold <= issue.new_request || second_cycle_flush || processing_csr || (next_state inside {PRE_CLEAR_STATE, INIT_CLEAR_STATE, TLB_CLEAR_STATE, IQ_DRAIN}) || potential_branch_exception;
+        gc_supress_writeback <= next_state inside {PRE_CLEAR_STATE, INIT_CLEAR_STATE, TLB_CLEAR_STATE} ? 1 : 0;
+        gc_init_clear <= (next_state == INIT_CLEAR_STATE);
     end
 
     ////////////////////////////////////////////////////
@@ -223,7 +225,9 @@ module gc_unit(
     always_comb begin
         next_state = state;
         case (state)
-            RST_STATE : next_state = IDLE_STATE;
+            RST_STATE : next_state = PRE_CLEAR_STATE;
+            PRE_CLEAR_STATE : next_state = INIT_CLEAR_STATE;
+            INIT_CLEAR_STATE : if (init_clear_done) next_state = IDLE_STATE;
             IDLE_STATE : begin
                 if (ls_exception.valid | potential_branch_exception) begin
                     next_state = IQ_DRAIN;
@@ -236,6 +240,7 @@ module gc_unit(
     end
 
     //Counters for tlb clearing states
+    shift_counter #(.DEPTH(INIT_CLEAR_DEPTH)) init_clear_counter (.*, .start((state == PRE_CLEAR_STATE)), .done(init_clear_done));
     shift_counter #(.DEPTH(TLB_CLEAR_DEPTH)) tlb_clear_counter (.*, .start((state == IDLE_STATE) && (next_state == TLB_CLEAR_STATE)), .done(tlb_clear_done));
 
     ////////////////////////////////////////////////////

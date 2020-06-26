@@ -119,6 +119,8 @@ module taiga (
     logic [31:0] exception_pc;
 
     //Global Control
+    logic gc_init_clear;
+    logic gc_fetch_hold;
     logic gc_issue_hold;
     logic gc_issue_flush;
     logic gc_fetch_flush;

@@ -29,6 +29,7 @@ module instruction_metadata_and_id_management
         input logic clk,
         input logic rst,
 
+        input logic gc_init_clear,
         input logic gc_fetch_flush,
 
         //Fetch
@@ -85,7 +86,8 @@ module instruction_metadata_and_id_management
     logic [31:0] rd_table [MAX_IDS];
 
     localparam LOG2_MAX_IDS = $clog2(MAX_IDS);
-    id_t pc_id_i;
+    id_t clear_index;
+    id_t pc_id_next;
     id_t decode_id;
     logic [LOG2_MAX_IDS:0] fetched_count; //MSB used as valid for decode stage
 
@@ -143,12 +145,19 @@ module instruction_metadata_and_id_management
     ////////////////////////////////////////////////////
     //ID Management
 
-
+    //Post-reset clr
+    initial clear_index = 0;
+    always_ff @ (posedge clk) begin
+        if (gc_init_clear)
+            clear_index <= clear_index + 1;
+    end
+    
     //Next ID always increases, except on a fetch buffer flush.
     //On a fetch buffer flush, the next ID is restored to the current decode ID.
     //This prevents a stall in the case where all  IDs are either in-flight or
     //in the fetch buffer at the point of a fetch flush.
-    assign pc_id_i = (gc_fetch_flush ? decode_id : pc_id) + LOG2_MAX_IDS'({pc_id_assigned & ~gc_fetch_flush});
+    assign pc_id_next = gc_init_clear ? clear_index : 
+        ((gc_fetch_flush ? decode_id : pc_id) + LOG2_MAX_IDS'({pc_id_assigned & ~gc_fetch_flush}));
     always_ff @ (posedge clk) begin
         if (rst) begin
             pc_id <= 0;
@@ -156,7 +165,7 @@ module instruction_metadata_and_id_management
             decode_id <= 0;
         end
         else begin
-            pc_id <= pc_id_i;
+            pc_id <= (gc_fetch_flush ? decode_id : pc_id) + LOG2_MAX_IDS'({pc_id_assigned & ~gc_fetch_flush});
             fetch_id <= (gc_fetch_flush ? decode_id : fetch_id) + LOG2_MAX_IDS'({fetch_complete & ~gc_fetch_flush});
             decode_id <= decode_id + LOG2_MAX_IDS'({decode_advance & ~gc_fetch_flush});
         end
@@ -178,9 +187,9 @@ module instruction_metadata_and_id_management
     //Instruction decoded and (issued or flushed) pair
     toggle_memory decode_toggle_mem (
         .clk, .rst,
-        .toggle(decode_advance & ~gc_fetch_flush),
-        .toggle_id(decode.id),
-        .read_id(pc_id_i),
+        .toggle((gc_init_clear & ~id_not_in_decode_issue) | (decode_advance & ~gc_fetch_flush)),
+        .toggle_id(gc_init_clear ? clear_index : decode.id),
+        .read_id(pc_id_next),
         .read_data(decoded_status)
     );
 
@@ -188,23 +197,23 @@ module instruction_metadata_and_id_management
         .clk, .rst,
         .toggle(instruction_issued | (gc_fetch_flush & issue.stage_valid)),
         .toggle_id(issue.id),
-        .read_id(pc_id_i),
+        .read_id(pc_id_next),
         .read_data(decoded_issued_status)
     );
 
     //Post issue status tracking
     toggle_memory issued_toggle_mem (
         .clk, .rst,
-        .toggle(instruction_issued),
-        .toggle_id(issue.id),
-        .read_id(pc_id_i),
+        .toggle((gc_init_clear & ~id_not_inflight)  | instruction_issued),
+        .toggle_id(gc_init_clear ? clear_index : issue.id),
+        .read_id(pc_id_next),
         .read_data(issued_status)
     );
     generate for (i = 0; i < REGFILE_READ_PORTS; i++) begin
         toggle_memory issued_toggle_mem_rs (
             .clk, .rst,
-            .toggle(instruction_issued & issue.uses_rd),
-            .toggle_id(issue.id),
+            .toggle((gc_init_clear & rs_id_inuse[i]) | (instruction_issued & issue.uses_rd)),
+            .toggle_id(gc_init_clear ? clear_index : issue.id),
             .read_id(rs_id[i]),
             .read_data(issued_status_rs[i])
         );
@@ -214,7 +223,7 @@ module instruction_metadata_and_id_management
         .clk, .rst,
         .toggle(branch_complete),
         .toggle_id(branch_id),
-        .read_id(pc_id_i),
+        .read_id(pc_id_next),
         .read_data(branch_complete_status)
     );
 
@@ -222,7 +231,7 @@ module instruction_metadata_and_id_management
         .clk, .rst,
         .toggle(store_complete),
         .toggle_id(store_id),
-        .read_id(pc_id_i),
+        .read_id(pc_id_next),
         .read_data(store_complete_status)
     );
 
@@ -230,7 +239,7 @@ module instruction_metadata_and_id_management
         .clk, .rst,
         .toggle(system_op_or_exception_complete),
         .toggle_id(system_op_or_exception_id),
-        .read_id(pc_id_i),
+        .read_id(pc_id_next),
         .read_data(system_op_or_exception_complete_status)
     );
 
@@ -251,7 +260,7 @@ module instruction_metadata_and_id_management
             .clk, .rst,
             .toggle(retired[i]),
             .toggle_id(ids_retiring[i]),
-            .read_id(pc_id_i),
+            .read_id(pc_id_next),
             .read_data(retired_status[i])
         );
         for (j = 0; j < REGFILE_READ_PORTS; j++) begin
@@ -265,7 +274,7 @@ module instruction_metadata_and_id_management
         end
     end endgenerate
 
-    //Computed one cycle in advance using pc_id_i
+    //Computed one cycle in advance using pc_id_next
     logic id_not_in_decode_issue;
     logic id_not_inflight;
     assign id_not_in_decode_issue = ~(decoded_status ^ decoded_issued_status);
@@ -322,7 +331,7 @@ module instruction_metadata_and_id_management
     //Issue
     always_comb begin
         for (int i = 0; i < REGFILE_READ_PORTS; i++) begin
-            rs_id[i] = rd_to_id_table[issue.rs_addr[i]];
+            rs_id[i] = gc_init_clear ? clear_index : rd_to_id_table[issue.rs_addr[i]];
             rs_inuse[i] = (|issue.rs_addr[i]) & (issue.rs_addr[i] == instruction_table[rs_id[i]][11:7]);//11:7 is rd_addr
         end
     end
