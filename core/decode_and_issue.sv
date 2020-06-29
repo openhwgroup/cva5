@@ -122,7 +122,12 @@ module decode_and_issue (
     genvar i;
     ////////////////////////////////////////////////////
     //Implementation
-    assign issue_stage_ready = (~gc_fetch_hold) & ((~issue.stage_valid) | instruction_issued);
+    
+    //Can move data into issue stage if:
+    // there is no global control hold on the issue stage,
+    // there is no instruction currently in the issue stage, or
+    // an instruction could issue (fetch flush and whether the instruction is valid are not needed in this check)
+    assign issue_stage_ready = (~gc_issue_hold) & ((~issue.stage_valid) | (|(unit_operands_ready & issue_ready)));
     assign decode_advance = decode.valid & issue_stage_ready;
 
     //Instruction aliases
@@ -225,18 +230,18 @@ module decode_and_issue (
     always_comb begin
         if (opcode_trim inside {LUI_T, AUIPC_T}) //LUI or AUIPC
             pre_alu_rs2 = {decode.instruction[31:12], 12'b0};
-        else if (opcode_trim == ARITH_IMM_T) //ARITH_IMM
-            pre_alu_rs2 = 32'(signed'(decode.instruction[31:20]));
-        else //JAL JALR
+        else if (opcode_trim inside {JAL_T, JALR_T}) //LUI or AUIPC //JAL JALR
             pre_alu_rs2 = 4;
+        else //ARITH_IMM
+            pre_alu_rs2 = 32'(signed'(decode.instruction[31:20]));
     end
 
     always_ff @(posedge clk) begin
         if (issue_stage_ready) begin
-            if (opcode_trim inside {LUI_T})
-                pre_alu_rs1_r <= '0;
-            else
+            if (opcode_trim inside {AUIPC_T, JAL_T, JALR_T})
                 pre_alu_rs1_r <= decode.pc;
+            else
+                pre_alu_rs1_r <= '0;
         end
     end
 
