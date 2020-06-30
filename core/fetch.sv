@@ -140,7 +140,7 @@ module fetch(
     assign flush_or_rst = (rst | gc_fetch_flush);
 
     assign new_mem_request = tlb.complete & pc_id_available & units_ready & ~gc_fetch_hold;
-    assign pc_id_assigned = new_mem_request & ~gc_fetch_flush;
+    assign pc_id_assigned = new_mem_request;
 
     //////////////////////////////////////////////
     //Subunit Tracking
@@ -199,5 +199,8 @@ module fetch(
 
     ////////////////////////////////////////////////////
     //Assertions
+    spurious_fetch_complete_assertion:
+        assert property (@(posedge clk) disable iff (rst) (|unit_data_valid) |-> (fetch_attr_fifo.valid && unit_data_valid[fetch_attr.subunit_id]))
+        else $error("Spurious fetch complete detected!");
 
 endmodule

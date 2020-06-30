@@ -1,5 +1,5 @@
 /*
- * Copyright © 2017 Eric Matthews,  Lesley Shannon
+ * Copyright © 2017-2020 Eric Matthews,  Lesley Shannon
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,15 +20,12 @@
  *             Eric Matthews <ematthew@sfu.ca>
  */
 
-import taiga_config::*;
-import taiga_types::*;
-
-module tag_bank  #(
+module tag_bank  
+    #(
         parameter WIDTH = 32,
         parameter LINES = 512
-        )
-        (
-
+    )
+    (
         input logic clk,
         input logic rst,
 
@@ -42,11 +39,9 @@ module tag_bank  #(
         input logic [WIDTH-1:0] data_in_b,
         output logic [WIDTH-1:0] data_out_a,
         output logic [WIDTH-1:0] data_out_b
-        );
+    );
 
-    (* ramstyle = "no_rw_check" *) logic  [WIDTH-1:0] tag_entry [LINES-1:0];
-
-    int i;
+    (* ram_style = "block", ramstyle = "no_rw_check" *) logic  [WIDTH-1:0] tag_entry [LINES];
     initial tag_entry = '{default: 0};
 
     always_ff @ (posedge clk) begin
@@ -60,15 +55,11 @@ module tag_bank  #(
 
     always_ff @ (posedge clk) begin
         if (en_b) begin
-            if (wen_b) begin
+            if (wen_b)
                 tag_entry[addr_b] <= data_in_b;
-            end
-            else begin
+            else
                 data_out_b <= tag_entry[addr_b];
-            end
         end
     end
-
-
 
 endmodule
