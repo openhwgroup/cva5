@@ -1,5 +1,5 @@
 /*
- * Copyright © 2017 Eric Matthews,  Lesley Shannon
+ * Copyright © 2017-2020 Eric Matthews,  Lesley Shannon
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -85,7 +85,8 @@ module dcache(
 
     logic second_cycle;
 
-    logic request;
+    logic new_arb_request;
+    logic arb_request_r;
 
     logic is_target_word;
 
@@ -143,7 +144,7 @@ module dcache(
     //L1 Arbiter Interface
     assign l1_request.addr = {stage2_addr[31:2], 2'b0} ;//Memory interface aligns request to burst size (done there to support AMO line-read word-write)
     assign l1_request.data = stage2_data;
-    assign l1_request.rnw = stage2_load;
+    assign l1_request.rnw = ~stage2_store;
     assign l1_request.be = stage2_be;
     assign l1_request.size = stage2_load ? (DCACHE_LINE_W-1) : 0;//LR and AMO ops are included in load
     assign l1_request.is_amo = (stage2_amo.is_amo | stage2_amo.is_lr | stage2_amo.is_sc);
@@ -157,15 +158,16 @@ module dcache(
     end
     assign is_target_word = (stage2_addr[DCACHE_SUB_LINE_ADDR_W+1:2] == word_count);
 
+    assign new_arb_request = second_cycle & (~(tag_hit & read_hit_allowed) | ~dcache_on);
     always_ff @ (posedge clk) begin
         if (rst)
-            request  <= 0;
+            arb_request_r  <= 0;
         else if (second_cycle & ~l1_request.ack)
-            request <= ~(tag_hit & read_hit_allowed) | ~dcache_on;
+            arb_request_r <= new_arb_request;
         else if (l1_request.ack)
-            request <= 0;
+            arb_request_r  <= 0;
     end
-    assign l1_request.request = request | (second_cycle & (~(tag_hit & read_hit_allowed) | ~dcache_on));
+    assign l1_request.request = new_arb_request | arb_request_r;
 
     ////////////////////////////////////////////////////
     //Replacement policy (free runing one-hot cycler, i.e. pseudo random)
@@ -279,17 +281,25 @@ module dcache(
             ls.data_valid <= ((l1_response.data_valid & is_target_word) | (read_hit_allowed & tag_hit) | sc_complete);
     end
 
-    assign ls.ready = (read_hit_allowed & tag_hit) | store_complete | (read_miss_complete) | idle;
+    assign ls.ready = (read_hit_allowed & tag_hit) | store_complete | read_miss_complete | idle;
 
     always_ff @ (posedge clk) begin
         if (rst)
             idle <= 1;
         else if (ls.new_request)
             idle <= 0;
-        else if ((read_hit_allowed & tag_hit) | read_miss_complete | store_complete) //read miss OR write through complete
+        else if (ls.ready)
             idle <= 1;
     end
 
+    ////////////////////////////////////////////////////
+    //End of Implementation
+    ////////////////////////////////////////////////////
 
+    ////////////////////////////////////////////////////
+    //Assertions
+    dcache_request_when_not_ready_assertion:
+        assert property (@(posedge clk) disable iff (rst) ls.new_request |-> ls.ready)
+        else $error("dcache received request when not ready");
 
 endmodule
