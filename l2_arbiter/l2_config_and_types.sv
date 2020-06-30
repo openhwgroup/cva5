@@ -31,14 +31,14 @@ package l2_config_and_types;
     //localparam int L2_INVALIDATION_FIFO_DEPTHS [7 : 0]   = '{4, 4, 4, 4, 4, 4, 4, 4};
     //localparam int L2_READ_RETURN_FIFO_DEPTHS [7 : 0]   = '{1, 1, 1, 1, 1, 1, 1, 1};//depth 1, rd_ack will be trimmed
 
-    localparam L2_INPUT_FIFO_DEPTHS = 4;
-    localparam L2_INVALIDATION_FIFO_DEPTHS = 4;
+    localparam L2_INPUT_FIFO_DEPTHS = 16;
+    localparam L2_INVALIDATION_FIFO_DEPTHS = 16;
     localparam L2_READ_RETURN_FIFO_DEPTHS = 1;//depth 1, rd_ack will be trimmed
 
 
-    localparam L2_MEM_ADDR_FIFO_DEPTH = 8;
+    localparam L2_MEM_ADDR_FIFO_DEPTH = 16;
 
-    localparam L2_DATA_ATTRIBUTES_FIFO_DEPTH = 16;//Sized larger to remove need to check full status
+    localparam L2_DATA_ATTRIBUTES_FIFO_DEPTH = 32;//Sized larger to remove need to check full status
 
 
 
