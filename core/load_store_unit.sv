@@ -74,8 +74,8 @@ module load_store_unit (
     localparam BUS_ID = USE_D_SCRATCH_MEM;
     localparam DCACHE_ID = USE_D_SCRATCH_MEM+USE_BUS;
 
-    //Should be equal to pipeline depth of longest load/store subunit + 1 (for changing between subunits)
-    localparam ATTRIBUTES_DEPTH = USE_DCACHE ? 3 : 2;
+    //Should be equal to pipeline depth of longest load/store subunit 
+    localparam ATTRIBUTES_DEPTH = USE_DCACHE ? 2 : 1;
 
     data_access_shared_inputs_t shared_inputs;
     ls_sub_unit_interface #(.BASE_ADDR(SCRATCH_ADDR_L), .UPPER_BOUND(SCRATCH_ADDR_H), .BIT_CHECK(SCRATCH_BIT_CHECK)) bram();
