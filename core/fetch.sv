@@ -39,6 +39,7 @@ module fetch(
         input logic pc_id_available,
         output logic pc_id_assigned,
         output logic fetch_complete,
+        output logic fetch_address_valid,
 
         branch_predictor_interface.fetch bp,
         ras_interface.fetch ras,
@@ -70,13 +71,19 @@ module fetch(
     logic [31:0] unit_data_array [NUM_SUB_UNITS-1:0];
 
     logic units_ready;
-    logic units_data_valid;
+
+    typedef struct packed{
+        logic address_valid;
+        logic [NUM_SUB_UNITS_W-1:0] subunit_id;
+    } fetch_attributes_t;
+    fetch_attributes_t fetch_attr_next;
+    fetch_attributes_t fetch_attr;
 
     logic [31:0] next_pc;
     logic [31:0] pc;
 
     logic flush_or_rst;
-    fifo_interface #(.DATA_WIDTH(NUM_SUB_UNITS_W)) next_unit();
+    fifo_interface #(.DATA_WIDTH($bits(fetch_attributes_t))) fetch_attr_fifo();
 
     logic new_mem_request;
 
@@ -137,19 +144,24 @@ module fetch(
 
     //////////////////////////////////////////////
     //Subunit Tracking
-    assign next_unit.push = new_mem_request;
-    assign next_unit.potential_push = new_mem_request;
-    assign next_unit.pop = units_data_valid;
-    one_hot_to_integer #(NUM_SUB_UNITS) hit_way_conv (.*, .one_hot(sub_unit_address_match), .int_out(next_unit.data_in));
-    taiga_fifo #(.DATA_WIDTH(NUM_SUB_UNITS_W), .FIFO_DEPTH(NEXT_ID_DEPTH))
-        attributes_fifo (.fifo(next_unit), .rst(flush_or_rst), .*);
+    assign fetch_attr_fifo.push = new_mem_request;
+    assign fetch_attr_fifo.potential_push = new_mem_request;
+    assign fetch_attr_fifo.pop = fetch_complete;
+    one_hot_to_integer #(NUM_SUB_UNITS) hit_way_conv (.*, .one_hot(sub_unit_address_match), .int_out(fetch_attr_next.subunit_id));
+    assign fetch_attr_next.address_valid = |sub_unit_address_match;
+
+    assign fetch_attr_fifo.data_in = fetch_attr_next;
+
+    taiga_fifo #(.DATA_WIDTH($bits(fetch_attributes_t)), .FIFO_DEPTH(NEXT_ID_DEPTH))
+        attributes_fifo (.fifo(fetch_attr_fifo), .rst(flush_or_rst), .*);
+
+    assign fetch_attr = fetch_attr_fifo.data_out;
 
     ////////////////////////////////////////////////////
     //Subunit Interfaces
     //In the case of a gc_fetch_flush, a request may already be in progress
     //for any sub unit.  That request can either be completed or aborted.
     //In either case, data_valid must NOT be asserted.
-    logic cache_address_match;
     generate
         for (i = 0; i < NUM_SUB_UNITS; i++) begin
             assign unit_ready[i] = fetch_sub[i].ready;
@@ -162,24 +174,30 @@ module fetch(
         end
     endgenerate
     assign units_ready = &unit_ready;
-    assign units_data_valid = |unit_data_valid;
 
     generate if (USE_I_SCRATCH_MEM) begin
         ibram i_bram (.*, .fetch_sub(fetch_sub[BRAM_ID]));
-        assign sub_unit_address_match[BRAM_ID] = USE_ICACHE ? ~cache_address_match : 1'b1;
+        assign sub_unit_address_match[BRAM_ID] = tlb.physical_address[31:32-SCRATCH_BIT_CHECK] == SCRATCH_ADDR_L[31:32-SCRATCH_BIT_CHECK];
     end
     endgenerate
     generate if (USE_ICACHE) begin
         icache i_cache (.*, .fetch_sub(fetch_sub[ICACHE_ID]));
-        assign cache_address_match = tlb.physical_address[31:32-MEMORY_BIT_CHECK] == MEMORY_ADDR_L[31:32-MEMORY_BIT_CHECK];
-        assign sub_unit_address_match[ICACHE_ID] = cache_address_match;
+        assign sub_unit_address_match[ICACHE_ID] = tlb.physical_address[31:32-MEMORY_BIT_CHECK] == MEMORY_ADDR_L[31:32-MEMORY_BIT_CHECK];
     end
     endgenerate
 
     ////////////////////////////////////////////////////
     //Instruction metada updates
     assign if_pc = pc;
-    assign fetch_instruction = unit_data_array[next_unit.data_out];
-    assign fetch_complete = units_data_valid;
+    assign fetch_instruction = unit_data_array[fetch_attr.subunit_id];
+    assign fetch_complete = (|unit_data_valid) | (fetch_attr_fifo.valid & ~fetch_attr.address_valid);//allow instruction to propagate to decode if address is invalid
+    assign fetch_address_valid = fetch_attr.address_valid;
+
+    ////////////////////////////////////////////////////
+    //End of Implementation
+    ////////////////////////////////////////////////////
+
+    ////////////////////////////////////////////////////
+    //Assertions
 
 endmodule

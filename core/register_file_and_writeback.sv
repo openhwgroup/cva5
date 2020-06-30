@@ -58,7 +58,8 @@ module register_file_and_writeback
     //aliases for write-back-interface signals
     id_t unit_instruction_id [NUM_WB_UNITS];
     logic unit_done [NUM_WB_UNITS];
-    logic [XLEN-1:0] unit_rd [NUM_WB_UNITS];
+    typedef logic [XLEN-1:0] unit_rd_t [NUM_WB_UNITS];
+    unit_rd_t unit_rd [COMMIT_PORTS];
     //Per-ID muxes for commit buffer
     logic [$clog2(NUM_WB_UNITS)-1:0] retiring_unit_select [COMMIT_PORTS];
     logic [31:0] retiring_data [COMMIT_PORTS];
@@ -66,16 +67,25 @@ module register_file_and_writeback
     typedef logic [31:0] rs_data_set_t [REGFILE_READ_PORTS];
     rs_data_set_t rs_data_set [COMMIT_PORTS];
 
-    genvar i;
+    genvar i, j;
     ////////////////////////////////////////////////////
     //Implementation
     //Re-assigning interface inputs to array types so that they can be dynamically indexed
     generate for (i=0; i< NUM_WB_UNITS; i++) begin : wb_interfaces_to_arrays_g
         assign unit_instruction_id[i] = unit_wb[i].id;
         assign unit_done[i] = unit_wb[i].done;
-        assign unit_rd[i] = unit_wb[i].rd;
         assign unit_wb[i].ack = unit_ack[i];
     end endgenerate
+
+    //As units are selected for commit ports based on their unit ID,
+    //for each additional commit port one unit can be skipped for the commit mux
+    generate for (i = 0; i < COMMIT_PORTS; i++) begin
+        initial unit_rd[i] = '{default: '0};
+        for (j=i; j< NUM_WB_UNITS; j++) begin
+            assign unit_rd[i][j] = unit_wb[j].rd;
+        end
+    end endgenerate
+
 
     ////////////////////////////////////////////////////
     //Unit select for register file
@@ -86,7 +96,12 @@ module register_file_and_writeback
         unit_ack = '{default: 0};
         retired = '{default: 0};
 
-        for (int i = 0; i < COMMIT_PORTS; i++) begin
+        unit_ack[0] = alu_issued;
+        retired[0] = alu_issued;
+        ids_retiring[0] = unit_instruction_id[ALU_UNIT_WB_ID];
+        retiring_data[0] = unit_rd[0][ALU_UNIT_WB_ID];
+
+        for (int i = 1; i < COMMIT_PORTS; i++) begin
             retiring_unit_select[i] = WB_UNITS_WIDTH'(i);
             for (int j = i; j < NUM_WB_UNITS; j++) begin //Unit index i will always be handled by commit port i or lower, so can be skipped when checking higher commit port indicies
                 if (unit_done[j] & ~unit_ack[j] & ~retired[i]) begin
@@ -98,11 +113,11 @@ module register_file_and_writeback
 
             //ID and data muxes
             ids_retiring[i] = unit_instruction_id[retiring_unit_select[i]];
-            retiring_data[i] = unit_rd[retiring_unit_select[i]];
+            retiring_data[i] = unit_rd[i][retiring_unit_select[i]];
         end
         //Late cycle abort for when ALU is not issued to
-        alu_selected = (retiring_unit_select[0] == ALU_UNIT_WB_ID);
-        if (alu_selected) retired[0] &= alu_issued;
+        //alu_selected = (retiring_unit_select[0] == ALU_UNIT_WB_ID);
+        //if (alu_selected) retired[0] &= alu_issued;
     end
 
     ////////////////////////////////////////////////////
@@ -129,9 +144,9 @@ module register_file_and_writeback
     //the most recently issued write to any given register will be committed
     logic update_lvt [COMMIT_PORTS];
     always_comb begin
-        update_lvt[0] = retired[0] & (alu_selected ? alu_issued : (id_for_rd[0] == ids_retiring[0]));
+        update_lvt[0] = retired[0];// & (alu_selected ? alu_issued : (id_for_rd[0] == ids_retiring[0]));
         for (int i = 1; i < COMMIT_PORTS; i++)
-            update_lvt[i] = retired[i] & (id_for_rd[i] == ids_retiring[i]) & ~(alu_selected & retired[0] & retired_rd_addr[0] == retired_rd_addr[i]);
+            update_lvt[i] = retired[i] & (id_for_rd[i] == ids_retiring[i]) & ~(retired[0] & retired_rd_addr[0] == retired_rd_addr[i]);
     end
 
     regfile_bank_sel regfile_lvt (
@@ -152,29 +167,29 @@ module register_file_and_writeback
 
     ////////////////////////////////////////////////////
     //Store Forwarding Support
-    logic [31:0] commit_regs [COMMIT_PORTS];
+    logic [31:0] commit_regs [COMMIT_PORTS-1];
     logic [$clog2(COMMIT_PORTS)-1:0] store_reg_sel;
     logic [$clog2(COMMIT_PORTS)-1:0] store_reg_sel_r;
 
-    generate for (i = 0; i < COMMIT_PORTS; i++) begin
+    generate for (i = 1; i < COMMIT_PORTS; i++) begin
         always_ff @ (posedge clk) begin
             if (wb_store.possibly_waiting & retired[i] & (wb_store.id_needed == ids_retiring[i]))
-                commit_regs[i] <= retiring_data[i];
+                commit_regs[i-1] <= retiring_data[i];
         end
     end endgenerate
 
     logic [COMMIT_PORTS-1:0] store_id_match;
     always_comb begin
         store_id_match = 0;
-        for (int i = 0; i < COMMIT_PORTS; i++) begin
+        for (int i = 1; i < COMMIT_PORTS; i++) begin
             if (wb_store.waiting & retired[i] & (wb_store.id_needed == ids_retiring[i]))
                 store_id_match[i] = 1;
         end
 
         store_reg_sel = 0;
-        for (int i = 1; i < COMMIT_PORTS; i++) begin
+        for (int i = 2; i < COMMIT_PORTS; i++) begin
             if (retired[i] & (wb_store.id_needed == ids_retiring[i]))
-                store_reg_sel = ($clog2(COMMIT_PORTS))'(i);
+                store_reg_sel = ($clog2(COMMIT_PORTS))'(i-1);
         end
     end
 

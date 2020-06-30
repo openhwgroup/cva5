@@ -41,6 +41,7 @@ module instruction_metadata_and_id_management
         output id_t fetch_id,
         input logic fetch_complete,
         input logic [31:0] fetch_instruction,
+        input logic fetch_address_valid,
 
         //Decode ID
         output decode_packet_t decode,
@@ -82,6 +83,9 @@ module instruction_metadata_and_id_management
     //////////////////////////////////////////
     logic [31:0] pc_table [MAX_IDS];
     logic [31:0] instruction_table [MAX_IDS];
+    logic valid_fetch_addr_table [MAX_IDS];
+
+    logic [4:0] rd_addr_table [MAX_IDS];
     logic [$bits(branch_metadata_t)-1:0] branch_metadata_table [MAX_IDS];
     logic [31:0] rd_table [MAX_IDS];
 
@@ -134,6 +138,19 @@ module instruction_metadata_and_id_management
         if (fetch_complete)
             instruction_table[fetch_id] <= fetch_instruction;
     end
+
+    //rd table
+    always_ff @ (posedge clk) begin
+        if (fetch_complete)
+            rd_addr_table[fetch_id] <= fetch_instruction[11:7];
+    end
+
+    //valid fetched address table
+    always_ff @ (posedge clk) begin
+        if (fetch_complete)
+            valid_fetch_addr_table[fetch_id] <= fetch_address_valid;
+    end
+    
 
     //Operand inuse determination
     initial rd_to_id_table = '{default: 0};
@@ -324,6 +341,7 @@ module instruction_metadata_and_id_management
     assign decode.valid = fetched_count[LOG2_MAX_IDS];
     assign decode.pc = pc_table[decode_id];
     assign decode.instruction = instruction_table[decode_id];
+    assign decode.addr_valid = valid_fetch_addr_table[decode_id];
 
     //Branch Predictor
     assign branch_metadata_ex = branch_metadata_table[branch_id];
@@ -332,14 +350,19 @@ module instruction_metadata_and_id_management
     always_comb begin
         for (int i = 0; i < REGFILE_READ_PORTS; i++) begin
             rs_id[i] = gc_init_clear ? clear_index : rd_to_id_table[issue.rs_addr[i]];
-            rs_inuse[i] = (|issue.rs_addr[i]) & (issue.rs_addr[i] == instruction_table[rs_id[i]][11:7]);//11:7 is rd_addr
+            rs_inuse[i] = (|issue.rs_addr[i]) & (issue.rs_addr[i] == rd_addr_table[rs_id[i]]);
         end
     end
 
     //Writeback support
     always_comb begin
+        retired_rd_addr[0] = issue.rd_addr;
+        for (int i = 1; i < COMMIT_PORTS; i++) begin
+            retired_rd_addr[i] = rd_addr_table[ids_retiring[i]];
+        end
+    end
+    always_comb begin
         for (int i = 0; i < COMMIT_PORTS; i++) begin
-            retired_rd_addr[i] = instruction_table[ids_retiring[i]][11:7];
             id_for_rd[i] = rd_to_id_table[retired_rd_addr[i]];
         end
     end

@@ -78,6 +78,7 @@ package taiga_types;
         logic [31:0] pc;
         logic [31:0] instruction;
         logic valid;
+        logic addr_valid;
     } decode_packet_t;
 
     typedef struct packed{
@@ -94,6 +95,7 @@ package taiga_types;
         logic uses_rd;
         id_t id;
         logic stage_valid;
+        logic addr_valid;
     } issue_packet_t;
 
     typedef struct packed{
