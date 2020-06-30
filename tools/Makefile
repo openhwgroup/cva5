@@ -3,7 +3,7 @@
 #MAKEFLAGS += --silent
 -include internal.mak
 MAKEFILE_DIR=$(pwd)
-TAIGA_DIR=/home/zaguila/Documents/Research/AXI_DDR_simulation/Taiga-dev
+TAIGA_DIR=/home/ematthew/taiga
 
 RISCV_PREFIX   ?= riscv32-unknown-elf-
 
@@ -17,7 +17,7 @@ TAIGA_SRCS = $(shell cat taiga_compile_order)
 
 #Tracing: Set to True or False
 TRACE_ENABLE=False
-VERILATOR_TRACE_FILE="/home/zaguila/Tools/RISCV/sim-logs/sim_results.vcd"
+VERILATOR_TRACE_FILE="/data/sim-logs/sim_results.vcd"
 
 #DDR Pre-Initialization
 LOAD_DDR_FROM_FILE = False
@@ -57,12 +57,11 @@ CFLAGS = -g0 -O3 -march=native -D$(ddr_size_def) -D$(page_size_def) -D$(max_infl
 ################################################################################
 VERILATOR_LINT_IGNORE= -Wno-LITENDIAN -Wno-SYMRSVDWORD
 ifeq ($(TRACE_ENABLE), True)
-	VERILATOR_CFLAGS =  --trace --CFLAGS "$(CFLAGS)  -D TRACE_ON"
+	VERILATOR_CFLAGS =  --trace --trace-structs --CFLAGS "$(CFLAGS)  -D TRACE_ON"
 else
 	VERILATOR_CFLAGS =   --CFLAGS  "$(CFLAGS)"
 endif
 
-VERILATOR_LINT_IGNORE= -Wno-LITENDIAN -Wno-SYMRSVDWORD
 ifeq ($(LOAD_DDR_FROM_FILE), True)
 	VERILATOR_CFLAGS :=  $(VERILATOR_CFLAGS) -D LOAD_DDR_FROM_FILE"
 endif
@@ -70,16 +69,16 @@ endif
 ##################################################################################
 
 
-#Compiance parameters
+#Compliance parameters
 ###############################################################
-COMPLIANCE_DIR=/home/zaguila/Tools/RISCV/taiga-riscv-compliance/
+COMPLIANCE_DIR=/home/ematthew/Research/RISCV/sfu-rcl/taiga-riscv-compliance/
 COMPLIANCE_TARGET=rv32im
 ###############################################################
 
 #Benchmark parameters
 #Assumes binaries are in the BENCHMARK_DIR
 ###############################################################
-EMBENCH_DIR=/home/zaguila/Tools/RISCV/taiga-embench
+EMBENCH_DIR=/home/ematthew/Research/RISCV/sfu-rcl/taiga-embench
 EMBENCH_BENCHMARKS =  \
 aha-mont64 \
 crc32 \
@@ -168,7 +167,7 @@ build_taiga_sim: $(TAIGA_SRCS)
 	cp $(VERILATOR_DIR)/AXI_DDR_simulation/ddr_page.cc $@/
 	cp $(VERILATOR_DIR)/AXI_DDR_simulation/ddr_page.h $@/
 	cp $(VERILATOR_DIR)/AXI_DDR_simulation/axi_interface.h $@/
-	verilator --cc --exe --Mdir $@ --assert $(VERILATOR_LINT_IGNORE) $(VERILATOR_CFLAGS) $(TAIGA_SRCS) \
+	verilator --cc --exe --Mdir $@ -DENABLE_SIMULATION_ASSERTIONS --assert $(VERILATOR_LINT_IGNORE) $(VERILATOR_CFLAGS) $(TAIGA_SRCS) \
 		 ../test_benches/verilator/taiga_local_mem.sv --top-module taiga_local_mem taiga_local_mem.cc ddr_page.cc SimMem.cc
 	$(MAKE) -C  $@ -f Vtaiga_local_mem.mk
 

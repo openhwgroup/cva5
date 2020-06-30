@@ -362,10 +362,18 @@ module gc_unit(
 
     assign csr_done = csr_ready_to_complete_r;
     assign csr_rd = wb_csr;
+    ////////////////////////////////////////////////////
+    //End of Implementation
+    ////////////////////////////////////////////////////
 
     ////////////////////////////////////////////////////
     //Assertions
-
-    ////////////////////////////////////////////////////
+    `ifdef ENABLE_SIMULATION_ASSERTIONS
+    generate if (DEBUG_CONVERT_EXCEPTIONS_INTO_ASSERTIONS) begin
+        unexpected_exception_assertion:
+            assert property (@(posedge clk) disable iff (rst) (~gc_exception.valid))
+            else $error("unexpected exception occured: %s", gc_exception.code.name());
+    end endgenerate
+    `endif
 
 endmodule

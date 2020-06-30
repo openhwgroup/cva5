@@ -194,7 +194,7 @@ endgenerate
     load_store_queue lsq_block (.*);
     assign shared_inputs = lsq.transaction_out;
 
-    assign lsq.accepted = lsq.transaction_ready & ready_for_issue;
+    assign lsq.accepted = issue_request;
 
     ////////////////////////////////////////////////////
     //ID Management
@@ -230,7 +230,7 @@ endgenerate
     assign ready_for_issue = units_ready & (~unit_switch_stall);
 
     assign issue.ready = ls_inputs.forwarded_store ? lsq.ready & ready_for_forwarded_store : lsq.ready;
-    assign issue_request = lsq.accepted;
+    assign issue_request = lsq.transaction_ready & ready_for_issue;
 
     ////////////////////////////////////////////////////
     //Load attributes FIFO
@@ -335,8 +335,10 @@ endgenerate
         assert property (@(posedge clk) disable iff (rst) csr_done |-> ls_is_idle)
         else $error("CSR read completed without ls being idle");
 
-    invalid_ls_address_assertion:
-        assert property (@(posedge clk) disable iff (rst) issue_request |-> |sub_unit_address_match)
-        else $error("invalid L/S address");
+    `ifdef ENABLE_SIMULATION_ASSERTIONS
+        invalid_ls_address_assertion:
+            assert property (@(posedge clk) disable iff (rst) issue_request |-> |sub_unit_address_match)
+            else $error("invalid L/S address");
+    `endif
 
 endmodule
