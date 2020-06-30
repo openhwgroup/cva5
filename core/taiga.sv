@@ -94,6 +94,7 @@ module taiga (
     id_t fetch_id;
     logic fetch_complete;
     logic [31:0] fetch_instruction;
+    logic fetch_address_valid;
         //Decode stage
     logic decode_advance;
     decode_packet_t decode;
