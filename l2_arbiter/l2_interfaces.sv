@@ -22,19 +22,6 @@
 
 import l2_config_and_types::*;
 
-interface l2_fifo_interface #(parameter DATA_WIDTH = 32);
-    logic push;
-    logic pop;
-    logic [DATA_WIDTH-1:0] data_in;
-    logic [DATA_WIDTH-1:0] data_out;
-    logic valid;
-    logic full;
-    logic empty;
-    modport enqueue (input full, empty, output data_in, push);
-    modport dequeue (input valid, data_out, output pop);
-    modport structure(input push, pop, data_in, output data_out, valid, full, empty);
-endinterface
-
 interface l2_arbitration_interface;
     logic [L2_NUM_PORTS-1:0] requests;
     logic [$clog2(L2_NUM_PORTS)-1:0] grantee_i;
