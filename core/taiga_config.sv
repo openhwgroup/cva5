@@ -37,7 +37,6 @@ package taiga_config;
 
     localparam MACHINE_IMPLEMENTATION_ID = 0;
     localparam CPU_ID = 0;//32-bit value
-    localparam bit[31:0] RESET_VEC = 32'h80000000;
 
     //CSR counter width (33-64 bits): 48-bits --> 32 days @ 100MHz
     localparam COUNTER_W = 33;
@@ -97,6 +96,8 @@ package taiga_config;
     localparam BUS_ADDR_H = 32'h6FFFFFFF;
     localparam BUS_BIT_CHECK = 4;
 
+    //PC address on reset
+    localparam bit[31:0] RESET_VEC = 32'h80000000;
 
     ////////////////////////////////////////////////////
     //Bus Options
@@ -167,6 +168,7 @@ package taiga_config;
 
     ////////////////////////////////////////////////////
     //Trace Options
+    //Trace interface is necessary for verilator simulation
     localparam ENABLE_TRACE_INTERFACE = 1;
 
 
@@ -187,11 +189,14 @@ package taiga_config;
     localparam ALU_UNIT_WB_ID = 0;
     localparam LS_UNIT_WB_ID = 1;
     localparam DIV_UNIT_WB_ID = LS_UNIT_WB_ID + USE_DIV;
-    localparam MUL_UNIT_WB_ID = DIV_UNIT_WB_ID + 1;
+    localparam MUL_UNIT_WB_ID = DIV_UNIT_WB_ID + USE_MUL;
     //Non-writeback units
     localparam BRANCH_UNIT_ID = MUL_UNIT_WB_ID + 1;
     localparam GC_UNIT_ID = BRANCH_UNIT_ID + 1;
 
     ////////////////////////////////////////////////////
+    //Debug Options for Simulation
+    //Will cause any enabled exception to cause an assertion, halting simulation
+    localparam DEBUG_TREAT_EXCEPTIONS_AS_ASSERTIONS = 0;
 
 endpackage
