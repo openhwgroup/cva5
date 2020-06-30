@@ -1,5 +1,5 @@
 /*
- * Copyright © 2017-2019 Eric Matthews,  Lesley Shannon
+ * Copyright © 2017-2020 Eric Matthews,  Lesley Shannon
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -71,21 +71,21 @@ module l1_arbiter
 
     //arbiter can pop address FIFO at a different rate than the data FIFO, so check that both have space.
     assign push_ready = ~l2.request_full & ~l2.data_full;
+    assign request_exists = |requests;
+
+    assign l2.request_push = push_ready & request_exists;
 
     //priority 0-to-n
     logic busy;
     always_comb begin
-        request_exists = l1_request[0].request;
-        acks[0] = l1_request[0].request & push_ready;
+        acks[0] = l1_request[0].request & push_ready;//L1_DCACHE_ID
         busy = l1_request[0].request;
-        for (int i=1; i <L1_CONNECTIONS; i++) begin
-            request_exists |= requests[i];
+        for (int i = 1; i < L1_CONNECTIONS; i++) begin
             acks[i] = requests[i] & push_ready & ~busy;
             busy |= requests[i];
         end
     end
 
-    assign l2.request_push = push_ready & request_exists;
 
     generate
         if (USE_DCACHE) begin
@@ -150,24 +150,16 @@ module l1_arbiter
     endgenerate
 
 
-    // generate
-    //      for (i=1; i <L1_CONNECTIONS; i++) begin
-    //          assign l2_requests[i] = l1_request[i].to_l2(i);
-    //        end
-    //    endgenerate
-
     always_comb begin
-        //l2.request = l2_requests[L1_CONNECTIONS-1];
         l2.addr = l2_requests[L1_CONNECTIONS-1].addr;
         l2.rnw = l2_requests[L1_CONNECTIONS-1].rnw;
         l2.be = l2_requests[L1_CONNECTIONS-1].be;
         l2.is_amo = l2_requests[L1_CONNECTIONS-1].is_amo;
         l2.amo_type_or_burst_size = l2_requests[L1_CONNECTIONS-1].amo_type_or_burst_size;
         l2.sub_id = l2_requests[L1_CONNECTIONS-1].sub_id;
-        for (int i = L1_CONNECTIONS-2; i >=0; i--) begin
+        for (int i = L1_CONNECTIONS-2; i >= 0; i--) begin
             if (requests[i]) begin
-                //l2.request = l2_requests[i];
-		l2.addr = l2_requests[i].addr;
+		        l2.addr = l2_requests[i].addr;
                 l2.rnw = l2_requests[i].rnw;
                 l2.be = l2_requests[i].be;
                 l2.is_amo = l2_requests[i].is_amo;
@@ -183,8 +175,6 @@ module l1_arbiter
             assign l1_response[i].data_valid = l2.rd_data_valid && (l2.rd_sub_id == i);
         end
     endgenerate
-
-
 
 endmodule
 
