@@ -1,5 +1,5 @@
 /*
- * Copyright © 2017-2019 Eric Matthews,  Lesley Shannon
+ * Copyright © 2017-2020 Eric Matthews,  Lesley Shannon
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,38 +20,35 @@
  *             Eric Matthews <ematthew@sfu.ca>
  */
 
-import taiga_config::*;
-import taiga_types::*;
-
 /*
  *  FIFOs Not underflow/overflow safe.
  *  Intended for small FIFO depths.
  *  For continuous operation when full, enqueing side must inspect pop signal
  */
-module taiga_fifo #(parameter DATA_WIDTH = 70, parameter FIFO_DEPTH = 4)
-        (
+module taiga_fifo
+    import taiga_config::*;
+    import riscv_types::*;
+    import taiga_types::*;
+    #(
+        parameter DATA_WIDTH = 70, 
+        parameter FIFO_DEPTH = 4
+    )
+    (
         input logic clk,
         input logic rst,
         fifo_interface.structure fifo
-        );
+    );
 
     localparam LOG2_FIFO_DEPTH = $clog2(FIFO_DEPTH);
-    //Force FIFO depth to next power of 2
-    (* ramstyle = "MLAB, no_rw_check" *) logic[DATA_WIDTH-1:0] lut_ram[(2**LOG2_FIFO_DEPTH)-1:0];
-    logic [LOG2_FIFO_DEPTH-1:0] write_index;
-    logic [LOG2_FIFO_DEPTH-1:0] read_index;
-    logic [LOG2_FIFO_DEPTH:0] inflight_count;
-
     ////////////////////////////////////////////////////
     //Implementation
+    //If depth is one, the FIFO can be implemented with a single register
     generate if (FIFO_DEPTH == 1) begin
         always_ff @ (posedge clk) begin
             if (rst)
                 fifo.valid <= 0;
-            else if (fifo.push)
-                fifo.valid <= 1;
-            else if (fifo.pop)
-                fifo.valid <= 0;
+            else
+                fifo.valid <= fifo.push | (fifo.valid & ~fifo.pop);
         end
         assign fifo.full = fifo.valid;
 
@@ -60,7 +57,39 @@ module taiga_fifo #(parameter DATA_WIDTH = 70, parameter FIFO_DEPTH = 4)
                 fifo.data_out <= fifo.data_in;
         end
     end
+    //If depth is two, the FIFO can be implemented with two registers
+    //connected as a shift reg for the same resources as a LUTRAM FIFO
+    //but with better timing
+    else if (FIFO_DEPTH == 2) begin
+        logic [DATA_WIDTH-1:0] shift_reg [FIFO_DEPTH];
+        logic [LOG2_FIFO_DEPTH:0] inflight_count;
+        ////////////////////////////////////////////////////
+        //Occupancy Tracking
+        always_ff @ (posedge clk) begin
+            if (rst)
+                inflight_count <= 0;
+            else
+                inflight_count <= inflight_count + (LOG2_FIFO_DEPTH+1)'(fifo.pop) - (LOG2_FIFO_DEPTH+1)'(fifo.push);
+        end
+
+        assign fifo.valid = inflight_count[LOG2_FIFO_DEPTH];
+        assign fifo.full = fifo.valid & ~|inflight_count[LOG2_FIFO_DEPTH-1:0];
+
+        always_ff @ (posedge clk) begin
+            if (fifo.push) begin
+                shift_reg[0] <= fifo.data_in;
+                shift_reg[1] <= shift_reg[0];
+            end
+        end
+
+        assign fifo.data_out = shift_reg[~inflight_count[0]];
+    end
     else begin
+        //Force FIFO depth to next power of 2
+        (* ramstyle = "MLAB, no_rw_check" *) logic [DATA_WIDTH-1:0] lut_ram [(2**LOG2_FIFO_DEPTH)];
+        logic [LOG2_FIFO_DEPTH-1:0] write_index;
+        logic [LOG2_FIFO_DEPTH-1:0] read_index;
+        logic [LOG2_FIFO_DEPTH:0] inflight_count;
         ////////////////////////////////////////////////////
         //Occupancy Tracking
         always_ff @ (posedge clk) begin
@@ -95,7 +124,8 @@ module taiga_fifo #(parameter DATA_WIDTH = 70, parameter FIFO_DEPTH = 4)
     ////////////////////////////////////////////////////
     //Assertions
     fifo_overflow_assertion:
-        assert property (@(posedge clk) disable iff (rst) !(fifo.full & fifo.push & ~fifo.pop)) else $error("overflow");
+        assert property (@(posedge clk) disable iff (rst) fifo.push |-> (~fifo.full | fifo.pop)) else $error("overflow");
     fifo_underflow_assertion:
-        assert property (@(posedge clk) disable iff (rst) !(~fifo.valid & fifo.pop)) else $error("underflow");
+        assert property (@(posedge clk) disable iff (rst) fifo.pop |-> fifo.valid) else $error("underflow");
+
 endmodule
