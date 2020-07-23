@@ -20,10 +20,13 @@
  *             Eric Matthews <ematthew@sfu.ca>
  */
 
+
+
+module byte_en_BRAM 
 import taiga_config::*;
 import taiga_types::*;
-
-module byte_en_BRAM #(
+import riscv_types::*;
+	#(
         parameter LINES = 4096,
         parameter preload_file = "",
         parameter USE_PRELOAD_FILE = 0
