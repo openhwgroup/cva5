@@ -20,11 +20,13 @@
  *             Eric Matthews <ematthew@sfu.ca>
  */
 
+
+
+module taiga_wrapper_xilinx
 import taiga_config::*;
 import taiga_types::*;
 import l2_config_and_types::*;
-
-module taiga_wrapper_xilinx (
+ (
         input logic clk,
         input logic rst,
 
