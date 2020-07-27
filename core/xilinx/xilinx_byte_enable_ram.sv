@@ -22,6 +22,7 @@
 
 import taiga_config::*;
 import taiga_types::*;
+import riscv_types::*;
 
 module xilinx_byte_enable_ram #(
         parameter LINES = 4096,
