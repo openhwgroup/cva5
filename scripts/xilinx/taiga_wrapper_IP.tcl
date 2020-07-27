@@ -17,8 +17,9 @@
 #*****************************************************************************************
 
 # Set the reference directory for source file relative paths (by default the value is script directory path)
-set origin_dir "."
-#set origin_dir [file dirname [info script]]
+#set origin_dir [ file dirname [ file normalize [ info script ] ] ]
+set origin_dir [file dirname [info script]]
+puts $origin_dir
 
 # Use origin directory path location variable, if specified in the tcl shell
 if { [info exists ::origin_dir_loc] } {
@@ -86,7 +87,7 @@ if { $::argc > 0 } {
 set orig_proj_dir "[file normalize "$origin_dir/"]"
 
 # Create project
-create_project ${_xil_proj_name_} ./${_xil_proj_name_} -part xc7z020clg484-1
+create_project ${_xil_proj_name_} $origin_dir/${_xil_proj_name_} -part xc7z020clg484-1
 
 # Set the directory path for the new project
 set proj_dir [get_property directory [current_project]]
@@ -116,16 +117,16 @@ if {[string equal [get_filesets -quiet sources_1] ""]} {
 #import_files -fileset [get_filesets sources_1] $origin_dir/l2_arbiter
 #import_files -fileset [get_filesets sources_1] $origin_dir/local_memory
 
-import_files -norecurse $origin_dir/core/xilinx/taiga_wrapper_xilinx.sv -force
-import_files -norecurse $origin_dir/l2_arbiter/l2_external_interfaces.sv -force
-import_files -norecurse $origin_dir/local_memory/local_memory_interface.sv -force
-import_files -norecurse $origin_dir/core/external_interfaces.sv -force
-import_files -norecurse $origin_dir/core/taiga_config.sv -force
-import_files -norecurse $origin_dir/l2_arbiter/l2_config_and_types.sv -force
+import_files -norecurse $origin_dir/../../core/xilinx/taiga_wrapper_xilinx.sv -force
+import_files -norecurse $origin_dir/../../l2_arbiter/l2_external_interfaces.sv -force
+import_files -norecurse $origin_dir/../../local_memory/local_memory_interface.sv -force
+import_files -norecurse $origin_dir/../../core/external_interfaces.sv -force
+import_files -norecurse $origin_dir/../../core/taiga_config.sv -force
+import_files -norecurse $origin_dir/../../l2_arbiter/l2_config_and_types.sv -force
 
 # Set IP repository paths
 set obj [get_filesets sources_1]
-set_property "ip_repo_paths" "[file normalize "$origin_dir/Clean_Taiga_IP"]" $obj
+set_property "ip_repo_paths" "[file normalize "$origin_dir/taiga_wrapper_IP"]" $obj
 
 # Rebuild user ip_repo's index before adding any source files
 update_ip_catalog -rebuild
@@ -242,12 +243,12 @@ set_property physical_name m_axi_awburst [ipx::get_port_maps AWBURST -of_objects
 #import_files -norecurse $origin_dir/core/interfaces.sv -force
 
 #####Re-Adding of project files
-set_property  ip_repo_paths  $origin_dir/${_xil_proj_name_} [current_project]
+set_property  ip_repo_paths  $origin_dir/../../${_xil_proj_name_} [current_project]
 current_project $_xil_proj_name_
 update_ip_catalog
-import_files -fileset [get_filesets sources_1] $origin_dir/core
-import_files -fileset [get_filesets sources_1] $origin_dir/l2_arbiter
-import_files -fileset [get_filesets sources_1] $origin_dir/local_memory
+import_files -fileset [get_filesets sources_1] $origin_dir/../../core
+import_files -fileset [get_filesets sources_1] $origin_dir/../../l2_arbiter
+import_files -fileset [get_filesets sources_1] $origin_dir/../../local_memory
 
 ############## Re-packaging of core
 update_compile_order -fileset sources_1
@@ -257,5 +258,6 @@ ipx::create_xgui_files [ipx::current_core]
 ipx::update_checksums [ipx::current_core]
 ipx::save_core [ipx::current_core]
 current_project taiga_wrapper_IP
-update_ip_catalog -rebuild -repo_path $origin_dir/${_xil_proj_name_}
+set_property "ip_repo_paths" "[file normalize "$origin_dir/taiga_wrapper_IP"]" $obj
+update_ip_catalog -rebuild
 
