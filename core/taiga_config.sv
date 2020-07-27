@@ -101,8 +101,8 @@ package taiga_config;
 
     ////////////////////////////////////////////////////
     //Bus Options
-    localparam C_M_AXI_ADDR_WIDTH = 32;
-    localparam C_M_AXI_DATA_WIDTH = 32;
+    parameter C_M_AXI_ADDR_WIDTH = 32; //Kept as parameter, due to localparam failing with scripted IP packaging
+    parameter C_M_AXI_DATA_WIDTH = 32; //Kept as parameter, due to localparam failing with scripted IP packaging
 
 
     ////////////////////////////////////////////////////

@@ -24,7 +24,7 @@
 package l2_config_and_types;
 
     localparam L2_NUM_PORTS = 2;
-    localparam L2_SUB_ID_W = 2;
+    parameter L2_SUB_ID_W = 2; //Kept as parameter, due to localparam failing with scripted IP packaging
 
 
     //localparam int L2_INPUT_FIFO_DEPTHS [7 : 0]   = '{4, 4, 4, 4, 4, 4, 4, 4};
