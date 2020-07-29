@@ -75,7 +75,7 @@ lint:
 	--lint-only
 
 .PHONY: lint-full
-lint_full:
+lint-full:
 	verilator -cc $(TAIGA_HW_SRCS) \
 	$(VERILATOR_DIR)/taiga_sim.sv \
 	--top-module taiga_sim \
@@ -89,7 +89,7 @@ $(TAIGA_SIM): $(TAIGA_HW_SRCS) $(TAIGA_SIM_SRCS)
 		$(VERILATOR_LINT_IGNORE) $(VERILATOR_CFLAGS) \
 		$(TAIGA_INCLUDED_SIM_SRCS) \
 		$(TAIGA_HW_SRCS) $(VERILATOR_DIR)/taiga_sim.sv --top-module taiga_sim
-	$(MAKE) -C  $(TAIGA_SIM_DIR) -f Vtaiga_sim.mk
+	$(MAKE) -C $(TAIGA_SIM_DIR) -f Vtaiga_sim.mk
 
 .PHONY: clean-taiga-sim
 clean-taiga-sim:
