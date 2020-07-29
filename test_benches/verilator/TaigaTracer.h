@@ -26,7 +26,7 @@
 #include <iostream>
 #include <iterator>
 #include "SimMem.h"
-#include "axi_ddr_sim.h"
+#include "AXI_DDR_simulation/axi_ddr_sim.h"
 //#define TRACE_ON
 
 #define COMPLIANCE_SIG_PHASE_NOP 0x00B00013U

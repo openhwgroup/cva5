@@ -25,7 +25,7 @@ import taiga_types::*;
 import l2_config_and_types::*;
 
 
-module taiga_local_mem # (
+module taiga_sim # (
         parameter MEMORY_FILE = "/home/ematthew/Research/RISCV/software/riscv-tools/riscv-tests/benchmarks/dhrystone.riscv.hw_init" //change this to appropriate location "/home/ematthew/Downloads/dhrystone.riscv.sim_init"
         )
         (

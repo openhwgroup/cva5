@@ -187,9 +187,9 @@ TaigaTracer<TB>::TaigaTracer(std::ifstream& programFile) {
     tb = new TB;
 
    #ifdef DDR_LOAD_FILE
-        axi_ddr = new axi_ddr_sim<Vtaiga_local_mem>(DDR_INIT_FILE,DDR_FILE_STARTING_LOCATION,DDR_FILE_NUM_BYTES);
+        axi_ddr = new axi_ddr_sim<Vtaiga_sim>(DDR_INIT_FILE,DDR_FILE_STARTING_LOCATION,DDR_FILE_NUM_BYTES);
     #else
-        axi_ddr = new axi_ddr_sim<Vtaiga_local_mem>(programFile, tb);
+        axi_ddr = new axi_ddr_sim<Vtaiga_sim>(programFile, tb);
         
     #endif
     programFile.clear();
