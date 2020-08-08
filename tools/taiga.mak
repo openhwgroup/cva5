@@ -1,4 +1,3 @@
-
 ###############################################################
 VERILATOR_DIR=$(TAIGA_DIR)/test_benches/verilator
 
@@ -16,11 +15,11 @@ TRACE_ENABLE?=False
 TAIGA_SIM_DIR?=$(VERILATOR_DIR)/build
 TAIGA_SIM?=$(TAIGA_SIM_DIR)/taiga-sim
 
-#DDR Pre-Initialization
-LOAD_DDR_FROM_FILE = False
-DDR_FILE = "\"path_to_DDR_init_file\""
-DDR_FILE_STARTING_LOCATION = 0
-DDR_FILE_NUM_BYTES = 0
+#(to-do)DDR Pre-Initialization
+#LOAD_DDR_FROM_FILE = False
+#DDR_FILE = "\"path_to_DDR_init_file\""
+#DDR_FILE_STARTING_LOCATION = 0
+#DDR_FILE_NUM_BYTES = 0
 
 #AXI DDR Parameters
 DDR_SIZE_GB = 4
@@ -42,13 +41,15 @@ max_delay_read = MAX_DELAY_RD=$(MAX_RD_DELAY)
 min_delay_write = MIN_DELAY_WR=$(MIN_WR_DELAY)
 max_delay_write = MAX_DELAY_WR=$(MAX_WR_DELAY)
 delay_seed = DELAY_SEED=$(DELAY_SEED)
-ddr_init_file = DDR_INIT_FILE=$(DDR_FILE)
-ddr_start_loc = DDR_FILE_STARTING_LOCATION=$(DDR_FILE_STARTING_LOCATION)
-ddr_num_bytes = DDR_FILE_NUM_BYTES=$(DDR_FILE_NUM_BYTES)
+#(to-do)
+#ddr_init_file = DDR_INIT_FILE=$(DDR_FILE)
+#ddr_start_loc = DDR_FILE_STARTING_LOCATION=$(DDR_FILE_STARTING_LOCATION)
+#ddr_num_bytes = DDR_FILE_NUM_BYTES=$(DDR_FILE_NUM_BYTES)
 
 CFLAGS = -g0 -O3 -std=c++11 -march=native -D$(ddr_size_def) -D$(page_size_def) -D$(max_inflight_read_requests) -D$(max_inflight_write_requests)\
-	-D$(mix_delay_read) -D$(max_delay_read) -D$(min_delay_write) -D$(max_delay_write) -D$(delay_seed)\
-	-D$(ddr_init_file) -D$(ddr_start_loc) -D$(ddr_num_bytes)
+	-D$(mix_delay_read) -D$(max_delay_read) -D$(min_delay_write) -D$(max_delay_write) -D$(delay_seed)
+
+	#(to-do)-D$(ddr_init_file) -D$(ddr_start_loc) -D$(ddr_num_bytes)
 
 #Verilator
 ################################################################################
@@ -60,9 +61,11 @@ else
 endif
 
 VERILATOR_LINT_IGNORE= -Wno-LITENDIAN -Wno-SYMRSVDWORD
-ifeq ($(LOAD_DDR_FROM_FILE), True)
-	VERILATOR_CFLAGS :=  $(VERILATOR_CFLAGS) -D LOAD_DDR_FROM_FILE"
-endif
+
+#(to-do)
+#ifeq ($(LOAD_DDR_FROM_FILE), True)
+#	VERILATOR_CFLAGS :=  $(VERILATOR_CFLAGS) -D LOAD_DDR_FROM_FILE"
+#endif
 
 ##################################################################################
 
