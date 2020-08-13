@@ -128,12 +128,14 @@ package riscv_types;
         MIDELEG = 12'h303,
         MIE = 12'h304,
         MTVEC = 12'h305,
+        MCOUNTEREN = 12'h306,
         //Machine trap handling
         MSCRATCH = 12'h340,
         MEPC = 12'h341,
         MCAUSE = 12'h342,
         MTVAL = 12'h343,
         MIP = 12'h344,
+
 
         //Machine Counters
         MCYCLE = 12'hB00,
@@ -148,7 +150,7 @@ package riscv_types;
         SIDELEG = 12'h103,
         SIE = 12'h104,
         STVEC = 12'h105,
-
+        SCOUNTEREN = 12'h106,
         //Supervisor trap handling
         SSCRATCH = 12'h140,
         SEPC = 12'h141,

@@ -497,9 +497,9 @@ endgenerate
         end
     end
 
-     always_comb begin
+    always_comb begin
         invalid_addr = 0;
-        case(csr_addr)
+        case (csr_addr) inside
             //Machine info
             MISA :  selected_csr = ENABLE_M_MODE ? misa : 0;
             MVENDORID : selected_csr = ENABLE_M_MODE ? mvendorid : 0;
@@ -512,17 +512,24 @@ endgenerate
             MIDELEG : selected_csr = ENABLE_M_MODE ? mideleg : 0;
             MIE : selected_csr = ENABLE_M_MODE ? mie_reg : 0;
             MTVEC : selected_csr = ENABLE_M_MODE ? mtvec : 0;
+            MCOUNTEREN : selected_csr = 0;
             //Machine trap handling
             MSCRATCH : selected_csr = ENABLE_M_MODE ? scratch_out : 0;
             MEPC : selected_csr = ENABLE_M_MODE ? mepc : 0;
             MCAUSE : selected_csr = ENABLE_M_MODE ? mcause : 0;
             MTVAL : selected_csr = ENABLE_M_MODE ? mtval : 0;
             MIP : selected_csr = ENABLE_M_MODE ? mip : 0;
+            //Machine Memory Protection
+            [12'h3EF : 12'h3A0] : selected_csr = 0;
             //Machine Timers and Counters
             MCYCLE : selected_csr = ENABLE_M_MODE ? mcycle[XLEN-1:0] : 0;
             MINSTRET : selected_csr = ENABLE_M_MODE ? minst_ret[XLEN-1:0] : 0;
+            [12'hB03 : 12'hB1F] : selected_csr = 0;
             MCYCLEH : selected_csr = ENABLE_M_MODE ? 32'(mcycle[COUNTER_W-1:XLEN]) : 0;
             MINSTRETH : selected_csr = ENABLE_M_MODE ? 32'(minst_ret[COUNTER_W-1:XLEN]) : 0;
+            [12'hB83 : 12'hB9F] : selected_csr = 0;
+            //Machine Counter Setup
+            [12'h320 : 12'h33F] : selected_csr = 0;
 
             //Supervisor Trap Setup
             SSTATUS : selected_csr = ENABLE_S_MODE ? (mstatus & sstatus_mask) : '0;
@@ -530,6 +537,7 @@ endgenerate
             SIDELEG : selected_csr = 0;
             SIE : selected_csr = ENABLE_S_MODE ? (mie_reg & sie_mask) : '0;
             STVEC : selected_csr = ENABLE_S_MODE ? stvec : '0;
+            SCOUNTEREN : selected_csr = 0;
             //Supervisor trap handling
             SSCRATCH : selected_csr = ENABLE_S_MODE ? scratch_out : '0;
             SEPC : selected_csr = ENABLE_S_MODE ? scratch_out : '0;
@@ -541,13 +549,18 @@ endgenerate
 
             //User status
             //Floating point
+            FFLAGS : selected_csr = 0;
+            FRM : selected_csr = 0;
+            FCSR : selected_csr = 0;
             //User Counter Timers
             CYCLE : selected_csr = mcycle[XLEN-1:0];
             TIME : selected_csr = mcycle[XLEN-1:0];
             INSTRET : selected_csr = minst_ret[XLEN-1:0];
+            [12'hC03 : 12'hC1F] : selected_csr = 0;
             CYCLEH : selected_csr = 32'(mcycle[COUNTER_W-1:XLEN]);
             TIMEH : selected_csr = 32'(mcycle[COUNTER_W-1:XLEN]);
             INSTRETH : selected_csr = 32'(minst_ret[COUNTER_W-1:XLEN]);
+            [12'hC83 : 12'hC9F] : selected_csr = 0;
 
             default : begin selected_csr = 0; invalid_addr = 1; end
         endcase
