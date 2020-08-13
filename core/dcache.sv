@@ -30,9 +30,9 @@ module dcache(
         input logic dcache_on,
         l1_arbiter_request_interface.master l1_request,
         l1_arbiter_return_interface.master l1_response,
-        input sc_complete,
-        input sc_success,
-        input clear_reservation,
+        input logic sc_complete,
+        input logic sc_success,
+        input logic clear_reservation,
 
         input data_access_shared_inputs_t ls_inputs,
         output logic[31:0] data_out,
@@ -171,11 +171,26 @@ module dcache(
 
     ////////////////////////////////////////////////////
     //Replacement policy (free runing one-hot cycler, i.e. pseudo random)
-    cycler #(DCACHE_WAYS) replacement_policy (.*, .en(1'b1), .one_hot(replacement_way));
+    cycler #(DCACHE_WAYS) replacement_policy (
+        .clk        (clk),
+        .rst        (rst),
+        .en         (1'b1), 
+        .one_hot    (replacement_way)
+    );
 
     //One-hot tag hit / update logic to binary int
-    one_hot_to_integer #(DCACHE_WAYS) hit_way_conv (.*, .one_hot(tag_hit_way), .int_out(tag_hit_way_int));
-    one_hot_to_integer #(DCACHE_WAYS) update_way_conv (.*, .one_hot(replacement_way), .int_out(replacement_way_int));
+    one_hot_to_integer #(DCACHE_WAYS) hit_way_conv (
+        .clk        (clk),
+        .rst        (rst), 
+        .one_hot(tag_hit_way), 
+        .int_out(tag_hit_way_int)
+    );
+    one_hot_to_integer #(DCACHE_WAYS) update_way_conv (
+        .clk        (clk),
+        .rst        (rst), 
+        .one_hot    (replacement_way), 
+        .int_out    (replacement_way_int)
+    );
 
 
     //If atomic load (LR or AMO op) and there's a tag hit reuse same line
@@ -190,17 +205,21 @@ module dcache(
 
     ////////////////////////////////////////////////////
     //Tag banks
-    dtag_banks dcache_tag_banks (.*,
-            .stage1_addr(ls_inputs.addr),
-            .stage2_addr(stage2_addr),
-            .inv_addr({l1_response.inv_addr, 2'b00}),
-            .update_way(tag_update_way),
-            .update(tag_update),
-            .stage1_adv(ls.new_request),
-            .stage1_inv(1'b0),//For software invalidation
-            .extern_inv(l1_response.inv_valid),
-            .extern_inv_complete(l1_response.inv_ack)
-        );
+    dtag_banks dcache_tag_banks (
+        .clk                    (clk),
+        .rst                    (rst),
+        .stage1_addr            (ls_inputs.addr),
+        .stage2_addr            (stage2_addr),
+        .inv_addr               ({l1_response.inv_addr, 2'b00}),
+        .update_way             (tag_update_way),
+        .update                 (tag_update),
+        .stage1_adv             (ls.new_request),
+        .stage1_inv             (1'b0),//For software invalidation
+        .extern_inv             (l1_response.inv_valid),
+        .extern_inv_complete    (l1_response.inv_ack),
+        .tag_hit                (tag_hit),
+        .tag_hit_way            (tag_hit_way)
+    );
 
     ////////////////////////////////////////////////////
     //AMO logic
@@ -213,7 +232,10 @@ module dcache(
     assign amo_alu_inputs.op = stage2_amo.op;
 
     generate if (USE_AMO)
-            amo_alu amo_unit (.*, .result(amo_result));
+        amo_alu amo_unit (
+            .amo_alu_inputs (amo_alu_inputs), 
+            .result         (amo_result)
+        );
     endgenerate
 
     always_comb begin

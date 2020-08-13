@@ -240,8 +240,19 @@ module gc_unit(
     end
 
     //Counters for tlb clearing states
-    shift_counter #(.DEPTH(INIT_CLEAR_DEPTH)) init_clear_counter (.*, .start((state == PRE_CLEAR_STATE)), .done(init_clear_done));
-    shift_counter #(.DEPTH(TLB_CLEAR_DEPTH)) tlb_clear_counter (.*, .start((state == IDLE_STATE) && (next_state == TLB_CLEAR_STATE)), .done(tlb_clear_done));
+    shift_counter #(.DEPTH(INIT_CLEAR_DEPTH)) init_clear_counter (
+        .clk    (clk),
+        .rst    (rst), 
+        .start  ((state == PRE_CLEAR_STATE)), 
+        .done   (init_clear_done)
+    );
+
+    shift_counter #(.DEPTH(TLB_CLEAR_DEPTH)) tlb_clear_counter (
+        .clk    (clk),
+        .rst    (rst), 
+        .start  ((state == IDLE_STATE) && (next_state == TLB_CLEAR_STATE)), 
+        .done   (tlb_clear_done)
+    );
 
     ////////////////////////////////////////////////////
     //mret/sret

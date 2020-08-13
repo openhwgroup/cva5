@@ -107,15 +107,19 @@ module dtag_banks(
         for (i=0; i < DCACHE_WAYS; i=i+1) begin : dtag_bank_gen
             assign update_tag_way[i] = update_way[i] | (inv_hit_way[i] & extern_inv_complete);
 
-            tag_bank #($bits(dtag_entry_t), DCACHE_LINES) dtag_bank (.*,
-                    .en_a(stage1_adv), .wen_a(stage1_inv),
-                    .addr_a(getLineAddr(stage1_addr)),
-                    .data_in_a('0), .data_out_a(tag_line[i]),
-
-                    .en_b(miss_or_extern_invalidate), .wen_b(update_tag_way[i]),
-                    .addr_b(update_port_addr),
-                    .data_in_b(new_tagline), .data_out_b(inv_tag_line[i])
-                );
+            tag_bank #($bits(dtag_entry_t), DCACHE_LINES) dtag_bank ( 
+                .clk            (clk),
+                .rst            (rst),
+                .en_a           (stage1_adv), 
+                .wen_a          (stage1_inv),
+                .addr_a         (getLineAddr(stage1_addr)),
+                .data_in_a      ('0), 
+                .data_out_a     (tag_line[i]),
+                .en_b           (miss_or_extern_invalidate), 
+                .wen_b          (update_tag_way[i]),
+                .addr_b         (update_port_addr),
+                .data_in_b      (new_tagline), .data_out_b(inv_tag_line[i])
+            );
 
             assign inv_hit_way[i] = (inv_hit_comparison_tagline == inv_tag_line[i]);
             assign tag_hit_way[i] = (stage2_hit_comparison_tagline == tag_line[i]);

@@ -113,6 +113,9 @@ module instruction_metadata_and_id_management
 
     logic [$clog2(MAX_COMPLETE_COUNT)-1:0] complete_count;
 
+    logic id_not_in_decode_issue;
+    logic id_not_inflight;
+
     //Writes to register file
     id_t rd_to_id_table [32];
     genvar i;
@@ -292,8 +295,7 @@ module instruction_metadata_and_id_management
     end endgenerate
 
     //Computed one cycle in advance using pc_id_next
-    logic id_not_in_decode_issue;
-    logic id_not_inflight;
+
     assign id_not_in_decode_issue = ~(decoded_status ^ decoded_issued_status);
     assign id_not_inflight =
         ~(issued_status ^

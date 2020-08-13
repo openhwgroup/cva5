@@ -84,18 +84,31 @@ module branch_predictor (
     generate if (USE_BRANCH_PREDICTOR)
     for (i=0; i<BRANCH_PREDICTOR_WAYS; i++) begin : branch_tag_banks
         branch_predictor_ram #(.C_DATA_WIDTH($bits(branch_table_entry_t)), .C_DEPTH(BRANCH_TABLE_ENTRIES))
-        tag_bank (.*,
-            .write_addr(br_results.pc_ex[2 +: BRANCH_ADDR_W]), .write_en(tag_update_way[i]), .write_data(ex_entry),
-            .read_addr(bp.next_pc[2 +: BRANCH_ADDR_W]), .read_en(bp.new_mem_request), .read_data(if_entry[i]));
+        tag_bank (       
+            .clk            (clk),
+            .rst            (rst),
+            .write_addr     (br_results.pc_ex[2 +: BRANCH_ADDR_W]), 
+            .write_en       (tag_update_way[i]), 
+            .write_data     (ex_entry),
+            .read_addr      (bp.next_pc[2 +: BRANCH_ADDR_W]), 
+            .read_en        (bp.new_mem_request), 
+            .read_data      (if_entry[i]));
     end
     endgenerate
 
     generate if (USE_BRANCH_PREDICTOR)
     for (i=0; i<BRANCH_PREDICTOR_WAYS; i++) begin : branch_table_banks
         branch_predictor_ram #(.C_DATA_WIDTH(32), .C_DEPTH(BRANCH_TABLE_ENTRIES))
-        addr_table (.*,
-            .write_addr(br_results.pc_ex[2 +: BRANCH_ADDR_W]), .write_en(target_update_way[i]), .write_data(br_results.new_pc),
-            .read_addr(bp.next_pc[2 +: BRANCH_ADDR_W]), .read_en(bp.new_mem_request), .read_data(predicted_pc[i]));
+        addr_table (       
+            .clk            (clk),
+            .rst            (rst),
+            .write_addr(br_results.pc_ex[2 +: BRANCH_ADDR_W]), 
+            .write_en(target_update_way[i]), 
+            .write_data(br_results.new_pc),
+            .read_addr(bp.next_pc[2 +: BRANCH_ADDR_W]), 
+            .read_en(bp.new_mem_request), 
+            .read_data(predicted_pc[i])
+        );
     end
     endgenerate
 
@@ -108,7 +121,12 @@ module branch_predictor (
     ////////////////////////////////////////////////////
     //Instruction Fetch Response
     generate if (BRANCH_PREDICTOR_WAYS > 1)
-        one_hot_to_integer #(BRANCH_PREDICTOR_WAYS) hit_way_conv (.*, .one_hot(tag_matches), .int_out(hit_way));
+        one_hot_to_integer #(BRANCH_PREDICTOR_WAYS) hit_way_conv (       
+            .clk            (clk),
+            .rst            (rst), 
+            .one_hot(tag_matches), 
+            .int_out(hit_way)
+        );
     else
         assign hit_way = 0;
     endgenerate
@@ -155,7 +173,12 @@ module branch_predictor (
 
     ////////////////////////////////////////////////////
     //Instruction Fetch metadata
-    cycler #(BRANCH_PREDICTOR_WAYS) replacement_policy (.*, .en(1'b1), .one_hot(replacement_way));
+    cycler #(BRANCH_PREDICTOR_WAYS) replacement_policy (       
+        .clk        (clk),
+        .rst        (rst), 
+        .en         (1'b1), 
+        .one_hot    (replacement_way)
+    );
 
     assign branch_metadata_if.branch_predictor_metadata = if_entry[hit_way].metadata;
     assign branch_metadata_if.branch_prediction_used = use_predicted_pc;

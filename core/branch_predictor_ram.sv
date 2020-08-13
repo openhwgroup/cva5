@@ -30,6 +30,7 @@ module branch_predictor_ram
         )
         (
         input logic clk,
+        input logic rst,
         input logic [$clog2(C_DEPTH)-1:0] write_addr,
         input logic write_en,
         input logic [$clog2(C_DEPTH)-1:0] read_addr,
