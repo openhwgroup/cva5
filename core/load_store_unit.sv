@@ -191,7 +191,15 @@ endgenerate
     assign lsq.new_issue = issue.new_request & ~unaligned_addr;
 
     logic [MAX_IDS-1:0] wb_hold_for_store_ids;
-    load_store_queue lsq_block (.*);
+    load_store_queue lsq_block (
+        .clk                            (clk),
+        .rst                            (rst),
+        .gc_fetch_flush                 (gc_fetch_flush),
+        .gc_issue_flush                 (gc_issue_flush),
+        .lsq                            (lsq),
+        .wb_store                       (wb_store),
+        .ready_for_forwarded_store      (ready_for_forwarded_store)
+    );
     assign shared_inputs = lsq.transaction_out;
 
     assign lsq.accepted = issue_request;
@@ -234,8 +242,17 @@ endgenerate
 
     ////////////////////////////////////////////////////
     //Load attributes FIFO
-    one_hot_to_integer #(NUM_SUB_UNITS) sub_unit_select (.*, .one_hot(sub_unit_address_match), .int_out(load_attributes_in.subunit_id));
-    taiga_fifo #(.DATA_WIDTH($bits(load_attributes_t)), .FIFO_DEPTH(ATTRIBUTES_DEPTH)) attributes_fifo (.fifo(load_attributes), .*);
+    one_hot_to_integer #(NUM_SUB_UNITS) sub_unit_select (
+        .clk        (clk),
+        .rst        (rst), 
+        .one_hot    (sub_unit_address_match), 
+        .int_out    (load_attributes_in.subunit_id)
+    );
+    taiga_fifo #(.DATA_WIDTH($bits(load_attributes_t)), .FIFO_DEPTH(ATTRIBUTES_DEPTH)) attributes_fifo (
+        .clk        (clk),
+        .rst        (rst), 
+        .fifo       (load_attributes)
+    );
     assign load_attributes_in.fn3 = shared_inputs.fn3;
     assign load_attributes_in.byte_addr = shared_inputs.addr[1:0];
     assign load_attributes_in.id = shared_inputs.id;
@@ -256,7 +273,14 @@ endgenerate
             assign unit_ready[BRAM_ID] = bram.ready;
             assign unit_data_valid[BRAM_ID] = bram.data_valid;
 
-            dbram d_bram (.*, .ls_inputs(shared_inputs), .ls(bram), .data_out(unit_data_array[BRAM_ID]));
+            dbram d_bram (
+                .clk        (clk),
+                .rst        (rst),  
+                .ls_inputs  (shared_inputs), 
+                .ls         (bram), 
+                .data_out   (unit_data_array[BRAM_ID]),
+                .data_bram  (data_bram)
+            );
         end
     endgenerate
 
@@ -268,11 +292,34 @@ endgenerate
             assign unit_data_valid[BUS_ID] = bus.data_valid;
 
             if(BUS_TYPE == AXI_BUS)
-                axi_master axi_bus (.*, .ls_inputs(shared_inputs), .size({1'b0,shared_inputs.fn3[1:0]}), .m_axi(m_axi), .ls(bus), .data_out(unit_data_array[BUS_ID])); //Lower two bits of fn3 match AXI specification for request size (byte/halfword/word)
+                axi_master axi_bus (
+                    .clk            (clk),
+                    .rst            (rst),
+                    .m_axi          (m_axi),
+                    .size           ({1'b0,shared_inputs.fn3[1:0]}),
+                    .data_out       (unit_data_array[BUS_ID]),
+                    .ls_inputs      (shared_inputs),
+                    .ls             (bus)
+                ); //Lower two bits of fn3 match AXI specification for request size (byte/halfword/word)
+
             else if (BUS_TYPE == WISHBONE_BUS)
-                wishbone_master wishbone_bus (.*, .ls_inputs(shared_inputs), .m_wishbone(m_wishbone), .ls(bus), .data_out(unit_data_array[BUS_ID]));
+                wishbone_master wishbone_bus (
+                    .clk            (clk),
+                    .rst            (rst),
+                    .m_wishbone     (m_wishbone),
+                    .data_out       (unit_data_array[BUS_ID]),
+                    .ls_inputs      (shared_inputs), 
+                    .ls             (bus) 
+                );
             else if (BUS_TYPE == AVALON_BUS)  begin
-                avalon_master avalon_bus (.*, .ls_inputs(shared_inputs), .m_avalon(m_avalon), .ls(bus), .data_out(unit_data_array[BUS_ID]));
+                avalon_master avalon_bus (
+                    .clk            (clk),
+                    .rst            (rst),
+                    .ls_inputs      (shared_inputs), 
+                    .m_avalon       (m_avalon), 
+                    .ls             (bus), 
+                    .data_out       (unit_data_array[BUS_ID])
+                );
             end
         end
     endgenerate
@@ -284,7 +331,20 @@ endgenerate
             assign unit_ready[DCACHE_ID] = cache.ready;
             assign unit_data_valid[DCACHE_ID] = cache.data_valid;
 
-            dcache data_cache (.*, .ls_inputs(shared_inputs), .ls(cache), .amo(ls_inputs.amo), .data_out(unit_data_array[DCACHE_ID]));
+            dcache data_cache (
+                .clk                    (clk),
+                .rst                    (rst),
+                .dcache_on              (dcache_on),
+                .l1_request             (l1_request),
+                .l1_response            (l1_response),
+                .sc_complete            (sc_complete),
+                .sc_success             (sc_success),
+                .clear_reservation      (clear_reservation),
+                .ls_inputs              (shared_inputs),
+                .data_out               (unit_data_array[DCACHE_ID]),
+                .amo                    (ls_inputs.amo),
+                .ls                     (cache)
+            );
         end
     endgenerate
 

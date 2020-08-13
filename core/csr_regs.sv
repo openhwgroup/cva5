@@ -70,6 +70,10 @@ module csr_regs
     (* ramstyle = "MLAB, no_rw_check" *) logic[XLEN-1:0] scratch_regs [31:0];//Only 0x1 and 0x3 used by supervisor and machine mode respectively
     logic[XLEN-1:0] scratch_out;
 
+    
+    privilege_t privilege_level;
+    privilege_t next_privilege_level;
+
     mip_t sip_mask;
     mie_t sie_mask;
     logic[XLEN-1:0] sepc;
@@ -164,8 +168,6 @@ module csr_regs
     ////////////////////////////////////////////////////
     //Non-Constant Registers
     mstatus_t mstatus;
-    privilege_t privilege_level;
-    privilege_t next_privilege_level;
 
     logic[XLEN-1:0] mtvec;
     logic[XLEN-1:0] medeleg;

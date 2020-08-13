@@ -190,21 +190,119 @@ module taiga (
     ////////////////////////////////////////////////////
     // Memory Interface
     generate if (ENABLE_S_MODE || USE_ICACHE || USE_DCACHE)
-            l1_arbiter arb(.*);
+
+        l1_arbiter arb(
+            .clk           (clk),
+            .rst           (rst),
+            .l2            (l2),
+            .sc_complete   (sc_complete),
+            .sc_success    (sc_success),
+            .l1_request    (l1_request),
+            .l1_response   (l1_response)
+        );
+
     endgenerate
 
     ////////////////////////////////////////////////////
     // ID support
-    instruction_metadata_and_id_management id_block (.*);
+    instruction_metadata_and_id_management id_block (
+        .clk                               (clk),
+        .rst                               (rst),
+        .gc_init_clear                     (gc_init_clear),
+        .gc_fetch_flush                    (gc_fetch_flush),
+        .pc_id                             (pc_id),
+        .pc_id_available                   (pc_id_available),
+        .if_pc                             (if_pc),
+        .pc_id_assigned                    (pc_id_assigned),
+        .fetch_id                          (fetch_id),
+        .fetch_complete                    (fetch_complete),
+        .fetch_instruction                 (fetch_instruction),
+        .fetch_address_valid               (fetch_address_valid),
+        .decode                            (decode),
+        .decode_advance                    (decode_advance),
+        .issue                             (issue),
+        .instruction_issued                (instruction_issued),
+        .rs_id                             (rs_id),
+        .rs_inuse                          (rs_inuse),
+        .rs_id_inuse                       (rs_id_inuse),
+        .branch_metadata_if                (branch_metadata_if),
+        .branch_metadata_ex                (branch_metadata_ex),
+        .store_complete                    (store_complete),
+        .store_id                          (store_id),
+        .branch_complete                   (branch_complete),
+        .branch_id                         (branch_id),
+        .system_op_or_exception_complete   (system_op_or_exception_complete),
+        .exception_with_rd_complete        (exception_with_rd_complete),
+        .system_op_or_exception_id         (system_op_or_exception_id),
+        .retire_inc                        (retire_inc),
+        .ids_retiring                      (ids_retiring),
+        .retired                           (retired),
+        .retired_rd_addr                   (retired_rd_addr),
+        .id_for_rd                         (id_for_rd),
+        .exception_pc                      (exception_pc)
+    );
 
     ////////////////////////////////////////////////////
     // Fetch
-    fetch fetch_block (.*, .icache_on('1), .tlb(itlb), .l1_request(l1_request[L1_ICACHE_ID]), .l1_response(l1_response[L1_ICACHE_ID]), .exception(1'b0));
-    branch_predictor bp_block (.*);
-    ras ras_block(.*);
+    fetch fetch_block (
+        .clk                      (clk),
+        .rst                      (rst),
+        .branch_flush             (branch_flush),
+        .gc_fetch_hold            (gc_fetch_hold),
+        .gc_fetch_flush           (gc_fetch_flush),
+        .gc_fetch_pc_override     (gc_fetch_pc_override),
+        .gc_fetch_pc              (gc_fetch_pc),           
+        .pc_id_available          (pc_id_available),
+        .pc_id_assigned           (pc_id_assigned),
+        .fetch_complete           (fetch_complete),
+        .fetch_address_valid      (fetch_address_valid),
+        .bp                       (bp),
+        .ras                      (ras),
+        .if_pc                    (if_pc),
+        .fetch_instruction        (fetch_instruction),                                
+        .instruction_bram         (instruction_bram), 
+        .icache_on('1), .tlb(itlb), 
+        .l1_request(l1_request[L1_ICACHE_ID]), 
+        .l1_response(l1_response[L1_ICACHE_ID]), 
+        .exception(1'b0)
+    );
+
+    branch_predictor bp_block (       
+       .clk                   (clk),
+       .rst                   (rst),
+       .bp                    (bp),
+       .branch_metadata_if    (branch_metadata_if),
+       .branch_metadata_ex    (branch_metadata_ex),
+       .br_results            (br_results)
+    );
+
+    ras ras_block(
+        .clk              (clk),
+        .rst              (rst),
+        .gc_fetch_flush   (gc_fetch_flush),
+        .ras              (ras)
+    );
+
     generate if (ENABLE_S_MODE) begin
-            tlb_lut_ram #(ITLB_WAYS, ITLB_DEPTH) i_tlb (.*, .tlb(itlb), .mmu(immu));
-            mmu i_mmu (.*,  .mmu(immu) , .l1_request(l1_request[L1_IMMU_ID]), .l1_response(l1_response[L1_IMMU_ID]), .mmu_exception());
+
+        tlb_lut_ram #(ITLB_WAYS, ITLB_DEPTH) i_tlb (       
+            .clk     (clk),
+            .rst     (rst),
+            .tlb_on  (tlb_on),
+            .asid    (asid),
+            .tlb     (itlb), 
+            .mmu     (immu)
+        );
+
+        mmu i_mmu (
+            .clk            (clk),
+            .rst            (rst),
+            .mmu            (immu) , 
+            .l1_request     (l1_request[L1_IMMU_ID]), 
+            .l1_response    (l1_response[L1_IMMU_ID]), 
+            .mmu_exception  ()
+        );
+
         end
         else begin
             assign itlb.complete = 1;
@@ -214,33 +312,220 @@ module taiga (
 
     ////////////////////////////////////////////////////
     //Decode/Issue
-    decode_and_issue decode_and_issue_block (.*);
+    decode_and_issue decode_and_issue_block (
+        .clk                            (clk),
+        .rst                            (rst),
+        .decode                         (decode),
+        .decode_advance                 (decode_advance),
+        .issue                          (issue),
+        .rs_data                        (rs_data),
+        .alu_inputs                     (alu_inputs),
+        .ls_inputs                      (ls_inputs),
+        .branch_inputs                  (branch_inputs),
+        .gc_inputs                      (gc_inputs),
+        .mul_inputs                     (mul_inputs),
+        .div_inputs                     (div_inputs),
+        .unit_issue                     (unit_issue),
+        .potential_branch_exception     (potential_branch_exception),
+        .alu_issued                     (alu_issued),
+        .gc_fetch_hold                  (gc_fetch_hold),
+        .gc_issue_hold                  (gc_issue_hold),
+        .gc_fetch_flush                 (gc_fetch_flush),
+        .gc_issue_flush                 (gc_issue_flush),
+        .gc_flush_required              (gc_flush_required),
+        .rs_inuse                       (rs_inuse),
+        .rs_id                          (rs_id),
+        .rs_id_inuse                    (rs_id_inuse),
+        .instruction_issued             (instruction_issued),
+        .illegal_instruction            (illegal_instruction),
+        .tr_operand_stall               (tr_operand_stall),
+        .tr_unit_stall                  (tr_unit_stall),
+        .tr_no_id_stall                 (tr_no_id_stall),
+        .tr_no_instruction_stall        (tr_no_instruction_stall),
+        .tr_other_stall                 (tr_other_stall),
+        .tr_branch_operand_stall        (tr_branch_operand_stall),
+        .tr_alu_operand_stall           (tr_alu_operand_stall),
+        .tr_ls_operand_stall            (tr_ls_operand_stall),
+        .tr_div_operand_stall           (tr_div_operand_stall),
+        .tr_alu_op                      (tr_alu_op),
+        .tr_branch_or_jump_op           (tr_branch_or_jump_op),
+        .tr_load_op                     (tr_load_op),
+        .tr_store_op                    (tr_store_op),
+        .tr_mul_op                      (tr_mul_op),
+        .tr_div_op                      (tr_div_op),
+        .tr_misc_op                     (tr_misc_op),
+        .tr_instruction_issued_dec      (tr_instruction_issued_dec),
+        .tr_instruction_pc_dec          (tr_instruction_pc_dec),
+        .tr_instruction_data_dec        (tr_instruction_data_dec)
+    );
 
     ////////////////////////////////////////////////////
     //Register File and Writeback
-    register_file_and_writeback register_file_and_writeback_block (.*);
+    register_file_and_writeback register_file_and_writeback_block (
+        .clk                                    (clk),
+        .rst                                    (rst),
+        .issue                                  (issue),
+        .alu_issued                             (alu_issued),
+        .rs_data                                (rs_data),
+        .ids_retiring                           (ids_retiring),
+        .retired                                (retired),
+        .retired_rd_addr                        (retired_rd_addr),
+        .id_for_rd                              (id_for_rd),
+        .unit_wb                                (unit_wb),
+        .wb_store                               (wb_store),
+        .tr_rs1_forwarding_needed               (tr_rs1_forwarding_needed),
+        .tr_rs2_forwarding_needed               (tr_rs2_forwarding_needed),
+        .tr_rs1_and_rs2_forwarding_needed       (tr_rs1_and_rs2_forwarding_needed)
+    );
 
     ////////////////////////////////////////////////////
     //Execution Units
-    branch_unit branch_unit_block (.*, .issue(unit_issue[BRANCH_UNIT_ID]));
-    alu_unit alu_unit_block (.*, .issue(unit_issue[ALU_UNIT_WB_ID]), .wb(unit_wb[ALU_UNIT_WB_ID]));
-    load_store_unit load_store_unit_block (.*, .dcache_on(1'b1), .clear_reservation(1'b0), .tlb(dtlb), .issue(unit_issue[LS_UNIT_WB_ID]), .wb(unit_wb[LS_UNIT_WB_ID]), .l1_request(l1_request[L1_DCACHE_ID]), .l1_response(l1_response[L1_DCACHE_ID]));
+    branch_unit branch_unit_block ( 
+        .clk                            (clk                       ),
+        .rst                            (rst                       ),                                    
+        .issue                          (unit_issue[BRANCH_UNIT_ID]),
+        .branch_inputs                  (branch_inputs             ),
+        .br_results                     (br_results                ),
+        .ras                            (ras                       ),
+        .branch_flush                   (branch_flush              ),
+        .branch_complete                (branch_complete           ),
+        .branch_id                      (branch_id                 ),
+        .branch_metadata_ex             (branch_metadata_ex        ),
+        .potential_branch_exception     (potential_branch_exception),
+        .branch_exception_is_jump       (branch_exception_is_jump  ),
+        .br_exception                   (br_exception              ),
+        .tr_branch_correct              (tr_branch_correct         ),
+        .tr_branch_misspredict          (tr_branch_misspredict     ),
+        .tr_return_correct              (tr_return_correct         ),
+        .tr_return_misspredict          (tr_return_misspredict     )
+    );
+
+
+    alu_unit alu_unit_block (
+        .clk         (clk),
+        .rst         (rst),
+        .alu_inputs  (alu_inputs),
+        .issue       (unit_issue[ALU_UNIT_WB_ID]), 
+        .wb          (unit_wb[ALU_UNIT_WB_ID])
+    );
+
+    load_store_unit load_store_unit_block (
+       .clk                            (clk),
+       .rst                            (rst),
+       .ls_inputs                      (ls_inputs),
+       .issue                          (unit_issue[LS_UNIT_WB_ID]),
+       .dcache_on                      (1'b1), 
+       .clear_reservation              (1'b0), 
+       .tlb                            (dtlb),  
+       .gc_fetch_flush                 (gc_fetch_flush),
+       .gc_issue_flush                 (gc_issue_flush),                                       
+       .l1_request                     (l1_request[L1_DCACHE_ID]), 
+       .l1_response                    (l1_response[L1_DCACHE_ID]),
+       .sc_complete                    (sc_complete),
+       .sc_success                     (sc_success),                                       
+       .m_axi                          (m_axi),
+       .m_avalon                       (m_avalon),
+       .m_wishbone                     (m_wishbone),                                       
+       .data_bram                      (data_bram),               
+       .store_complete                 (store_complete),
+       .store_id                       (store_id),  
+       .wb_store                       (wb_store),                     
+       .csr_rd                         (csr_rd),
+       .csr_id                         (csr_id),
+       .csr_done                       (csr_done),
+       .ls_is_idle                     (ls_is_idle),
+       .ls_exception                   (ls_exception),
+       .ls_exception_is_store          (ls_exception_is_store),
+       .wb                             (unit_wb[LS_UNIT_WB_ID])
+    );
+
     generate if (ENABLE_S_MODE) begin
-            tlb_lut_ram #(DTLB_WAYS, DTLB_DEPTH) d_tlb (.*, .tlb(dtlb), .mmu(dmmu));
-            mmu d_mmu (.*, .mmu(dmmu), .l1_request(l1_request[L1_DMMU_ID]), .l1_response(l1_response[L1_DMMU_ID]), .mmu_exception());
-        end
-        else begin
+           
+        tlb_lut_ram #(DTLB_WAYS, DTLB_DEPTH) d_tlb (       
+            .clk     (clk),
+            .rst     (rst),
+            .tlb_on  (tlb_on),
+            .asid    (asid),
+            .tlb     (dtlb), 
+            .mmu     (dmmu)
+        );
+
+        mmu d_mmu (
+            .clk            (clk),
+            .rst            (rst),
+            .mmu            (dmmu) , 
+            .l1_request     (l1_request[L1_DMMU_ID]), 
+            .l1_response    (l1_response[L1_DMMU_ID]),
+            .mmu_exception  ()
+        );
+    end
+    else begin
             assign dtlb.complete = 1;
             assign dtlb.physical_address = dtlb.virtual_address;
-        end
+    end
     endgenerate
-    gc_unit gc_unit_block (.*, .issue(unit_issue[GC_UNIT_ID]));
+    gc_unit gc_unit_block (
+        .clk                                (clk),
+        .rst                                (rst),
+        .issue                              (unit_issue[GC_UNIT_ID]),
+        .gc_inputs                          (gc_inputs),
+        .gc_flush_required                  (gc_flush_required),
+        .branch_flush                       (branch_flush),
+        .potential_branch_exception         (potential_branch_exception),
+        .branch_exception_is_jump           (branch_exception_is_jump),
+        .br_exception                       (br_exception),
+        .illegal_instruction                (illegal_instruction),
+        .ls_exception                       (ls_exception),
+        .ls_exception_is_store              (ls_exception_is_store),
+        .tlb_on                             (tlb_on),
+        .asid                               (asid),
+        .immu                               (immu),
+        .dmmu                               (dmmu),
+        .system_op_or_exception_complete    (system_op_or_exception_complete),
+        .exception_with_rd_complete         (exception_with_rd_complete),
+        .system_op_or_exception_id          (system_op_or_exception_id),
+        .exception_pc                       (exception_pc),
+        .retire_inc                         (retire_inc),
+        .instruction_retired                (instruction_retired),
+        .interrupt                          (interrupt),
+        .timer_interrupt                    (timer_interrupt),
+        .gc_init_clear                      (gc_init_clear),
+        .gc_fetch_hold                      (gc_fetch_hold),
+        .gc_issue_hold                      (gc_issue_hold),
+        .gc_issue_flush                     (gc_issue_flush),
+        .gc_fetch_flush                     (gc_fetch_flush),
+        .gc_fetch_pc_override               (gc_fetch_pc_override),
+        .gc_supress_writeback               (gc_supress_writeback),
+        .gc_fetch_pc                        (gc_fetch_pc),
+        .csr_rd                             (csr_rd),
+        .csr_id                             (csr_id),
+        .csr_done                           (csr_done),
+        .ls_is_idle                         (ls_is_idle)
+    );
 
     generate if (USE_MUL)
-            mul_unit mul_unit_block (.*, .issue(unit_issue[MUL_UNIT_WB_ID]), .wb(unit_wb[MUL_UNIT_WB_ID]));
+
+        mul_unit mul_unit_block (.*,
+            .clk           (clk),
+            .rst           (rst),
+            .mul_inputs    (mul_inputs),
+            .issue         (unit_issue[MUL_UNIT_WB_ID]),
+            .wb            (unit_wb[MUL_UNIT_WB_ID])
+        );
+
     endgenerate
+
     generate if (USE_DIV)
-            div_unit div_unit_block (.*, .issue(unit_issue[DIV_UNIT_WB_ID]), .wb(unit_wb[DIV_UNIT_WB_ID]));
+
+        div_unit div_unit_block (
+            .clk                (clk),
+            .rst                (rst),
+            .gc_fetch_flush     (gc_fetch_flush),
+            .div_inputs         (div_inputs),
+            .issue              (unit_issue[DIV_UNIT_WB_ID]), 
+            .wb                 (unit_wb[DIV_UNIT_WB_ID])
+        );
+
     endgenerate
 
     ////////////////////////////////////////////////////

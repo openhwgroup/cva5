@@ -147,13 +147,22 @@ module fetch(
     assign fetch_attr_fifo.push = new_mem_request;
     assign fetch_attr_fifo.potential_push = new_mem_request;
     assign fetch_attr_fifo.pop = fetch_complete;
-    one_hot_to_integer #(NUM_SUB_UNITS) hit_way_conv (.*, .one_hot(sub_unit_address_match), .int_out(fetch_attr_next.subunit_id));
+    one_hot_to_integer #(NUM_SUB_UNITS) hit_way_conv (
+        .clk        (clk), 
+        .rst        (rst),
+        .one_hot    (sub_unit_address_match), 
+        .int_out    (fetch_attr_next.subunit_id)
+    );
     assign fetch_attr_next.address_valid = |sub_unit_address_match;
 
     assign fetch_attr_fifo.data_in = fetch_attr_next;
 
     taiga_fifo #(.DATA_WIDTH($bits(fetch_attributes_t)), .FIFO_DEPTH(NEXT_ID_DEPTH))
-        attributes_fifo (.fifo(fetch_attr_fifo), .rst(flush_or_rst), .*);
+        attributes_fifo (
+            .clk        (clk), 
+            .rst        (flush_or_rst), 
+            .fifo       (fetch_attr_fifo)
+        );
 
     assign fetch_attr = fetch_attr_fifo.data_out;
 
@@ -176,12 +185,24 @@ module fetch(
     assign units_ready = &unit_ready;
 
     generate if (USE_I_SCRATCH_MEM) begin
-        ibram i_bram (.*, .fetch_sub(fetch_sub[BRAM_ID]));
+        ibram i_bram (
+            .clk                (clk), 
+            .rst                (rst),
+            .fetch_sub          (fetch_sub[BRAM_ID]),
+            .instruction_bram   (instruction_bram)
+        );
         assign sub_unit_address_match[BRAM_ID] = tlb.physical_address[31:32-SCRATCH_BIT_CHECK] == SCRATCH_ADDR_L[31:32-SCRATCH_BIT_CHECK];
     end
     endgenerate
     generate if (USE_ICACHE) begin
-        icache i_cache (.*, .fetch_sub(fetch_sub[ICACHE_ID]));
+        icache i_cache (
+            .clk                (clk), 
+            .rst                (rst),
+            .icache_on          (icache_on),
+            .l1_request         (l1_request),
+            .l1_response        (l1_response),
+            .fetch_sub  (fetch_sub[ICACHE_ID])
+        );
         assign sub_unit_address_match[ICACHE_ID] = tlb.physical_address[31:32-MEMORY_BIT_CHECK] == MEMORY_ADDR_L[31:32-MEMORY_BIT_CHECK];
     end
     endgenerate

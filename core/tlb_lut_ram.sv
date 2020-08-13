@@ -88,7 +88,12 @@ module tlb_lut_ram #(
         end
     endgenerate
 
-    cycler #(.C_WIDTH(WAYS)) replacement_policy (.*, .en(1'b1), .one_hot(replacement_way));
+    cycler #(.C_WIDTH(WAYS)) replacement_policy (       
+        .clk        (clk),
+        .rst        (rst), 
+        .en         (1'b1), 
+        .one_hot    (replacement_way)
+    );
 
 
     always_ff @ (posedge clk) begin

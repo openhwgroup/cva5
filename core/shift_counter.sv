@@ -25,7 +25,7 @@ import taiga_types::*;
 
 module shift_counter #(parameter DEPTH = 16) (
         input logic clk,
-
+        input logic rst,
         input logic start,
         output logic done
         );

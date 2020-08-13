@@ -104,7 +104,11 @@ module div_unit
     ////////////////////////////////////////////////////
     //Input FIFO
     taiga_fifo #(.DATA_WIDTH($bits(div_fifo_inputs_t)), .FIFO_DEPTH(1))
-        div_input_fifo (.fifo(input_fifo), .*);
+        div_input_fifo (
+            .clk    (clk),
+            .rst    (rst),
+            .fifo   (input_fifo)
+        );
 
     assign input_fifo.data_in = fifo_inputs;
     assign input_fifo.push = issue.new_request;
@@ -134,7 +138,11 @@ module div_unit
     //Div core
     assign div_core.dividend = div_op.unsigned_dividend;
     assign div_core.divisor = div_op.unsigned_divisor;
-    div_algorithm divider_block (.*, .div(div_core));
+    div_algorithm divider_block (
+        .clk    (clk),
+        .rst    (rst), 
+        .div    (div_core)
+    );
 
     ////////////////////////////////////////////////////
     //Output

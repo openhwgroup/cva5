@@ -24,8 +24,8 @@
 clear -all
 set_engine_mode {Hp Ht L B I N Tri}
 
-set SCRIPTS_PATH ./Taiga-dev/formal/scripts
-set JG_TAIGA_RTL_PATH ./Taiga-dev
+set SCRIPTS_PATH ../../Taiga-dev/formal/scripts
+set JG_TAIGA_RTL_PATH ../../Taiga-dev
 
 analyze -sv -f ${SCRIPTS_PATH}/taiga_rtl.vfile 
 analyze -sv ${JG_TAIGA_RTL_PATH}/formal/models/taiga_fbm.sv

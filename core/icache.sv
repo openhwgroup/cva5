@@ -90,7 +90,12 @@ module icache
     end
 
     //Replacement policy is psuedo random
-    cycler #(ICACHE_WAYS) replacement_policy (.*, .en(1'b1), .one_hot(replacement_way));
+    cycler #(ICACHE_WAYS) replacement_policy (
+        .clk        (clk), 
+        .rst        (rst), 
+        .en         (1'b1), 
+        .one_hot    (replacement_way)
+    );
     always_ff @ (posedge clk) begin
         if (second_cycle)
             tag_update_way <= replacement_way;
