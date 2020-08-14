@@ -487,13 +487,33 @@ endgenerate
     ////////////////////////////////////////////////////
     //Timers and Counters
     //Register increment for instructions completed
+    logic[COUNTER_W-1:0] mcycle_next;
+    assign mcycle_next = mcycle + 1;
+    
+    //As the CSR write takes effect after the instruction has otherwise completed,
+    //we perform the muxing after the addition to handle the rollover case.
+    //Ideally, we would mux the write operation before the adder so that it could
+    //be absorbed into the adder LUT
     always_ff @(posedge clk) begin
         if (rst) begin
-            mcycle <= 0;
-            minst_ret <= 0;
+            mcycle[31:0] <= 0;
+            mcycle[COUNTER_W-1:32] <= 0;
         end else begin
-            mcycle <= mcycle + 1;
-            minst_ret <= minst_ret + COUNTER_W'(retire_inc);
+            mcycle[31:0] <= mwrite_decoder[MCYCLE[7:0]] ? updated_csr : mcycle_next[31:0];
+            mcycle[COUNTER_W-1:32] <= mwrite_decoder[MCYCLEH[7:0]] ? updated_csr[COUNTER_W-33:0] : mcycle_next[COUNTER_W-1:32];
+        end
+    end
+
+    logic[COUNTER_W-1:0] minst_ret_next;
+    assign minst_ret_next = minst_ret + COUNTER_W'(retire_inc);
+
+    always_ff @(posedge clk) begin
+        if (rst) begin
+            minst_ret[31:0] <= 0;
+            minst_ret[COUNTER_W-1:32] <= 0;
+        end else begin
+            minst_ret[31:0] <= mwrite_decoder[MINSTRET[7:0]] ? updated_csr : minst_ret_next[31:0];
+            minst_ret[COUNTER_W-1:32] <= mwrite_decoder[MINSTRETH[7:0]] ? updated_csr[COUNTER_W-33:0] : minst_ret_next[COUNTER_W-1:32];
         end
     end
 
