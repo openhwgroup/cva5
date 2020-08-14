@@ -386,11 +386,49 @@ generate if (ENABLE_M_MODE) begin
 
     ////////////////////////////////////////////////////
     //MCAUSE
-    logic[XLEN-1:0] mcause_mask;
+    //As the exception and interrupts codes are sparsely populated,
+    //to ensure that only legal values are written, a ROM lookup
+    //is used to validate the CSR write operation
+    logic MCAUSE_EXCEPTION_MASKING_ROM [2**ECODE_W];
+    logic MCAUSE_INTERRUPT_MASKING_ROM [2**ECODE_W];
+    always_comb begin
+        MCAUSE_EXCEPTION_MASKING_ROM = '{default: 0};
+        MCAUSE_EXCEPTION_MASKING_ROM[INST_ADDR_MISSALIGNED] = 1;
+        MCAUSE_EXCEPTION_MASKING_ROM[INST_ACCESS_FAULT] = ENABLE_S_MODE;
+        MCAUSE_EXCEPTION_MASKING_ROM[ILLEGAL_INST] = 1;
+        MCAUSE_EXCEPTION_MASKING_ROM[BREAK] = 1;
+        MCAUSE_EXCEPTION_MASKING_ROM[LOAD_ADDR_MISSALIGNED] = 1;
+        MCAUSE_EXCEPTION_MASKING_ROM[LOAD_FAULT] = ENABLE_S_MODE;
+        MCAUSE_EXCEPTION_MASKING_ROM[STORE_AMO_ADDR_MISSALIGNED] = 1;
+        MCAUSE_EXCEPTION_MASKING_ROM[STORE_AMO_FAULT] = ENABLE_S_MODE;
+        MCAUSE_EXCEPTION_MASKING_ROM[ECALL_U] = ENABLE_S_MODE;
+        MCAUSE_EXCEPTION_MASKING_ROM[ECALL_S] = ENABLE_S_MODE;
+        MCAUSE_EXCEPTION_MASKING_ROM[ECALL_M] = 1;
+        MCAUSE_EXCEPTION_MASKING_ROM[INST_PAGE_FAULT] = ENABLE_S_MODE;
+        MCAUSE_EXCEPTION_MASKING_ROM[LOAD_PAGE_FAULT] = ENABLE_S_MODE;
+        MCAUSE_EXCEPTION_MASKING_ROM[STORE_OR_AMO_PAGE_FAULT] = ENABLE_S_MODE;
+
+        MCAUSE_INTERRUPT_MASKING_ROM = '{default: 0};
+        MCAUSE_INTERRUPT_MASKING_ROM[S_SOFTWARE_INTERRUPT] = ENABLE_S_MODE;
+        MCAUSE_INTERRUPT_MASKING_ROM[M_SOFTWARE_INTERRUPT] = 1;
+        MCAUSE_INTERRUPT_MASKING_ROM[S_TIMER_INTERRUPT] = ENABLE_S_MODE;
+        MCAUSE_INTERRUPT_MASKING_ROM[M_TIMER_INTERRUPT] = 1;
+        MCAUSE_INTERRUPT_MASKING_ROM[S_EXTERNAL_INTERRUPT] = ENABLE_S_MODE;
+        MCAUSE_INTERRUPT_MASKING_ROM[M_EXTERNAL_INTERRUPT] = 1;
+    end
+
+    logic mcause_write_valid;
+    always_comb begin
+        if (updated_csr[XLEN-1]) //interrupt
+            mcause_write_valid = MCAUSE_INTERRUPT_MASKING_ROM[updated_csr[ECODE_W-1:0]];
+        else
+            mcause_write_valid = MCAUSE_EXCEPTION_MASKING_ROM[updated_csr[ECODE_W-1:0]];
+    end
+
     always_ff @(posedge clk) begin
         mcause.zeroes <= '0;
-        if (mwrite_decoder[MCAUSE[7:0]] | gc_exception.valid) begin
-            mcause.interrupt <= gc_exception.valid ? 1'b0 :updated_csr[XLEN-1];
+        if ((mcause_write_valid & mwrite_decoder[MCAUSE[7:0]]) | gc_exception.valid) begin
+            mcause.interrupt <= gc_exception.valid ? 1'b0 : updated_csr[XLEN-1];
             mcause.code <= gc_exception.valid ? gc_exception.code : updated_csr[ECODE_W-1:0];
         end
     end
