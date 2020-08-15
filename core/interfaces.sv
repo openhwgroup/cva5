@@ -148,12 +148,12 @@ interface mmu_interface;
     //From CSR
     logic [21:0] ppn;
     logic mxr; //Make eXecutable Readable
-    logic pum; //Protect User Memory
+    logic sum; //permit Supervisor User Memory access
     logic [1:0] privilege;
 
-    modport mmu (input virtual_address, new_request, execute, rnw, ppn, mxr, pum, privilege, output write_entry, new_phys_addr);
+    modport mmu (input virtual_address, new_request, execute, rnw, ppn, mxr, sum, privilege, output write_entry, new_phys_addr);
     modport tlb (input write_entry, new_phys_addr, output new_request, virtual_address, execute, rnw);
-    modport csr (output ppn, mxr, pum, privilege);
+    modport csr (output ppn, mxr, sum, privilege);
 
 endinterface
 
@@ -166,12 +166,8 @@ interface tlb_interface;
     logic complete;
     logic [31:0] physical_address;
 
-    logic flush;
-    logic flush_complete;
-
-    modport tlb (input virtual_address, new_request, flush, rnw, execute,   output complete, physical_address, flush_complete);
+    modport tlb (input virtual_address, new_request, rnw, execute,   output complete, physical_address);
     modport mem  (output new_request, virtual_address, rnw, execute, input complete, physical_address);
-    modport fence (output flush, input flush_complete);
 
 endinterface
 
