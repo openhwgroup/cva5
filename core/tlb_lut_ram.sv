@@ -31,11 +31,12 @@ module tlb_lut_ram #(
         input logic clk,
         input logic rst,
         input logic tlb_on,
+        input gc_tlb_flush,
         input logic [ASIDLEN-1:0] asid,
         mmu_interface.tlb mmu,
         tlb_interface.tlb tlb
         );
-
+    //////////////////////////////////////////
     localparam TLB_TAG_W = 32-12-$clog2(DEPTH);
 
     typedef struct packed {
@@ -44,36 +45,39 @@ module tlb_lut_ram #(
         logic [19:0] phys_addr;
     } tlb_entry_t;
 
-
-    logic [$clog2(DEPTH)-1:0] tlb_read_addr;
-    logic [$clog2(DEPTH)-1:0] tlb_write_addr;
-
+    logic [$clog2(DEPTH)-1:0] tlb_addr;
     logic [TLB_TAG_W-1:0] virtual_tag;
 
     tlb_entry_t ram [DEPTH-1:0][WAYS-1:0];
     logic [DEPTH-1:0] valid [WAYS-1:0];
 
     logic [WAYS-1:0] tag_hit;
+    logic hit;
     logic [WAYS-1:0] replacement_way;
 
     logic [$bits(tlb_entry_t)-1:0] ram_data [WAYS-1:0][1];
     tlb_entry_t ram_entry [WAYS-1:0];
     tlb_entry_t new_entry;
 
-    logic flush_in_progress;
     logic [$clog2(DEPTH)-1:0] flush_addr;
 
-    logic hit;
-
     logic [WAYS-1:0] tlb_write;
+    ////////////////////////////////////////////////////
+    //Implementation
+    //LUTRAM-based
+    //Reset is performed sequentially, coordinated by the gc unit
 
-    assign virtual_tag = tlb.virtual_address[31:32-TLB_TAG_W];
-    assign tlb_read_addr = tlb.virtual_address[$clog2(DEPTH)+11:12];
+    always_ff @ (posedge clk) begin
+        if (~flush_in_progress)
+            flush_addr <= 0;
+        else
+            flush_addr <= flush_addr + 1;
+    end
 
-    assign tlb_write_addr = tlb.flush ? flush_addr : tlb_read_addr;
-    assign tlb_write = tlb.flush ? {WAYS{flush_in_progress}} : (replacement_way & {WAYS{mmu.write_entry}});
+    assign tlb_addr = tlb.virtual_address[12 +: $clog2(DEPTH)];
+    assign tlb_write = {WAYS{gc_tlb_flush}}  | replacement_way;
 
-    assign new_entry.valid = ~tlb.flush;
+    assign new_entry.valid = ~gc_tlb_flush;
     assign new_entry.tag = virtual_tag;
     assign new_entry.phys_addr = mmu.new_phys_addr;
 
@@ -81,9 +85,14 @@ module tlb_lut_ram #(
     generate
         for (i=0; i<WAYS; i=i+1) begin : lut_rams
             lut_ram #(.WIDTH($bits(tlb_entry_t)), .DEPTH(DEPTH), .READ_PORTS(1))
-            ram_block (.clk(clk),
-                    .waddr(tlb_write_addr), .ram_write(tlb_write[i]), .new_ram_data(new_entry),
-                    .raddr({tlb_read_addr}), .ram_data_out(ram_data[i]));
+            ram_block (
+                .clk(clk),
+                .waddr(tlb_addr),
+                .ram_write(tlb_write[i]),
+                .new_ram_data(new_entry),
+                .raddr({tlb_addr}),
+                .ram_data_out(ram_data[i])
+            );
             assign ram_entry[i] = ram_data[i][0];
         end
     endgenerate
@@ -95,30 +104,7 @@ module tlb_lut_ram #(
         .one_hot    (replacement_way)
     );
 
-
-    always_ff @ (posedge clk) begin
-        if (rst)
-            flush_in_progress <= 0;
-        else if (tlb.flush_complete)
-            flush_in_progress <= 0;
-        else if (tlb.flush)
-            flush_in_progress <= 1;
-    end
-
-    always_ff @ (posedge clk) begin
-        if (rst)
-            flush_addr <= 0;
-        else if (flush_in_progress)
-            flush_addr <= flush_addr + 1;
-    end
-
-    always_ff @ (posedge clk) begin
-        if (rst)
-            tlb.flush_complete <= 0;
-        else
-            tlb.flush_complete <= (flush_addr == (DEPTH-1));
-    end
-
+    assign virtual_tag = tlb.virtual_address[31:32-TLB_TAG_W];
 
     always_comb begin
         for (int i=0; i<WAYS; i=i+1) begin

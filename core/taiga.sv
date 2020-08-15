@@ -127,6 +127,7 @@ module taiga (
     logic gc_fetch_flush;
     logic gc_fetch_pc_override;
     logic gc_supress_writeback;
+    logic gc_tlb_flush;
     logic [31:0] gc_fetch_pc;
 
     logic[31:0] csr_rd;
@@ -289,6 +290,7 @@ module taiga (
             .clk     (clk),
             .rst     (rst),
             .tlb_on  (tlb_on),
+            .gc_tlb_flush (gc_tlb_flush),
             .asid    (asid),
             .tlb     (itlb), 
             .mmu     (immu)
@@ -445,6 +447,7 @@ module taiga (
             .clk     (clk),
             .rst     (rst),
             .tlb_on  (tlb_on),
+            .gc_tlb_flush (gc_tlb_flush),
             .asid    (asid),
             .tlb     (dtlb), 
             .mmu     (dmmu)
@@ -496,6 +499,7 @@ module taiga (
         .gc_fetch_flush                     (gc_fetch_flush),
         .gc_fetch_pc_override               (gc_fetch_pc_override),
         .gc_supress_writeback               (gc_supress_writeback),
+        .gc_tlb_flush                            (gc_tlb_flush),
         .gc_fetch_pc                        (gc_fetch_pc),
         .csr_rd                             (csr_rd),
         .csr_id                             (csr_id),

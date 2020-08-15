@@ -80,6 +80,7 @@ module gc_unit(
         output logic gc_fetch_flush,
         output logic gc_fetch_pc_override,
         output logic gc_supress_writeback,
+        output logic gc_tlb_flush,
 
         output logic [31:0] gc_fetch_pc,
 
@@ -204,6 +205,7 @@ module gc_unit(
         gc_issue_hold <= issue.new_request || second_cycle_flush || processing_csr || (next_state inside {PRE_CLEAR_STATE, INIT_CLEAR_STATE, TLB_CLEAR_STATE, IQ_DRAIN}) || potential_branch_exception;
         gc_supress_writeback <= next_state inside {PRE_CLEAR_STATE, INIT_CLEAR_STATE, TLB_CLEAR_STATE} ? 1 : 0;
         gc_init_clear <= (next_state == INIT_CLEAR_STATE);
+        gc_tlb_flush <= next_state inside {INIT_CLEAR_STATE, TLB_CLEAR_STATE};
     end
 
     ////////////////////////////////////////////////////
