@@ -26,14 +26,13 @@ import taiga_types::*;
 import csr_types::*;
 
 module mmu
-        (
+    (
         input logic clk,
         input logic rst,
         mmu_interface.mmu mmu,
         l1_arbiter_request_interface.master l1_request,
-        l1_arbiter_return_interface.master l1_response,
-        output mmu_exception
-        );
+        l1_arbiter_return_interface.master l1_response
+    );
 
     typedef struct packed{
         logic [11:0] ppn1;
@@ -49,105 +48,103 @@ module mmu
         logic v;
     } pte_t;
 
-    logic [31:0] request_addr;
-    logic [19:0] request_addr_input_a;
-    logic [9:0] request_addr_input_b;
+    typedef enum {IDLE, SEND_REQUEST_1, WAIT_REQUEST_1, SEND_REQUEST_2, WAIT_REQUEST_2, COMPLETE_SUCCESS, COMPLETE_FAULT} mmu_state_t;
+    mmu_state_t state;
+    mmu_state_t next_state;
 
-    logic privilege_check;
-    logic permissions_check;
+    pte_t pte;
+    logic access_valid;
+    logic privilege_valid;
+    ////////////////////////////////////////////////////
+    //Implementation
 
-    logic second_request;
-    logic access_exception;
-    typedef enum logic[1:0] {IDLE, REQUEST, WAIT} mmu_state_t;
-    mmu_state_t mmu_state;
-
+    ////////////////////////////////////////////////////
+    //L1 arbiter Interfrace
     assign l1_request.rnw = 1;
     assign l1_request.be = '1;
     assign l1_request.size = '0;
     assign l1_request.is_amo = 0;
     assign l1_request.amo = 0;
 
-    pte_t pte;
+    always_ff @ (posedge clk) begin
+        if (rst | l1_request.ack)
+            l1_request.request <= 0;
+        else if (next_state inside {SEND_REQUEST_1, SEND_REQUEST_2})
+            l1_request.request <= 1;
+    end
+
+    always_ff @ (posedge clk) begin
+        if (next_state == SEND_REQUEST_2)
+            l1_request.addr <= {{pte.ppn1[9:0], pte.ppn0}, mmu.virtual_address[21:12], 2'b00};
+        else
+            l1_request.addr <= {mmu.ppn[19:0], mmu.virtual_address[31:22], 2'b00};
+    end
+
     assign pte = l1_response.data;
 
-    assign mmu_exception = access_exception;
+    ////////////////////////////////////////////////////
+    //Access and permission checks
+    assign access_valid =
+        (mmu.execute & pte.x) | //fetch
+        (mmu.rnw & (pte.r | (pte.x & mmu.mxr))) | //load
+        ((~mmu.rnw & ~mmu.execute) & pte.w); //store
 
-    //assign request_addr = (mmu_state == IDLE) ? {mmu.ppn[19:0], 12'd0} + {mmu.virtual_address[31:22], 2'b00} : {pte.ppn1,pte.ppn0, 12'd0} + {mmu.virtual_address[21:12], 2'b00};
-    assign request_addr_input_a = (mmu_state == IDLE) ? mmu.ppn[19:0] : {pte.ppn1[9:0],pte.ppn0};
-    assign request_addr_input_b = (mmu_state == IDLE) ? mmu.virtual_address[31:22] : mmu.virtual_address[21:12];
-    assign request_addr = {request_addr_input_a, 12'd0} + {request_addr_input_b, 2'b00};
+    assign privilege_valid = 
+        (mmu.privilege == MACHINE_PRIVILEGE) |
+        ((mmu.privilege == SUPERVISOR_PRIVILEGE) & (~pte.u | (pte.u & mmu.sum))) |
+        ((mmu.privilege == USER_PRIVILEGE) & pte.u);
+
+    ////////////////////////////////////////////////////
+    //State Machine
+    always_comb begin
+        next_state = state;
+        case (state)
+            IDLE : if (mmu.new_request) next_state = WAIT_REQUEST_1;
+            SEND_REQUEST_1 : if (l1_request.ack) next_state = WAIT_REQUEST_1;
+            WAIT_REQUEST_1 : begin
+                if (l1_response.data_valid) begin
+                    if (~pte.v | (~pte.r & pte.w)) //page not valid OR invalid xwr pattern
+                        next_state = COMPLETE_FAULT;
+                    else if (pte.v & (pte.r | pte.x)) //superpage (all remaining xwr patterns other than all zeros)
+                        next_state = (access_valid & privilege_valid) ? COMPLETE_SUCCESS : COMPLETE_FAULT;
+                    else //(pte.v & ~pte.x & ~pte.w & ~pte.r) pointer to next level in page table
+                        next_state = SEND_REQUEST_2;
+                end
+            end
+            SEND_REQUEST_2 : if (l1_request.ack) next_state = WAIT_REQUEST_2;
+            WAIT_REQUEST_2 : if (l1_response.data_valid) next_state = (access_valid & privilege_valid) ? COMPLETE_SUCCESS : COMPLETE_FAULT;
+            COMPLETE_SUCCESS : next_state = IDLE;
+            COMPLETE_FAULT : next_state = IDLE;
+            default : next_state = IDLE;
+        endcase
+    end
 
     always_ff @ (posedge clk) begin
-        mmu. new_phys_addr[19:10] <= pte.ppn1[9:0];
-
-        if (~l1_request.request)
-            l1_request.addr <= request_addr;
-
-        if (second_request)
-            mmu. new_phys_addr[9:0] <= pte.ppn0;
+        if (rst)
+            state <= IDLE;
         else
-            mmu. new_phys_addr[9:0] <= mmu.virtual_address[21:12];
+            state <= next_state;
     end
 
-    //Not ((user-mode and non-user page) OR (supervisor-mode and user-page and user protected))
-    assign privilege_check = !(
-            ((mmu.privilege == USER_PRIVILEGE) && ~pte.u) |
-            ((mmu.privilege == SUPERVISOR_PRIVILEGE) && pte.u && mmu.pum)
-            );
-
-    assign permissions_check = privilege_check & ((mmu.execute & pte.x) | //execute and exec bit set
-        (~mmu.execute & //load-store
-                ((mmu.rnw & (pte.r | (pte.x & mmu.mxr))) | //read and (read bit set or (execute and MXR))
-                (~mmu.rnw & pte.w))));
-
+    ////////////////////////////////////////////////////
+    //TLB return path
     always_ff @ (posedge clk) begin
-        if (rst) begin
-            mmu_state <= IDLE;
-            l1_request.request <= 0;
-            mmu.write_entry <= 0;
-            second_request <= 0;
-            access_exception <= 0;
-        end
-        else begin
-            unique case (mmu_state)
-                IDLE: begin
-                    mmu.write_entry <= 0;
-                    second_request <= 0;
-                    access_exception <= 0;
-                    if (mmu.new_request & ~mmu.write_entry) begin //~mmu.write_entry for handshaking
-                        mmu_state <= REQUEST;
-                        l1_request.request <= 1;
-                    end
-                end
-                REQUEST: begin
-                    if (l1_request.ack) begin
-                        mmu_state <= WAIT;
-                        l1_request.request <= 0;
-                    end
-                end
-                WAIT: begin
-                    if (l1_response.data_valid) begin
-                        if (~pte.v | (~pte.r & pte.w) | (~pte.r & ~pte.x & second_request)) begin //invalid pte
-                            mmu_state <= IDLE;
-                            access_exception <= 1;
-                        end
-                        else if (pte.r | pte.x) begin //leaf pte found
-                            mmu_state <= IDLE;
-                            if (permissions_check)
-                                mmu.write_entry <= 1;
-                            else
-                                access_exception <= 1;
-                        end
-                        else begin //Non-leaf pte, request next level
-                            mmu_state <= REQUEST;
-                            l1_request.request <= 1;
-                            second_request <= 1;
-                        end
-                    end
-                end
-            endcase
+        if (l1_response.data_valid) begin
+            mmu.new_phys_addr[19:10] <= pte.ppn1[9:0];
+            mmu.new_phys_addr[9:0] <= (state == WAIT_REQUEST_2) ? pte.ppn0 : mmu.virtual_address[21:12];
         end
     end
+    assign mmu.write_entry = (state == COMPLETE_SUCCESS);
+    assign mmu.is_fault = (state == COMPLETE_FAULT);
 
+    ////////////////////////////////////////////////////
+    //End of Implementation
+    ////////////////////////////////////////////////////
+
+    ////////////////////////////////////////////////////
+    //Assertions
+    mmu_spurious_l1_response:
+        assert property (@(posedge clk) disable iff (rst) (l1_response.data_valid) |-> (state inside {WAIT_REQUEST_1, WAIT_REQUEST_2}))
+        else $error("mmu recieved response without a request");
 
 endmodule

@@ -485,8 +485,8 @@ generate if (ENABLE_S_MODE) begin
     //MMU interface
     assign immu.mxr = mstatus.mxr;
     assign dmmu.mxr = mstatus.mxr;
-    assign immu.pum = mstatus.sum;
-    assign dmmu.pum = mstatus.sum;
+    assign immu.sum = mstatus.sum;
+    assign dmmu.sum = mstatus.sum;
     assign immu.privilege = privilege_level;
     assign dmmu.privilege = mstatus.mprv ? mstatus.mpp : privilege_level;
     assign immu.ppn = satp.ppn;
