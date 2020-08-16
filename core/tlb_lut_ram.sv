@@ -68,7 +68,7 @@ module tlb_lut_ram #(
     //Reset is performed sequentially, coordinated by the gc unit
 
     always_ff @ (posedge clk) begin
-        if (~flush_in_progress)
+        if (~gc_tlb_flush)
             flush_addr <= 0;
         else
             flush_addr <= flush_addr + 1;
@@ -90,7 +90,7 @@ module tlb_lut_ram #(
                 .waddr(tlb_addr),
                 .ram_write(tlb_write[i]),
                 .new_ram_data(new_entry),
-                .raddr({tlb_addr}),
+                .raddr('{tlb_addr}),
                 .ram_data_out(ram_data[i])
             );
             assign ram_entry[i] = ram_data[i][0];
@@ -125,6 +125,7 @@ module tlb_lut_ram #(
     assign mmu.execute = tlb.execute;
     assign mmu.rnw = tlb.rnw;
 
+    //On a TLB miss, the 
     assign hit = |tag_hit;
     assign tlb.complete = hit | ~tlb_on;
 

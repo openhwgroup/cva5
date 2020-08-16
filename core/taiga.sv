@@ -301,8 +301,7 @@ module taiga (
             .rst            (rst),
             .mmu            (immu) , 
             .l1_request     (l1_request[L1_IMMU_ID]), 
-            .l1_response    (l1_response[L1_IMMU_ID]), 
-            .mmu_exception  ()
+            .l1_response    (l1_response[L1_IMMU_ID])
         );
 
         end
@@ -458,8 +457,7 @@ module taiga (
             .rst            (rst),
             .mmu            (dmmu) , 
             .l1_request     (l1_request[L1_DMMU_ID]), 
-            .l1_response    (l1_response[L1_DMMU_ID]),
-            .mmu_exception  ()
+            .l1_response    (l1_response[L1_DMMU_ID])
         );
     end
     else begin
