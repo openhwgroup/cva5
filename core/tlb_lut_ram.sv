@@ -79,7 +79,7 @@ module tlb_lut_ram #(
 
     assign new_entry.valid = ~gc_tlb_flush;
     assign new_entry.tag = virtual_tag;
-    assign new_entry.phys_addr = mmu.new_phys_addr;
+    assign new_entry.phys_addr = mmu.upper_physical_address;
 
     genvar i;
     generate
