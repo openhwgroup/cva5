@@ -48,9 +48,17 @@ module mmu
         logic v;
     } pte_t;
 
-    typedef enum {IDLE, SEND_REQUEST_1, WAIT_REQUEST_1, SEND_REQUEST_2, WAIT_REQUEST_2, COMPLETE_SUCCESS, COMPLETE_FAULT} mmu_state_t;
-    mmu_state_t state;
-    mmu_state_t next_state;
+    typedef enum  {
+        IDLE = 0,
+        SEND_REQUEST_1 = 1,
+        WAIT_REQUEST_1 = 2,
+        SEND_REQUEST_2 = 3,
+        WAIT_REQUEST_2 = 4,
+        COMPLETE_SUCCESS = 5,
+        COMPLETE_FAULT = 6
+    } mmu_state_t;
+    logic [6:0] state;
+    logic [6:0] next_state;
 
     pte_t pte;
     logic access_valid;
@@ -66,28 +74,27 @@ module mmu
     assign l1_request.is_amo = 0;
     assign l1_request.amo = 0;
 
-    always_ff @ (posedge clk) begin
-        if (rst | l1_request.ack)
-            l1_request.request <= 0;
-        else if (next_state inside {SEND_REQUEST_1, SEND_REQUEST_2})
-            l1_request.request <= 1;
-    end
+    assign l1_request.request = state[SEND_REQUEST_1] | state[SEND_REQUEST_2];
 
+    //Page Table addresses
     always_ff @ (posedge clk) begin
-        if (next_state == SEND_REQUEST_2)
-            l1_request.addr <= {{pte.ppn1[9:0], pte.ppn0}, mmu.virtual_address[21:12], 2'b00};
-        else
-            l1_request.addr <= {mmu.ppn[19:0], mmu.virtual_address[31:22], 2'b00};
+        if (state[IDLE] | l1_response.data_valid) begin
+            if (state[IDLE])
+                l1_request.addr <= {mmu.ppn[19:0], mmu.virtual_address[31:22], 2'b00};
+            else
+                l1_request.addr <= {{pte.ppn1[9:0], pte.ppn0}, mmu.virtual_address[21:12], 2'b00};
+        end
     end
 
     assign pte = l1_response.data;
 
     ////////////////////////////////////////////////////
     //Access and permission checks
+    //A and D bits are software managed
     assign access_valid =
-        (mmu.execute & pte.x) | //fetch
-        (mmu.rnw & (pte.r | (pte.x & mmu.mxr))) | //load
-        ((~mmu.rnw & ~mmu.execute) & pte.w); //store
+        (mmu.execute & pte.x & pte.a) | //fetch
+        (mmu.rnw & (pte.r | (pte.x & mmu.mxr)) & pte.a) | //load
+        ((~mmu.rnw & ~mmu.execute) & pte.w & pte.a & pte.d); //store
 
     assign privilege_valid = 
         (mmu.privilege == MACHINE_PRIVILEGE) |
@@ -98,30 +105,47 @@ module mmu
     //State Machine
     always_comb begin
         next_state = state;
-        case (state)
-            IDLE : if (mmu.new_request) next_state = WAIT_REQUEST_1;
-            SEND_REQUEST_1 : if (l1_request.ack) next_state = WAIT_REQUEST_1;
-            WAIT_REQUEST_1 : begin
+        case (1'b1)
+            state[IDLE] :
+                if (mmu.new_request) begin
+                    next_state = 2**SEND_REQUEST_1;
+                end
+            state[SEND_REQUEST_1] : 
+                if (l1_request.ack) begin
+                    next_state = 2**WAIT_REQUEST_1;
+                end
+            state[WAIT_REQUEST_1] :
                 if (l1_response.data_valid) begin
                     if (~pte.v | (~pte.r & pte.w)) //page not valid OR invalid xwr pattern
-                        next_state = COMPLETE_FAULT;
-                    else if (pte.v & (pte.r | pte.x)) //superpage (all remaining xwr patterns other than all zeros)
-                        next_state = (access_valid & privilege_valid) ? COMPLETE_SUCCESS : COMPLETE_FAULT;
+                        next_state = 2**COMPLETE_FAULT;
+                    else if (pte.v & (pte.r | pte.x)) begin//superpage (all remaining xwr patterns other than all zeros)
+                        if (access_valid & privilege_valid)
+                            next_state = 2**COMPLETE_SUCCESS;
+                        else
+                            next_state = 2**COMPLETE_FAULT;
+                    end
                     else //(pte.v & ~pte.x & ~pte.w & ~pte.r) pointer to next level in page table
-                        next_state = SEND_REQUEST_2;
+                        next_state = 2**SEND_REQUEST_2;
                 end
-            end
-            SEND_REQUEST_2 : if (l1_request.ack) next_state = WAIT_REQUEST_2;
-            WAIT_REQUEST_2 : if (l1_response.data_valid) next_state = (access_valid & privilege_valid) ? COMPLETE_SUCCESS : COMPLETE_FAULT;
-            COMPLETE_SUCCESS : next_state = IDLE;
-            COMPLETE_FAULT : next_state = IDLE;
-            default : next_state = IDLE;
+            state[SEND_REQUEST_2] : 
+                if (l1_request.ack) begin
+                    next_state = 2**WAIT_REQUEST_2;
+                end
+            state[WAIT_REQUEST_2] : 
+                if (l1_response.data_valid) begin
+                    if (access_valid & privilege_valid)
+                        next_state = 2**COMPLETE_SUCCESS;
+                    else
+                        next_state = 2**COMPLETE_FAULT;
+                end
+            state[COMPLETE_SUCCESS], state[COMPLETE_FAULT]  :
+                next_state = 2**IDLE;
         endcase
     end
 
     always_ff @ (posedge clk) begin
         if (rst)
-            state <= IDLE;
+            state <= 2**IDLE;
         else
             state <= next_state;
     end
@@ -130,12 +154,12 @@ module mmu
     //TLB return path
     always_ff @ (posedge clk) begin
         if (l1_response.data_valid) begin
-            mmu.new_phys_addr[19:10] <= pte.ppn1[9:0];
-            mmu.new_phys_addr[9:0] <= (state == WAIT_REQUEST_2) ? pte.ppn0 : mmu.virtual_address[21:12];
+            mmu.upper_physical_address[19:10] <= pte.ppn1[9:0];
+            mmu.upper_physical_address[9:0] <= state[WAIT_REQUEST_2] ? pte.ppn0 : mmu.virtual_address[21:12];
         end
     end
-    assign mmu.write_entry = (state == COMPLETE_SUCCESS);
-    assign mmu.is_fault = (state == COMPLETE_FAULT);
+    assign mmu.write_entry = state[COMPLETE_SUCCESS];
+    assign mmu.is_fault = state[COMPLETE_FAULT];
 
     ////////////////////////////////////////////////////
     //End of Implementation
@@ -144,7 +168,7 @@ module mmu
     ////////////////////////////////////////////////////
     //Assertions
     mmu_spurious_l1_response:
-        assert property (@(posedge clk) disable iff (rst) (l1_response.data_valid) |-> (state inside {WAIT_REQUEST_1, WAIT_REQUEST_2}))
+        assert property (@(posedge clk) disable iff (rst) (l1_response.data_valid) |-> (state[WAIT_REQUEST_1] | state[WAIT_REQUEST_2]))
         else $error("mmu recieved response without a request");
 
 endmodule
