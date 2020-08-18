@@ -300,6 +300,7 @@ module taiga (
             .clk            (clk),
             .rst            (rst),
             .mmu            (immu) , 
+            .abort_request (gc_fetch_flush),
             .l1_request     (l1_request[L1_IMMU_ID]), 
             .l1_response    (l1_response[L1_IMMU_ID])
         );
@@ -456,6 +457,7 @@ module taiga (
             .clk            (clk),
             .rst            (rst),
             .mmu            (dmmu) , 
+            .abort_request (1'b0),
             .l1_request     (l1_request[L1_DMMU_ID]), 
             .l1_response    (l1_response[L1_DMMU_ID])
         );
