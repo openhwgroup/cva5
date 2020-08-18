@@ -28,8 +28,9 @@ package taiga_types;
 
     localparam WB_UNITS_WIDTH = $clog2(NUM_WB_UNITS);
     localparam LOG2_COMMIT_PORTS = $clog2(COMMIT_PORTS);
+    localparam LOG2_MAX_IDS = $clog2(MAX_IDS);
 
-    typedef logic[$clog2(MAX_IDS)-1:0] id_t;
+    typedef logic[LOG2_MAX_IDS-1:0] id_t;
     typedef logic[WB_UNITS_WIDTH-1:0] unit_id_t;
     typedef logic[1:0] branch_predictor_metadata_t;
 

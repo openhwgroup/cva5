@@ -136,7 +136,7 @@ endinterface
 
 interface mmu_interface;
     //From TLB
-    logic new_request;
+    logic request;
     logic execute;
     logic rnw;
     logic [31:0] virtual_address;
@@ -147,14 +147,14 @@ interface mmu_interface;
     logic is_fault;
 
     //From CSR
-    logic [21:0] ppn;
+    logic [21:0] satp_ppn;
     logic mxr; //Make eXecutable Readable
     logic sum; //permit Supervisor User Memory access
     logic [1:0] privilege;
 
-    modport mmu (input virtual_address, new_request, execute, rnw, ppn, mxr, sum, privilege, output write_entry, upper_physical_address, is_fault);
-    modport tlb (input write_entry, upper_physical_address, is_fault, output new_request, virtual_address, execute, rnw);
-    modport csr (output ppn, mxr, sum, privilege);
+    modport mmu (input virtual_address, request, execute, rnw, satp_ppn, mxr, sum, privilege, output write_entry, upper_physical_address, is_fault);
+    modport tlb (input write_entry, upper_physical_address, is_fault, output request, virtual_address, execute, rnw);
+    modport csr (output satp_ppn, mxr, sum, privilege);
 
 endinterface
 

@@ -85,6 +85,7 @@ module fetch(
     logic flush_or_rst;
     fifo_interface #(.DATA_WIDTH($bits(fetch_attributes_t))) fetch_attr_fifo();
 
+    logic update_pc;
     logic new_mem_request;
 
     //Cache related
@@ -95,10 +96,11 @@ module fetch(
     //Implementation
     ////////////////////////////////////////////////////
     //Fetch PC
+    assign update_pc = new_mem_request | gc_fetch_flush;
     always_ff @(posedge clk) begin
         if (rst)
             pc <= RESET_VEC;
-        else if (new_mem_request | gc_fetch_flush)
+        else if (update_pc)
             pc <= {next_pc[31:2], 2'b0};
     end
 
@@ -115,7 +117,7 @@ module fetch(
             next_pc = pc_plus_4;
     end
 
-    assign bp.new_mem_request = new_mem_request | gc_fetch_flush;
+    assign bp.new_mem_request = update_pc;
     assign bp.next_pc = next_pc;
     assign bp.if_pc = pc;
 
@@ -129,6 +131,7 @@ module fetch(
     assign tlb.virtual_address = pc;
     assign tlb.execute = 1;
     assign tlb.rnw = 0;
+    assign tlb.new_request = update_pc;
 
     always_ff @(posedge clk) begin
         if (new_mem_request)

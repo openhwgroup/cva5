@@ -482,6 +482,7 @@ generate if (ENABLE_S_MODE) begin
     assign asid = satp.asid;
     //******************
 
+    ////////////////////////////////////////////////////
     //MMU interface
     assign immu.mxr = mstatus.mxr;
     assign dmmu.mxr = mstatus.mxr;
@@ -489,13 +490,14 @@ generate if (ENABLE_S_MODE) begin
     assign dmmu.sum = mstatus.sum;
     assign immu.privilege = privilege_level;
     assign dmmu.privilege = mstatus.mprv ? mstatus.mpp : privilege_level;
-    assign immu.ppn = satp.ppn;
-    assign dmmu.ppn = satp.ppn;
-    //******************
+    assign immu.satp_ppn = satp.ppn;
+    assign dmmu.satp_ppn = satp.ppn;
+    ////////////////////////////////////////////////////
 
     assign sip_mask =  '{default:0, seip:1, stip:1, ssip:1};
 
-    //stvec
+    ////////////////////////////////////////////////////
+    //STVEC
     logic [31:0] stvec_mask = '1;
     always_ff @(posedge clk) begin
         if (rst)
@@ -504,7 +506,8 @@ generate if (ENABLE_S_MODE) begin
             stvec <= (updated_csr & stvec_mask);
     end
 
-    //satp
+    ////////////////////////////////////////////////////
+    //SATP
     logic[XLEN-1:0] satp_mask;
     assign satp_mask = '1;
     always_ff @(posedge clk) begin

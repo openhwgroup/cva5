@@ -114,11 +114,11 @@ module tlb_lut_ram #(
 
     always_ff @ (posedge clk) begin
         if (rst)
-            mmu.new_request <= 0;
-        else if (mmu.write_entry)
-            mmu.new_request <= 0;
+            mmu.request <= 0;
+        else if (mmu.write_entry | mmu.is_fault)
+            mmu.request <= 0;
         else if (tlb_on & ~hit & tlb.new_request)
-            mmu.new_request <= 1;
+            mmu.request <= 1;
     end
 
     assign mmu.virtual_address = tlb.virtual_address;
