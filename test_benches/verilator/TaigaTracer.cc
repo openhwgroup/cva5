@@ -134,14 +134,14 @@ void TaigaTracer<TB>::tick() {
 		tb->clk = 1;
 		tb->eval();
         #ifdef TRACE_ON
-            verilatorWaveformTracer->dump(vluint32_t(10*cycle_count-2));
+            verilatorWaveformTracer->dump(vluint32_t(cycle_count));
         #endif
         cycle_count++;
 
         tb->clk = 0;
         tb->eval();
         #ifdef TRACE_ON
-            verilatorWaveformTracer->dump(vluint32_t(10*cycle_count));
+            verilatorWaveformTracer->dump(vluint32_t(cycle_count));
         #endif
 
 
