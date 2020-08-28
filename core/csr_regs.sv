@@ -473,15 +473,12 @@ endgenerate
     ////////////////////////////////////////////////////
     //BEGIN OF SUPERVISOR REGS
     ////////////////////////////////////////////////////
-
-generate if (ENABLE_S_MODE) begin
-
-    //******************************************************************
     //TLB status --- used to mux physical/virtual address
-    assign tlb_on = satp.mode;
+    assign tlb_on = ENABLE_S_MODE & satp.mode;
     assign asid = satp.asid;
     //******************
 
+generate if (ENABLE_S_MODE) begin
     ////////////////////////////////////////////////////
     //MMU interface
     assign immu.mxr = mstatus.mxr;

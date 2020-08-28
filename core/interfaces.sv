@@ -159,17 +159,28 @@ interface mmu_interface;
 endinterface
 
 interface tlb_interface;
-    logic [31:0] virtual_address;
+    //Handshaking
+    logic ready;
     logic new_request;
+    logic done;
+
+    //TLB Inputs
+    logic [31:0] virtual_address;
     logic rnw;
     logic execute;
 
-    logic complete;
+    //TLB Outputs
+    logic is_fault;
     logic [31:0] physical_address;
 
-    modport tlb (input virtual_address, new_request, rnw, execute,   output complete, physical_address);
-    modport mem  (output new_request, virtual_address, rnw, execute, input complete, physical_address);
-
+    modport tlb (
+        input new_request, virtual_address, rnw, execute,
+        output ready, done, is_fault, physical_address
+    );
+    modport requester  (
+        output new_request, virtual_address, rnw, execute,
+        input ready, done, is_fault, physical_address
+    );
 endinterface
 
 interface load_store_queue_interface;

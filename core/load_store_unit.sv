@@ -32,10 +32,11 @@ module load_store_unit (
 
         input logic dcache_on,
         input logic clear_reservation,
-        tlb_interface.mem tlb,
+        tlb_interface.requester tlb,
 
         input logic gc_fetch_flush,
         input logic gc_issue_flush,
+        input logic tlb_on,
 
         l1_arbiter_request_interface.master l1_request,
         l1_arbiter_return_interface.master l1_response,
@@ -84,7 +85,7 @@ module load_store_unit (
 
     logic units_ready;
     logic unit_switch_stall;
-    logic ready_for_issue;
+    logic ready_for_issue_from_lsq;
     logic issue_request;
     logic load_complete;
 
@@ -140,10 +141,10 @@ generate if (ENABLE_M_MODE) begin
         endcase
     end
     assign ls_exception_is_store = ls_inputs.store;
-   assign ls_exception.valid = unaligned_addr & issue.new_request;
-   assign ls_exception.code = ls_inputs.store ? STORE_AMO_ADDR_MISSALIGNED : LOAD_ADDR_MISSALIGNED;
-   assign ls_exception.tval = virtual_address;
-   assign ls_exception.id = issue.id;
+    assign ls_exception.valid = unaligned_addr & issue.new_request;
+    assign ls_exception.code = ls_inputs.store ? STORE_AMO_ADDR_MISSALIGNED : LOAD_ADDR_MISSALIGNED;
+    assign ls_exception.tval = virtual_address;
+    assign ls_exception.id = issue.id;
 
 end
 endgenerate
@@ -152,7 +153,7 @@ endgenerate
     assign virtual_address = ls_inputs.rs1 + 32'(signed'(ls_inputs.offset));
 
     assign tlb.virtual_address = virtual_address;
-    assign tlb.new_request = issue_request;
+    assign tlb.new_request = tlb_on & issue_request;
     assign tlb.execute = 0;
     assign tlb.rnw = ls_inputs.load & ~ls_inputs.store;
 
@@ -177,7 +178,7 @@ endgenerate
 
     ////////////////////////////////////////////////////
     //Load Store Queue
-    assign lsq.addr = virtual_address;
+    assign lsq.addr = tlb_on ? tlb.physical_address : virtual_address;
     assign lsq.fn3 = ls_inputs.fn3;
     assign lsq.be = be;
     assign lsq.data_in = ls_inputs.rs2;
@@ -188,7 +189,7 @@ endgenerate
     assign lsq.data_id = ls_inputs.store_forward_id;
 
     assign lsq.possible_issue = issue.possible_issue;
-    assign lsq.new_issue = issue.new_request & ~unaligned_addr;
+    assign lsq.new_issue = issue.new_request & ~unaligned_addr & (~tlb_on | tlb.done);
 
     logic [MAX_IDS-1:0] wb_hold_for_store_ids;
     load_store_queue lsq_block (
@@ -235,10 +236,10 @@ endgenerate
     assign units_ready = &unit_ready;
     assign load_complete = |unit_data_valid;
 
-    assign ready_for_issue = units_ready & (~unit_switch_stall);
+    assign ready_for_issue_from_lsq = units_ready & (~unit_switch_stall);
 
-    assign issue.ready = ls_inputs.forwarded_store ? lsq.ready & ready_for_forwarded_store : lsq.ready;
-    assign issue_request = lsq.transaction_ready & ready_for_issue;
+    assign issue.ready = (~tlb_on | tlb.ready) & (ls_inputs.forwarded_store ? lsq.ready & ready_for_forwarded_store : lsq.ready);
+    assign issue_request = lsq.transaction_ready & ready_for_issue_from_lsq;
 
     ////////////////////////////////////////////////////
     //Load attributes FIFO

@@ -32,6 +32,7 @@ module fetch(
         input logic gc_fetch_hold,
         input logic gc_fetch_flush,
         input logic gc_fetch_pc_override,
+        input logic tlb_on,
         input logic exception,
         input logic [31:0] gc_fetch_pc,
 
@@ -48,7 +49,7 @@ module fetch(
         output logic [31:0] if_pc,
         output logic [31:0] fetch_instruction,
 
-        tlb_interface.mem tlb,
+        tlb_interface.requester tlb,
         local_memory_interface.master instruction_bram,
         input logic icache_on,
         l1_arbiter_request_interface.master l1_request,
@@ -71,6 +72,7 @@ module fetch(
     logic [31:0] unit_data_array [NUM_SUB_UNITS-1:0];
 
     logic units_ready;
+    logic address_valid;
 
     typedef struct packed{
         logic address_valid;
@@ -87,6 +89,9 @@ module fetch(
 
     logic update_pc;
     logic new_mem_request;
+    logic exception_pending;
+
+    logic [31:0] translated_address;
 
     //Cache related
     logic [31:0] stage2_phys_address;
@@ -117,6 +122,16 @@ module fetch(
             next_pc = pc_plus_4;
     end
 
+    //If an exception occurs here in the fetch logic,
+    //hold the fetching of data from memory until the status of the
+    //exception has been resolved
+    always_ff @(posedge clk) begin
+        if (rst | gc_fetch_flush)
+            exception_pending <= 0;
+        else if (tlb.is_fault | (new_mem_request & ~address_valid))
+            exception_pending <= 1;
+    end
+
     assign bp.new_mem_request = update_pc;
     assign bp.next_pc = next_pc;
     assign bp.if_pc = pc;
@@ -131,18 +146,19 @@ module fetch(
     assign tlb.virtual_address = pc;
     assign tlb.execute = 1;
     assign tlb.rnw = 0;
-    assign tlb.new_request = update_pc;
+    assign tlb.new_request = tlb.ready & tlb_on;
+    assign translated_address = tlb_on ? tlb.physical_address : pc;
 
     always_ff @(posedge clk) begin
         if (new_mem_request)
-            stage2_phys_address <= tlb.physical_address;
+            stage2_phys_address <= translated_address;
     end
 
     //////////////////////////////////////////////
     //Issue Control Signals
     assign flush_or_rst = (rst | gc_fetch_flush);
 
-    assign new_mem_request = tlb.complete & pc_id_available & units_ready & ~gc_fetch_hold;
+    assign new_mem_request = (~tlb_on | tlb.done) & pc_id_available & units_ready & ~gc_fetch_hold & ~exception_pending;
     assign pc_id_assigned = new_mem_request;
 
     //////////////////////////////////////////////
@@ -156,7 +172,7 @@ module fetch(
         .one_hot    (sub_unit_address_match), 
         .int_out    (fetch_attr_next.subunit_id)
     );
-    assign fetch_attr_next.address_valid = |sub_unit_address_match;
+    assign fetch_attr_next.address_valid = address_valid;
 
     assign fetch_attr_fifo.data_in = fetch_attr_next;
 
@@ -179,13 +195,14 @@ module fetch(
             assign unit_ready[i] = fetch_sub[i].ready;
             assign unit_data_valid[i] = fetch_sub[i].data_valid;
             assign fetch_sub[i].new_request = new_mem_request & sub_unit_address_match[i];
-            assign fetch_sub[i].stage1_addr = tlb.physical_address;
+            assign fetch_sub[i].stage1_addr = translated_address;
             assign fetch_sub[i].stage2_addr = stage2_phys_address;
             assign fetch_sub[i].flush = gc_fetch_flush;
             assign unit_data_array[i] = fetch_sub[i].data_out;
         end
     endgenerate
     assign units_ready = &unit_ready;
+    assign address_valid = |sub_unit_address_match;
 
     generate if (USE_I_SCRATCH_MEM) begin
         ibram i_bram (
@@ -194,7 +211,7 @@ module fetch(
             .fetch_sub          (fetch_sub[BRAM_ID]),
             .instruction_bram   (instruction_bram)
         );
-        assign sub_unit_address_match[BRAM_ID] = tlb.physical_address[31:32-SCRATCH_BIT_CHECK] == SCRATCH_ADDR_L[31:32-SCRATCH_BIT_CHECK];
+        assign sub_unit_address_match[BRAM_ID] = translated_address[31:32-SCRATCH_BIT_CHECK] == SCRATCH_ADDR_L[31:32-SCRATCH_BIT_CHECK];
     end
     endgenerate
     generate if (USE_ICACHE) begin
@@ -206,7 +223,7 @@ module fetch(
             .l1_response        (l1_response),
             .fetch_sub  (fetch_sub[ICACHE_ID])
         );
-        assign sub_unit_address_match[ICACHE_ID] = tlb.physical_address[31:32-MEMORY_BIT_CHECK] == MEMORY_ADDR_L[31:32-MEMORY_BIT_CHECK];
+        assign sub_unit_address_match[ICACHE_ID] = translated_address[31:32-MEMORY_BIT_CHECK] == MEMORY_ADDR_L[31:32-MEMORY_BIT_CHECK];
     end
     endgenerate
 

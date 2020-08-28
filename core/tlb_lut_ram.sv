@@ -30,8 +30,8 @@ module tlb_lut_ram #(
         (
         input logic clk,
         input logic rst,
-        input logic tlb_on,
-        input gc_tlb_flush,
+        input logic gc_tlb_flush,
+        input logic abort_request,
         input logic [ASIDLEN-1:0] asid,
         mmu_interface.tlb mmu,
         tlb_interface.tlb tlb
@@ -62,6 +62,8 @@ module tlb_lut_ram #(
     logic [$clog2(DEPTH)-1:0] flush_addr;
 
     logic [WAYS-1:0] tlb_write;
+    logic request_in_progress;
+    logic mmu_request_complete;
     ////////////////////////////////////////////////////
     //Implementation
     //LUTRAM-based
@@ -112,30 +114,52 @@ module tlb_lut_ram #(
         end
     end
 
+    assign tlb.ready = ~request_in_progress;
+
     always_ff @ (posedge clk) begin
         if (rst)
-            mmu.request <= 0;
-        else if (mmu.write_entry | mmu.is_fault)
-            mmu.request <= 0;
-        else if (tlb_on & ~hit & tlb.new_request)
-            mmu.request <= 1;
+            request_in_progress <= 0;
+        else if (mmu.write_entry | mmu.is_fault | abort_request)
+            request_in_progress <= 0;
+        else if (tlb.new_request & ~hit)
+            request_in_progress <= 1;
+    end
+    
+    assign mmu.request = request_in_progress;
+
+    always_ff @ (posedge clk) begin
+        if (rst)
+            mmu_request_complete <= 0;
+        else
+            mmu_request_complete <= mmu.write_entry;
     end
 
     assign mmu.virtual_address = tlb.virtual_address;
     assign mmu.execute = tlb.execute;
     assign mmu.rnw = tlb.rnw;
 
-    //On a TLB miss, the 
+    //On a TLB miss, the entry is requested from the MMU
+    //Once the request completes, it will update the TLB, causing
+    //the current request to output a hit
     assign hit = |tag_hit;
-    assign tlb.complete = hit | ~tlb_on;
+    assign tlb.done = hit & (tlb.new_request | mmu_request_complete);
+    assign tlb.is_fault = mmu.is_fault;
 
     always_comb begin
         tlb.physical_address[11:0] = tlb.virtual_address[11:0];
-        tlb.physical_address[31:12] = tlb.virtual_address[31:12];
-        for (int i=0; i<WAYS; i=i+1) begin
-            if(tag_hit[i] & tlb_on)  tlb.physical_address[31:12] = ram_entry[i].phys_addr;
+        tlb.physical_address[31:12] = 0;
+        for (int i = 0; i < WAYS; i++) begin
+            if (tag_hit[i])  tlb.physical_address[31:12] |= ram_entry[i].phys_addr;
         end
     end
+    ////////////////////////////////////////////////////
+    //End of Implementation
+    ////////////////////////////////////////////////////
 
+    ////////////////////////////////////////////////////
+    //Assertions
+    multiple_tag_hit_in_tlb:
+        assert property (@(posedge clk) disable iff (rst) (tlb.done) |-> $onehot(tag_hit))
+        else $error("Multiple tag hits in TLB!");
 
 endmodule
