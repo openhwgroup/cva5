@@ -262,7 +262,9 @@ module taiga (
         .if_pc                    (if_pc),
         .fetch_instruction        (fetch_instruction),                                
         .instruction_bram         (instruction_bram), 
-        .icache_on('1), .tlb(itlb), 
+        .icache_on('1),
+        .tlb(itlb), 
+        .tlb_on  (tlb_on),
         .l1_request(l1_request[L1_ICACHE_ID]), 
         .l1_response(l1_response[L1_ICACHE_ID]), 
         .exception(1'b0)
@@ -289,7 +291,7 @@ module taiga (
         tlb_lut_ram #(ITLB_WAYS, ITLB_DEPTH) i_tlb (       
             .clk     (clk),
             .rst     (rst),
-            .tlb_on  (tlb_on),
+            .abort_request  (gc_fetch_flush),
             .gc_tlb_flush (gc_tlb_flush),
             .asid    (asid),
             .tlb     (itlb), 
@@ -307,7 +309,8 @@ module taiga (
 
         end
         else begin
-            assign itlb.complete = 1;
+            assign itlb.ready = 1;
+            assign itlb.done = itlb.new_request;
             assign itlb.physical_address = itlb.virtual_address;
         end
     endgenerate
@@ -420,7 +423,8 @@ module taiga (
        .clear_reservation              (1'b0), 
        .tlb                            (dtlb),  
        .gc_fetch_flush                 (gc_fetch_flush),
-       .gc_issue_flush                 (gc_issue_flush),                                       
+       .gc_issue_flush                 (gc_issue_flush),           
+       .tlb_on  (tlb_on),                            
        .l1_request                     (l1_request[L1_DCACHE_ID]), 
        .l1_response                    (l1_response[L1_DCACHE_ID]),
        .sc_complete                    (sc_complete),
@@ -446,7 +450,7 @@ module taiga (
         tlb_lut_ram #(DTLB_WAYS, DTLB_DEPTH) d_tlb (       
             .clk     (clk),
             .rst     (rst),
-            .tlb_on  (tlb_on),
+            .abort_request  (1'b0),
             .gc_tlb_flush (gc_tlb_flush),
             .asid    (asid),
             .tlb     (dtlb), 
@@ -463,7 +467,8 @@ module taiga (
         );
     end
     else begin
-            assign dtlb.complete = 1;
+            assign dtlb.ready = 1;
+            assign dtlb.done = dtlb.new_request;
             assign dtlb.physical_address = dtlb.virtual_address;
     end
     endgenerate
