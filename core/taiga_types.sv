@@ -74,12 +74,22 @@ package taiga_types;
         logic [BRANCH_PREDICTOR_WAYS-1:0] branch_predictor_update_way;
     } branch_metadata_t;
 
+    typedef enum logic {
+        FETCH_ACCESS_FAULT = 1'b0,
+        FETCH_PAGE_FAULT = 1'b1
+    } fetch_error_codes_t;
+
+    typedef struct packed{
+        logic ok;
+        fetch_error_codes_t error_code;
+    } fetch_metadata_t;
+
     typedef struct packed{
         id_t id;
         logic [31:0] pc;
         logic [31:0] instruction;
         logic valid;
-        logic addr_valid;
+        fetch_metadata_t fetch_metadata;
     } decode_packet_t;
 
     typedef struct packed{
@@ -96,7 +106,7 @@ package taiga_types;
         logic uses_rd;
         id_t id;
         logic stage_valid;
-        logic addr_valid;
+        fetch_metadata_t fetch_metadata;
     } issue_packet_t;
 
     typedef struct packed{

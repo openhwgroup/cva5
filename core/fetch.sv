@@ -40,7 +40,7 @@ module fetch(
         input logic pc_id_available,
         output logic pc_id_assigned,
         output logic fetch_complete,
-        output logic fetch_address_valid,
+        output fetch_metadata_t fetch_metadata,
 
         branch_predictor_interface.fetch bp,
         ras_interface.fetch ras,
@@ -76,6 +76,7 @@ module fetch(
 
     typedef struct packed{
         logic address_valid;
+        logic mmu_fault;
         logic [NUM_SUB_UNITS_W-1:0] subunit_id;
     } fetch_attributes_t;
     fetch_attributes_t fetch_attr_next;
@@ -159,12 +160,12 @@ module fetch(
     assign flush_or_rst = (rst | gc_fetch_flush);
 
     assign new_mem_request = (~tlb_on | tlb.done) & pc_id_available & units_ready & ~gc_fetch_hold & ~exception_pending;
-    assign pc_id_assigned = new_mem_request;
+    assign pc_id_assigned = new_mem_request | tlb.is_fault;
 
     //////////////////////////////////////////////
     //Subunit Tracking
-    assign fetch_attr_fifo.push = new_mem_request;
-    assign fetch_attr_fifo.potential_push = new_mem_request;
+    assign fetch_attr_fifo.push = new_mem_request | tlb.is_fault;
+    assign fetch_attr_fifo.potential_push = new_mem_request | tlb.is_fault;
     assign fetch_attr_fifo.pop = fetch_complete;
     one_hot_to_integer #(NUM_SUB_UNITS) hit_way_conv (
         .clk        (clk), 
@@ -173,6 +174,7 @@ module fetch(
         .int_out    (fetch_attr_next.subunit_id)
     );
     assign fetch_attr_next.address_valid = address_valid;
+    assign fetch_attr_next.mmu_fault = tlb.is_fault;
 
     assign fetch_attr_fifo.data_in = fetch_attr_next;
 
@@ -232,7 +234,8 @@ module fetch(
     assign if_pc = pc;
     assign fetch_instruction = unit_data_array[fetch_attr.subunit_id];
     assign fetch_complete = (|unit_data_valid) | (fetch_attr_fifo.valid & ~fetch_attr.address_valid);//allow instruction to propagate to decode if address is invalid
-    assign fetch_address_valid = fetch_attr.address_valid;
+    assign fetch_metadata.ok = fetch_attr.address_valid & ~fetch_attr.mmu_fault;
+    assign fetch_metadata.error_code = fetch_attr.mmu_fault ? FETCH_PAGE_FAULT : FETCH_ACCESS_FAULT;
 
     ////////////////////////////////////////////////////
     //End of Implementation
