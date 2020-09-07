@@ -29,6 +29,7 @@ module decode_and_issue (
         input logic rst,
 
         //ID Management
+        input logic pc_id_available,
         input decode_packet_t decode,
         output logic decode_advance,
 
@@ -549,8 +550,8 @@ module decode_and_issue (
     generate if (ENABLE_TRACE_INTERFACE) begin
         assign tr_operand_stall = |(unit_needed_issue_stage & unit_ready) & issue_valid & ~|(unit_operands_ready & unit_needed_issue_stage);
         assign tr_unit_stall = ~|(unit_needed_issue_stage & unit_ready) & issue_valid & |(unit_operands_ready & unit_needed_issue_stage);
-        assign tr_no_id_stall = 0;
-        assign tr_no_instruction_stall = ~issue.stage_valid | gc_fetch_flush;
+        assign tr_no_id_stall = (~issue.stage_valid & ~pc_id_available & ~gc_fetch_flush); //All instructions in execution pipeline
+        assign tr_no_instruction_stall = (~tr_no_id_stall & ~issue.stage_valid) | gc_fetch_flush;
         assign tr_other_stall = issue.stage_valid & ~instruction_issued & ~(tr_operand_stall | tr_unit_stall | tr_no_id_stall | tr_no_instruction_stall);
         assign tr_branch_operand_stall = tr_operand_stall & unit_needed_issue_stage[BRANCH_UNIT_ID];
         assign tr_alu_operand_stall = tr_operand_stall & unit_needed_issue_stage[ALU_UNIT_WB_ID] & ~unit_needed_issue_stage[BRANCH_UNIT_ID];

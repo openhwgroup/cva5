@@ -320,6 +320,7 @@ module taiga (
     decode_and_issue decode_and_issue_block (
         .clk                            (clk),
         .rst                            (rst),
+        .pc_id_available          (pc_id_available),
         .decode                         (decode),
         .decode_advance                 (decode_advance),
         .issue                          (issue),
