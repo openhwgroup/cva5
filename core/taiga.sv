@@ -94,7 +94,7 @@ module taiga (
     id_t fetch_id;
     logic fetch_complete;
     logic [31:0] fetch_instruction;
-    logic fetch_address_valid;
+    fetch_metadata_t fetch_metadata;
         //Decode stage
     logic decode_advance;
     decode_packet_t decode;
@@ -218,7 +218,7 @@ module taiga (
         .fetch_id                          (fetch_id),
         .fetch_complete                    (fetch_complete),
         .fetch_instruction                 (fetch_instruction),
-        .fetch_address_valid               (fetch_address_valid),
+        .fetch_metadata               (fetch_metadata),
         .decode                            (decode),
         .decode_advance                    (decode_advance),
         .issue                             (issue),
@@ -256,7 +256,7 @@ module taiga (
         .pc_id_available          (pc_id_available),
         .pc_id_assigned           (pc_id_assigned),
         .fetch_complete           (fetch_complete),
-        .fetch_address_valid      (fetch_address_valid),
+        .fetch_metadata      (fetch_metadata),
         .bp                       (bp),
         .ras                      (ras),
         .if_pc                    (if_pc),

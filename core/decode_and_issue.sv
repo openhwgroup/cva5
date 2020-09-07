@@ -158,7 +158,7 @@ module decode_and_issue (
         if (issue_stage_ready) begin
             issue.pc <= decode.pc;
             issue.instruction <= decode.instruction;
-            issue.addr_valid <= decode.addr_valid;
+            issue.fetch_metadata <= decode.fetch_metadata;
             issue.fn3 <= fn3;
             issue.opcode <= opcode;
             issue.rs_addr[RS1] <= rs1_addr;
@@ -541,7 +541,7 @@ module decode_and_issue (
     //TODO: convert into exception and expand support into all fetch stage exceptions
     //If an invalid fetch address has reached the issue stage and has not been flushed as a branch, processor state is corrupted
     invalid_fetch_address_assertion:
-        assert property (@(posedge clk) disable iff (rst) (issue.stage_valid & ~issue.addr_valid) |-> (gc_fetch_flush))
+        assert property (@(posedge clk) disable iff (rst) (issue.stage_valid & (~issue.fetch_metadata.ok & issue.fetch_metadata.error_code == FETCH_ACCESS_FAULT)) |-> (gc_fetch_flush))
         else $error("invalid fetch address");
 
     ////////////////////////////////////////////////////

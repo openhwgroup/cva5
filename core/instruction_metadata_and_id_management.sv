@@ -41,7 +41,7 @@ module instruction_metadata_and_id_management
         output id_t fetch_id,
         input logic fetch_complete,
         input logic [31:0] fetch_instruction,
-        input logic fetch_address_valid,
+        input fetch_metadata_t fetch_metadata,
 
         //Decode ID
         output decode_packet_t decode,
@@ -87,7 +87,7 @@ module instruction_metadata_and_id_management
 
     logic [4:0] rd_addr_table [MAX_IDS];
     logic [$bits(branch_metadata_t)-1:0] branch_metadata_table [MAX_IDS];
-    logic [31:0] rd_table [MAX_IDS];
+    logic [$bits(fetch_metadata_t)-1:0] fetch_metadata_table [MAX_IDS];
 
     localparam LOG2_MAX_IDS = $clog2(MAX_IDS);
     id_t clear_index;
@@ -151,7 +151,7 @@ module instruction_metadata_and_id_management
     //valid fetched address table
     always_ff @ (posedge clk) begin
         if (fetch_complete)
-            valid_fetch_addr_table[fetch_id] <= fetch_address_valid;
+            fetch_metadata_table[fetch_id] <= fetch_metadata;
     end
     
 
@@ -343,7 +343,7 @@ module instruction_metadata_and_id_management
     assign decode.valid = fetched_count[LOG2_MAX_IDS];
     assign decode.pc = pc_table[decode_id];
     assign decode.instruction = instruction_table[decode_id];
-    assign decode.addr_valid = valid_fetch_addr_table[decode_id];
+    assign decode.fetch_metadata = fetch_metadata_table[decode_id];
 
     //Branch Predictor
     assign branch_metadata_ex = branch_metadata_table[branch_id];
