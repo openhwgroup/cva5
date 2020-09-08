@@ -232,6 +232,9 @@ package taiga_types;
     } fifo_type_t;
 
     typedef struct packed {
+        //Fetch
+        logic early_branch_correction;
+
         //Decode
         logic operand_stall;
         logic unit_stall;

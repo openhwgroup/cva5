@@ -39,6 +39,7 @@ module instruction_metadata_and_id_management
         input logic pc_id_assigned,
 
         output id_t fetch_id,
+        input logic early_branch_flush,
         input logic fetch_complete,
         input logic [31:0] fetch_instruction,
         input fetch_metadata_t fetch_metadata,
@@ -176,8 +177,13 @@ module instruction_metadata_and_id_management
     //On a fetch buffer flush, the next ID is restored to the current decode ID.
     //This prevents a stall in the case where all  IDs are either in-flight or
     //in the fetch buffer at the point of a fetch flush.
+    id_t next_pc_id_base;
+    id_t next_fetch_id_base;
+    assign next_pc_id_base = gc_fetch_flush ? decode_id : (early_branch_flush ? fetch_id : pc_id);
+    assign next_fetch_id_base = gc_fetch_flush ? decode_id : fetch_id;
+
     assign pc_id_next = gc_init_clear ? clear_index : 
-        ((gc_fetch_flush ? decode_id : pc_id) + LOG2_MAX_IDS'({pc_id_assigned & ~gc_fetch_flush}));
+        (next_pc_id_base + LOG2_MAX_IDS'({pc_id_assigned & ~gc_fetch_flush}));
     always_ff @ (posedge clk) begin
         if (rst) begin
             pc_id <= 0;
@@ -185,8 +191,8 @@ module instruction_metadata_and_id_management
             decode_id <= 0;
         end
         else begin
-            pc_id <= (gc_fetch_flush ? decode_id : pc_id) + LOG2_MAX_IDS'({pc_id_assigned & ~gc_fetch_flush});
-            fetch_id <= (gc_fetch_flush ? decode_id : fetch_id) + LOG2_MAX_IDS'({fetch_complete & ~gc_fetch_flush});
+            pc_id <= next_pc_id_base + LOG2_MAX_IDS'({pc_id_assigned & (~gc_fetch_flush) & (~early_branch_flush)});
+            fetch_id <= next_fetch_id_base + LOG2_MAX_IDS'({fetch_complete & ~gc_fetch_flush});
             decode_id <= decode_id + LOG2_MAX_IDS'({decode_advance & ~gc_fetch_flush});
         end
     end

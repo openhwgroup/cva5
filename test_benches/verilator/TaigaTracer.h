@@ -39,6 +39,7 @@ template <typename T, int N>
 constexpr int arraySize(T(&)[N]) { return N; }
 
 static const char * const eventNames[] = {
+    "early_branch_correction",
     "operand_stall",
     "unit_stall",
     "no_id_stall",
