@@ -191,7 +191,7 @@ module instruction_metadata_and_id_management
             decode_id <= 0;
         end
         else begin
-            pc_id <= next_pc_id_base + LOG2_MAX_IDS'({pc_id_assigned & (~gc_fetch_flush) & (~early_branch_flush)});
+            pc_id <= next_pc_id_base + LOG2_MAX_IDS'({pc_id_assigned & (~gc_fetch_flush)});
             fetch_id <= next_fetch_id_base + LOG2_MAX_IDS'({fetch_complete & ~gc_fetch_flush});
             decode_id <= decode_id + LOG2_MAX_IDS'({decode_advance & ~gc_fetch_flush});
         end

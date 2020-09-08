@@ -28,6 +28,7 @@ module ras (
         input logic clk,
         input logic rst,
         input logic gc_fetch_flush,
+        input logic early_branch_flush_ras_adjust,
         ras_interface.self ras
         );
 
@@ -46,12 +47,12 @@ module ras (
     //On a speculative branch, save the current stack pointer
     //Restored if branch is misspredicted (gc_fetch_flush)
     taiga_fifo #(.DATA_WIDTH(RAS_DEPTH_W), .FIFO_DEPTH(MAX_IDS))
-        read_index_fifo (.clk, .rst(rst | gc_fetch_flush), .fifo(ri_fifo));
+        read_index_fifo (.clk, .rst(rst | gc_fetch_flush | early_branch_flush_ras_adjust), .fifo(ri_fifo));
 
     assign ri_fifo.data_in = read_index;
     assign ri_fifo.push = ras.branch_fetched;
     assign ri_fifo.potential_push = ras.branch_fetched;
-    assign ri_fifo.pop = ras.branch_retired;
+    assign ri_fifo.pop = ras.branch_retired & ri_fifo.valid; //Prevent popping from fifo if reset due to early_branch_flush_ras_adjust
 
     always_ff @ (posedge clk) begin
         if (ras.push)

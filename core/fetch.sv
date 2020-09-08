@@ -47,6 +47,7 @@ module fetch(
 
         //Instruction Metadata
         output logic early_branch_flush,
+        output logic early_branch_flush_ras_adjust,
         output logic [31:0] if_pc,
         output logic [31:0] fetch_instruction,
 
@@ -80,6 +81,7 @@ module fetch(
 
     typedef struct packed{
         logic is_predicted_branch_or_jump;
+        logic is_branch;
         logic address_valid;
         logic mmu_fault;
         logic [NUM_SUB_UNITS_W-1:0] subunit_id;
@@ -179,6 +181,7 @@ module fetch(
         .int_out    (fetch_attr_next.subunit_id)
     );
     assign fetch_attr_next.is_predicted_branch_or_jump = bp.use_prediction;
+    assign fetch_attr_next.is_branch = bp.use_prediction & bp.is_branch;
     assign fetch_attr_next.address_valid = address_valid;
     assign fetch_attr_next.mmu_fault = tlb.is_fault;
 
@@ -245,13 +248,14 @@ module fetch(
     assign fetch_metadata.error_code = fetch_attr.mmu_fault ? FETCH_PAGE_FAULT : FETCH_ACCESS_FAULT;
 
     assign fetch_instruction = unit_data_array[fetch_attr.subunit_id];
-    assign fetch_complete = ((fetch_attr_fifo.valid & ~valid_fetch_result) | (|unit_data_valid) & (~early_branch_flush));//allow instruction to propagate to decode if address is invalid
+    assign fetch_complete = (fetch_attr_fifo.valid & ~valid_fetch_result) | (|unit_data_valid);//allow instruction to propagate to decode if address is invalid
 
     ////////////////////////////////////////////////////
     //Branch Predictor correction
     logic is_branch_or_jump;
     assign is_branch_or_jump = fetch_instruction[6:2] inside {JAL_T, JALR_T, BRANCH_T};
     assign early_branch_flush = (valid_fetch_result & (|unit_data_valid)) & fetch_attr.is_predicted_branch_or_jump & (~is_branch_or_jump);
+    assign early_branch_flush_ras_adjust = (valid_fetch_result & (|unit_data_valid)) & fetch_attr.is_branch & (~is_branch_or_jump);
     generate if (ENABLE_TRACE_INTERFACE) begin
         assign tr_early_branch_correction = early_branch_flush;
     end endgenerate

@@ -95,6 +95,7 @@ module taiga (
     logic fetch_complete;
     logic [31:0] fetch_instruction;
     logic early_branch_flush;
+    logic early_branch_flush_ras_adjust;
     fetch_metadata_t fetch_metadata;
         //Decode stage
     logic decode_advance;
@@ -263,6 +264,7 @@ module taiga (
         .bp                       (bp),
         .ras                      (ras),
         .early_branch_flush (early_branch_flush),
+        .early_branch_flush_ras_adjust (early_branch_flush_ras_adjust),
         .if_pc                    (if_pc),
         .fetch_instruction        (fetch_instruction),                                
         .instruction_bram         (instruction_bram), 
@@ -288,6 +290,7 @@ module taiga (
         .clk              (clk),
         .rst              (rst),
         .gc_fetch_flush   (gc_fetch_flush),
+        .early_branch_flush_ras_adjust (early_branch_flush_ras_adjust),
         .ras              (ras)
     );
 
