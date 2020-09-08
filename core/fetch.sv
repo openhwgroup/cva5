@@ -46,6 +46,7 @@ module fetch(
         ras_interface.fetch ras,
 
         //Instruction Metadata
+        output logic early_branch_flush,
         output logic [31:0] if_pc,
         output logic [31:0] fetch_instruction,
 
@@ -53,7 +54,10 @@ module fetch(
         local_memory_interface.master instruction_bram,
         input logic icache_on,
         l1_arbiter_request_interface.master l1_request,
-        l1_arbiter_return_interface.master l1_response
+        l1_arbiter_return_interface.master l1_response,
+
+        //Trace Interface
+        output logic tr_early_branch_correction
         );
 
     localparam NUM_SUB_UNITS = USE_I_SCRATCH_MEM + USE_ICACHE;
@@ -75,6 +79,7 @@ module fetch(
     logic address_valid;
 
     typedef struct packed{
+        logic is_predicted_branch_or_jump;
         logic address_valid;
         logic mmu_fault;
         logic [NUM_SUB_UNITS_W-1:0] subunit_id;
@@ -102,7 +107,7 @@ module fetch(
     //Implementation
     ////////////////////////////////////////////////////
     //Fetch PC
-    assign update_pc = new_mem_request | gc_fetch_flush;
+    assign update_pc = new_mem_request | gc_fetch_flush | early_branch_flush;
     always_ff @(posedge clk) begin
         if (rst)
             pc <= RESET_VEC;
@@ -117,7 +122,7 @@ module fetch(
             next_pc = gc_fetch_pc;
         else if (branch_flush)
             next_pc = bp.branch_flush_pc;
-        else if (bp.use_prediction)
+        else if (bp.use_prediction & ~early_branch_flush)
             next_pc = bp.is_return ? ras.addr : bp.predicted_pc;
         else
             next_pc = pc_plus_4;
@@ -127,7 +132,7 @@ module fetch(
     //hold the fetching of data from memory until the status of the
     //exception has been resolved
     always_ff @(posedge clk) begin
-        if (rst | gc_fetch_flush)
+        if (flush_or_rst)
             exception_pending <= 0;
         else if (tlb.is_fault | (new_mem_request & ~address_valid))
             exception_pending <= 1;
@@ -137,10 +142,10 @@ module fetch(
     assign bp.next_pc = next_pc;
     assign bp.if_pc = pc;
 
-    assign ras.pop = bp.use_prediction & bp.is_return & ~branch_flush & ~gc_fetch_pc_override & new_mem_request;
-    assign ras.push = bp.use_prediction & bp.is_call & ~branch_flush & ~gc_fetch_pc_override & new_mem_request;
+    assign ras.pop = bp.use_prediction & bp.is_return & ~branch_flush & ~gc_fetch_pc_override & new_mem_request & (~early_branch_flush);
+    assign ras.push = bp.use_prediction & bp.is_call & ~branch_flush & ~gc_fetch_pc_override & new_mem_request & (~early_branch_flush);
     assign ras.new_addr = pc_plus_4;
-    assign ras.branch_fetched = bp.use_prediction & bp.is_branch & new_mem_request; //flush not needed as FIFO resets inside of RAS
+    assign ras.branch_fetched = bp.use_prediction & bp.is_branch & new_mem_request & (~early_branch_flush); //flush not needed as FIFO resets inside of RAS
 
     ////////////////////////////////////////////////////
     //TLB
@@ -157,9 +162,9 @@ module fetch(
 
     //////////////////////////////////////////////
     //Issue Control Signals
-    assign flush_or_rst = (rst | gc_fetch_flush);
+    assign flush_or_rst = (rst | gc_fetch_flush | early_branch_flush);
 
-    assign new_mem_request = (~tlb_on | tlb.done) & pc_id_available & units_ready & ~gc_fetch_hold & ~exception_pending;
+    assign new_mem_request = (~tlb_on | tlb.done) & pc_id_available & units_ready & (~gc_fetch_hold) & (~exception_pending);
     assign pc_id_assigned = new_mem_request | tlb.is_fault;
 
     //////////////////////////////////////////////
@@ -173,6 +178,7 @@ module fetch(
         .one_hot    (sub_unit_address_match), 
         .int_out    (fetch_attr_next.subunit_id)
     );
+    assign fetch_attr_next.is_predicted_branch_or_jump = bp.use_prediction;
     assign fetch_attr_next.address_valid = address_valid;
     assign fetch_attr_next.mmu_fault = tlb.is_fault;
 
@@ -231,11 +237,24 @@ module fetch(
 
     ////////////////////////////////////////////////////
     //Instruction metada updates
+    logic valid_fetch_result;
+    assign valid_fetch_result = fetch_attr_fifo.valid & fetch_attr.address_valid & (~fetch_attr.mmu_fault);
+
     assign if_pc = pc;
-    assign fetch_instruction = unit_data_array[fetch_attr.subunit_id];
-    assign fetch_complete = (|unit_data_valid) | (fetch_attr_fifo.valid & ~fetch_attr.address_valid);//allow instruction to propagate to decode if address is invalid
-    assign fetch_metadata.ok = fetch_attr.address_valid & ~fetch_attr.mmu_fault;
+    assign fetch_metadata.ok = valid_fetch_result;
     assign fetch_metadata.error_code = fetch_attr.mmu_fault ? FETCH_PAGE_FAULT : FETCH_ACCESS_FAULT;
+
+    assign fetch_instruction = unit_data_array[fetch_attr.subunit_id];
+    assign fetch_complete = ((fetch_attr_fifo.valid & ~valid_fetch_result) | (|unit_data_valid) & (~early_branch_flush));//allow instruction to propagate to decode if address is invalid
+
+    ////////////////////////////////////////////////////
+    //Branch Predictor correction
+    logic is_branch_or_jump;
+    assign is_branch_or_jump = fetch_instruction[6:2] inside {JAL_T, JALR_T, BRANCH_T};
+    assign early_branch_flush = (valid_fetch_result & (|unit_data_valid)) & fetch_attr.is_predicted_branch_or_jump & (~is_branch_or_jump);
+    generate if (ENABLE_TRACE_INTERFACE) begin
+        assign tr_early_branch_correction = early_branch_flush;
+    end endgenerate
 
     ////////////////////////////////////////////////////
     //End of Implementation

@@ -94,6 +94,7 @@ module taiga (
     id_t fetch_id;
     logic fetch_complete;
     logic [31:0] fetch_instruction;
+    logic early_branch_flush;
     fetch_metadata_t fetch_metadata;
         //Decode stage
     logic decode_advance;
@@ -150,6 +151,7 @@ module taiga (
     id_t id_for_rd [COMMIT_PORTS];
 
     //Trace Interface Signals
+    logic tr_early_branch_correction;
     logic tr_operand_stall;
     logic tr_unit_stall;
     logic tr_no_id_stall;
@@ -216,6 +218,7 @@ module taiga (
         .if_pc                             (if_pc),
         .pc_id_assigned                    (pc_id_assigned),
         .fetch_id                          (fetch_id),
+        .early_branch_flush (early_branch_flush),
         .fetch_complete                    (fetch_complete),
         .fetch_instruction                 (fetch_instruction),
         .fetch_metadata               (fetch_metadata),
@@ -259,6 +262,7 @@ module taiga (
         .fetch_metadata      (fetch_metadata),
         .bp                       (bp),
         .ras                      (ras),
+        .early_branch_flush (early_branch_flush),
         .if_pc                    (if_pc),
         .fetch_instruction        (fetch_instruction),                                
         .instruction_bram         (instruction_bram), 
@@ -267,7 +271,8 @@ module taiga (
         .tlb_on  (tlb_on),
         .l1_request(l1_request[L1_ICACHE_ID]), 
         .l1_response(l1_response[L1_ICACHE_ID]), 
-        .exception(1'b0)
+        .exception(1'b0),
+        .tr_early_branch_correction (tr_early_branch_correction)
     );
 
     branch_predictor bp_block (       
@@ -291,7 +296,7 @@ module taiga (
         tlb_lut_ram #(ITLB_WAYS, ITLB_DEPTH) i_tlb (       
             .clk     (clk),
             .rst     (rst),
-            .abort_request  (gc_fetch_flush),
+            .abort_request  (gc_fetch_flush | early_branch_flush),
             .gc_tlb_flush (gc_tlb_flush),
             .asid    (asid),
             .tlb     (itlb), 
@@ -556,6 +561,7 @@ module taiga (
     //Trace Interface
     generate if (ENABLE_TRACE_INTERFACE) begin
         always_ff @(posedge clk) begin
+            tr.events.early_branch_correction <= tr_early_branch_correction;
             tr.events.operand_stall <= tr_operand_stall;
             tr.events.unit_stall <= tr_unit_stall;
             tr.events.no_id_stall <= tr_no_id_stall;
