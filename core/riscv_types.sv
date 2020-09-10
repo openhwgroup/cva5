@@ -116,6 +116,15 @@ package riscv_types;
     } fn3_mul_div_t;
 
     typedef enum logic [11:0] {
+        ECALL_imm = 12'b000000000000,
+        EBREAK_imm = 12'b000000000001,
+        URET_imm = 12'b000000000010,
+        SRET_imm = 12'b000100000010,
+        MRET_imm = 12'b001100000010,
+        SFENCE_imm = 12'b0001001?????
+    } imm_sys_t;
+
+    typedef enum logic [11:0] {
         //Machine info
         MVENDORID = 12'hF11,
         MARCHID = 12'hF12,

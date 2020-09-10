@@ -420,13 +420,10 @@ module decode_and_issue (
 
     ////////////////////////////////////////////////////
     //Global Control unit inputs
-    logic sfence;
     logic ifence;
     logic is_csr;
     logic is_csr_r;
     logic potential_flush;
-    assign sfence = decode.instruction[25];
-    assign ifence =  (opcode_trim == FENCE_T) && fn3[0];
     assign is_csr = (opcode_trim == SYSTEM_T) && (fn3 != 0);
 
     logic is_ecall;
@@ -435,14 +432,38 @@ module decode_and_issue (
     logic is_fence;
     logic is_ifence_r;
 
+    logic [7:0] sys_op_match;
+    typedef enum logic [2:0] {
+        ECALL_i = 0,
+        EBREAK_i = 1,
+        URET_i = 2,
+        SRET_i = 3,
+        MRET_i = 4,
+        SFENCE_i = 5
+    } sys_op_index_t;
+
+    always_comb begin
+        sys_op_match = '0;
+        case (decode.instruction[31:20]) inside
+            ECALL_imm : sys_op_match[ECALL_i] = ENABLE_M_MODE;
+            EBREAK_imm : sys_op_match[EBREAK_i] = ENABLE_M_MODE;
+            URET_imm : sys_op_match[URET_i] = ENABLE_U_MODE;
+            SRET_imm : sys_op_match[SRET_i] = ENABLE_S_MODE;
+            MRET_imm : sys_op_match[MRET_i] = ENABLE_M_MODE;
+            SFENCE_imm : sys_op_match[SFENCE_i] = ENABLE_S_MODE;
+            default : sys_op_match = '0;
+        endcase
+    end
+
+    assign ifence = (opcode_trim == FENCE_T) && fn3[0];
     always_ff @(posedge clk) begin
         if (issue_stage_ready) begin
             is_csr_r <= is_csr;
-            is_ecall <= ENABLE_M_MODE && environment_op && (decode.instruction[21:20] == 0);
-            is_ebreak <= ENABLE_M_MODE && environment_op && (decode.instruction[21:20] == 2'b01);
-            is_ret <= ENABLE_M_MODE && environment_op && (decode.instruction[21:20] == 2'b10);
+            is_ecall <= environment_op & sys_op_match[ECALL_i];
+            is_ebreak <= environment_op & sys_op_match[EBREAK_i];
+            is_ret <= environment_op & (sys_op_match[URET_i] | sys_op_match[SRET_i] | sys_op_match[MRET_i]);
             is_fence <= ENABLE_M_MODE && (opcode_trim == FENCE_T) && ~fn3[0];
-            is_ifence_r <= ifence;
+            is_ifence_r <= (opcode_trim == FENCE_T) && fn3[0];
             potential_flush <= (environment_op | ifence);
         end
     end
