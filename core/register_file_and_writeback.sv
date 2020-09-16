@@ -39,7 +39,7 @@ module register_file_and_writeback
         input id_t id_for_rd [COMMIT_PORTS],
         //Writeback
         unit_writeback_interface.wb unit_wb[NUM_WB_UNITS],
-        writeback_store_interface.wb wb_store,
+        output wb_packet_t wb_snoop,
 
         //Trace signals
         output logic tr_rs1_forwarding_needed,
@@ -167,46 +167,16 @@ module register_file_and_writeback
 
     ////////////////////////////////////////////////////
     //Store Forwarding Support
-    logic [31:0] commit_regs [COMMIT_PORTS-1];
-    logic [$clog2(COMMIT_PORTS)-1:0] store_reg_sel;
-    logic [$clog2(COMMIT_PORTS)-1:0] store_reg_sel_r;
-
-    generate for (i = 1; i < COMMIT_PORTS; i++) begin
-        always_ff @ (posedge clk) begin
-            if (wb_store.possibly_waiting & retired[i] & (wb_store.id_needed == ids_retiring[i]))
-                commit_regs[i-1] <= retiring_data[i];
-        end
-    end endgenerate
-
-    logic [COMMIT_PORTS-1:0] store_id_match;
-    always_comb begin
-        store_id_match = 0;
-        for (int i = 1; i < COMMIT_PORTS; i++) begin
-            if (wb_store.waiting & retired[i] & (wb_store.id_needed == ids_retiring[i]))
-                store_id_match[i] = 1;
-        end
-
-        store_reg_sel = 0;
-        for (int i = 2; i < COMMIT_PORTS; i++) begin
-            if (retired[i] & (wb_store.id_needed == ids_retiring[i]))
-                store_reg_sel = ($clog2(COMMIT_PORTS))'(i-1);
-        end
-    end
-
     always_ff @ (posedge clk) begin
-        if (|store_id_match)
-            store_reg_sel_r <= store_reg_sel;
+        if (rst)
+            wb_snoop.valid <= 0;
+        else
+            wb_snoop.valid <= retired[1];
     end
-
     always_ff @ (posedge clk) begin
-        if (rst | wb_store.ack)
-            wb_store.id_done <= 0;
-        else if (|store_id_match)
-            wb_store.id_done <= 1;
+        wb_snoop.data <= retiring_data[1];
+        wb_snoop.id <= ids_retiring[1];
     end
-    assign wb_store.data = commit_regs[store_reg_sel_r];
-
-
 
     ////////////////////////////////////////////////////
     //End of Implementation

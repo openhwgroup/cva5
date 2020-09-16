@@ -36,6 +36,9 @@ ${JG_TAIGA_RTL_PATH}/core/ddata_bank.sv \
 ${JG_TAIGA_RTL_PATH}/core/dtag_banks.sv \
 ${JG_TAIGA_RTL_PATH}/core/amo_alu.sv \
 ${JG_TAIGA_RTL_PATH}/core/dcache.sv \
+${JG_TAIGA_RTL_PATH}/core/addr_hash.sv \
+${JG_TAIGA_RTL_PATH}/core/load_queue.sv \
+${JG_TAIGA_RTL_PATH}/core/store_queue.sv \
 ${JG_TAIGA_RTL_PATH}/core/load_store_queue.sv \
 ${JG_TAIGA_RTL_PATH}/core/load_store_unit.sv \
 ${JG_TAIGA_RTL_PATH}/core/ibram.sv \

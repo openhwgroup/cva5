@@ -54,7 +54,7 @@ module load_store_unit (
         output id_t store_id,
 
         //Writeback-Store Interface
-        writeback_store_interface.ls wb_store,
+        input wb_packet_t wb_snoop,
 
         //CSR support
         input logic[31:0] csr_rd,
@@ -65,7 +65,9 @@ module load_store_unit (
         output exception_packet_t ls_exception,
         output logic ls_exception_is_store,
 
-        unit_writeback_interface.unit wb
+        unit_writeback_interface.unit wb,
+
+        output logic tr_load_conflict_delay
         );
 
     localparam NUM_SUB_UNITS = USE_D_SCRATCH_MEM+USE_BUS+USE_DCACHE;
@@ -119,10 +121,8 @@ module load_store_unit (
     fifo_interface #(.DATA_WIDTH($bits(load_attributes_t))) load_attributes();
 
     load_store_queue_interface lsq();
+    logic tr_possible_load_conflict_delay;
 
-    logic [31:0] compare_addr;
-    logic address_conflict;
-    logic ready_for_forwarded_store;
     ////////////////////////////////////////////////////
     //Implementation
     ////////////////////////////////////////////////////
@@ -173,7 +173,6 @@ endgenerate
             end
             default : be = '1;
         endcase
-        be &= {4{~ls_inputs.load}};
     end
 
     ////////////////////////////////////////////////////
@@ -191,15 +190,16 @@ endgenerate
     assign lsq.possible_issue = issue.possible_issue;
     assign lsq.new_issue = issue.new_request & ~unaligned_addr & (~tlb_on | tlb.done);
 
-    logic [MAX_IDS-1:0] wb_hold_for_store_ids;
     load_store_queue lsq_block (
         .clk                            (clk),
         .rst                            (rst),
         .gc_fetch_flush                 (gc_fetch_flush),
         .gc_issue_flush                 (gc_issue_flush),
         .lsq                            (lsq),
-        .wb_store                       (wb_store),
-        .ready_for_forwarded_store      (ready_for_forwarded_store)
+        .wb_snoop                       (wb_snoop),
+        .ids_released ('{LOG2_MAX_IDS'(1'b0), store_id}),
+        .wb_released ('{1'b0, store_complete}),
+        .tr_possible_load_conflict_delay (tr_possible_load_conflict_delay)
     );
     assign shared_inputs = lsq.transaction_out;
 
@@ -207,9 +207,13 @@ endgenerate
 
     ////////////////////////////////////////////////////
     //ID Management
-    assign store_complete = lsq.accepted & lsq.transaction_out.store;
-    assign store_id = lsq.transaction_out.id;
-
+    always_ff @ (posedge clk) begin
+        store_id <= lsq.id;
+        if (rst)
+            store_complete <= 0;
+        else
+            store_complete <= lsq.new_issue & lsq.store;
+    end
     ////////////////////////////////////////////////////
     //Unit tracking
     assign current_unit = sub_unit_address_match;
@@ -238,7 +242,7 @@ endgenerate
 
     assign ready_for_issue_from_lsq = units_ready & (~unit_switch_stall);
 
-    assign issue.ready = (~tlb_on | tlb.ready) & (ls_inputs.forwarded_store ? lsq.ready & ready_for_forwarded_store : lsq.ready);
+    assign issue.ready = (~tlb_on | tlb.ready) & lsq.ready;
     assign issue_request = lsq.transaction_ready & ready_for_issue_from_lsq;
 
     ////////////////////////////////////////////////////
@@ -401,5 +405,12 @@ endgenerate
             assert property (@(posedge clk) disable iff (rst) issue_request |-> |sub_unit_address_match)
             else $error("invalid L/S address");
     `endif
+
+    ////////////////////////////////////////////////////
+    //Trace Interface
+    generate if (ENABLE_TRACE_INTERFACE) begin
+        assign tr_load_conflict_delay = tr_possible_load_conflict_delay & ready_for_issue_from_lsq;
+    end
+    endgenerate
 
 endmodule
