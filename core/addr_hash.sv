@@ -36,10 +36,10 @@ module addr_hash (
     //Xor addr in groups of 4-bits, truncating to the virtual/physical address invariant bits (11:0)
     //lower two bits are not used due to complications in determining overlap between byte
     //halfword and word operations.
-    assign addr_hash[0] = addr[2];// ^ addr[6] ^ addr[10];
-    //assign addr_hash[1] = addr[3] ^ addr[7] ^ addr[11];
-    //assign addr_hash[2] = addr[4] ^ addr[8];
-    //assign addr_hash[3] = addr[5] ^ addr[9];
+    assign addr_hash[0] = addr[2] ^ addr[6] ^ addr[10];
+    assign addr_hash[1] = addr[3] ^ addr[7] ^ addr[11];
+    assign addr_hash[2] = addr[4] ^ addr[8];
+    assign addr_hash[3] = addr[5] ^ addr[9];
     ////////////////////////////////////////////////////
     //End of Implementation
     ////////////////////////////////////////////////////
