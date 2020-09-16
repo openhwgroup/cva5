@@ -61,6 +61,7 @@ static const char * const eventNames[] = {
     "branch_misspredict",
     "return_correct",
     "return_misspredict",
+    "load_conflict_delay",
     "rs1_forwarding_needed",
     "rs2_forwarding_needed",
     "rs1_and_rs2_forwarding_needed",

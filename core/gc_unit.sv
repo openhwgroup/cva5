@@ -231,12 +231,12 @@ module gc_unit(
             PRE_CLEAR_STATE : next_state = INIT_CLEAR_STATE;
             INIT_CLEAR_STATE : if (init_clear_done) next_state = IDLE_STATE;
             IDLE_STATE : begin
-                if (ls_exception.valid | potential_branch_exception) begin
+                if (ls_exception.valid | potential_branch_exception | system_op_or_exception_complete) begin
                     next_state = IQ_DRAIN;
                 end
             end
             TLB_CLEAR_STATE : if (tlb_clear_done) next_state = IDLE_STATE;
-            IQ_DRAIN : next_state = IDLE_STATE;
+            IQ_DRAIN : if (ls_is_idle) next_state = IDLE_STATE;
             default : next_state = RST_STATE;
         endcase
     end

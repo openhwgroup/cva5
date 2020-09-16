@@ -143,7 +143,7 @@ module taiga (
     logic gc_flush_required;
 
     //LS
-    writeback_store_interface wb_store();
+    wb_packet_t wb_snoop;
 
     //WB
     id_t ids_retiring [COMMIT_PORTS];
@@ -179,6 +179,8 @@ module taiga (
     logic tr_branch_misspredict;
     logic tr_return_correct;
     logic tr_return_misspredict;
+
+    logic tr_load_conflict_delay;
 
     logic tr_rs1_forwarding_needed;
     logic tr_rs2_forwarding_needed;
@@ -386,7 +388,7 @@ module taiga (
         .retired_rd_addr                        (retired_rd_addr),
         .id_for_rd                              (id_for_rd),
         .unit_wb                                (unit_wb),
-        .wb_store                               (wb_store),
+        .wb_snoop                               (wb_snoop),
         .tr_rs1_forwarding_needed               (tr_rs1_forwarding_needed),
         .tr_rs2_forwarding_needed               (tr_rs2_forwarding_needed),
         .tr_rs1_and_rs2_forwarding_needed       (tr_rs1_and_rs2_forwarding_needed)
@@ -444,14 +446,15 @@ module taiga (
        .data_bram                      (data_bram),               
        .store_complete                 (store_complete),
        .store_id                       (store_id),  
-       .wb_store                       (wb_store),                     
+       .wb_snoop                       (wb_snoop),                     
        .csr_rd                         (csr_rd),
        .csr_id                         (csr_id),
        .csr_done                       (csr_done),
        .ls_is_idle                     (ls_is_idle),
        .ls_exception                   (ls_exception),
        .ls_exception_is_store          (ls_exception_is_store),
-       .wb                             (unit_wb[LS_UNIT_WB_ID])
+       .wb                             (unit_wb[LS_UNIT_WB_ID]),
+       .tr_load_conflict_delay (tr_load_conflict_delay)
     );
 
     generate if (ENABLE_S_MODE) begin
@@ -586,6 +589,7 @@ module taiga (
             tr.events.branch_misspredict <= tr_branch_misspredict;
             tr.events.return_correct <= tr_return_correct;
             tr.events.return_misspredict <= tr_return_misspredict;
+            tr.events.load_conflict_delay <= tr_load_conflict_delay;
             tr.events.rs1_forwarding_needed <= tr_rs1_forwarding_needed;
             tr.events.rs2_forwarding_needed <= tr_rs2_forwarding_needed;
             tr.events.rs1_and_rs2_forwarding_needed <= tr_rs1_and_rs2_forwarding_needed;

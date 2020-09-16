@@ -34,6 +34,8 @@ package taiga_types;
     typedef logic[WB_UNITS_WIDTH-1:0] unit_id_t;
     typedef logic[1:0] branch_predictor_metadata_t;
 
+    typedef logic [3:0] addr_hash_t;
+
     typedef enum logic [1:0] {
         ALU_LOGIC_XOR = 2'b00,
         ALU_LOGIC_OR = 2'b01,
@@ -217,6 +219,25 @@ package taiga_types;
 
     typedef struct packed {
         logic [31:0] addr;
+        logic [2:0] fn3;
+        id_t id;
+        logic [3:0] potential_store_conflicts;
+    } lq_entry_t;
+
+    typedef struct packed {
+        logic [31:0] addr;
+        logic [3:0] be;
+        logic [2:0] fn3;
+    } sq_entry_t;
+
+    typedef struct packed {
+        logic [31:0] data;
+        id_t id;
+        logic valid;
+    } wb_packet_t;
+
+    typedef struct packed {
+        logic [31:0] addr;
         logic load;
         logic store;
         logic [3:0] be;
@@ -261,6 +282,9 @@ package taiga_types;
         logic branch_misspredict;
         logic return_correct;
         logic return_misspredict;
+
+        //Load Store Unit
+        logic load_conflict_delay;
 
         //Register File
         logic rs1_forwarding_needed;
