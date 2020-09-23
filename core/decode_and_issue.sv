@@ -177,7 +177,7 @@ module decode_and_issue (
     assign unit_needed[BRANCH_UNIT_ID] = opcode_trim inside {BRANCH_T, JAL_T, JALR_T};
     assign unit_needed[ALU_UNIT_WB_ID] =  ((opcode_trim == ARITH_T) && ~decode.instruction[25]) || (opcode_trim inside {ARITH_IMM_T, AUIPC_T, LUI_T, JAL_T, JALR_T});
     assign unit_needed[LS_UNIT_WB_ID] = opcode_trim inside {LOAD_T, STORE_T, AMO_T};
-    assign unit_needed[GC_UNIT_ID] = opcode_trim inside {SYSTEM_T, FENCE_T};
+    assign unit_needed[GC_UNIT_WB_ID] = opcode_trim inside {SYSTEM_T, FENCE_T};
 
     assign mult_div_op = (opcode_trim == ARITH_T) && decode.instruction[25];
     generate if (USE_MUL)
@@ -475,11 +475,11 @@ module decode_and_issue (
     assign gc_inputs.instruction = issue.instruction;
     assign gc_inputs.is_csr = is_csr_r;
     assign gc_inputs.is_fence = is_fence;
-    assign gc_inputs.is_i_fence = ENABLE_M_MODE & issue_to[GC_UNIT_ID] & is_ifence_r;
+    assign gc_inputs.is_i_fence = ENABLE_M_MODE & issue_to[GC_UNIT_WB_ID] & is_ifence_r;
 
     assign gc_inputs.rs1 = rs_data[RS1];
     assign gc_inputs.rs2 = rs_data[RS2];
-    assign gc_flush_required = ENABLE_M_MODE && issue_to[GC_UNIT_ID] && potential_flush;
+    assign gc_flush_required = ENABLE_M_MODE && issue_to[GC_UNIT_WB_ID] && potential_flush;
 
     ////////////////////////////////////////////////////
     //Mul unit inputs

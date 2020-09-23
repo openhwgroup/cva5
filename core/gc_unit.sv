@@ -84,12 +84,9 @@ module gc_unit(
 
         output logic [31:0] gc_fetch_pc,
 
-        //Write-back to Load-Store Unit
-        output logic[31:0] csr_rd,
-        output id_t csr_id,
-        output logic csr_done,
-        input logic ls_is_idle
-        );
+        input logic ls_is_idle,
+        unit_writeback_interface.unit wb
+    );
 
     //Largest depth for TLBs
     localparam int TLB_CLEAR_DEPTH = (DTLB_DEPTH > ITLB_DEPTH) ? DTLB_DEPTH : ITLB_DEPTH;
@@ -169,7 +166,7 @@ module gc_unit(
     logic csr_ready_to_complete;
     logic csr_ready_to_complete_r;
     id_t instruction_id;
-
+    id_t csr_id;
     ////////////////////////////////////////////////////
     //Implementation
     //Input registering
@@ -373,8 +370,12 @@ module gc_unit(
         end
     end
 
-    assign csr_done = csr_ready_to_complete_r;
-    assign csr_rd = wb_csr;
+    ////////////////////////////////////////////////////
+    //Output
+    assign wb.rd = wb_csr;
+    assign wb.done = csr_ready_to_complete_r;
+    assign wb.id = csr_id;
+
     ////////////////////////////////////////////////////
     //End of Implementation
     ////////////////////////////////////////////////////
