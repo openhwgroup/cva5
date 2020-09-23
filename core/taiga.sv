@@ -131,10 +131,6 @@ module taiga (
     logic gc_supress_writeback;
     logic gc_tlb_flush;
     logic [31:0] gc_fetch_pc;
-
-    logic[31:0] csr_rd;
-    id_t csr_id;
-    logic csr_done;
     logic ls_is_idle;
 
     //Decode Unit and Fetch Unit
@@ -445,11 +441,8 @@ module taiga (
        .m_wishbone                     (m_wishbone),                                       
        .data_bram                      (data_bram),               
        .store_complete                 (store_complete),
-       .store_id                       (store_id),  
-       .wb_snoop                       (wb_snoop),                     
-       .csr_rd                         (csr_rd),
-       .csr_id                         (csr_id),
-       .csr_done                       (csr_done),
+       .store_id                       (store_id),
+       .wb_snoop                       (wb_snoop),
        .ls_is_idle                     (ls_is_idle),
        .ls_exception                   (ls_exception),
        .ls_exception_is_store          (ls_exception_is_store),
@@ -487,7 +480,7 @@ module taiga (
     gc_unit gc_unit_block (
         .clk                                (clk),
         .rst                                (rst),
-        .issue                              (unit_issue[GC_UNIT_ID]),
+        .issue                              (unit_issue[GC_UNIT_WB_ID]),
         .gc_inputs                          (gc_inputs),
         .gc_flush_required                  (gc_flush_required),
         .branch_flush                       (branch_flush),
@@ -518,10 +511,8 @@ module taiga (
         .gc_supress_writeback               (gc_supress_writeback),
         .gc_tlb_flush                            (gc_tlb_flush),
         .gc_fetch_pc                        (gc_fetch_pc),
-        .csr_rd                             (csr_rd),
-        .csr_id                             (csr_id),
-        .csr_done                           (csr_done),
-        .ls_is_idle                         (ls_is_idle)
+        .ls_is_idle                         (ls_is_idle),
+        .wb (unit_wb[GC_UNIT_WB_ID])
     );
 
     generate if (USE_MUL)

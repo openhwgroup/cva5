@@ -57,9 +57,6 @@ module load_store_unit (
         input wb_packet_t wb_snoop,
 
         //CSR support
-        input logic[31:0] csr_rd,
-        input id_t csr_id,
-        input logic csr_done,
         output logic ls_is_idle,
 
         output exception_packet_t ls_exception,
@@ -382,9 +379,9 @@ endgenerate
 
     ////////////////////////////////////////////////////
     //Output bank
-    assign wb.rd = csr_done ? csr_rd : final_load_data;
-    assign wb.done = csr_done | load_complete;
-    assign wb.id = csr_done ? csr_id : stage2_attr.id;
+    assign wb.rd = final_load_data;
+    assign wb.done = load_complete;
+    assign wb.id = stage2_attr.id;
 
     ////////////////////////////////////////////////////
     //End of Implementation
@@ -395,10 +392,6 @@ endgenerate
     spurious_load_complete_assertion:
         assert property (@(posedge clk) disable iff (rst) load_complete |-> (load_attributes.valid && unit_data_valid[stage2_attr.subunit_id]))
         else $error("Spurious load complete detected!");
-
-    csr_load_conflict_assertion:
-        assert property (@(posedge clk) disable iff (rst) csr_done |-> ls_is_idle)
-        else $error("CSR read completed without ls being idle");
 
     `ifdef ENABLE_SIMULATION_ASSERTIONS
         invalid_ls_address_assertion:
