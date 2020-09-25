@@ -54,37 +54,44 @@ module register_file_and_writeback
 
     //Writeback
     logic alu_selected;
-    logic unit_ack [NUM_WB_UNITS];
+    logic [NUM_WB_UNITS-1:0] unit_ack [NUM_WB_GROUPS];
     //aliases for write-back-interface signals
-    id_t unit_instruction_id [NUM_WB_UNITS];
-    logic unit_done [NUM_WB_UNITS];
+    id_t [NUM_WB_UNITS-1:0] unit_instruction_id [NUM_WB_GROUPS];
+    logic [NUM_WB_UNITS-1:0] unit_done [NUM_WB_GROUPS];
+
+
     typedef logic [XLEN-1:0] unit_rd_t [NUM_WB_UNITS];
-    unit_rd_t unit_rd [COMMIT_PORTS];
+    unit_rd_t unit_rd [NUM_WB_GROUPS];
     //Per-ID muxes for commit buffer
-    logic [$clog2(NUM_WB_UNITS)-1:0] retiring_unit_select [COMMIT_PORTS];
-    logic [31:0] retiring_data [COMMIT_PORTS];
+    logic [$clog2(NUM_WB_UNITS)-1:0] retiring_unit_select [NUM_WB_GROUPS];
+    logic [31:0] retiring_data [NUM_WB_GROUPS];
 
     typedef logic [31:0] rs_data_set_t [REGFILE_READ_PORTS];
-    rs_data_set_t rs_data_set [COMMIT_PORTS];
+    rs_data_set_t rs_data_set [NUM_WB_GROUPS];
 
     genvar i, j;
     ////////////////////////////////////////////////////
     //Implementation
     //Re-assigning interface inputs to array types so that they can be dynamically indexed
-    generate for (i=0; i< NUM_WB_UNITS; i++) begin : wb_interfaces_to_arrays_g
-        assign unit_instruction_id[i] = unit_wb[i].id;
-        assign unit_done[i] = unit_wb[i].done;
-        assign unit_wb[i].ack = unit_ack[i];
-    end endgenerate
+    generate
+        for (i = 0; i < NUM_WB_GROUPS; i++) begin
+            for (j = 0; j < NUM_WB_UNITS_GROUP[i]; j++) begin
+                assign unit_instruction_id[i][j] = unit_wb[CUMULATIVE_NUM_WB_UNITS_GROUP[i] + j].id;
+                assign unit_done[i][j] = unit_wb[CUMULATIVE_NUM_WB_UNITS_GROUP[i] + j].done;
+                assign unit_wb[CUMULATIVE_NUM_WB_UNITS_GROUP[i] + j].ack = unit_ack[i][j];
+            end
+        end
+    endgenerate
 
     //As units are selected for commit ports based on their unit ID,
     //for each additional commit port one unit can be skipped for the commit mux
-    generate for (i = 0; i < COMMIT_PORTS; i++) begin
-        initial unit_rd[i] = '{default: '0};
-        for (j=i; j< NUM_WB_UNITS; j++) begin
-            assign unit_rd[i][j] = unit_wb[j].rd;
+    generate
+        for (i = 0; i < NUM_WB_GROUPS; i++) begin : wb_rd_mux_gen
+            for (j = 0; j < NUM_WB_UNITS_GROUP[i]; j++) begin
+                assign unit_rd[i][j] = unit_wb[CUMULATIVE_NUM_WB_UNITS_GROUP[i] + j].rd;
+            end
         end
-    end endgenerate
+    endgenerate
 
 
     ////////////////////////////////////////////////////
@@ -93,31 +100,26 @@ module register_file_and_writeback
     //   Search for complete units (in fixed unit order)
     //   Assign to a commit port, mask that unit and commit port
     always_comb begin
-        unit_ack = '{default: 0};
-        retired = '{default: 0};
-
-        unit_ack[0] = alu_issued;
-        retired[0] = alu_issued;
-        ids_retiring[0] = unit_instruction_id[ALU_UNIT_WB_ID];
-        retiring_data[0] = unit_rd[0][ALU_UNIT_WB_ID];
-
-        for (int i = 1; i < COMMIT_PORTS; i++) begin
-            retiring_unit_select[i] = WB_UNITS_WIDTH'(i);
-            for (int j = i; j < NUM_WB_UNITS; j++) begin //Unit index i will always be handled by commit port i or lower, so can be skipped when checking higher commit port indicies
-                if (unit_done[j] & ~unit_ack[j] & ~retired[i]) begin
+        for (int i = 0; i < NUM_WB_GROUPS; i++) begin
+            unit_ack[i] = '{default: 0};
+            retired[i] = 0;
+            retiring_unit_select[i] = WB_UNITS_WIDTH'(NUM_WB_UNITS_GROUP[i]-1);
+            for (int j = 0; j < (NUM_WB_UNITS_GROUP[i] - 1); j++) begin
+                if (unit_done[i][j]) begin
                     retiring_unit_select[i] = WB_UNITS_WIDTH'(j);
-                    unit_ack[j] = 1;
-                    retired[i] = 1;
+                    break;
                 end
             end
-
             //ID and data muxes
-            ids_retiring[i] = unit_instruction_id[retiring_unit_select[i]];
+            retired[i] = unit_done[i][retiring_unit_select[i]];
+            ids_retiring[i] = unit_instruction_id[i][retiring_unit_select[i]];
             retiring_data[i] = unit_rd[i][retiring_unit_select[i]];
+            unit_ack[i][retiring_unit_select[i]] = retired[i];
         end
-        //Late cycle abort for when ALU is not issued to
-        //alu_selected = (retiring_unit_select[0] == ALU_UNIT_WB_ID);
-        //if (alu_selected) retired[0] &= alu_issued;
+        
+        retired[0] = alu_issued;
+        unit_ack[0][retiring_unit_select[0]] = retired[0];
+    
     end
 
     ////////////////////////////////////////////////////

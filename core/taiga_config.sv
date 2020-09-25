@@ -183,17 +183,33 @@ package taiga_config;
 
     ////////////////////////////////////////////////////
     //Write-Back Unit IDs
-    localparam NUM_WB_UNITS = 3 + USE_MUL + USE_DIV;//ALU and LS and CSR
+    localparam NUM_WB_UNITS_GROUP_1 = 1;//ALU
+    localparam NUM_WB_UNITS_GROUP_2 = 2 + USE_MUL + USE_DIV;//LS + CSR
+    localparam NUM_WB_UNITS = NUM_WB_UNITS_GROUP_1 + NUM_WB_UNITS_GROUP_2;
     localparam NUM_UNITS = NUM_WB_UNITS + 1;//Branch 
 
-    localparam ALU_UNIT_WB_ID = 0;
-    localparam LS_UNIT_WB_ID = 1;
-    localparam DIV_UNIT_WB_ID = LS_UNIT_WB_ID + USE_DIV;
-    localparam MUL_UNIT_WB_ID = DIV_UNIT_WB_ID + USE_MUL;
-    localparam GC_UNIT_WB_ID = MUL_UNIT_WB_ID + 1;
+    localparam NUM_WB_GROUPS = 2;
+    localparam int NUM_WB_UNITS_GROUP [2] = '{NUM_WB_UNITS_GROUP_1, NUM_WB_UNITS_GROUP_2};
+    localparam int CUMULATIVE_NUM_WB_UNITS_GROUP [2] = '{0, NUM_WB_UNITS_GROUP_1};
 
+    localparam ALU_UNIT_ID = 0;
+    localparam LS_UNIT_ID = 1;
+    localparam DIV_UNIT_ID = LS_UNIT_ID + USE_DIV;
+    localparam MUL_UNIT_ID = DIV_UNIT_ID + USE_MUL;
+    localparam GC_UNIT_ID = MUL_UNIT_ID + 1;
     //Non-writeback units
-    localparam BRANCH_UNIT_ID = GC_UNIT_WB_ID + 1;
+    localparam BRANCH_UNIT_ID = GC_UNIT_ID + 1;
+
+    //Writeback group 1
+    localparam ALU_UNIT_WB1_ID = 0;
+
+    //Writeback group 2
+    localparam LS_UNIT_WB2_ID = 0;
+    localparam DIV_UNIT_WB2_ID = LS_UNIT_WB2_ID + USE_DIV;
+    localparam MUL_UNIT_WB2_ID = DIV_UNIT_WB2_ID + USE_MUL;
+    localparam GC_UNIT_WB2_ID = MUL_UNIT_WB2_ID + 1;
+
+
 
     ////////////////////////////////////////////////////
     //Debug Parameters
