@@ -175,17 +175,17 @@ module decode_and_issue (
     ////////////////////////////////////////////////////
     //Unit Determination
     assign unit_needed[BRANCH_UNIT_ID] = opcode_trim inside {BRANCH_T, JAL_T, JALR_T};
-    assign unit_needed[ALU_UNIT_WB_ID] =  ((opcode_trim == ARITH_T) && ~decode.instruction[25]) || (opcode_trim inside {ARITH_IMM_T, AUIPC_T, LUI_T, JAL_T, JALR_T});
-    assign unit_needed[LS_UNIT_WB_ID] = opcode_trim inside {LOAD_T, STORE_T, AMO_T};
-    assign unit_needed[GC_UNIT_WB_ID] = opcode_trim inside {SYSTEM_T, FENCE_T};
+    assign unit_needed[ALU_UNIT_ID] =  ((opcode_trim == ARITH_T) && ~decode.instruction[25]) || (opcode_trim inside {ARITH_IMM_T, AUIPC_T, LUI_T, JAL_T, JALR_T});
+    assign unit_needed[LS_UNIT_ID] = opcode_trim inside {LOAD_T, STORE_T, AMO_T};
+    assign unit_needed[GC_UNIT_ID] = opcode_trim inside {SYSTEM_T, FENCE_T};
 
     assign mult_div_op = (opcode_trim == ARITH_T) && decode.instruction[25];
     generate if (USE_MUL)
-        assign unit_needed[MUL_UNIT_WB_ID] = mult_div_op && ~fn3[2];
+        assign unit_needed[MUL_UNIT_ID] = mult_div_op && ~fn3[2];
     endgenerate
 
     generate if (USE_DIV)
-        assign unit_needed[DIV_UNIT_WB_ID] = mult_div_op && fn3[2];
+        assign unit_needed[DIV_UNIT_ID] = mult_div_op && fn3[2];
     endgenerate
 
     always_ff @(posedge clk) begin
@@ -211,7 +211,7 @@ module decode_and_issue (
     //All units share the same operand ready logic except load-store which has an internal forwarding path
     always_comb begin
         unit_operands_ready = {NUM_UNITS{operands_ready}};
-        unit_operands_ready[LS_UNIT_WB_ID] = ~rs1_conflict;
+        unit_operands_ready[LS_UNIT_ID] = ~rs1_conflict;
     end
 
     assign issue_ready = unit_needed_issue_stage & unit_ready;
@@ -306,7 +306,7 @@ module decode_and_issue (
     assign alu_inputs.shifter_in = rs_data[RS1];
     assign alu_inputs.shift_amount = issue.opcode[5] ? rs_data[RS2][4:0] : issue.rs_addr[RS2];
 
-    assign alu_issued = issue_to[ALU_UNIT_WB_ID] & ~potential_branch_exception;
+    assign alu_issued = issue_to[ALU_UNIT_ID] & ~potential_branch_exception;
 
     ////////////////////////////////////////////////////
     //Load Store unit inputs
@@ -475,11 +475,11 @@ module decode_and_issue (
     assign gc_inputs.instruction = issue.instruction;
     assign gc_inputs.is_csr = is_csr_r;
     assign gc_inputs.is_fence = is_fence;
-    assign gc_inputs.is_i_fence = ENABLE_M_MODE & issue_to[GC_UNIT_WB_ID] & is_ifence_r;
+    assign gc_inputs.is_i_fence = ENABLE_M_MODE & issue_to[GC_UNIT_ID] & is_ifence_r;
 
     assign gc_inputs.rs1 = rs_data[RS1];
     assign gc_inputs.rs2 = rs_data[RS2];
-    assign gc_flush_required = ENABLE_M_MODE && issue_to[GC_UNIT_WB_ID] && potential_flush;
+    assign gc_flush_required = ENABLE_M_MODE && issue_to[GC_UNIT_ID] && potential_flush;
 
     ////////////////////////////////////////////////////
     //Mul unit inputs
@@ -500,17 +500,17 @@ module decode_and_issue (
         logic current_op_resuses_rs1_rs2;
 
         always_ff @(posedge clk) begin
-            if (issue_to[DIV_UNIT_WB_ID]) begin
+            if (issue_to[DIV_UNIT_ID]) begin
                 prev_div_rs1_addr <= rs1_addr;
                 prev_div_rs2_addr <= rs2_addr;
             end
         end
 
         assign current_op_resuses_rs1_rs2 = (prev_div_rs1_addr == issue.rs_addr[RS1]) && (prev_div_rs2_addr == issue.rs_addr[RS2]);
-        assign set_prev_div_result_valid = unit_needed_issue_stage[DIV_UNIT_WB_ID];
+        assign set_prev_div_result_valid = unit_needed_issue_stage[DIV_UNIT_ID];
 
         //If current div operation overwrites an input register OR any other instruction overwrites the last div operations input registers
-        assign clear_prev_div_result_valid = issue.uses_rd & ((issue.rd_addr == (unit_needed_issue_stage[DIV_UNIT_WB_ID] ? issue.rs_addr[RS1] : prev_div_rs1_addr)) || (issue.rd_addr == (unit_needed_issue_stage[DIV_UNIT_WB_ID] ? issue.rs_addr[RS2] : prev_div_rs2_addr)));
+        assign clear_prev_div_result_valid = issue.uses_rd & ((issue.rd_addr == (unit_needed_issue_stage[DIV_UNIT_ID] ? issue.rs_addr[RS1] : prev_div_rs1_addr)) || (issue.rd_addr == (unit_needed_issue_stage[DIV_UNIT_ID] ? issue.rs_addr[RS2] : prev_div_rs2_addr)));
 
         set_clr_reg_with_rst #(.SET_OVER_CLR(0), .WIDTH(1), .RST_VALUE(0)) prev_div_result_valid_m (
             .clk, .rst,
@@ -575,9 +575,9 @@ module decode_and_issue (
         assign tr_no_instruction_stall = (~tr_no_id_stall & ~issue.stage_valid) | gc_fetch_flush;
         assign tr_other_stall = issue.stage_valid & ~instruction_issued & ~(tr_operand_stall | tr_unit_stall | tr_no_id_stall | tr_no_instruction_stall);
         assign tr_branch_operand_stall = tr_operand_stall & unit_needed_issue_stage[BRANCH_UNIT_ID];
-        assign tr_alu_operand_stall = tr_operand_stall & unit_needed_issue_stage[ALU_UNIT_WB_ID] & ~unit_needed_issue_stage[BRANCH_UNIT_ID];
-        assign tr_ls_operand_stall = tr_operand_stall & unit_needed_issue_stage[LS_UNIT_WB_ID];
-        assign tr_div_operand_stall = tr_operand_stall & unit_needed_issue_stage[DIV_UNIT_WB_ID];
+        assign tr_alu_operand_stall = tr_operand_stall & unit_needed_issue_stage[ALU_UNIT_ID] & ~unit_needed_issue_stage[BRANCH_UNIT_ID];
+        assign tr_ls_operand_stall = tr_operand_stall & unit_needed_issue_stage[LS_UNIT_ID];
+        assign tr_div_operand_stall = tr_operand_stall & unit_needed_issue_stage[DIV_UNIT_ID];
 
         //Instruction Mix
         always_ff @(posedge clk) begin
@@ -586,8 +586,8 @@ module decode_and_issue (
                 tr_branch_or_jump_op <= instruction_issued && (opcode_trim inside {JAL_T, JALR_T, BRANCH_T});
                 tr_load_op <= instruction_issued && (opcode_trim inside {LOAD_T, AMO_T});
                 tr_store_op <= instruction_issued && (opcode_trim inside {STORE_T});
-                tr_mul_op <= instruction_issued && unit_needed_issue_stage[MUL_UNIT_WB_ID];
-                tr_div_op <= instruction_issued && unit_needed_issue_stage[DIV_UNIT_WB_ID];
+                tr_mul_op <= instruction_issued && unit_needed_issue_stage[MUL_UNIT_ID];
+                tr_div_op <= instruction_issued && unit_needed_issue_stage[DIV_UNIT_ID];
                 tr_misc_op <= instruction_issued & ~(tr_alu_op | tr_branch_or_jump_op | tr_load_op | tr_store_op | tr_mul_op | tr_div_op);
             end
         end

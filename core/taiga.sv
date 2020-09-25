@@ -417,15 +417,15 @@ module taiga (
         .clk         (clk),
         .rst         (rst),
         .alu_inputs  (alu_inputs),
-        .issue       (unit_issue[ALU_UNIT_WB_ID]), 
-        .wb          (unit_wb[ALU_UNIT_WB_ID])
+        .issue       (unit_issue[ALU_UNIT_ID]), 
+        .wb          (unit_wb[ALU_UNIT_ID])
     );
 
     load_store_unit load_store_unit_block (
        .clk                            (clk),
        .rst                            (rst),
        .ls_inputs                      (ls_inputs),
-       .issue                          (unit_issue[LS_UNIT_WB_ID]),
+       .issue                          (unit_issue[LS_UNIT_ID]),
        .dcache_on                      (1'b1), 
        .clear_reservation              (1'b0), 
        .tlb                            (dtlb),  
@@ -446,7 +446,7 @@ module taiga (
        .ls_is_idle                     (ls_is_idle),
        .ls_exception                   (ls_exception),
        .ls_exception_is_store          (ls_exception_is_store),
-       .wb                             (unit_wb[LS_UNIT_WB_ID]),
+       .wb                             (unit_wb[LS_UNIT_ID]),
        .tr_load_conflict_delay (tr_load_conflict_delay)
     );
 
@@ -480,7 +480,7 @@ module taiga (
     gc_unit gc_unit_block (
         .clk                                (clk),
         .rst                                (rst),
-        .issue                              (unit_issue[GC_UNIT_WB_ID]),
+        .issue                              (unit_issue[GC_UNIT_ID]),
         .gc_inputs                          (gc_inputs),
         .gc_flush_required                  (gc_flush_required),
         .branch_flush                       (branch_flush),
@@ -512,7 +512,7 @@ module taiga (
         .gc_tlb_flush                            (gc_tlb_flush),
         .gc_fetch_pc                        (gc_fetch_pc),
         .ls_is_idle                         (ls_is_idle),
-        .wb (unit_wb[GC_UNIT_WB_ID])
+        .wb (unit_wb[GC_UNIT_ID])
     );
 
     generate if (USE_MUL)
@@ -521,8 +521,8 @@ module taiga (
             .clk           (clk),
             .rst           (rst),
             .mul_inputs    (mul_inputs),
-            .issue         (unit_issue[MUL_UNIT_WB_ID]),
-            .wb            (unit_wb[MUL_UNIT_WB_ID])
+            .issue         (unit_issue[MUL_UNIT_ID]),
+            .wb            (unit_wb[MUL_UNIT_ID])
         );
 
     endgenerate
@@ -534,8 +534,8 @@ module taiga (
             .rst                (rst),
             .gc_fetch_flush     (gc_fetch_flush),
             .div_inputs         (div_inputs),
-            .issue              (unit_issue[DIV_UNIT_WB_ID]), 
-            .wb                 (unit_wb[DIV_UNIT_WB_ID])
+            .issue              (unit_issue[DIV_UNIT_ID]), 
+            .wb                 (unit_wb[DIV_UNIT_ID])
         );
 
     endgenerate
