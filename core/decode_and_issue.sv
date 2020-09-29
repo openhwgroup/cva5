@@ -59,6 +59,7 @@ module decode_and_issue (
         input logic rs_id_inuse [REGFILE_READ_PORTS],
 
         output logic instruction_issued,
+        output logic instruction_issued_with_rd,
         output logic illegal_instruction,
 
         //Trace signals
@@ -218,7 +219,7 @@ module decode_and_issue (
     assign issue_to = {NUM_UNITS{issue_valid}} & unit_operands_ready & issue_ready;
 
     assign instruction_issued = issue_valid & |(unit_operands_ready & issue_ready);
-
+    assign instruction_issued_with_rd = instruction_issued & issue.uses_rd;
     ////////////////////////////////////////////////////
     //ALU unit inputs
     logic [XLEN-1:0] alu_rs1_data;
