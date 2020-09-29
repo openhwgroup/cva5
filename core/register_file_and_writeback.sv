@@ -30,6 +30,7 @@ module register_file_and_writeback
 
         //Issue interface
         input issue_packet_t issue,
+        input logic instruction_issued_with_rd,
         input logic alu_issued,
         output logic [31:0] rs_data [REGFILE_READ_PORTS],
         //ID Metadata
@@ -131,7 +132,7 @@ module register_file_and_writeback
             .clk, .rst,
             .rd_addr(retired_rd_addr[i]),
             .new_data(retiring_data[i]),
-            .commit(update_lvt[i] & (|retired_rd_addr[i])),
+            .commit(retired[i] & (|retired_rd_addr[i])),
             .read_addr(issue.rs_addr),
             .data(rs_data_set[i])
         );
@@ -139,25 +140,16 @@ module register_file_and_writeback
 
     ////////////////////////////////////////////////////
     //Register File LVT
-
-    //Only update lvt if the retiring instrucion is the most recently issued
-    //write to a given register.  This check allows multiple oustanding writes
-    //to the same register.  As instructions can complete out-of-order, only
-    //the most recently issued write to any given register will be committed
-    logic update_lvt [COMMIT_PORTS];
-    always_comb begin
-        update_lvt[0] = retired[0];// & (alu_selected ? alu_issued : (id_for_rd[0] == ids_retiring[0]));
-        for (int i = 1; i < COMMIT_PORTS; i++)
-            update_lvt[i] = retired[i] & (id_for_rd[i] == ids_retiring[i]) & ~(retired[0] & retired_rd_addr[0] == retired_rd_addr[i]);
+    logic [$clog2(COMMIT_PORTS)-1:0] bank_sel [32];
+    always_ff @ (posedge clk) begin
+        if (instruction_issued_with_rd)
+            bank_sel[issue.rd_addr] <= ~alu_issued;
     end
-
-    regfile_bank_sel regfile_lvt (
-        .clk, .rst,
-        .rs_addr(issue.rs_addr),
-        .rs_sel,
-        .rd_addr(retired_rd_addr),
-        .rd_retired(update_lvt)
-    );
+    always_comb begin
+        for (int i = 0; i < REGFILE_READ_PORTS; i++) begin
+            rs_sel[i] = bank_sel[issue.rs_addr[i]];
+        end
+    end
 
     ////////////////////////////////////////////////////
     //Register File Muxing

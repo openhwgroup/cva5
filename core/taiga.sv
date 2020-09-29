@@ -136,6 +136,7 @@ module taiga (
     //Decode Unit and Fetch Unit
     logic illegal_instruction;
     logic instruction_issued;
+    logic instruction_issued_with_rd;
     logic gc_flush_required;
 
     //LS
@@ -349,6 +350,7 @@ module taiga (
         .rs_id                          (rs_id),
         .rs_id_inuse                    (rs_id_inuse),
         .instruction_issued             (instruction_issued),
+        .instruction_issued_with_rd (instruction_issued_with_rd),
         .illegal_instruction            (illegal_instruction),
         .tr_operand_stall               (tr_operand_stall),
         .tr_unit_stall                  (tr_unit_stall),
@@ -377,6 +379,7 @@ module taiga (
         .clk                                    (clk),
         .rst                                    (rst),
         .issue                                  (issue),
+        .instruction_issued_with_rd (instruction_issued_with_rd),
         .alu_issued                             (alu_issued),
         .rs_data                                (rs_data),
         .ids_retiring                           (ids_retiring),
