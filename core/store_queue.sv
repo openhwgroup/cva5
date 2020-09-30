@@ -75,7 +75,8 @@ module store_queue # (
     id_t [DEPTH-1:0] id_needed;
     id_t [DEPTH-1:0] ids;
     load_check_count_t [DEPTH-1:0] load_check_count;
-    logic [31:0] store_data [DEPTH];
+    logic [31:0] store_data_from_issue [DEPTH];
+    logic [31:0] store_data_from_wb [DEPTH];
 
     //LUTRAM-based memory blocks
     logic [$bits(sq_entry_t)-1:0] store_attr [DEPTH];
@@ -138,7 +139,7 @@ module store_queue # (
     //Attributes LUTRAM
     always_ff @ (posedge clk) begin
         if (new_sq_request)
-            store_attr[sq_index] <= {lsq.addr, lsq.be, lsq.fn3};
+            store_attr[sq_index] <= {lsq.addr, lsq.be, lsq.fn3, lsq.forwarded_store};
     end
 
     //Hash mem
@@ -224,25 +225,15 @@ module store_queue # (
 
     ////////////////////////////////////////////////////
     //Store Data
-    logic store_we [DEPTH];
-    logic [31:0] new_store_data [DEPTH];
-
-    always_comb begin
+    always_ff @ (posedge clk) begin
         for (int i = 0; i < DEPTH; i++) begin
-            store_we[i] = (wb_id_match[i] & wb_snoop.valid & waiting_for_data[i]) | (new_request_one_hot[i] & ~lsq.forwarded_store);
-        end
-    end
-
-    always_comb begin
-        for (int i = 0; i < DEPTH; i++) begin
-            new_store_data[i] = (wb_id_match[i] & wb_snoop.valid & waiting_for_data[i]) ? wb_snoop.data : lsq.data_in;
+            if (wb_id_match[i] & wb_snoop.valid & waiting_for_data[i])
+                store_data_from_wb[i] <= wb_snoop.data;
         end
     end
     always_ff @ (posedge clk) begin
-        for (int i = 0; i < DEPTH; i++) begin
-            if (store_we[i])
-                store_data[i] <=  new_store_data[i];
-        end
+        if (new_sq_request & ~lsq.forwarded_store)
+            store_data_from_issue[sq_index] <= lsq.data_in;
     end
 
     ////////////////////////////////////////////////////
@@ -262,7 +253,7 @@ module store_queue # (
         //Input: ABCD
         //Assuming aligned requests,
         //Possible byte selections: (A/C/D, B/D, C/D, D)
-        data_for_alignment = store_data[sq_oldest];
+        data_for_alignment = output_attr.forwarded_store ? store_data_from_wb[sq_oldest] : store_data_from_issue[sq_oldest];
 
         sq_data[7:0] = data_for_alignment[7:0];
         sq_data[15:8] = (sq_entry.addr[1:0] == 2'b01) ? data_for_alignment[7:0] : data_for_alignment[15:8];
