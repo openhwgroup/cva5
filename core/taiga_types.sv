@@ -228,6 +228,7 @@ package taiga_types;
         logic [31:0] addr;
         logic [3:0] be;
         logic [2:0] fn3;
+        logic forwarded_store;
     } sq_entry_t;
 
     typedef struct packed {
