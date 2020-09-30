@@ -211,7 +211,7 @@ module instruction_metadata_and_id_management
     //TODO: support arbitrary rst assertion (clear signal from global control)
 
     //Instruction decoded and (issued or flushed) pair
-    toggle_memory decode_toggle_mem (
+    toggle_memory #(.DEPTH(MAX_IDS)) decode_toggle_mem (
         .clk, .rst,
         .toggle((gc_init_clear & ~id_not_in_decode_issue) | (decode_advance & ~gc_fetch_flush)),
         .toggle_id(gc_init_clear ? clear_index : decode.id),
@@ -219,7 +219,7 @@ module instruction_metadata_and_id_management
         .read_data(decoded_status)
     );
 
-    toggle_memory decoded_issued_toggle_mem (
+    toggle_memory #(.DEPTH(MAX_IDS)) decoded_issued_toggle_mem (
         .clk, .rst,
         .toggle(instruction_issued | (gc_fetch_flush & issue.stage_valid)),
         .toggle_id(issue.id),
@@ -228,7 +228,7 @@ module instruction_metadata_and_id_management
     );
 
     //Post issue status tracking
-    toggle_memory issued_toggle_mem (
+    toggle_memory #(.DEPTH(MAX_IDS)) issued_toggle_mem (
         .clk, .rst,
         .toggle((gc_init_clear & ~id_not_inflight)  | instruction_issued),
         .toggle_id(gc_init_clear ? clear_index : issue.id),
@@ -236,7 +236,7 @@ module instruction_metadata_and_id_management
         .read_data(issued_status)
     );
     generate for (i = 0; i < REGFILE_READ_PORTS; i++) begin
-        toggle_memory issued_toggle_mem_rs (
+        toggle_memory #(.DEPTH(MAX_IDS)) issued_toggle_mem_rs (
             .clk, .rst,
             .toggle((gc_init_clear & rs_id_inuse[i]) | (instruction_issued & issue.uses_rd)),
             .toggle_id(gc_init_clear ? clear_index : issue.id),
@@ -245,7 +245,7 @@ module instruction_metadata_and_id_management
         );
     end endgenerate
 
-    toggle_memory branch_toggle_mem (
+    toggle_memory #(.DEPTH(MAX_IDS)) branch_toggle_mem (
         .clk, .rst,
         .toggle(branch_complete),
         .toggle_id(branch_id),
@@ -253,7 +253,7 @@ module instruction_metadata_and_id_management
         .read_data(branch_complete_status)
     );
 
-    toggle_memory store_toggle_mem (
+    toggle_memory #(.DEPTH(MAX_IDS)) store_toggle_mem (
         .clk, .rst,
         .toggle(store_complete),
         .toggle_id(store_id),
@@ -270,7 +270,7 @@ module instruction_metadata_and_id_management
     );
 
     generate for (i = 0; i < REGFILE_READ_PORTS; i++) begin
-        toggle_memory exception_complete_toggle_mem_rs (
+        toggle_memory #(.DEPTH(MAX_IDS)) exception_complete_toggle_mem_rs (
             .clk, .rst,
             .toggle(exception_with_rd_complete),
             .toggle_id(system_op_or_exception_id),
@@ -282,7 +282,7 @@ module instruction_metadata_and_id_management
     //One memory per commit port
     genvar j;
     generate for (i = 0; i < COMMIT_PORTS; i++) begin
-        toggle_memory retired_toggle_mem (
+        toggle_memory #(.DEPTH(MAX_IDS)) retired_toggle_mem (
             .clk, .rst,
             .toggle(retired[i]),
             .toggle_id(ids_retiring[i]),
@@ -290,7 +290,7 @@ module instruction_metadata_and_id_management
             .read_data(retired_status[i])
         );
         for (j = 0; j < REGFILE_READ_PORTS; j++) begin
-            toggle_memory retired_toggle_mem_rs (
+            toggle_memory #(.DEPTH(MAX_IDS)) retired_toggle_mem_rs (
                 .clk, .rst,
                 .toggle(retired[i]),
                 .toggle_id(ids_retiring[i]),

@@ -21,22 +21,24 @@
  */
 
 module toggle_memory
-
     import taiga_config::*;
     import taiga_types::*;
+    # (
+        parameter DEPTH = 8
+    )
     (
         input logic clk,
         input logic rst,
 
         input logic toggle,
-        input id_t toggle_id,
+        input logic [$clog2(DEPTH)-1:0] toggle_id,
 
-        input id_t read_id,
+        input logic [$clog2(DEPTH)-1:0] read_id,
         output logic read_data
     );
     ////////////////////////////////////////////////////
     //Implementation
-    logic id_toggle_memory [MAX_IDS];
+    logic id_toggle_memory [DEPTH];
 
     initial id_toggle_memory = '{default: 0};
     always_ff @ (posedge clk) begin
