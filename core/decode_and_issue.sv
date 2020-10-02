@@ -165,6 +165,8 @@ module decode_and_issue (
             issue.opcode <= opcode;
             issue.rs_addr[RS1] <= rs1_addr;
             issue.rs_addr[RS2] <= rs2_addr;
+            issue.rs_phys_addr[RS1] <= {1'b0, rs1_addr};
+            issue.rs_phys_addr[RS2] <= {1'b0, rs2_addr};
             issue.rd_addr <= rd_addr;
             issue.id <= decode.id;
             issue.uses_rs1 <= uses_rs1;

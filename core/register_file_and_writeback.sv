@@ -130,10 +130,10 @@ module register_file_and_writeback
     generate for (i = 0; i < COMMIT_PORTS; i++) begin
         register_file #(.NUM_READ_PORTS(REGFILE_READ_PORTS)) register_file_blocks (
             .clk, .rst,
-            .rd_addr(retired_rd_addr[i]),
+            .write_addr({1'b0, retired_rd_addr[i]}),
             .new_data(retiring_data[i]),
             .commit(retired[i] & (|retired_rd_addr[i])),
-            .read_addr(issue.rs_addr),
+            .read_addr(issue.rs_phys_addr),
             .data(rs_data_set[i])
         );
     end endgenerate
