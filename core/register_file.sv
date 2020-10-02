@@ -32,27 +32,26 @@ module register_file
         input logic rst,
 
         //Writeback
-        input logic [4:0] rd_addr,
+        input phys_addr_t write_addr,
         input logic [31:0] new_data,
         input logic commit,
 
         //Issue
-        input  rs_addr_t [NUM_READ_PORTS-1:0] read_addr,
+        input phys_addr_t [NUM_READ_PORTS-1:0] read_addr,
         output logic [31:0] data [NUM_READ_PORTS]
     );
 
-    logic [31:0] register_file [32];
+    logic [31:0] register_file [64];
     ////////////////////////////////////////////////////
     //Implementation
 
     ////////////////////////////////////////////////////
     //Register File
-    //Assign zero to r0 and initialize all registers to zero
-
+    //Assign zero to r0 and initialize all registers to zero for simulation
     initial register_file = '{default: 0};
     always_ff @ (posedge clk) begin
         if (commit)
-            register_file[rd_addr] <= new_data;
+            register_file[write_addr] <= new_data;
     end
     always_comb begin
         foreach(read_addr[i])
@@ -62,19 +61,7 @@ module register_file
     ////////////////////////////////////////////////////
     //Assertions
     write_to_zero_reg_assertion:
-        assert property (@(posedge clk) disable iff (rst) !(commit & rd_addr == 0))
+        assert property (@(posedge clk) disable iff (rst) !(commit & write_addr == 0))
         else $error("Write to zero reg occured!");
-
-    ////////////////////////////////////////////////////
-    //Simulation Only
-    //synthesis translate_off
-    logic [31:0][31:0] sim_registers_unamed;
-    simulation_named_regfile sim_register;
-    always_comb begin
-        foreach(register_file[i])
-            sim_registers_unamed[i] = register_file[i];
-        sim_register = sim_registers_unamed;
-    end
-    //synthesis translate_on
 
 endmodule

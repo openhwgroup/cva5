@@ -35,6 +35,7 @@ package taiga_types;
     typedef logic[1:0] branch_predictor_metadata_t;
 
     typedef logic [3:0] addr_hash_t;
+    typedef logic [5:0] phys_addr_t;
 
     typedef enum logic [1:0] {
         ALU_LOGIC_XOR = 2'b00,
@@ -100,7 +101,9 @@ package taiga_types;
         logic [2:0] fn3;
         logic [6:0] opcode;
 
-        rs_addr_t [REGFILE_READ_PORTS-1:0] rs_addr;//packed style instead of unpacked due to tool limitations
+        rs_addr_t [REGFILE_READ_PORTS-1:0] rs_addr;
+        phys_addr_t [REGFILE_READ_PORTS-1:0] rs_phys_addr;
+
         logic [4:0] rd_addr;
 
         logic uses_rs1;
