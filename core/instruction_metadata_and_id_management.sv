@@ -166,12 +166,6 @@ module instruction_metadata_and_id_management
     ////////////////////////////////////////////////////
     //ID Management
 
-    //Post-reset clr
-    initial clear_index = 0;
-    always_ff @ (posedge clk) begin
-        if (gc_init_clear)
-            clear_index <= clear_index + 1;
-    end
     
     //Next ID always increases, except on a fetch buffer flush.
     //On a fetch buffer flush, the next ID is restored to the current decode ID.
@@ -182,8 +176,7 @@ module instruction_metadata_and_id_management
     assign next_pc_id_base = gc_fetch_flush ? decode_id : (early_branch_flush ? fetch_id : pc_id);
     assign next_fetch_id_base = gc_fetch_flush ? decode_id : fetch_id;
 
-    assign pc_id_next = gc_init_clear ? clear_index : 
-        (next_pc_id_base + LOG2_MAX_IDS'({pc_id_assigned & ~gc_fetch_flush}));
+    assign pc_id_next = next_pc_id_base + LOG2_MAX_IDS'({pc_id_assigned & ~gc_fetch_flush});
     always_ff @ (posedge clk) begin
         if (rst) begin
             pc_id <= 0;
@@ -208,123 +201,66 @@ module instruction_metadata_and_id_management
     //Issue Tracking
     //As there are multiple completion sources, each source toggles a bit in its own LUTRAM.
     //All LUTRAMs are then xor-ed together to produce the status of the ID.
-    //TODO: support arbitrary rst assertion (clear signal from global control)
-
-    //Instruction decoded and (issued or flushed) pair
-    toggle_memory #(.DEPTH(MAX_IDS)) decode_toggle_mem (
-        .clk, .rst,
-        .toggle((gc_init_clear & ~id_not_in_decode_issue) | (decode_advance & ~gc_fetch_flush)),
-        .toggle_id(gc_init_clear ? clear_index : decode.id),
-        .read_id(pc_id_next),
-        .read_data(decoded_status)
-    );
-
-    toggle_memory #(.DEPTH(MAX_IDS)) decoded_issued_toggle_mem (
-        .clk, .rst,
-        .toggle(instruction_issued | (gc_fetch_flush & issue.stage_valid)),
-        .toggle_id(issue.id),
-        .read_id(pc_id_next),
-        .read_data(decoded_issued_status)
-    );
-
-    //Post issue status tracking
-    toggle_memory #(.DEPTH(MAX_IDS)) issued_toggle_mem (
-        .clk, .rst,
-        .toggle((gc_init_clear & ~id_not_inflight)  | instruction_issued),
-        .toggle_id(gc_init_clear ? clear_index : issue.id),
-        .read_id(pc_id_next),
-        .read_data(issued_status)
-    );
-    generate for (i = 0; i < REGFILE_READ_PORTS; i++) begin
-        toggle_memory #(.DEPTH(MAX_IDS)) issued_toggle_mem_rs (
-            .clk, .rst,
-            .toggle((gc_init_clear & rs_id_inuse[i]) | (instruction_issued & issue.uses_rd)),
-            .toggle_id(gc_init_clear ? clear_index : issue.id),
-            .read_id(rs_id[i]),
-            .read_data(issued_status_rs[i])
-        );
-    end endgenerate
-
-    toggle_memory #(.DEPTH(MAX_IDS)) branch_toggle_mem (
-        .clk, .rst,
-        .toggle(branch_complete),
-        .toggle_id(branch_id),
-        .read_id(pc_id_next),
-        .read_data(branch_complete_status)
-    );
-
-    toggle_memory #(.DEPTH(MAX_IDS)) store_toggle_mem (
-        .clk, .rst,
-        .toggle(store_complete),
-        .toggle_id(store_id),
-        .read_id(pc_id_next),
-        .read_data(store_complete_status)
-    );
-
-    toggle_memory system_op_or_exception_complete_toggle_mem (
-        .clk, .rst,
-        .toggle(system_op_or_exception_complete),
-        .toggle_id(system_op_or_exception_id),
-        .read_id(pc_id_next),
-        .read_data(system_op_or_exception_complete_status)
-    );
-
-    generate for (i = 0; i < REGFILE_READ_PORTS; i++) begin
-        toggle_memory #(.DEPTH(MAX_IDS)) exception_complete_toggle_mem_rs (
-            .clk, .rst,
-            .toggle(exception_with_rd_complete),
-            .toggle_id(system_op_or_exception_id),
-            .read_id(rs_id[i]),
-            .read_data(exception_with_rd_complete_status_rs[i])
-        );
-    end endgenerate
-
-    //One memory per commit port
-    genvar j;
-    generate for (i = 0; i < COMMIT_PORTS; i++) begin
-        toggle_memory #(.DEPTH(MAX_IDS)) retired_toggle_mem (
-            .clk, .rst,
-            .toggle(retired[i]),
-            .toggle_id(ids_retiring[i]),
-            .read_id(pc_id_next),
-            .read_data(retired_status[i])
-        );
-        for (j = 0; j < REGFILE_READ_PORTS; j++) begin
-            toggle_memory #(.DEPTH(MAX_IDS)) retired_toggle_mem_rs (
-                .clk, .rst,
-                .toggle(retired[i]),
-                .toggle_id(ids_retiring[i]),
-                .read_id(rs_id[j]),
-                .read_data(retired_status_rs[j][i])
-            );
-        end
-    end endgenerate
 
     //Computed one cycle in advance using pc_id_next
-
-    assign id_not_in_decode_issue = ~(decoded_status ^ decoded_issued_status);
-    assign id_not_inflight =
-        ~(issued_status ^
-            branch_complete_status ^
-            store_complete_status ^
-            system_op_or_exception_complete_status ^
-            (^retired_status)
-        );
+    logic id_in_decode_issue [1];
+    toggle_memory_set # (
+        .DEPTH (MAX_IDS),
+        .NUM_WRITE_PORTS (2),
+        .NUM_READ_PORTS (1),
+        .WRITE_INDEX_FOR_RESET (0),
+        .READ_INDEX_FOR_RESET (0)
+    ) id_in_decode_tracking
+    (
+        .clk (clk),
+        .rst (rst),
+        .init_clear (gc_init_clear),
+        .toggle ('{(decode_advance & ~gc_fetch_flush), (instruction_issued | (gc_fetch_flush & issue.stage_valid))}),
+        .toggle_addr ('{decode.id, issue.id}),
+        .read_addr ('{pc_id_next}),
+        .in_use (id_in_decode_issue)
+    );
+    assign id_not_in_decode_issue = ~id_in_decode_issue[0];
 
     ////////////////////////////////////////////////////
     //Outputs
+    logic id_inflight [1];
+    toggle_memory_set # (
+        .DEPTH (MAX_IDS),
+        .NUM_WRITE_PORTS (6),
+        .NUM_READ_PORTS (1),
+        .WRITE_INDEX_FOR_RESET (0),
+        .READ_INDEX_FOR_RESET (0)
+    ) id_inflight_tracking
+    (
+        .clk (clk),
+        .rst (rst),
+        .init_clear (gc_init_clear),
+        .toggle ('{instruction_issued, branch_complete, store_complete, system_op_or_exception_complete, retired[0], retired[1]}),
+        .toggle_addr ('{issue.id, branch_id, store_id, system_op_or_exception_id, ids_retiring[0], ids_retiring[1]}),
+        .read_addr ('{pc_id_next}),
+        .in_use (id_inflight)
+    );
+    assign id_not_inflight = ~id_inflight[0];
 
     //rs1/rs2 conflicts don't check branch or store memories as the only
     //IDs stored in the rs to ID table are instructions that write to the register file
-    always_comb begin
-        for (int i = 0; i < REGFILE_READ_PORTS; i++) begin
-            rs_id_inuse[i] = (
-                issued_status_rs[i] ^
-                exception_with_rd_complete_status_rs[i] ^
-                (^retired_status_rs[i])
-            );
-        end
-    end
+    toggle_memory_set # (
+        .DEPTH (MAX_IDS),
+        .NUM_WRITE_PORTS (4),
+        .NUM_READ_PORTS (2),
+        .WRITE_INDEX_FOR_RESET (0),
+        .READ_INDEX_FOR_RESET (0)
+    ) rs_inuse_tacking
+    (
+        .clk (clk),
+        .rst (rst),
+        .init_clear (gc_init_clear),
+        .toggle ('{(instruction_issued & issue.uses_rd), exception_with_rd_complete, retired[0], retired[1]}),
+        .toggle_addr ('{issue.id, system_op_or_exception_id, ids_retiring[0], ids_retiring[1]}),
+        .read_addr (rs_id),
+        .in_use (rs_id_inuse)
+    );
 
     always_ff @ (posedge clk) begin
         if (rst)
@@ -357,7 +293,7 @@ module instruction_metadata_and_id_management
     //Issue
     always_comb begin
         for (int i = 0; i < REGFILE_READ_PORTS; i++) begin
-            rs_id[i] = gc_init_clear ? clear_index : rd_to_id_table[issue.rs_addr[i]];
+            rs_id[i] = rd_to_id_table[issue.rs_addr[i]];
             rs_inuse[i] = (|issue.rs_addr[i]) & (issue.rs_addr[i] == rd_addr_table[rs_id[i]]);
         end
     end
