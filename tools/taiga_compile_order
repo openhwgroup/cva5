@@ -100,6 +100,7 @@ l2_arbiter/l2_round_robin.sv
 l2_arbiter/l2_arbiter.sv
 
 core/toggle_memory.sv
+core/toggle_memory_set.sv
 core/instruction_metadata_and_id_management.sv
 
 core/taiga.sv
