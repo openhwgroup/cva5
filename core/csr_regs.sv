@@ -53,8 +53,8 @@ module csr_regs
         mmu_interface.csr immu,
         mmu_interface.csr dmmu,
 
-        //WB
-        input logic [$clog2(MAX_COMPLETE_COUNT)-1:0] retire_inc,
+        //Retire
+        input retire_packet_t retire,
 
         //External
         input logic interrupt,
@@ -543,7 +543,7 @@ endgenerate
     end
 
     logic[COUNTER_W-1:0] minst_ret_next;
-    assign minst_ret_next = minst_ret + COUNTER_W'(retire_inc);
+    assign minst_ret_next = minst_ret + COUNTER_W'(retire.count);
 
     always_ff @(posedge clk) begin
         if (rst) begin

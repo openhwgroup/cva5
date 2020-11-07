@@ -271,3 +271,46 @@ interface unsigned_division_interface #(parameter DATA_WIDTH = 32);
     modport divider (output remainder, quotient, done, divisor_is_zero, input dividend, divisor, start);
 endinterface
 
+interface renamer_interface;
+    rs_addr_t rd_addr;
+    rs_addr_t [REGFILE_READ_PORTS-1:0] rs_addr;
+    rs_wb_group_t rd_wb_group;
+    logic uses_rd;
+    id_t id;
+
+    phys_addr_t [REGFILE_READ_PORTS-1:0] phys_rs_addr;
+    phys_addr_t phys_rd_addr;
+
+    rs_wb_group_t [REGFILE_READ_PORTS-1:0] rs_wb_group;
+
+    modport renamer (
+        input rd_addr, rs_addr, rd_wb_group, uses_rd, id,
+        output phys_rs_addr, rs_wb_group, phys_rd_addr
+    );
+    modport decode (
+        input phys_rs_addr, rs_wb_group, phys_rd_addr,
+        output rd_addr, rs_addr, rd_wb_group, uses_rd, id
+    );
+endinterface
+
+interface register_file_issue_interface;
+    //read interface
+    phys_addr_t phys_rs_addr [REGFILE_READ_PORTS];
+    logic [LOG2_COMMIT_PORTS-1:0] rs_wb_group [REGFILE_READ_PORTS];
+    logic [31:0] data [REGFILE_READ_PORTS];
+    logic inuse [REGFILE_READ_PORTS];
+
+    //write interface
+    phys_addr_t phys_rd_addr;
+    logic [LOG2_COMMIT_PORTS-1:0] rd_wb_group;
+    logic issued;
+
+    modport register_file (
+        input phys_rs_addr, phys_rd_addr, issued, rs_wb_group, rd_wb_group,
+        output data, inuse
+    );
+    modport issue (
+        output phys_rs_addr, phys_rd_addr, issued, rs_wb_group, rd_wb_group,
+        input data, inuse
+    );
+endinterface

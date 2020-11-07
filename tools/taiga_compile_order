@@ -88,9 +88,11 @@ core/fetch.sv
 core/illegal_instruction_checker.sv
 core/decode_and_issue.sv
 
-core/regfile_bank_sel.sv
+core/register_free_list.sv
+core/renamer.sv
+core/register_bank.sv
 core/register_file.sv
-core/register_file_and_writeback.sv
+core/writeback.sv
 
 core/placer_randomizer.sv
 

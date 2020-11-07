@@ -34,7 +34,6 @@ module branch_unit(
         ras_interface.branch_unit ras,
         output logic branch_flush,
 
-        output logic branch_complete,
         output id_t branch_id,
         input branch_metadata_t branch_metadata_ex,
 
@@ -65,6 +64,7 @@ module branch_unit(
     logic [31:0] pc_ex;
     logic instruction_is_completing;
 
+    logic branch_complete;
     logic jal_jalr_ex;
     ////////////////////////////////////////////////////
     //Implementation

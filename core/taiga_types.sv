@@ -24,10 +24,9 @@ package taiga_types;
     import taiga_config::*;
     import riscv_types::*;
 
-    localparam MAX_COMPLETE_COUNT = 3 + COMMIT_PORTS; //Branch + Store + System + COMMIT_PORTS
-
+    localparam RETIRE_W = $clog2(RETIRE_PORTS);
     localparam WB_UNITS_WIDTH = $clog2(NUM_WB_UNITS);
-    localparam LOG2_COMMIT_PORTS = $clog2(COMMIT_PORTS);
+    localparam LOG2_COMMIT_PORTS = $clog2(NUM_WB_GROUPS);
     localparam LOG2_MAX_IDS = $clog2(MAX_IDS);
 
     typedef logic[LOG2_MAX_IDS-1:0] id_t;
@@ -36,6 +35,7 @@ package taiga_types;
 
     typedef logic [3:0] addr_hash_t;
     typedef logic [5:0] phys_addr_t;
+    typedef logic [$clog2(NUM_WB_GROUPS)-1:0] rs_wb_group_t;
 
     typedef enum logic [1:0] {
         ALU_LOGIC_XOR = 2'b00,
@@ -102,9 +102,12 @@ package taiga_types;
         logic [6:0] opcode;
 
         rs_addr_t [REGFILE_READ_PORTS-1:0] rs_addr;
-        phys_addr_t [REGFILE_READ_PORTS-1:0] rs_phys_addr;
+        phys_addr_t [REGFILE_READ_PORTS-1:0] phys_rs_addr;
+        rs_wb_group_t [REGFILE_READ_PORTS-1:0] rs_wb_group;
 
-        logic [4:0] rd_addr;
+        rs_addr_t rd_addr;
+        phys_addr_t phys_rd_addr;
+        rs_wb_group_t rd_wb_group;
 
         logic uses_rs1;
         logic uses_rs2;
@@ -234,11 +237,26 @@ package taiga_types;
         logic forwarded_store;
     } sq_entry_t;
 
-    typedef struct packed {
-        logic [31:0] data;
+    typedef struct packed{
         id_t id;
         logic valid;
+        logic [31:0] data;
     } wb_packet_t;
+
+    typedef struct packed{
+        id_t id;
+        logic valid;
+        phys_addr_t phys_addr;
+        logic [31:0] data;
+    } commit_packet_t;
+
+    typedef struct packed{
+        logic valid;
+        id_t phys_id;
+        phys_addr_t phys_addr;
+        rs_addr_t rd_addr;
+        logic [RETIRE_W : 0] count;
+    } retire_packet_t;
 
     typedef struct packed {
         logic [31:0] addr;

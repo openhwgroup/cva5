@@ -36,9 +36,10 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
         //Writeback snooping
         input wb_packet_t wb_snoop,
 
-        //Writeback release
-        input id_t ids_released [COMMIT_PORTS],
-        input logic wb_released [COMMIT_PORTS],
+        //Retire release
+        input id_t retire_ids [RETIRE_PORTS],
+        input logic retire_ids_retired [RETIRE_PORTS],
+
         output logic tr_possible_load_conflict_delay
     );
     localparam SQ_DEPTH = 4;
@@ -97,8 +98,8 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
         .sq_entry (sq_entry),
         .sq_data (sq_data),
         .wb_snoop (wb_snoop),
-        .ids_released (ids_released),
-        .wb_released (wb_released),
+        .retire_ids (retire_ids),
+        .retire_ids_retired (retire_ids_retired),
         .store_ack (store_ack),
         .sq_output_valid (sq_output_valid)
     );
