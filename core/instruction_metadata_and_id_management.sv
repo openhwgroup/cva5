@@ -47,37 +47,32 @@ module instruction_metadata_and_id_management
         //Decode ID
         output decode_packet_t decode,
         input logic decode_advance,
+        input logic decode_uses_rd,
+        input rs_addr_t decode_rd_addr,
+        //renamer
+        input phys_addr_t decode_phys_rd_addr,
 
         //Issue stage
         input issue_packet_t issue,
         input logic instruction_issued,
-        output id_t rs_id [REGFILE_READ_PORTS],
-        output logic rs_inuse [REGFILE_READ_PORTS],
-        output logic rs_id_inuse[REGFILE_READ_PORTS],
+        input logic instruction_issued_with_rd,
 
         //Branch Predictor
         input branch_metadata_t branch_metadata_if,
+        input id_t branch_id,
         output branch_metadata_t branch_metadata_ex,
 
-        //ID freeing
-        input logic store_complete,
-        input id_t store_id,
+        //WB
+        input wb_packet_t wb_packet [NUM_WB_GROUPS],
+        output commit_packet_t commit_packet [NUM_WB_GROUPS],
 
-        input logic branch_complete,
-        input id_t branch_id,
+        //Retirer
+        output retire_packet_t retire,
+        output id_t retire_ids [RETIRE_PORTS],
+        output logic retire_ids_retired [RETIRE_PORTS],
 
-        input logic system_op_or_exception_complete,
-        input logic exception_with_rd_complete,
-        input id_t system_op_or_exception_id,
-
-        output logic [$clog2(MAX_COMPLETE_COUNT)-1:0] retire_inc,
-
-        //Writeback/Register File
-        input id_t ids_retiring [COMMIT_PORTS],
-        input logic retired [COMMIT_PORTS],
-        output logic [4:0] retired_rd_addr [COMMIT_PORTS],
-        output id_t id_for_rd [COMMIT_PORTS],
         //Exception
+        input id_t exception_id,
         output logic [31:0] exception_pc
 
     );
@@ -86,39 +81,21 @@ module instruction_metadata_and_id_management
     logic [31:0] instruction_table [MAX_IDS];
     logic valid_fetch_addr_table [MAX_IDS];
 
-    logic [4:0] rd_addr_table [MAX_IDS];
+    rs_addr_t rd_addr_table [MAX_IDS];
+    phys_addr_t phys_addr_table [MAX_IDS];
+    logic uses_rd_table [MAX_IDS];
+
     logic [$bits(branch_metadata_t)-1:0] branch_metadata_table [MAX_IDS];
     logic [$bits(fetch_metadata_t)-1:0] fetch_metadata_table [MAX_IDS];
 
     localparam LOG2_MAX_IDS = $clog2(MAX_IDS);
-    id_t clear_index;
-    id_t pc_id_next;
     id_t decode_id;
+
     logic [LOG2_MAX_IDS:0] fetched_count; //MSB used as valid for decode stage
+    logic [LOG2_MAX_IDS:0] pre_issue_count;
+    logic [LOG2_MAX_IDS:0] post_issue_count;
+    logic [LOG2_MAX_IDS:0] inflight_count;
 
-    //Toggle memory results for tracking completion after issue
-    logic decoded_status;
-    logic decoded_issued_status;
-
-    logic issued_status;
-    logic issued_status_rs [REGFILE_READ_PORTS];
-
-    logic branch_complete_status;
-    logic store_complete_status;
-
-    logic system_op_or_exception_complete_status;
-    logic exception_with_rd_complete_status_rs [REGFILE_READ_PORTS];
-
-    logic [COMMIT_PORTS-1:0] retired_status;
-    logic [COMMIT_PORTS-1:0] retired_status_rs [REGFILE_READ_PORTS];
-
-    logic [$clog2(MAX_COMPLETE_COUNT)-1:0] complete_count;
-
-    logic id_not_in_decode_issue;
-    logic id_not_inflight;
-
-    //Writes to register file
-    id_t rd_to_id_table [32];
     genvar i;
     ////////////////////////////////////////////////////
     //Implementation
@@ -143,40 +120,42 @@ module instruction_metadata_and_id_management
             instruction_table[fetch_id] <= fetch_instruction;
     end
 
-    //rd table
-    always_ff @ (posedge clk) begin
-        if (fetch_complete)
-            rd_addr_table[fetch_id] <= fetch_instruction[11:7];
-    end
-
     //valid fetched address table
     always_ff @ (posedge clk) begin
         if (fetch_complete)
             fetch_metadata_table[fetch_id] <= fetch_metadata;
     end
-    
 
-    //Operand inuse determination
-    initial rd_to_id_table = '{default: 0};
+    //phys rd table
     always_ff @ (posedge clk) begin
-        if (instruction_issued & issue.uses_rd)//tracks most recently issued instruction that writes to the register file
-            rd_to_id_table[issue.rd_addr] <= issue.id;
+        if (decode_advance)
+            phys_addr_table[decode_id] <= decode_phys_rd_addr;
     end
 
+    //rd table
+    always_ff @ (posedge clk) begin
+        if (decode_advance)
+            rd_addr_table[decode_id] <= decode_rd_addr;
+    end
+
+    //uses rd table
+    always_ff @ (posedge clk) begin
+        if (decode_advance)
+            uses_rd_table[decode_id] <= decode_uses_rd;
+    end    
     ////////////////////////////////////////////////////
     //ID Management
 
     
     //Next ID always increases, except on a fetch buffer flush.
-    //On a fetch buffer flush, the next ID is restored to the current decode ID.
+    //On a fetch buffer flush, the next ID is restored to the oldest non-issued ID (decode or issue stage)
     //This prevents a stall in the case where all  IDs are either in-flight or
     //in the fetch buffer at the point of a fetch flush.
     id_t next_pc_id_base;
     id_t next_fetch_id_base;
-    assign next_pc_id_base = gc_fetch_flush ? decode_id : (early_branch_flush ? fetch_id : pc_id);
-    assign next_fetch_id_base = gc_fetch_flush ? decode_id : fetch_id;
+    assign next_pc_id_base = gc_fetch_flush ? (issue.stage_valid ? issue.id : decode_id) : (early_branch_flush ? fetch_id : pc_id);
+    assign next_fetch_id_base = gc_fetch_flush ? (issue.stage_valid ? issue.id : decode_id) : fetch_id;
 
-    assign pc_id_next = next_pc_id_base + LOG2_MAX_IDS'({pc_id_assigned & ~gc_fetch_flush});
     always_ff @ (posedge clk) begin
         if (rst) begin
             pc_id <= 0;
@@ -186,103 +165,107 @@ module instruction_metadata_and_id_management
         else begin
             pc_id <= next_pc_id_base + LOG2_MAX_IDS'({pc_id_assigned & (~gc_fetch_flush)});
             fetch_id <= next_fetch_id_base + LOG2_MAX_IDS'({fetch_complete & ~gc_fetch_flush});
-            decode_id <= decode_id + LOG2_MAX_IDS'({decode_advance & ~gc_fetch_flush});
+            decode_id <= ((gc_fetch_flush & issue.stage_valid) ? issue.id : decode_id) + LOG2_MAX_IDS'({decode_advance & ~gc_fetch_flush});
         end
     end
+    //Retire IDs
+     generate for (i = 0; i < RETIRE_PORTS; i++) begin
+        always_ff @ (posedge clk) begin
+            if (rst)
+                retire_ids[i] <= LOG2_MAX_IDS'(i);
+            else
+                retire_ids[i] <= retire_ids[i] + LOG2_MAX_IDS'(retire.count);
+        end
+    end endgenerate
 
     always_ff @ (posedge clk) begin
         if (rst | gc_fetch_flush)
             fetched_count <= 0;
         else
-            fetched_count <= fetched_count + (LOG2_MAX_IDS+1)'(decode_advance) - (LOG2_MAX_IDS+1)'(fetch_complete);
+            fetched_count <= fetched_count + (LOG2_MAX_IDS+1)'(fetch_complete) - (LOG2_MAX_IDS+1)'(decode_advance);
     end
 
-    ////////////////////////////////////////////////////
-    //Issue Tracking
-    //As there are multiple completion sources, each source toggles a bit in its own LUTRAM.
-    //All LUTRAMs are then xor-ed together to produce the status of the ID.
-
-    //Computed one cycle in advance using pc_id_next
-    logic id_in_decode_issue [1];
-    toggle_memory_set # (
-        .DEPTH (MAX_IDS),
-        .NUM_WRITE_PORTS (2),
-        .NUM_READ_PORTS (1),
-        .WRITE_INDEX_FOR_RESET (0),
-        .READ_INDEX_FOR_RESET (0)
-    ) id_in_decode_tracking
-    (
-        .clk (clk),
-        .rst (rst),
-        .init_clear (gc_init_clear),
-        .toggle ('{(decode_advance & ~gc_fetch_flush), (instruction_issued | (gc_fetch_flush & issue.stage_valid))}),
-        .toggle_addr ('{decode.id, issue.id}),
-        .read_addr ('{pc_id_next}),
-        .in_use (id_in_decode_issue)
-    );
-    assign id_not_in_decode_issue = ~id_in_decode_issue[0];
-
-    ////////////////////////////////////////////////////
-    //Outputs
-    logic id_inflight [1];
-    toggle_memory_set # (
-        .DEPTH (MAX_IDS),
-        .NUM_WRITE_PORTS (6),
-        .NUM_READ_PORTS (1),
-        .WRITE_INDEX_FOR_RESET (0),
-        .READ_INDEX_FOR_RESET (0)
-    ) id_inflight_tracking
-    (
-        .clk (clk),
-        .rst (rst),
-        .init_clear (gc_init_clear),
-        .toggle ('{instruction_issued, branch_complete, store_complete, system_op_or_exception_complete, retired[0], retired[1]}),
-        .toggle_addr ('{issue.id, branch_id, store_id, system_op_or_exception_id, ids_retiring[0], ids_retiring[1]}),
-        .read_addr ('{pc_id_next}),
-        .in_use (id_inflight)
-    );
-    assign id_not_inflight = ~id_inflight[0];
-
-    //rs1/rs2 conflicts don't check branch or store memories as the only
-    //IDs stored in the rs to ID table are instructions that write to the register file
-    toggle_memory_set # (
-        .DEPTH (MAX_IDS),
-        .NUM_WRITE_PORTS (4),
-        .NUM_READ_PORTS (2),
-        .WRITE_INDEX_FOR_RESET (0),
-        .READ_INDEX_FOR_RESET (0)
-    ) rs_inuse_tacking
-    (
-        .clk (clk),
-        .rst (rst),
-        .init_clear (gc_init_clear),
-        .toggle ('{(instruction_issued & issue.uses_rd), exception_with_rd_complete, retired[0], retired[1]}),
-        .toggle_addr ('{issue.id, system_op_or_exception_id, ids_retiring[0], ids_retiring[1]}),
-        .read_addr (rs_id),
-        .in_use (rs_id_inuse)
-    );
+    always_ff @ (posedge clk) begin
+        if (rst | gc_fetch_flush)
+            pre_issue_count <= 0;
+        else
+            pre_issue_count <= pre_issue_count 
+            + (LOG2_MAX_IDS+1)'(pc_id_assigned) 
+            - (LOG2_MAX_IDS+1)'(instruction_issued);
+    end
 
     always_ff @ (posedge clk) begin
         if (rst)
-            pc_id_available <= 1;
+            post_issue_count <= 0;
         else
-            pc_id_available <= id_not_in_decode_issue & id_not_inflight;
+            post_issue_count <= post_issue_count
+            + (LOG2_MAX_IDS+1)'(instruction_issued) 
+            - (LOG2_MAX_IDS+1)'(retire.count);
     end
 
-    localparam MCC_W = $clog2(MAX_COMPLETE_COUNT);
+    assign inflight_count = pre_issue_count + post_issue_count;
+
+    ////////////////////////////////////////////////////
+    //ID in-use determination
+    logic id_inuse [RETIRE_PORTS];
+    //WB group zero is not included as it completes within a single cycle
+    //Non-writeback instructions not included as current instruction set
+    //complete in their first cycle of the execute stage, or do not cause an
+    //exception after that point
+    toggle_memory_set # (
+        .DEPTH (MAX_IDS),
+        .NUM_WRITE_PORTS (2),
+        .NUM_READ_PORTS (RETIRE_PORTS),
+        .WRITE_INDEX_FOR_RESET (0),
+        .READ_INDEX_FOR_RESET (0)
+    ) id_inuse_toggle_mem_set
+    (
+        .clk (clk),
+        .rst (rst),
+        .init_clear (gc_init_clear),
+        .toggle ('{(instruction_issued_with_rd & (issue.rd_wb_group == 1)), wb_packet[1].valid}),
+        .toggle_addr ('{issue.id, wb_packet[1].id}),
+        .read_addr (retire_ids),
+        .in_use (id_inuse)
+    );
+
+    ////////////////////////////////////////////////////
+    //Retirer
+    logic contiguous_retire;
+
     always_comb begin
-        complete_count = MCC_W'(branch_complete) + MCC_W'(store_complete) + MCC_W'(system_op_or_exception_complete);
-        for (int i = 0; i < COMMIT_PORTS; i++) begin
-            complete_count  += MCC_W'(retired[i]);
+        contiguous_retire = 1;
+        retire_ids_retired = '{default: 0};
+
+        retire.valid = 0;
+        retire.count = 0;
+        retire.phys_id = retire_ids[0];
+
+        for (int i = 0; i < RETIRE_PORTS; i++) begin
+            //Only pop if all older entries have been popped and only if this is either the first entry that writes to the regfile
+            //or does not write to the regfile
+            if ((post_issue_count > (LOG2_MAX_IDS+1)'(i)) && contiguous_retire) begin
+                retire_ids_retired[i] = (~uses_rd_table[retire_ids[i]] | (~id_inuse[i] & ~retire.valid));
+                contiguous_retire &= retire_ids_retired[i];
+                retire.count += retire_ids_retired[i];
+
+                if (retire_ids_retired[i] & uses_rd_table[retire_ids[i]]) begin
+                    retire.valid |= 1;
+                    retire.phys_id = retire_ids[i];
+                end
+            end
         end
+
+        retire.rd_addr = rd_addr_table[retire.phys_id];
     end
-    always_ff @ (posedge clk) begin
-        retire_inc <= complete_count;
-    end
+
+    ////////////////////////////////////////////////////
+    //Outputs
+    assign pc_id_available = ~inflight_count[LOG2_MAX_IDS];
 
     //Decode
     assign decode.id = decode_id;
-    assign decode.valid = fetched_count[LOG2_MAX_IDS];
+    assign decode.valid = |fetched_count;
     assign decode.pc = pc_table[decode_id];
     assign decode.instruction = instruction_table[decode_id];
     assign decode.fetch_metadata = fetch_metadata_table[decode_id];
@@ -290,30 +273,24 @@ module instruction_metadata_and_id_management
     //Branch Predictor
     assign branch_metadata_ex = branch_metadata_table[branch_id];
 
-    //Issue
+    //Writeback/Commit support
     always_comb begin
-        for (int i = 0; i < REGFILE_READ_PORTS; i++) begin
-            rs_id[i] = rd_to_id_table[issue.rs_addr[i]];
-            rs_inuse[i] = (|issue.rs_addr[i]) & (issue.rs_addr[i] == rd_addr_table[rs_id[i]]);
-        end
-    end
-
-    //Writeback support
-    always_comb begin
-        retired_rd_addr[0] = issue.rd_addr;
-        for (int i = 1; i < COMMIT_PORTS; i++) begin
-            retired_rd_addr[i] = rd_addr_table[ids_retiring[i]];
+        for (int i = 0; i < NUM_WB_GROUPS; i++) begin
+            commit_packet[i].id = wb_packet[i].id;
+            commit_packet[i].valid = wb_packet[i].valid;
+            commit_packet[i].data = wb_packet[i].data;
         end
     end
     always_comb begin
-        for (int i = 0; i < COMMIT_PORTS; i++) begin
-            id_for_rd[i] = rd_to_id_table[retired_rd_addr[i]];
+        commit_packet[0].phys_addr = issue.phys_rd_addr;
+        for (int i = 1; i < NUM_WB_GROUPS; i++) begin
+            commit_packet[i].phys_addr = phys_addr_table[wb_packet[i].id];
         end
     end
 
     //Exception Support
      generate if (ENABLE_M_MODE) begin
-         assign exception_pc = pc_table[system_op_or_exception_id];
+         assign exception_pc = pc_table[exception_id];
      end endgenerate
 
     ////////////////////////////////////////////////////

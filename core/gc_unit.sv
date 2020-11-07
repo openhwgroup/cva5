@@ -55,18 +55,12 @@ module gc_unit(
         mmu_interface.csr immu,
         mmu_interface.csr dmmu,
 
-        //ID Management
-        output logic system_op_or_exception_complete,
-        output logic exception_with_rd_complete,
-        output id_t system_op_or_exception_id,
-
         //Exception
+        output id_t exception_id,
         input logic [31:0] exception_pc,
 
-        //WB
-        input logic [$clog2(MAX_COMPLETE_COUNT)-1:0] retire_inc,
-        input logic instruction_retired,
-        //unit_writeback_interface.unit gc_wb,
+        //Retire
+        input retire_packet_t retire,
 
         //External
         input logic interrupt,
@@ -91,7 +85,7 @@ module gc_unit(
     //Largest depth for TLBs
     localparam int TLB_CLEAR_DEPTH = (DTLB_DEPTH > ITLB_DEPTH) ? DTLB_DEPTH : ITLB_DEPTH;
     //For general reset clear, greater of TLB depth or id-flight memory blocks (MAX_IDS)
-    localparam int INIT_CLEAR_DEPTH = ENABLE_S_MODE ? (TLB_CLEAR_DEPTH > MAX_IDS ? TLB_CLEAR_DEPTH : MAX_IDS) : MAX_IDS;
+    localparam int INIT_CLEAR_DEPTH = ENABLE_S_MODE ? (TLB_CLEAR_DEPTH > 64 ? TLB_CLEAR_DEPTH : 64) : 64;
 
     ////////////////////////////////////////////////////
     //Instructions
@@ -136,6 +130,9 @@ module gc_unit(
     logic i_fence_flush;
     exception_code_t ecall_code;
     logic second_cycle_flush;
+
+    logic system_op_or_exception_complete;
+    logic exception_with_rd_complete;
 
     //CSR
     logic mret;
@@ -182,7 +179,7 @@ module gc_unit(
         system_op_or_exception_complete <=
                 (issue.new_request & (gc_inputs.is_ret | gc_inputs.is_fence | gc_inputs.is_i_fence)) |
                 gc_exception.valid;
-        system_op_or_exception_id <= exception_or_system_id;
+        exception_id <= exception_or_system_id;
         exception_with_rd_complete <= (ls_exception.valid & ~ls_exception_is_store) | (br_exception.valid & branch_exception_is_jump);
     end
 
@@ -338,7 +335,7 @@ module gc_unit(
         .asid(asid),
         .immu(immu),
         .dmmu(dmmu),
-        .retire_inc(retire_inc),
+        .retire(retire),
         .interrupt(interrupt),
         .timer_interrupt(timer_interrupt),
         .wb_csr(wb_csr),

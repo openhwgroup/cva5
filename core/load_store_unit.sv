@@ -49,12 +49,12 @@ module load_store_unit (
 
         local_memory_interface.master data_bram,
 
-        //ID Management
-        output logic store_complete,
-        output id_t store_id,
-
         //Writeback-Store Interface
         input wb_packet_t wb_snoop,
+
+        //Retire release
+        input id_t retire_ids [RETIRE_PORTS],
+        input logic retire_ids_retired [RETIRE_PORTS],
 
         //CSR support
         output logic ls_is_idle,
@@ -188,29 +188,20 @@ endgenerate
     assign lsq.new_issue = issue.new_request & ~unaligned_addr & (~tlb_on | tlb.done);
 
     load_store_queue lsq_block (
-        .clk                            (clk),
-        .rst                            (rst),
-        .gc_fetch_flush                 (gc_fetch_flush),
-        .gc_issue_flush                 (gc_issue_flush),
-        .lsq                            (lsq),
-        .wb_snoop                       (wb_snoop),
-        .ids_released ('{LOG2_MAX_IDS'(1'b0), store_id}),
-        .wb_released ('{1'b0, store_complete}),
+        .clk (clk),
+        .rst (rst),
+        .gc_fetch_flush (gc_fetch_flush),
+        .gc_issue_flush (gc_issue_flush),
+        .lsq (lsq),
+        .wb_snoop (wb_snoop),
+        .retire_ids (retire_ids),
+        .retire_ids_retired (retire_ids_retired),
         .tr_possible_load_conflict_delay (tr_possible_load_conflict_delay)
     );
     assign shared_inputs = lsq.transaction_out;
-
     assign lsq.accepted = issue_request;
 
-    ////////////////////////////////////////////////////
-    //ID Management
-    always_ff @ (posedge clk) begin
-        store_id <= lsq.id;
-        if (rst)
-            store_complete <= 0;
-        else
-            store_complete <= lsq.new_issue & lsq.store;
-    end
+
     ////////////////////////////////////////////////////
     //Unit tracking
     assign current_unit = sub_unit_address_match;

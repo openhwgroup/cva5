@@ -1,5 +1,5 @@
 /*
- * Copyright © 2017-2020 Eric Matthews,  Lesley Shannon
+ * Copyright © 2020 Eric Matthews,  Lesley Shannon
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,44 +24,86 @@ module register_file
     import taiga_config::*;
     import riscv_types::*;
     import taiga_types::*;
-    #(
-        parameter NUM_READ_PORTS = 2
-    )
     (
         input logic clk,
         input logic rst,
 
+        input logic gc_init_clear,
+
+        //Issue interface
+        register_file_issue_interface.register_file rf_issue,
+
         //Writeback
-        input phys_addr_t write_addr,
-        input logic [31:0] new_data,
-        input logic commit,
-
-        //Issue
-        input phys_addr_t [NUM_READ_PORTS-1:0] read_addr,
-        output logic [31:0] data [NUM_READ_PORTS]
+        input commit_packet_t commit [NUM_WB_GROUPS]
     );
+    typedef logic [31:0] rs_data_set_t [REGFILE_READ_PORTS];
+    rs_data_set_t rs_data_set [NUM_WB_GROUPS];
 
-    logic [31:0] register_file [64];
+    typedef logic inuse_t [REGFILE_READ_PORTS]; 
+    inuse_t phys_reg_inuse_set [NUM_WB_GROUPS];
+
+    genvar i;
     ////////////////////////////////////////////////////
     //Implementation
 
     ////////////////////////////////////////////////////
-    //Register File
-    //Assign zero to r0 and initialize all registers to zero for simulation
-    initial register_file = '{default: 0};
-    always_ff @ (posedge clk) begin
-        if (commit)
-            register_file[write_addr] <= new_data;
-    end
+    //Phys register inuse
+    //WB group 0 contains the ALU, a single-cycle unit, thus any preceeding
+    //instructions will have written their data to the register file
+    assign phys_reg_inuse_set[0] = '{default : 0};
+
+    //WB groups 1+ have multiple-cycle operation and thus a status flag is set
+    //for each physical register
+    toggle_memory_set # (
+        .DEPTH (64),
+        .NUM_WRITE_PORTS (2),
+        .NUM_READ_PORTS (REGFILE_READ_PORTS),
+        .WRITE_INDEX_FOR_RESET (0),
+        .READ_INDEX_FOR_RESET (0)
+    ) id_inuse_toggle_mem_set
+    (
+        .clk (clk),
+        .rst (rst),
+        .init_clear (gc_init_clear),
+        .toggle ('{(rf_issue.issued & (rf_issue.rd_wb_group == 1) & |rf_issue.phys_rd_addr), (commit[1].valid & |commit[1].phys_addr)}),
+        .toggle_addr ('{rf_issue.phys_rd_addr, commit[1].phys_addr}),
+        .read_addr (rf_issue.phys_rs_addr),
+        .in_use (phys_reg_inuse_set[1])
+    );
     always_comb begin
-        foreach(read_addr[i])
-            data[i] = register_file[read_addr[i]];
+        for (int i = 0; i < REGFILE_READ_PORTS; i++) begin
+            rf_issue.inuse[i] = phys_reg_inuse_set[rf_issue.rs_wb_group[i]][i];
+        end
     end
 
     ////////////////////////////////////////////////////
+    //Register Banks
+    //Implemented in seperate module as there is not universal tool support for inferring
+    //arrays of memory blocks.
+    generate for (i = 0; i < NUM_WB_GROUPS; i++) begin : register_file_gen
+        register_bank #(.NUM_READ_PORTS(REGFILE_READ_PORTS)) reg_group (
+            .clk, .rst,
+            .write_addr(commit[i].phys_addr),
+            .new_data(commit[i].data),
+            .commit(commit[i].valid & (|commit[i].phys_addr)),
+            .read_addr(rf_issue.phys_rs_addr),
+            .data(rs_data_set[i])
+        );
+    end endgenerate
+
+    ////////////////////////////////////////////////////
+    //Register File Muxing
+    always_comb begin
+        for (int i = 0; i < REGFILE_READ_PORTS; i++) begin
+            rf_issue.data[i] = rs_data_set[rf_issue.rs_wb_group[i]][i];
+        end
+    end
+
+    ////////////////////////////////////////////////////
+    //End of Implementation
+    ////////////////////////////////////////////////////
+
+    ////////////////////////////////////////////////////
     //Assertions
-    write_to_zero_reg_assertion:
-        assert property (@(posedge clk) disable iff (rst) !(commit & write_addr == 0))
-        else $error("Write to zero reg occured!");
 
 endmodule

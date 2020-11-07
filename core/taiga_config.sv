@@ -155,12 +155,12 @@ package taiga_config;
     ////////////////////////////////////////////////////
     //ID limit
     //MAX_IDS restricted to a power of 2
-    localparam MAX_IDS = 8; //8 sufficient for rv32im configs
+    localparam MAX_IDS = 16; //8 sufficient for rv32im configs
 
     ////////////////////////////////////////////////////
     //Number of commit ports
-    localparam COMMIT_PORTS = 2; //min 2
-    localparam REGFILE_READ_PORTS = 2; //min 2, for RS1 and RS2
+    localparam RETIRE_PORTS = 2; //min 2. (Non-powers of two supported)
+    localparam REGFILE_READ_PORTS = 2; //min 2, for RS1 and RS2. (Non-powers of two supported)
     typedef enum logic {
         RS1 = 0,
         RS2 = 1
@@ -179,7 +179,6 @@ package taiga_config;
     localparam L1_DMMU_ID = 1;//ENABLE_S_MODE;
     localparam L1_ICACHE_ID = 2;//ENABLE_S_MODE + USE_DCACHE;
     localparam L1_IMMU_ID = 3;//ENABLE_S_MODE + USE_DCACHE + USE_ICACHE;
-
 
     ////////////////////////////////////////////////////
     //Write-Back Unit IDs

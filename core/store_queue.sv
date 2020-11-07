@@ -51,9 +51,9 @@ module store_queue # (
         //Writeback snooping
         input wb_packet_t wb_snoop,
 
-        //Writeback release
-        input id_t ids_released [COMMIT_PORTS],
-        input wb_released [COMMIT_PORTS],
+        //Retire
+        input id_t retire_ids [RETIRE_PORTS],
+        input logic retire_ids_retired [RETIRE_PORTS],
 
         //lsq output
         output sq_entry_t sq_entry,
@@ -208,11 +208,13 @@ module store_queue # (
     ////////////////////////////////////////////////////
     //Release Handling
     //Can be released on the same cycle the store arrives at the store queue
+    //TODO: change to toggle memory
     logic [DEPTH-1:0] newly_released;
     always_comb begin
         for (int i = 0; i < DEPTH; i++) begin
-            for (int j = 0; j < COMMIT_PORTS; j++) begin
-                newly_released[i] = (ids[i] == ids_released[j]) & wb_released[j];
+            newly_released[i] = 0;
+            for (int j = 0; j < RETIRE_PORTS; j++) begin
+                newly_released[i] |= (ids[i] == retire_ids[j]) & retire_ids_retired[j];
             end
         end
     end
