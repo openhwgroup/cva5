@@ -277,7 +277,7 @@ module instruction_metadata_and_id_management
     always_comb begin
         for (int i = 0; i < NUM_WB_GROUPS; i++) begin
             commit_packet[i].id = wb_packet[i].id;
-            commit_packet[i].valid = wb_packet[i].valid;
+            commit_packet[i].valid = wb_packet[i].valid & |commit_packet[i].phys_addr;
             commit_packet[i].data = wb_packet[i].data;
         end
     end
