@@ -65,7 +65,7 @@ module register_file
         .clk (clk),
         .rst (rst),
         .init_clear (gc_init_clear),
-        .toggle ('{(rf_issue.issued & (rf_issue.rd_wb_group == 1) & |rf_issue.phys_rd_addr), (commit[1].valid & |commit[1].phys_addr)}),
+        .toggle ('{(rf_issue.issued & (rf_issue.rd_wb_group == 1) & |rf_issue.phys_rd_addr), commit[1].valid}),
         .toggle_addr ('{rf_issue.phys_rd_addr, commit[1].phys_addr}),
         .read_addr (rf_issue.phys_rs_addr),
         .in_use (phys_reg_inuse_set[1])
@@ -85,7 +85,7 @@ module register_file
             .clk, .rst,
             .write_addr(commit[i].phys_addr),
             .new_data(commit[i].data),
-            .commit(commit[i].valid & (|commit[i].phys_addr)),
+            .commit(commit[i].valid),
             .read_addr(rf_issue.phys_rs_addr),
             .data(rs_data_set[i])
         );
@@ -105,5 +105,8 @@ module register_file
 
     ////////////////////////////////////////////////////
     //Assertions
+    for (genvar i = 0; i < NUM_WB_GROUPS; i++) begin : write_to_rd_zero_assertion
+        assert property (@(posedge clk) disable iff (rst) (commit[i].valid) |-> (commit[i].phys_addr != 0)) else $error("write to register zero");
+    end
 
 endmodule
