@@ -71,7 +71,6 @@ module store_queue # (
     logic [DEPTH-1:0] valid;
     addr_hash_t [DEPTH-1:0] hashes;
     logic [DEPTH-1:0] released;
-    logic [DEPTH-1:0] waiting_for_data;
     id_t [DEPTH-1:0] id_needed;
     id_t [DEPTH-1:0] ids;
     load_check_count_t [DEPTH-1:0] load_check_count;
@@ -196,19 +195,8 @@ module store_queue # (
         end
     end
 
-    //Store forwarding support
-    //New request takes precedence over a wb_id_match
-    always_ff @ (posedge clk) begin
-        if (rst)
-            waiting_for_data <= '0;
-        else
-            waiting_for_data <= (waiting_for_data & ~(wb_id_match & {DEPTH{wb_snoop.valid}})) | (new_request_one_hot & {DEPTH{lsq.forwarded_store}});
-    end
-
     ////////////////////////////////////////////////////
     //Release Handling
-    //Can be released on the same cycle the store arrives at the store queue
-    //TODO: change to toggle memory
     logic [DEPTH-1:0] newly_released;
     always_comb begin
         for (int i = 0; i < DEPTH; i++) begin
@@ -222,14 +210,14 @@ module store_queue # (
         if (rst)
             released <= '0;
         else
-            released <= (released & ~new_request_one_hot) | newly_released;
+            released <= (released | newly_released) & ~new_request_one_hot;
     end
 
     ////////////////////////////////////////////////////
     //Store Data
     always_ff @ (posedge clk) begin
         for (int i = 0; i < DEPTH; i++) begin
-            if (wb_id_match[i] & wb_snoop.valid & waiting_for_data[i])
+            if ((wb_id_match[i] | new_request_one_hot[i]) & wb_snoop.valid & (~released[i] | new_request_one_hot[i]))
                 store_data_from_wb[i] <= wb_snoop.data;
         end
     end
@@ -243,7 +231,7 @@ module store_queue # (
     logic [31:0] data_for_alignment;
     sq_entry_t output_attr;
 
-    assign sq_output_valid = valid[sq_oldest] & released[sq_oldest] & ~waiting_for_data[sq_oldest];
+    assign sq_output_valid = valid[sq_oldest] & released[sq_oldest];
     
     assign output_attr = store_attr[sq_oldest];
 
