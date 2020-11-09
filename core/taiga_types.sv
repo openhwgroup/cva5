@@ -253,8 +253,6 @@ package taiga_types;
     typedef struct packed{
         logic valid;
         id_t phys_id;
-        phys_addr_t phys_addr;
-        rs_addr_t rd_addr;
         logic [RETIRE_W : 0] count;
     } retire_packet_t;
 
