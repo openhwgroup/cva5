@@ -141,7 +141,7 @@ module instruction_metadata_and_id_management
     //uses rd table
     always_ff @ (posedge clk) begin
         if (decode_advance)
-            uses_rd_table[decode_id] <= decode_uses_rd;
+            uses_rd_table[decode_id] <= decode_uses_rd & |decode_rd_addr;
     end    
     ////////////////////////////////////////////////////
     //ID Management
@@ -232,9 +232,13 @@ module instruction_metadata_and_id_management
     ////////////////////////////////////////////////////
     //Retirer
     logic contiguous_retire;
+    logic non_rd_ids_retired [RETIRE_PORTS];
+    logic rd_ids_retired [RETIRE_PORTS];
 
     always_comb begin
         contiguous_retire = 1;
+        non_rd_ids_retired = '{default: 0};
+        rd_ids_retired = '{default: 0};
         retire_ids_retired = '{default: 0};
 
         retire.valid = 0;
@@ -245,18 +249,19 @@ module instruction_metadata_and_id_management
             //Only pop if all older entries have been popped and only if this is either the first entry that writes to the regfile
             //or does not write to the regfile
             if ((post_issue_count > (LOG2_MAX_IDS+1)'(i)) && contiguous_retire) begin
-                retire_ids_retired[i] = (~uses_rd_table[retire_ids[i]] | (~id_inuse[i] & ~retire.valid));
+                non_rd_ids_retired[i] = ~uses_rd_table[retire_ids[i]] & ~id_inuse[i];
+                rd_ids_retired[i] = uses_rd_table[retire_ids[i]] & ~id_inuse[i] & ~retire.valid;
+                retire_ids_retired[i] = non_rd_ids_retired[i] | rd_ids_retired[i];
+
                 contiguous_retire &= retire_ids_retired[i];
                 retire.count += retire_ids_retired[i];
-
-                if (retire_ids_retired[i] & uses_rd_table[retire_ids[i]]) begin
+                
+                if (rd_ids_retired[i]) begin
                     retire.valid |= 1;
                     retire.phys_id = retire_ids[i];
                 end
             end
         end
-
-        retire.rd_addr = rd_addr_table[retire.phys_id];
     end
 
     ////////////////////////////////////////////////////
