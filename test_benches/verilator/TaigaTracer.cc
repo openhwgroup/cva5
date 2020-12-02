@@ -146,10 +146,13 @@ void TaigaTracer<TB>::tick() {
 
 
         if (check_instruction_issued(BENCHMARK_START_COLLECTION_NOP)) {
-            collect_stats = true;
             reset_stats();
+            collect_stats = true;
         }
-        if (check_instruction_issued(BENCHMARK_END_COLLECTION_NOP)) {
+        else if (check_instruction_issued(BENCHMARK_RESUME_COLLECTION_NOP)) {
+            collect_stats = true;
+        }
+        else if (check_instruction_issued(BENCHMARK_END_COLLECTION_NOP)) {
             collect_stats = false;
         }
 
