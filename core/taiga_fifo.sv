@@ -125,6 +125,8 @@ module taiga_fifo
     //Assertions
     fifo_overflow_assertion:
         assert property (@(posedge clk) disable iff (rst) fifo.push |-> (~fifo.full | fifo.pop)) else $error("overflow");
+    fifo_potenial_push_overflow_assertion:
+        assert property (@(posedge clk) disable iff (rst) fifo.potential_push |-> (~fifo.full | fifo.pop)) else $error("potential push overflow");
     fifo_underflow_assertion:
         assert property (@(posedge clk) disable iff (rst) fifo.pop |-> fifo.valid) else $error("underflow");
 
