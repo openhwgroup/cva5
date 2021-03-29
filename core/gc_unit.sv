@@ -78,7 +78,11 @@ module gc_unit(
 
         output logic [31:0] gc_fetch_pc,
 
+        //Ordering support
         input logic ls_is_idle,
+        input logic [LOG2_MAX_IDS:0] post_issue_count,
+
+        //WB
         unit_writeback_interface.unit wb
     );
 
@@ -358,7 +362,7 @@ module gc_unit(
       .result(processing_csr)
     );
 
-    assign csr_ready_to_complete = processing_csr & ls_is_idle;
+    assign csr_ready_to_complete = processing_csr & (post_issue_count == 1);
     always_ff @(posedge clk) begin
         csr_ready_to_complete_r <= csr_ready_to_complete;
         csr_id <= instruction_id;

@@ -130,6 +130,7 @@ module taiga (
     logic gc_tlb_flush;
     logic [31:0] gc_fetch_pc;
     logic ls_is_idle;
+    logic [LOG2_MAX_IDS:0] post_issue_count;
 
     //Decode Unit and Fetch Unit
     logic illegal_instruction;
@@ -230,7 +231,8 @@ module taiga (
         .retire (retire),
         .retire_ids (retire_ids),
         .retire_ids_retired(retire_ids_retired),
-         .exception_id (exception_id),
+        .post_issue_count(post_issue_count),
+        .exception_id (exception_id),
         .exception_pc (exception_pc)
     );
 
@@ -501,6 +503,7 @@ module taiga (
         .gc_tlb_flush (gc_tlb_flush),
         .gc_fetch_pc (gc_fetch_pc),
         .ls_is_idle (ls_is_idle),
+        .post_issue_count (post_issue_count),
         .wb (unit_wb[GC_UNIT_ID])
     );
 
