@@ -48,13 +48,6 @@ package taiga_config;
     localparam USE_MUL = 1;
     localparam USE_DIV = 1;
 
-    //Division algorithm selection
-    typedef enum {
-        RADIX_2,//Smallest
-        QUICK_CLZ//Highest performance and best performance per LUT
-    } div_type;
-    localparam div_type DIV_ALGORITHM = QUICK_CLZ;
-
     //Enable Atomic extension (cache operations only)
     localparam USE_AMO = 0;
 
