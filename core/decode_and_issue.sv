@@ -426,7 +426,7 @@ module decode_and_issue (
 
 
     always_comb begin
-        unique if (~opcode[3] & opcode[2])
+        if (~opcode[3] & opcode[2])
             pc_offset = 21'(signed'(jalr_imm));
         else if (opcode[3])
             pc_offset = 21'(signed'({jal_imm, 1'b0}));
