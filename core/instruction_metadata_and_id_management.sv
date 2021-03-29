@@ -71,6 +71,8 @@ module instruction_metadata_and_id_management
         output id_t retire_ids [RETIRE_PORTS],
         output logic retire_ids_retired [RETIRE_PORTS],
 
+        //CSR
+        output logic [LOG2_MAX_IDS:0] post_issue_count,
         //Exception
         input id_t exception_id,
         output logic [31:0] exception_pc
@@ -88,12 +90,11 @@ module instruction_metadata_and_id_management
     logic [$bits(branch_metadata_t)-1:0] branch_metadata_table [MAX_IDS];
     logic [$bits(fetch_metadata_t)-1:0] fetch_metadata_table [MAX_IDS];
 
-    localparam LOG2_MAX_IDS = $clog2(MAX_IDS);
     id_t decode_id;
 
     logic [LOG2_MAX_IDS:0] fetched_count; //MSB used as valid for decode stage
     logic [LOG2_MAX_IDS:0] pre_issue_count;
-    logic [LOG2_MAX_IDS:0] post_issue_count;
+    //logic [LOG2_MAX_IDS:0] post_issue_count;
     logic [LOG2_MAX_IDS:0] inflight_count;
 
     genvar i;
