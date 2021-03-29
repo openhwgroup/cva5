@@ -262,13 +262,15 @@ endinterface
 interface unsigned_division_interface #(parameter DATA_WIDTH = 32);
     logic start;
     logic [DATA_WIDTH-1:0] dividend;
+    logic [$clog2(DATA_WIDTH)-1:0] dividend_CLZ;
     logic [DATA_WIDTH-1:0] divisor;
+    logic [$clog2(DATA_WIDTH)-1:0] divisor_CLZ;
     logic [DATA_WIDTH-1:0] remainder;
     logic [DATA_WIDTH-1:0] quotient;
     logic done;
     logic divisor_is_zero;
-    modport requester (input remainder, quotient, done, divisor_is_zero, output dividend, divisor, start);
-    modport divider (output remainder, quotient, done, divisor_is_zero, input dividend, divisor, start);
+    modport requester (input remainder, quotient, done, output dividend, dividend_CLZ, divisor, divisor_CLZ, divisor_is_zero, start);
+    modport divider (output remainder, quotient, done, input dividend, dividend_CLZ, divisor, divisor_CLZ, divisor_is_zero, start);
 endinterface
 
 interface renamer_interface;
