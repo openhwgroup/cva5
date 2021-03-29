@@ -431,4 +431,24 @@ module taiga_sim # (
             taiga_events[$bits(taiga_trace_events_t)-1-i] = taiga_events_packed[i];
     end
 
+    ////////////////////////////////////////////////////
+    //Performs the lookups to provide the speculative architectural register file with
+    //standard register names for simulation purposes
+    logic [31:0][31:0] sim_registers_unamed_groups[NUM_WB_GROUPS];
+    logic [31:0][31:0] sim_registers_unamed;
+
+    simulation_named_regfile sim_register;
+    genvar i, j;
+    generate  for (i = 0; i < 32; i++) begin
+        for (j = 0; j < NUM_WB_GROUPS; j++) begin
+            assign sim_registers_unamed_groups[j][i] = 
+            cpu.register_file_block.register_file_gen[j].reg_group.register_file_bank[cpu.renamer_block.speculative_rd_to_phys_table[i]];
+        end
+        assign sim_registers_unamed[31-i] = sim_registers_unamed_groups[cpu.renamer_block.spec_wb_group[i]][i];
+    end
+    endgenerate
+
+    ////////////////////////////////////////////////////
+    //Assertion Binding
+
 endmodule
