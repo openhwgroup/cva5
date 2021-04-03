@@ -76,11 +76,11 @@ module store_queue
     id_t [DEPTH-1:0] id_needed;
     id_t [DEPTH-1:0] ids;
     load_check_count_t [DEPTH-1:0] load_check_count;
-    logic [31:0] store_data_from_issue [DEPTH];
+    (* ramstyle = "MLAB, no_rw_check" *) logic [31:0] store_data_from_issue [DEPTH];
     logic [31:0] store_data_from_wb [DEPTH];
 
     //LUTRAM-based memory blocks
-    logic [$bits(sq_entry_t)-1:0] store_attr [DEPTH];
+    (* ramstyle = "MLAB, no_rw_check" *) logic [$bits(sq_entry_t)-1:0] store_attr [DEPTH];
 
     load_check_count_t [DEPTH-1:0] load_check_count_next;
 

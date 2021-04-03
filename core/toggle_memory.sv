@@ -40,7 +40,7 @@ module toggle_memory
     );
     ////////////////////////////////////////////////////
     //Implementation
-    logic id_toggle_memory [DEPTH];
+    (* ramstyle = "MLAB, no_rw_check" *) logic [0:0] id_toggle_memory [DEPTH];
 
     initial id_toggle_memory = '{default: 0};
     always_ff @ (posedge clk) begin
