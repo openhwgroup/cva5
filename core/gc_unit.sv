@@ -364,7 +364,13 @@ module gc_unit(
 
     assign csr_ready_to_complete = processing_csr & (post_issue_count == 1);
     always_ff @(posedge clk) begin
-        csr_ready_to_complete_r <= csr_ready_to_complete;
+        if (rst)
+            csr_ready_to_complete_r <= 0;
+        else
+            csr_ready_to_complete_r <= csr_ready_to_complete;
+    end
+
+    always_ff @(posedge clk) begin
         csr_id <= instruction_id;
         if (issue.new_request) begin
             instruction_id <= issue.id;
