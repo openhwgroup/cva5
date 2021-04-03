@@ -74,8 +74,9 @@ interface l2_requester_interface;
 endinterface
 
 
-interface l2_memory_interface #( parameter L2_ID_W = $clog2(L2_NUM_PORTS) + L2_SUB_ID_W);
+interface l2_memory_interface;
     import l2_config_and_types::*;
+    localparam L2_ID_W = $clog2(L2_NUM_PORTS) + L2_SUB_ID_W;
 
     logic [29:0] addr;
     logic [3:0] be;
