@@ -377,7 +377,7 @@ module decode_and_issue
         end
     end
 
-    id_t rd_to_id_table [32];
+    (* ramstyle = "MLAB, no_rw_check" *) id_t rd_to_id_table [32];
     always_ff @ (posedge clk) begin
         if (instruction_issued_with_rd)
             rd_to_id_table[issue.rd_addr] <= issue.id;

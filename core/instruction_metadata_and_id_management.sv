@@ -80,16 +80,16 @@ module instruction_metadata_and_id_management
 
     );
     //////////////////////////////////////////
-    logic [31:0] pc_table [MAX_IDS];
-    logic [31:0] instruction_table [MAX_IDS];
-    logic valid_fetch_addr_table [MAX_IDS];
+    (* ramstyle = "MLAB, no_rw_check" *) logic [31:0] pc_table [MAX_IDS];
+    (* ramstyle = "MLAB, no_rw_check" *) logic [31:0] instruction_table [MAX_IDS];
+    (* ramstyle = "MLAB, no_rw_check" *) logic [0:0] valid_fetch_addr_table [MAX_IDS];
 
-    rs_addr_t rd_addr_table [MAX_IDS];
-    phys_addr_t phys_addr_table [MAX_IDS];
-    logic uses_rd_table [MAX_IDS];
+    (* ramstyle = "MLAB, no_rw_check" *) rs_addr_t rd_addr_table [MAX_IDS];
+    (* ramstyle = "MLAB, no_rw_check" *) phys_addr_t phys_addr_table [MAX_IDS];
+    (* ramstyle = "MLAB, no_rw_check" *) logic [0:0] uses_rd_table [MAX_IDS];
 
-    logic [$bits(branch_metadata_t)-1:0] branch_metadata_table [MAX_IDS];
-    logic [$bits(fetch_metadata_t)-1:0] fetch_metadata_table [MAX_IDS];
+    (* ramstyle = "MLAB, no_rw_check" *) logic [$bits(branch_metadata_t)-1:0] branch_metadata_table [MAX_IDS];
+    (* ramstyle = "MLAB, no_rw_check" *) logic [$bits(fetch_metadata_t)-1:0] fetch_metadata_table [MAX_IDS];
 
     id_t decode_id;
 

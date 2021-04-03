@@ -43,11 +43,11 @@ module renamer
         input retire_packet_t retire
     );
     //////////////////////////////////////////
-    phys_addr_t architectural_id_to_phys_table [MAX_IDS];
-    phys_addr_t speculative_rd_to_phys_table [32];
+    (* ramstyle = "MLAB, no_rw_check" *) phys_addr_t architectural_id_to_phys_table [MAX_IDS];
+    (* ramstyle = "MLAB, no_rw_check" *) phys_addr_t speculative_rd_to_phys_table [32];
 
-    rs_wb_group_t spec_wb_group [32];
-    rs_wb_group_t arch_wb_group [32];
+    (* ramstyle = "MLAB, no_rw_check" *) rs_wb_group_t spec_wb_group [32];
+    (* ramstyle = "MLAB, no_rw_check" *) rs_wb_group_t arch_wb_group [32];
     rs_wb_group_t rollback_wb_group;
 
     logic [5:0] clear_index;
