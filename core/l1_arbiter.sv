@@ -20,13 +20,14 @@
  *             Eric Matthews <ematthew@sfu.ca>
  */
 
-import taiga_config::*;
-import riscv_types::*;
-import taiga_types::*;
-import l2_config_and_types::*;
-
 module l1_arbiter
-        (
+
+    import taiga_config::*;
+    import riscv_types::*;
+    import taiga_types::*;
+    import l2_config_and_types::*;
+
+    (
         input logic clk,
         input logic rst,
 
@@ -37,7 +38,7 @@ module l1_arbiter
 
         l1_arbiter_request_interface.slave l1_request[L1_CONNECTIONS-1:0],
         l1_arbiter_return_interface.slave l1_response[L1_CONNECTIONS-1:0]
-        );
+    );
 
     l2_request_t[L1_CONNECTIONS-1:0] l2_requests;
 

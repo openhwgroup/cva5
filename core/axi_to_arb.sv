@@ -20,14 +20,14 @@
  *             Eric Matthews <ematthew@sfu.ca>
  */
 
-import taiga_config::*;
-import riscv_types::*;
-import taiga_types::*;
-import l2_config_and_types::*;
-
-
 module axi_to_arb
-        (
+
+    import taiga_config::*;
+    import riscv_types::*;
+    import taiga_types::*;
+    import l2_config_and_types::*;
+
+    (
         input logic clk,
         input logic rst,
 
@@ -73,12 +73,10 @@ module axi_to_arb
         input logic axi_bvalid,
         input logic [1:0] axi_bresp,
 
-
-
         //arb interface
         l2_memory_interface.slave l2
 
-        );
+    );
 
     logic pop_request;
 

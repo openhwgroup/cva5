@@ -20,11 +20,13 @@
  *             Eric Matthews <ematthew@sfu.ca>
  */
 
-import taiga_config::*;
-import riscv_types::*;
-import taiga_types::*;
+module store_queue
 
-module store_queue # (
+    import taiga_config::*;
+    import riscv_types::*;
+    import taiga_types::*;
+
+    # (
         parameter DEPTH = 4
     )
     ( 

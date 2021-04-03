@@ -20,15 +20,20 @@
  *             Eric Matthews <ematthew@sfu.ca>
  */
 
-import taiga_config::*;
-import taiga_types::*;
 
-module intel_byte_enable_ram #(
+
+module intel_byte_enable_ram 
+
+    import taiga_config::*;
+    import riscv_types::*;
+    import taiga_types::*;
+
+    #(
         parameter LINES = 8192,
         parameter preload_file = "",
         parameter USE_PRELOAD_FILE = 0
-        )
-        (
+    )
+    (
         input logic clk,
         input logic[$clog2(LINES)-1:0] addr_a,
         input logic en_a,
@@ -41,7 +46,7 @@ module intel_byte_enable_ram #(
         input logic[XLEN/8-1:0] be_b,
         input logic[XLEN-1:0] data_in_b,
         output logic[XLEN-1:0] data_out_b
-        );
+    );
 
     (* ramstyle = "no_rw_check" *) logic [3:0][7:0] ram [LINES-1:0];
 

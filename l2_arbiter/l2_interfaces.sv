@@ -20,9 +20,9 @@
  *             Eric Matthews <ematthew@sfu.ca>
  */
 
-import l2_config_and_types::*;
-
 interface l2_arbitration_interface;
+    import l2_config_and_types::*;
+
     logic [L2_NUM_PORTS-1:0] requests;
     logic [$clog2(L2_NUM_PORTS)-1:0] grantee_i;
     logic [L2_NUM_PORTS-1:0] grantee_v;

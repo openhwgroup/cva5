@@ -20,18 +20,20 @@
  *             Eric Matthews <ematthew@sfu.ca>
  */
 
-import taiga_config::*;
-import riscv_types::*;
-import taiga_types::*;
+module branch_comparator
 
-module branch_comparator(
-            input logic use_signed,
-            input logic less_than,
-            input logic [31:0] a,
-            input logic [31:0] b,
-            input logic xor_result,
-            output logic result
-        );
+    import taiga_config::*;
+    import riscv_types::*;
+    import taiga_types::*;
+
+    (
+        input logic use_signed,
+        input logic less_than,
+        input logic [31:0] a,
+        input logic [31:0] b,
+        input logic xor_result,
+        output logic result
+    );
 
     logic [32:0] sign_extended_a;
     logic [32:0] sign_extended_b;

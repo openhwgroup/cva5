@@ -23,6 +23,7 @@
 module instruction_metadata_and_id_management
 
     import taiga_config::*;
+    import riscv_types::*;
     import taiga_types::*;
 
     (

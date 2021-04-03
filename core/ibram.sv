@@ -20,16 +20,18 @@
  *             Eric Matthews <ematthew@sfu.ca>
  */
 
-import taiga_config::*;
-import taiga_types::*;
+module ibram
 
-module ibram(
+    import taiga_config::*;
+    import taiga_types::*;
+    
+    (
         input logic clk,
         input logic rst,
 
         fetch_sub_unit_interface.sub_unit fetch_sub,
         local_memory_interface.master instruction_bram
-        );
+    );
 
     assign fetch_sub.ready = 1;
 

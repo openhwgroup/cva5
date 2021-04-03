@@ -20,11 +20,9 @@
  *             Eric Matthews <ematthew@sfu.ca>
  */
 
-import taiga_config::*;
-import taiga_types::*;
-
-module one_hot_occupancy #(parameter DEPTH = 4)
-        (
+module one_hot_occupancy 
+    #(parameter DEPTH = 4)
+    (
         input logic clk,
         input logic rst,
         input logic push,
@@ -34,7 +32,7 @@ module one_hot_occupancy #(parameter DEPTH = 4)
         output logic empty,
         output logic almost_empty,
         output logic valid
-        );
+    );
 
     logic [DEPTH:0] valid_chain;
 

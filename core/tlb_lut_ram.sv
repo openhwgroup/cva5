@@ -20,14 +20,19 @@
  *             Eric Matthews <ematthew@sfu.ca>
  */
 
-import taiga_config::*;
-import taiga_types::*;
 
-module tlb_lut_ram #(
+
+module tlb_lut_ram
+
+    import taiga_config::*;
+    import riscv_types::*;
+    import taiga_types::*;
+
+    #(
         parameter WAYS = 2,
         parameter DEPTH = 32
-        )
-        (
+    )
+    (
         input logic clk,
         input logic rst,
         input logic gc_tlb_flush,
@@ -35,7 +40,7 @@ module tlb_lut_ram #(
         input logic [ASIDLEN-1:0] asid,
         mmu_interface.tlb mmu,
         tlb_interface.tlb tlb
-        );
+    );
     //////////////////////////////////////////
     localparam TLB_TAG_W = 32-12-$clog2(DEPTH);
 

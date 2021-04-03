@@ -21,8 +21,10 @@
  */
 
 module toggle_memory
+
     import taiga_config::*;
     import taiga_types::*;
+    
     # (
         parameter DEPTH = 8
     )

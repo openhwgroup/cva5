@@ -20,14 +20,16 @@
  *             Eric Matthews <ematthew@sfu.ca>
  */
 
-import taiga_config::*;
-import riscv_types::*;
-import taiga_types::*;
+module amo_alu
 
-module amo_alu(
+    import taiga_config::*;
+    import riscv_types::*;
+    import taiga_types::*;
+
+    (
         input amo_alu_inputs_t amo_alu_inputs,
         output logic[31:0] result
-        );
+    );
 
     logic rs1_smaller_than_rs2;
      logic signed [32:0] rs1_ext;

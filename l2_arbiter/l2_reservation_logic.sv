@@ -20,10 +20,12 @@
  *             Eric Matthews <ematthew@sfu.ca>
  */
  
-import l2_config_and_types::*;
 
 module l2_reservation_logic
-        (
+
+    import l2_config_and_types::*;
+
+    (
         input logic clk,
         input logic rst,
 
@@ -37,7 +39,7 @@ module l2_reservation_logic
 
         output logic abort
 
-        );
+    );
 
     logic [31:2] reservation_address [L2_NUM_PORTS-1:0];
     logic [L2_NUM_PORTS-1:0] reservation;

@@ -22,16 +22,18 @@
 
 
 
-module byte_en_BRAM 
-import taiga_config::*;
-import taiga_types::*;
-import riscv_types::*;
+module byte_en_BRAM
+
+    import taiga_config::*;
+    import taiga_types::*;
+    import riscv_types::*;
+
 	#(
         parameter LINES = 4096,
         parameter preload_file = "",
         parameter USE_PRELOAD_FILE = 0
-        )
-        (
+    )
+    (
         input logic clk,
         input logic[$clog2(LINES)-1:0] addr_a,
         input logic en_a,
@@ -44,7 +46,7 @@ import riscv_types::*;
         input logic[XLEN/8-1:0] be_b,
         input logic[XLEN-1:0] data_in_b,
         output logic[XLEN-1:0] data_out_b
-        );
+    );
 
     generate
         if(FPGA_VENDOR == "xilinx")

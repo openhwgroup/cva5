@@ -20,17 +20,19 @@
  *             Eric Matthews <ematthew@sfu.ca>
  */
  
-import taiga_config::*;
-import riscv_types::*;
-import taiga_types::*;
+module ras
 
-module ras (
+    import taiga_config::*;
+    import riscv_types::*;
+    import taiga_types::*;
+
+    (
         input logic clk,
         input logic rst,
         input logic gc_fetch_flush,
         input logic early_branch_flush_ras_adjust,
         ras_interface.self ras
-        );
+    );
 
     (* ramstyle = "MLAB, no_rw_check" *) logic[31:0] lut_ram [RAS_DEPTH];
 

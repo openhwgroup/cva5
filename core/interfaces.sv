@@ -20,12 +20,9 @@
  *             Eric Matthews <ematthew@sfu.ca>
  */
 
-import taiga_config::*;
-import riscv_types::*;
-import taiga_types::*;
-import l2_config_and_types::*;
-
 interface branch_predictor_interface;
+    import taiga_types::*;
+
     //Fetch signals
     logic [31:0] if_pc;
     id_t if_id;
@@ -52,6 +49,8 @@ interface branch_predictor_interface;
 endinterface
 
 interface unit_issue_interface;
+    import taiga_types::*;
+
     logic possible_issue;
     logic new_request;
     logic new_request_r;
@@ -64,6 +63,9 @@ interface unit_issue_interface;
 endinterface
 
 interface unit_writeback_interface;
+    import riscv_types::*;
+    import taiga_types::*;
+
         logic ack;
 
         id_t id;
@@ -95,6 +97,8 @@ interface ras_interface;
 endinterface
 
 interface csr_exception_interface;
+    import riscv_types::*;
+
     logic valid;
     exception_code_t code;
     logic [31:0] pc;
@@ -109,6 +113,9 @@ interface csr_exception_interface;
 endinterface
 
 interface exception_interface;
+    import riscv_types::*;
+    import taiga_types::*;
+
     logic valid;
     logic ack;
     
@@ -184,6 +191,8 @@ interface tlb_interface;
 endinterface
 
 interface load_store_queue_interface;
+    import riscv_types::*;
+    import taiga_types::*;
 
     logic [31:0] addr;
     logic load;
@@ -210,6 +219,9 @@ interface load_store_queue_interface;
 endinterface
 
 interface writeback_store_interface;
+    import riscv_types::*;
+    import taiga_types::*;
+
         id_t id_needed;
         logic possibly_waiting;
         logic waiting;
@@ -274,6 +286,10 @@ interface unsigned_division_interface #(parameter DATA_WIDTH = 32);
 endinterface
 
 interface renamer_interface;
+    import taiga_config::*;
+    import riscv_types::*;
+    import taiga_types::*;
+
     rs_addr_t rd_addr;
     rs_addr_t [REGFILE_READ_PORTS-1:0] rs_addr;
     rs_wb_group_t rd_wb_group;
@@ -296,6 +312,10 @@ interface renamer_interface;
 endinterface
 
 interface register_file_issue_interface;
+    import taiga_config::*;
+    import riscv_types::*;
+    import taiga_types::*;
+
     //read interface
     phys_addr_t phys_rs_addr [REGFILE_READ_PORTS];
     logic [LOG2_COMMIT_PORTS-1:0] rs_wb_group [REGFILE_READ_PORTS];

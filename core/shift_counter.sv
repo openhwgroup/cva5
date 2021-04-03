@@ -20,15 +20,18 @@
  *             Eric Matthews <ematthew@sfu.ca>
  */
 
-import taiga_config::*;
-import taiga_types::*;
+module shift_counter
 
-module shift_counter #(parameter DEPTH = 16) (
+    import taiga_config::*;
+    import taiga_types::*;
+
+    #(parameter DEPTH = 16)
+    (
         input logic clk,
         input logic rst,
         input logic start,
         output logic done
-        );
+    );
 
     logic [DEPTH-1:0] counter;
     ////////////////////////////////////////////////////

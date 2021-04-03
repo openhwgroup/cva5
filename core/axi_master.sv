@@ -20,12 +20,13 @@
  *             Eric Matthews <ematthew@sfu.ca>
  */
 
-import taiga_config::*;
-import riscv_types::*;
-import taiga_types::*;
-
 module axi_master
-        (
+
+    import taiga_config::*;
+    import riscv_types::*;
+    import taiga_types::*;
+
+    (
         input logic clk,
         input logic rst,
 
@@ -36,7 +37,7 @@ module axi_master
         input data_access_shared_inputs_t ls_inputs,
         ls_sub_unit_interface.sub_unit ls
 
-        );
+    );
     logic ready;
 
 

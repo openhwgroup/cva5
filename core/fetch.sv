@@ -20,11 +20,13 @@
  *             Eric Matthews <ematthew@sfu.ca>
  */
 
-import taiga_config::*;
-import riscv_types::*;
-import taiga_types::*;
+module fetch
 
-module fetch(
+    import taiga_config::*;
+    import riscv_types::*;
+    import taiga_types::*;
+
+    (
         input logic clk,
         input logic rst,
 
@@ -59,7 +61,7 @@ module fetch(
 
         //Trace Interface
         output logic tr_early_branch_correction
-        );
+    );
 
     localparam NUM_SUB_UNITS = USE_I_SCRATCH_MEM + USE_ICACHE;
     localparam NUM_SUB_UNITS_W = (NUM_SUB_UNITS == 1) ? 1 : $clog2(NUM_SUB_UNITS);

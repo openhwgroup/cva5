@@ -21,8 +21,10 @@
  */
 
 module toggle_memory_set
+
     import taiga_config::*;
     import taiga_types::*;
+    
     # (
         parameter DEPTH = 64,
         parameter NUM_WRITE_PORTS = 3,

@@ -20,10 +20,12 @@
  *             Eric Matthews <ematthew@sfu.ca>
  */
 
-import taiga_config::*;
-import taiga_types::*;
+module dbram
 
-module dbram(
+    import taiga_config::*;
+    import taiga_types::*;
+
+    (
         input logic clk,
         input logic rst,
 
@@ -32,7 +34,7 @@ module dbram(
         output logic[31:0] data_out,
 
         local_memory_interface.master data_bram
-        );
+    );
 
     assign ls.ready = 1;
 

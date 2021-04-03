@@ -25,14 +25,14 @@
 module one_hot_to_integer
     #(
         parameter C_WIDTH = 40
-        )
-        (
+    )
+    (
         //clk and rst for assertion purposes
         input logic clk,
         input logic rst,
         input logic [C_WIDTH-1:0] one_hot,
         output logic [(C_WIDTH == 1) ? 0 : ($clog2(C_WIDTH)-1) : 0] int_out
-        );
+    );
     ////////////////////////////////////////////////////
     //Implementation
     localparam LOG2_WIDTH = $clog2(C_WIDTH);

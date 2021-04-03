@@ -22,15 +22,18 @@
 
 `timescale 1ns/1ns
 
-import tb_tools::*;
-import taiga_config::*;
-import taiga_types::*;
-import l2_config_and_types::*;
-
 `define  MEMORY_FILE  "/home/ematthew/Research/RISCV/software/riscv-tools/riscv-tests/benchmarks/dhrystone.riscv.sim_init"
 `define  UART_LOG  "/home/ematthew/uart.log"
 
-module taiga_tb ( );
+module taiga_tb 
+
+    import tb_tools::*;
+    import taiga_config::*;
+    import l2_config_and_types::*;
+    import riscv_types::*;
+    import taiga_types::*;
+
+  ( );
 
     logic simulator_clk;
     logic simulator_resetn;
