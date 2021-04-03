@@ -208,14 +208,13 @@ interface load_store_queue_interface;
     logic new_issue;
     logic ready;
 
-    id_t id_needed_by_store;
     data_access_shared_inputs_t transaction_out;
     logic transaction_ready;
     logic empty;
     logic accepted;
 
-    modport queue (input addr, load, store, be, fn3, data_in, id, forwarded_store, data_id, possible_issue, new_issue, accepted, output ready, id_needed_by_store, transaction_out, transaction_ready, empty);
-    modport ls  (output addr, load, store, be, fn3, data_in, id, forwarded_store, data_id, possible_issue, new_issue, accepted, input ready, id_needed_by_store, transaction_out, transaction_ready, empty);
+    modport queue (input addr, load, store, be, fn3, data_in, id, forwarded_store, data_id, possible_issue, new_issue, accepted, output ready, transaction_out, transaction_ready, empty);
+    modport ls  (output addr, load, store, be, fn3, data_in, id, forwarded_store, data_id, possible_issue, new_issue, accepted, input ready, transaction_out, transaction_ready, empty);
 endinterface
 
 interface writeback_store_interface;

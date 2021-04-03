@@ -45,6 +45,8 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
     localparam SQ_DEPTH = 4;
     addr_hash_t addr_hash;
 
+    lsq_entry_t lsq_entry;
+
     lq_entry_t lq_entry;
     logic [SQ_DEPTH-1:0] potential_store_conflicts;
     logic load_ack;
@@ -73,10 +75,22 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
         .addr_hash (addr_hash)
     );
 
+    assign lsq_entry.addr = lsq.addr;
+    assign lsq_entry.load = lsq.load;
+    assign lsq_entry.store = lsq.store;
+    assign lsq_entry.be = lsq.be;
+    assign lsq_entry.fn3 = lsq.fn3;
+    assign lsq_entry.data_in = lsq.data_in;
+    assign lsq_entry.id = lsq.id;
+    assign lsq_entry.forwarded_store = lsq.forwarded_store;
+    assign lsq_entry.data_id = lsq.data_id;
+    assign lsq_entry.possible_issue = lsq.possible_issue;
+    assign lsq_entry.new_issue = lsq.new_issue;
+
     load_queue #(.SQ_DEPTH(SQ_DEPTH)) lq_block (
         .clk (clk),
         .rst (rst | gc_issue_flush),
-        .lsq (lsq),
+        .lsq (lsq_entry),
         .lq_entry (lq_entry),
         .potential_store_conflicts (potential_store_conflicts),
         .load_ack (load_ack),
@@ -87,7 +101,7 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
     store_queue #(.DEPTH(SQ_DEPTH)) sq_block (
         .clk (clk),
         .rst (rst | gc_issue_flush),
-        .lsq (lsq),
+        .lsq (lsq_entry),
         .sq_empty (sq_empty),
         .sq_full (sq_full),
         .addr_hash (addr_hash),

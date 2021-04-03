@@ -33,7 +33,7 @@ module load_queue
         input logic clk,
         input logic rst,
 
-        load_store_queue_interface.queue lsq,
+        input lsq_entry_t lsq,
         output lq_entry_t lq_entry,
         input logic [SQ_DEPTH-1:0] potential_store_conflicts,
         input load_ack,

@@ -38,7 +38,7 @@ module store_queue
         output logic sq_full,
 
         //Request interface
-        load_store_queue_interface.queue lsq,
+        input lsq_entry_t lsq,
 
         //Address hash (shared by loads and stores)
         input addr_hash_t addr_hash,
