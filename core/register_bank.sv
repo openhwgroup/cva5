@@ -55,10 +55,10 @@ module register_bank
         if (commit)
             register_file_bank[write_addr] <= new_data;
     end
-    always_comb begin
-        foreach(read_addr[i])
-            data[i] = register_file_bank[read_addr[i]];
-    end
+    
+    generate for (genvar i = 0; i < NUM_READ_PORTS; i++)
+        assign data[i] = register_file_bank[read_addr[i]];
+    endgenerate
 
     ////////////////////////////////////////////////////
     //Assertions
