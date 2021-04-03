@@ -23,10 +23,12 @@
 
 
 module taiga_wrapper_xilinx
-import taiga_config::*;
-import taiga_types::*;
-import l2_config_and_types::*;
- (
+
+	import taiga_config::*;
+	import taiga_types::*;
+	import l2_config_and_types::*;
+
+	(
         input logic clk,
         input logic rst,
 

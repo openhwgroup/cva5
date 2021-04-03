@@ -20,11 +20,13 @@
  *             Eric Matthews <ematthew@sfu.ca>
  */
 
-import taiga_config::*;
-import riscv_types::*;
-import taiga_types::*;
+module branch_unit
 
-module branch_unit(
+    import taiga_config::*;
+    import riscv_types::*;
+    import taiga_types::*;
+
+    (
         input logic clk,
         input logic rst,
 
@@ -46,7 +48,7 @@ module branch_unit(
         output logic tr_branch_misspredict,
         output logic tr_return_correct,
         output logic tr_return_misspredict
-        );
+    );
 
     logic branch_issued_r;
 

@@ -20,11 +20,13 @@
  *             Eric Matthews <ematthew@sfu.ca>
  */
 
-import taiga_config::*;
-import riscv_types::*;
-import taiga_types::*;
+module dcache
 
-module dcache(
+    import taiga_config::*;
+    import riscv_types::*;
+    import taiga_types::*;
+    
+    (
         input logic clk,
         input logic rst,
         input logic dcache_on,
@@ -39,7 +41,7 @@ module dcache(
 
         input amo_details_t amo,
         ls_sub_unit_interface.sub_unit ls
-        );
+    );
 
     localparam DCACHE_SIZE_IN_WORDS = DCACHE_LINES*DCACHE_LINE_W*DCACHE_WAYS;
 

@@ -20,16 +20,18 @@
  *             Eric Matthews <ematthew@sfu.ca>
  */
 
-import taiga_config::*;
-import taiga_types::*;
-import riscv_types::*;
+module xilinx_byte_enable_ram
 
-module xilinx_byte_enable_ram #(
+    import taiga_config::*;
+    import riscv_types::*;
+    import taiga_types::*;
+
+    #(
         parameter LINES = 4096,
         parameter preload_file = "",
         parameter USE_PRELOAD_FILE = 0
-        )
-        (
+    )
+    (
         input logic clk,
 
         input logic[$clog2(LINES)-1:0] addr_a,
@@ -43,7 +45,7 @@ module xilinx_byte_enable_ram #(
         input logic[XLEN/8-1:0] be_b,
         input logic[XLEN-1:0] data_in_b,
         output logic[XLEN-1:0] data_out_b
-        );
+    );
 
     logic [31:0] ram [LINES-1:0];
 

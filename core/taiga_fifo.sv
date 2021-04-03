@@ -26,9 +26,11 @@
  *  For continuous operation when full, enqueing side must inspect pop signal
  */
 module taiga_fifo
+
     import taiga_config::*;
     import riscv_types::*;
     import taiga_types::*;
+    
     #(
         parameter DATA_WIDTH = 70, 
         parameter FIFO_DEPTH = 4

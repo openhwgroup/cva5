@@ -20,14 +20,15 @@
  *             Eric Matthews <ematthew@sfu.ca>
  */
 
-import l2_config_and_types::*;
-
 module l2_round_robin
-        (
+
+    import l2_config_and_types::*;
+
+    (
         input logic clk,
         input logic rst,
         l2_arbitration_interface.slave arb
-        );
+    );
 
     logic [$clog2(L2_NUM_PORTS)-1:0] state;
     logic[$clog2(L2_NUM_PORTS)-1:0] muxes [L2_NUM_PORTS-1:0];

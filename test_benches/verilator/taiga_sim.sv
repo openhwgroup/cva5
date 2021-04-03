@@ -20,15 +20,17 @@
  *             Eric Matthews <ematthew@sfu.ca>
  */
 
-import taiga_config::*;
-import taiga_types::*;
-import l2_config_and_types::*;
+module taiga_sim 
 
+    import taiga_config::*;
+    import l2_config_and_types::*;
+    import riscv_types::*;
+    import taiga_types::*;
 
-module taiga_sim # (
+    # (
         parameter MEMORY_FILE = "/home/ematthew/Research/RISCV/software/riscv-tools/riscv-tests/benchmarks/dhrystone.riscv.hw_init" //change this to appropriate location "/home/ematthew/Downloads/dhrystone.riscv.sim_init"
-        )
-        (
+    )
+    (
         input logic clk,
         input logic rst,
 

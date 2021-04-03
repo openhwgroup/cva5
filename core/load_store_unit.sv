@@ -20,11 +20,13 @@
  *             Eric Matthews <ematthew@sfu.ca>
  */
 
-import taiga_config::*;
-import riscv_types::*;
-import taiga_types::*;
+module load_store_unit
 
-module load_store_unit (
+    import taiga_config::*;
+    import riscv_types::*;
+    import taiga_types::*;
+
+    (
         input logic clk,
         input logic rst,
         input load_store_inputs_t ls_inputs,
@@ -65,7 +67,7 @@ module load_store_unit (
         unit_writeback_interface.unit wb,
 
         output logic tr_load_conflict_delay
-        );
+    );
 
     localparam NUM_SUB_UNITS = USE_D_SCRATCH_MEM+USE_BUS+USE_DCACHE;
     localparam NUM_SUB_UNITS_W = (NUM_SUB_UNITS == 1) ? 1 : $clog2(NUM_SUB_UNITS);

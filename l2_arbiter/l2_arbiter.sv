@@ -20,16 +20,19 @@
  *             Eric Matthews <ematthew@sfu.ca>
  */
 
-import l2_config_and_types::*;
-import taiga_types::*;
+module l2_arbiter
 
-module l2_arbiter (
+    import l2_config_and_types::*;
+    import riscv_types::*;
+    import taiga_types::*;
+
+    (
         input logic clk,
         input logic rst,
 
         l2_requester_interface.slave request [L2_NUM_PORTS-1:0],
         l2_memory_interface.master mem
-        );
+    );
 
     l2_arbitration_interface arb();
 

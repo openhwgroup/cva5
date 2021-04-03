@@ -20,9 +20,9 @@
  *             Eric Matthews <ematthew@sfu.ca>
  */
 
-import l2_config_and_types::*;
-
 interface l2_requester_interface;
+    import l2_config_and_types::*;
+
     //l2_request_t request;
     logic [29:0] addr;
     logic [3:0] be;
@@ -75,6 +75,8 @@ endinterface
 
 
 interface l2_memory_interface #( parameter L2_ID_W = $clog2(L2_NUM_PORTS) + L2_SUB_ID_W);
+    import l2_config_and_types::*;
+
     logic [29:0] addr;
     logic [3:0] be;
     logic rnw;

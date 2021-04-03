@@ -21,7 +21,9 @@
  */
 
 module  illegal_instruction_checker
+
     import taiga_config::*;
+    
     (
         input logic [31:0] instruction,
         output logic illegal_instruction

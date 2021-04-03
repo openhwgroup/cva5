@@ -20,18 +20,20 @@
  *             Eric Matthews <ematthew@sfu.ca>
  */
 
-import taiga_config::*;
-import riscv_types::*;
-import taiga_types::*;
+module mul_unit
 
-module mul_unit(
+    import taiga_config::*;
+    import riscv_types::*;
+    import taiga_types::*;
+
+    (
         input logic clk,
         input logic rst,
 
         input mul_inputs_t mul_inputs,
         unit_issue_interface.unit issue,
         unit_writeback_interface.unit wb
-        );
+    );
 
     logic signed [63:0] result;
     logic mulh [2];

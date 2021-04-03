@@ -20,13 +20,15 @@
  *             Eric Matthews <ematthew@sfu.ca>
  */
 
-import taiga_config::*;
-import taiga_types::*;
+module ddata_bank 
 
-module ddata_bank #(
+    import taiga_config::*;
+    import taiga_types::*;
+
+    #(
         parameter LINES = 2048
-        )
-        (
+    )
+    (
         input logic clk,
         input logic[$clog2(LINES)-1:0] addr_a,
         input logic en_a,
@@ -38,7 +40,7 @@ module ddata_bank #(
         input logic[$clog2(LINES)-1:0] addr_b,
         input logic en_b,
         input logic[31:0] data_in_b
-        );
+    );
 
     byte_en_BRAM #(LINES, "", 0) ram_block (.*, .be_b({4{en_b}}), .data_out_b());
 

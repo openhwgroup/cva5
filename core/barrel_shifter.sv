@@ -20,11 +20,13 @@
  *             Eric Matthews <ematthew@sfu.ca>
  */
 
-import taiga_config::*;
-import riscv_types::*;
-import taiga_types::*;
+module barrel_shifter
 
-module barrel_shifter (
+    import taiga_config::*;
+    import riscv_types::*;
+    import taiga_types::*;
+    
+    (
         input logic[31:0] shifter_input,
         input logic[4:0] shift_amount,
         input logic arith,

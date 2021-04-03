@@ -20,15 +20,16 @@
  *             Eric Matthews <ematthew@sfu.ca>
  */
 
-import taiga_config::*;
-import taiga_types::*;
-
 module branch_predictor_ram
-        #(
+
+    import taiga_config::*;
+    import taiga_types::*;
+
+    #(
         parameter C_DATA_WIDTH = 20,
         parameter C_DEPTH = 512
-        )
-        (
+    )
+    (
         input logic clk,
         input logic rst,
         input logic [$clog2(C_DEPTH)-1:0] write_addr,
@@ -37,7 +38,7 @@ module branch_predictor_ram
         input logic read_en,
         input logic [C_DATA_WIDTH-1:0] write_data,
         output logic [C_DATA_WIDTH-1:0] read_data
-        );
+    );
     (* ram_style = "block" *)logic [C_DATA_WIDTH-1:0] branch_ram [C_DEPTH-1:0];
     //implementation
     ////////////////////////////////////////////////////

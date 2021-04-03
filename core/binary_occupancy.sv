@@ -20,11 +20,13 @@
  *             Eric Matthews <ematthew@sfu.ca>
  */
 
-import taiga_config::*;
-import taiga_types::*;
+module binary_occupancy
 
-module binary_occupancy #(parameter DEPTH = 4)
-        (
+    import taiga_config::*;
+    import taiga_types::*;
+    
+    #(parameter DEPTH = 4)
+    (
         input logic clk,
         input logic rst,
         input logic push,
@@ -34,7 +36,7 @@ module binary_occupancy #(parameter DEPTH = 4)
         output logic empty,
         output logic almost_empty,
         output logic valid
-        );
+    );
 
     logic[$clog2(DEPTH)-1:0] count;
 

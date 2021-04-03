@@ -20,10 +20,12 @@
  *             Eric Matthews <ematthew@sfu.ca>
  */
 
-import taiga_config::*;
-import taiga_types::*;
+module itag_banks
 
-module itag_banks(
+    import taiga_config::*;
+    import taiga_types::*;
+
+    (
         input logic clk,
         input logic rst,
 

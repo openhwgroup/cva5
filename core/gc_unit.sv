@@ -20,12 +20,14 @@
  *             Eric Matthews <ematthew@sfu.ca>
  */
 
-import taiga_config::*;
-import riscv_types::*;
-import taiga_types::*;
-import csr_types::*;
+module gc_unit
 
-module gc_unit(
+    import taiga_config::*;
+    import riscv_types::*;
+    import taiga_types::*;
+    import csr_types::*;
+
+    (
         input logic clk,
         input logic rst,
 

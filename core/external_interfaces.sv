@@ -20,11 +20,8 @@
  *             Eric Matthews <ematthew@sfu.ca>
  */
 
-import taiga_config::*;
-import taiga_types::*;
-import l2_config_and_types::*;
-
 interface axi_interface;
+    import taiga_config::*;
 
     logic arready;
     logic arvalid;
@@ -129,6 +126,8 @@ interface wishbone_interface;
 endinterface
 
 interface l1_arbiter_request_interface;
+    import l2_config_and_types::*;
+
     logic [31:0] addr;
     logic [31:0] data ;
     logic rnw ;
