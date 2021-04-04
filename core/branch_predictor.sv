@@ -66,12 +66,12 @@ module branch_predictor
     } branch_table_entry_t;
 
 
-    branch_table_entry_t if_entry [BRANCH_PREDICTOR_WAYS-1:0];
+    branch_table_entry_t [BRANCH_PREDICTOR_WAYS-1:0] if_entry;
     branch_table_entry_t ex_entry;
 
     logic branch_predictor_direction_changed;
     logic [31:0] new_jump_addr;
-    logic [31:0] predicted_pc [BRANCH_PREDICTOR_WAYS-1:0];
+    logic [BRANCH_PREDICTOR_WAYS-1:0][31:0] predicted_pc;
 
     logic [BRANCH_PREDICTOR_WAYS-1:0] tag_matches;
     logic [BRANCH_PREDICTOR_WAYS-1:0] replacement_way;
