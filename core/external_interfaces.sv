@@ -139,17 +139,8 @@ interface l1_arbiter_request_interface;
     logic request;
     logic ack;
 
-    function  l2_request_t to_l2 (input bit[L2_SUB_ID_W-1:0] sub_id);
-        to_l2.addr = addr[31:2];
-        to_l2.rnw = rnw;
-        to_l2.be = be;
-        to_l2.is_amo = is_amo;
-        to_l2.amo_type_or_burst_size = is_amo ? amo : size;
-        to_l2.sub_id = sub_id;
-    endfunction
-
     modport master (output addr, data, rnw, be, size, is_amo, amo, request, input ack);
-    modport slave (import to_l2, input addr, data, rnw, be, size, is_amo, amo, request, output ack);
+    modport slave (input addr, data, rnw, be, size, is_amo, amo, request, output ack);
     modport formal (input addr, data, rnw, be, size, is_amo, amo, request, ack);
 
 endinterface
