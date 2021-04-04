@@ -30,6 +30,7 @@ core/one_hot_occupancy.sv
 core/binary_occupancy.sv 
 core/taiga_fifo.sv  
 core/shift_counter.sv
+core/priority_encoder.sv
 
 core/set_clr_reg_with_rst.sv
 
