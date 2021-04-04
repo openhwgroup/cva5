@@ -77,23 +77,24 @@ module writeback
     //Iterating through all commit ports:
     //   Search for complete units (in fixed unit order)
     //   Assign to a commit port, mask that unit and commit port
+    generate for (i = 0; i < NUM_WB_GROUPS; i++) begin
+        priority_encoder
+            #(.WIDTH(NUM_WB_UNITS_GROUP[i]))
+        unit_done_encoder
+        (
+            .priority_vector (unit_done[i][NUM_WB_UNITS_GROUP[i]-1 : 0]),
+            .encoded_result (unit_sel[i][NUM_WB_UNITS_GROUP[i] == 1 ? 0 : ($clog2(NUM_WB_UNITS_GROUP[i])-1) : 0])
+        );
+        assign wb_packet[i].valid = |unit_done[i];
+        assign wb_packet [i].id = unit_instruction_id[i][unit_sel[i]];
+        assign wb_packet[i].data = unit_rd[i][unit_sel[i]];
+    end endgenerate
+
     always_comb begin
         for (int i = 0; i < NUM_WB_GROUPS; i++) begin
-            unit_ack[i] = '{default: 0};
-            wb_packet[i].valid = 0;
-            unit_sel[i] = WB_UNITS_WIDTH'(NUM_WB_UNITS_GROUP[i]-1);
-            for (int j = 0; j < (NUM_WB_UNITS_GROUP[i] - 1); j++) begin
-                if (unit_done[i][j]) begin
-                    unit_sel[i] = WB_UNITS_WIDTH'(j);
-                    break;
-                end
-            end
-            //ID and data muxes
-            wb_packet[i].valid = unit_done[i][unit_sel[i]];
-            wb_packet[i].id = unit_instruction_id[i][unit_sel[i]];
-            wb_packet[i].data = unit_rd[i][unit_sel[i]];
+            unit_ack[i] = '0;
             unit_ack[i][unit_sel[i]] = wb_packet[i].valid;
-        end    
+        end
     end
 
     ////////////////////////////////////////////////////
