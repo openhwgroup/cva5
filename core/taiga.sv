@@ -114,7 +114,7 @@ module taiga
         //ID freeing
     retire_packet_t retire;
     id_t retire_ids [RETIRE_PORTS];
-    logic retire_ids_retired [RETIRE_PORTS];
+    logic retire_port_valid [RETIRE_PORTS];
         //Writeback
     wb_packet_t wb_packet [NUM_WB_GROUPS];
     commit_packet_t commit_packet [NUM_WB_GROUPS];
@@ -235,7 +235,7 @@ module taiga
         .commit_packet (commit_packet),
         .retire (retire),
         .retire_ids (retire_ids),
-        .retire_ids_retired(retire_ids_retired),
+        .retire_port_valid(retire_port_valid),
         .post_issue_count(post_issue_count),
         .exception_id (exception_id),
         .exception_pc (exception_pc)
@@ -441,7 +441,7 @@ module taiga
         .data_bram (data_bram),
         .wb_snoop (wb_snoop),
         .retire_ids (retire_ids),
-        .retire_ids_retired(retire_ids_retired),
+        .retire_port_valid(retire_port_valid),
         .ls_is_idle (ls_is_idle),
         .ls_exception (ls_exception),
         .ls_exception_is_store (ls_exception_is_store),

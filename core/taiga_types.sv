@@ -24,7 +24,7 @@ package taiga_types;
     import taiga_config::*;
     import riscv_types::*;
 
-    localparam RETIRE_W = $clog2(RETIRE_PORTS);
+    localparam LOG2_RETIRE_PORTS = $clog2(RETIRE_PORTS);
     localparam WB_UNITS_WIDTH = $clog2(NUM_WB_UNITS);
     localparam LOG2_COMMIT_PORTS = $clog2(NUM_WB_GROUPS);
     localparam LOG2_MAX_IDS = $clog2(MAX_IDS);
@@ -268,7 +268,7 @@ package taiga_types;
     typedef struct packed{
         logic valid;
         id_t phys_id;
-        logic [RETIRE_W : 0] count;
+        logic [LOG2_RETIRE_PORTS : 0] count;
     } retire_packet_t;
 
     typedef struct packed {
