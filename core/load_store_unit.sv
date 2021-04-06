@@ -56,7 +56,7 @@ module load_store_unit
 
         //Retire release
         input id_t retire_ids [RETIRE_PORTS],
-        input logic retire_ids_retired [RETIRE_PORTS],
+        input logic retire_port_valid [RETIRE_PORTS],
 
         //CSR support
         output logic ls_is_idle,
@@ -197,7 +197,7 @@ endgenerate
         .lsq (lsq),
         .wb_snoop (wb_snoop),
         .retire_ids (retire_ids),
-        .retire_ids_retired (retire_ids_retired),
+        .retire_port_valid (retire_port_valid),
         .tr_possible_load_conflict_delay (tr_possible_load_conflict_delay)
     );
     assign shared_inputs = lsq.transaction_out;

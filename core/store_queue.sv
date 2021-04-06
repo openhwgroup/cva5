@@ -55,7 +55,7 @@ module store_queue
 
         //Retire
         input id_t retire_ids [RETIRE_PORTS],
-        input logic retire_ids_retired [RETIRE_PORTS],
+        input logic retire_port_valid [RETIRE_PORTS],
 
         //lsq output
         output sq_entry_t sq_entry,
@@ -204,7 +204,7 @@ module store_queue
         for (int i = 0; i < DEPTH; i++) begin
             newly_released[i] = 0;
             for (int j = 0; j < RETIRE_PORTS; j++) begin
-                newly_released[i] |= (ids[i] == retire_ids[j]) & retire_ids_retired[j];
+                newly_released[i] |= (ids[i] == retire_ids[j]) & retire_port_valid[j];
             end
         end
     end

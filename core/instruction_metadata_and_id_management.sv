@@ -70,7 +70,7 @@ module instruction_metadata_and_id_management
         //Retirer
         output retire_packet_t retire,
         output id_t retire_ids [RETIRE_PORTS],
-        output logic retire_ids_retired [RETIRE_PORTS],
+        output logic retire_port_valid [RETIRE_PORTS],
 
         //CSR
         output logic [LOG2_MAX_IDS:0] post_issue_count,
@@ -84,7 +84,6 @@ module instruction_metadata_and_id_management
     (* ramstyle = "MLAB, no_rw_check" *) logic [31:0] instruction_table [MAX_IDS];
     (* ramstyle = "MLAB, no_rw_check" *) logic [0:0] valid_fetch_addr_table [MAX_IDS];
 
-    (* ramstyle = "MLAB, no_rw_check" *) rs_addr_t rd_addr_table [MAX_IDS];
     (* ramstyle = "MLAB, no_rw_check" *) phys_addr_t phys_addr_table [MAX_IDS];
     (* ramstyle = "MLAB, no_rw_check" *) logic [0:0] uses_rd_table [MAX_IDS];
 
@@ -95,7 +94,8 @@ module instruction_metadata_and_id_management
 
     logic [LOG2_MAX_IDS:0] fetched_count; //MSB used as valid for decode stage
     logic [LOG2_MAX_IDS:0] pre_issue_count;
-    //logic [LOG2_MAX_IDS:0] post_issue_count;
+    logic [LOG2_MAX_IDS:0] pre_issue_count_next;
+    logic [LOG2_MAX_IDS:0] post_issue_count_next;
     logic [LOG2_MAX_IDS:0] inflight_count;
 
     genvar i;
@@ -104,59 +104,65 @@ module instruction_metadata_and_id_management
 
     ////////////////////////////////////////////////////
     //Instruction Metadata
-    //pc table
+    //PC table
+    //Number of read ports = 1 or 2 (decode stage + exception logic (if enabled))
     always_ff @ (posedge clk) begin
         if (pc_id_assigned)
             pc_table[pc_id] <= if_pc;
     end
 
-    //branch metadata table
+    ////////////////////////////////////////////////////
+    //Branch metadata table
+    //Number of read ports = 1 (branch unit)
     always_ff @ (posedge clk) begin
         if (pc_id_assigned)
             branch_metadata_table[pc_id] <= branch_metadata_if;
     end
 
-    //instruction table
+    ////////////////////////////////////////////////////
+    //Instruction table
+    //Number of read ports = 1 (decode stage)
     always_ff @ (posedge clk) begin
         if (fetch_complete)
             instruction_table[fetch_id] <= fetch_instruction;
     end
 
-    //valid fetched address table
+    ////////////////////////////////////////////////////
+    //Valid fetched address table
+    //Number of read ports = 1 (decode stage)
     always_ff @ (posedge clk) begin
         if (fetch_complete)
             fetch_metadata_table[fetch_id] <= fetch_metadata;
     end
 
-    //phys rd table
+    ////////////////////////////////////////////////////
+    //Phys rd table
+    //Number of read ports = (NUM_WB_GROUPS - 1)  (ALU WB group uses issue_phys_rd_addr)
     always_ff @ (posedge clk) begin
         if (decode_advance)
             phys_addr_table[decode_id] <= decode_phys_rd_addr;
     end
 
-    //rd table
-    always_ff @ (posedge clk) begin
-        if (decode_advance)
-            rd_addr_table[decode_id] <= decode_rd_addr;
-    end
-
-    //uses rd table
+    ////////////////////////////////////////////////////
+    //Uses rd table
+    //Number of read ports = RETIRE_PORTS
     always_ff @ (posedge clk) begin
         if (decode_advance)
             uses_rd_table[decode_id] <= decode_uses_rd & |decode_rd_addr;
     end    
     ////////////////////////////////////////////////////
     //ID Management
-
     
     //Next ID always increases, except on a fetch buffer flush.
     //On a fetch buffer flush, the next ID is restored to the oldest non-issued ID (decode or issue stage)
     //This prevents a stall in the case where all  IDs are either in-flight or
     //in the fetch buffer at the point of a fetch flush.
+    id_t oldest_pre_issue_id;
     id_t next_pc_id_base;
     id_t next_fetch_id_base;
-    assign next_pc_id_base = gc_fetch_flush ? (issue.stage_valid ? issue.id : decode_id) : (early_branch_flush ? fetch_id : pc_id);
-    assign next_fetch_id_base = gc_fetch_flush ? (issue.stage_valid ? issue.id : decode_id) : fetch_id;
+    assign oldest_pre_issue_id = issue.stage_valid ? issue.id : decode_id;
+    assign next_pc_id_base = gc_fetch_flush ? oldest_pre_issue_id : (early_branch_flush ? fetch_id : pc_id);
+    assign next_fetch_id_base = gc_fetch_flush ? oldest_pre_issue_id : fetch_id;
 
     always_ff @ (posedge clk) begin
         if (rst) begin
@@ -171,6 +177,7 @@ module instruction_metadata_and_id_management
         end
     end
     //Retire IDs
+    //Each retire port lags behind the previous one by one index (eg. [3, 2, 1, 0])
      generate for (i = 0; i < RETIRE_PORTS; i++) begin
         always_ff @ (posedge clk) begin
             if (rst)
@@ -187,25 +194,28 @@ module instruction_metadata_and_id_management
             fetched_count <= fetched_count + (LOG2_MAX_IDS+1)'(fetch_complete) - (LOG2_MAX_IDS+1)'(decode_advance);
     end
 
+    assign pre_issue_count_next = pre_issue_count  + (LOG2_MAX_IDS+1)'(pc_id_assigned) - (LOG2_MAX_IDS+1)'(instruction_issued);
     always_ff @ (posedge clk) begin
         if (rst | gc_fetch_flush)
             pre_issue_count <= 0;
         else
-            pre_issue_count <= pre_issue_count 
-            + (LOG2_MAX_IDS+1)'(pc_id_assigned) 
-            - (LOG2_MAX_IDS+1)'(instruction_issued);
+            pre_issue_count <= pre_issue_count_next;
     end
 
+    assign post_issue_count_next = post_issue_count  + (LOG2_MAX_IDS+1)'(instruction_issued) - (LOG2_MAX_IDS+1)'(retire.count);
     always_ff @ (posedge clk) begin
         if (rst)
             post_issue_count <= 0;
         else
-            post_issue_count <= post_issue_count
-            + (LOG2_MAX_IDS+1)'(instruction_issued) 
-            - (LOG2_MAX_IDS+1)'(retire.count);
+            post_issue_count <= post_issue_count_next;
     end
 
-    assign inflight_count = pre_issue_count + post_issue_count;
+    always_ff @ (posedge clk) begin
+        if (rst)
+            inflight_count <= 0;
+        else
+            inflight_count <= (gc_fetch_flush ? '0 : pre_issue_count_next) + post_issue_count_next;
+    end
 
     ////////////////////////////////////////////////////
     //ID in-use determination
@@ -234,35 +244,41 @@ module instruction_metadata_and_id_management
     ////////////////////////////////////////////////////
     //Retirer
     logic contiguous_retire;
-    logic non_rd_ids_retired [RETIRE_PORTS];
-    logic rd_ids_retired [RETIRE_PORTS];
+    logic id_is_post_issue [RETIRE_PORTS];
+    logic id_ready_to_retire [RETIRE_PORTS];
+    logic [LOG2_RETIRE_PORTS-1:0] phys_id_sel;
+    logic [RETIRE_PORTS-1:0] retire_id_uses_rd;
+    logic [RETIRE_PORTS-1:0] retire_id_inuse;
+
+     generate for (i = 0; i < RETIRE_PORTS; i++) begin
+        assign retire_id_uses_rd[i] = uses_rd_table[retire_ids[i]];
+        assign retire_id_inuse[i] = id_inuse[i];
+     end endgenerate
+
+    priority_encoder #(.WIDTH(RETIRE_PORTS))
+    phys_id_sel_encoder (
+        .priority_vector (retire_id_uses_rd & ~retire_id_inuse),
+        .encoded_result (phys_id_sel)
+    );
+    assign retire.phys_id = retire_ids[phys_id_sel];
 
     always_comb begin
         contiguous_retire = 1;
-        non_rd_ids_retired = '{default: 0};
-        rd_ids_retired = '{default: 0};
-        retire_ids_retired = '{default: 0};
-
         retire.valid = 0;
         retire.count = 0;
-        retire.phys_id = retire_ids[0];
-
+        //Supports retiring up to RETIRE_PORTS instructions.  The retired block of instructions must be
+        //contiguous and must start with the first retire port.  Additionally, only one register file writing 
+        //instruction is supported per cycle.
         for (int i = 0; i < RETIRE_PORTS; i++) begin
-            //Only pop if all older entries have been popped and only if this is either the first entry that writes to the regfile
-            //or does not write to the regfile
-            if ((post_issue_count > (LOG2_MAX_IDS+1)'(i)) && contiguous_retire) begin
-                non_rd_ids_retired[i] = ~uses_rd_table[retire_ids[i]] & ~id_inuse[i];
-                rd_ids_retired[i] = uses_rd_table[retire_ids[i]] & ~id_inuse[i] & ~retire.valid;
-                retire_ids_retired[i] = non_rd_ids_retired[i] | rd_ids_retired[i];
+            id_is_post_issue[i] = post_issue_count > (LOG2_MAX_IDS+1)'(i);
 
-                contiguous_retire &= retire_ids_retired[i];
-                retire.count += retire_ids_retired[i];
-                
-                if (rd_ids_retired[i]) begin
-                    retire.valid |= 1;
-                    retire.phys_id = retire_ids[i];
-                end
-            end
+            id_ready_to_retire[i] = (id_is_post_issue[i] & contiguous_retire & ~id_inuse[i]);
+            retire_port_valid[i] = id_ready_to_retire[i] & ((~retire_id_uses_rd[i]) | (~retire.valid));
+
+            contiguous_retire &= retire_port_valid[i];
+
+            retire.valid |= retire_port_valid[i] & retire_id_uses_rd[i];
+            retire.count += retire_port_valid[i];
         end
     end
 
@@ -281,19 +297,18 @@ module instruction_metadata_and_id_management
     assign branch_metadata_ex = branch_metadata_table[branch_id];
 
     //Writeback/Commit support
-    always_comb begin
-        for (int i = 0; i < NUM_WB_GROUPS; i++) begin
-            commit_packet[i].id = wb_packet[i].id;
-            commit_packet[i].valid = wb_packet[i].valid & |commit_packet[i].phys_addr;
-            commit_packet[i].data = wb_packet[i].data;
-        end
-    end
-    always_comb begin
-        commit_packet[0].phys_addr = issue.phys_rd_addr;
-        for (int i = 1; i < NUM_WB_GROUPS; i++) begin
-            commit_packet[i].phys_addr = phys_addr_table[wb_packet[i].id];
-        end
-    end
+    phys_addr_t commit_phys_addr [NUM_WB_GROUPS];
+    assign commit_phys_addr[0] = issue.phys_rd_addr;
+     generate for (i = 1; i < NUM_WB_GROUPS; i++) begin
+        assign commit_phys_addr[i] = phys_addr_table[wb_packet[i].id];
+     end endgenerate
+
+     generate for (i = 0; i < NUM_WB_GROUPS; i++) begin
+        assign commit_packet[i].id = wb_packet[i].id;
+        assign commit_packet[i].phys_addr = commit_phys_addr[i];        
+        assign commit_packet[i].valid = wb_packet[i].valid & |commit_phys_addr[i];
+        assign commit_packet[i].data = wb_packet[i].data;
+     end endgenerate
 
     //Exception Support
      generate if (ENABLE_M_MODE) begin

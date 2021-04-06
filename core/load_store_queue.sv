@@ -38,7 +38,7 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
 
         //Retire release
         input id_t retire_ids [RETIRE_PORTS],
-        input logic retire_ids_retired [RETIRE_PORTS],
+        input logic retire_port_valid [RETIRE_PORTS],
 
         output logic tr_possible_load_conflict_delay
     );
@@ -113,7 +113,7 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
         .sq_data (sq_data),
         .wb_snoop (wb_snoop),
         .retire_ids (retire_ids),
-        .retire_ids_retired (retire_ids_retired),
+        .retire_port_valid (retire_port_valid),
         .store_ack (store_ack),
         .sq_output_valid (sq_output_valid)
     );
