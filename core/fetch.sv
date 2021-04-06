@@ -91,6 +91,9 @@ module fetch
     fetch_attributes_t fetch_attr_next;
     fetch_attributes_t fetch_attr;
 
+    logic [31:0] pc_plus_4;
+    logic [31:0] pc_mux [4];
+    logic [1:0] pc_sel;
     logic [31:0] next_pc;
     logic [31:0] pc;
 
@@ -119,18 +122,18 @@ module fetch
             pc <= {next_pc[31:2], 2'b0};
     end
 
-    logic [31:0] pc_plus_4;
     assign pc_plus_4 = pc + 4;
-    always_comb begin
-        if (gc_fetch_pc_override)
-            next_pc = gc_fetch_pc;
-        else if (branch_flush)
-            next_pc = bp.branch_flush_pc;
-        else if (bp.use_prediction & ~early_branch_flush)
-            next_pc = bp.is_return ? ras.addr : bp.predicted_pc;
-        else
-            next_pc = pc_plus_4;
-    end
+
+    priority_encoder #(.WIDTH(4))
+    pc_sel_encoder (
+        .priority_vector ({1'b1, (bp.use_prediction & ~early_branch_flush), branch_flush, gc_fetch_pc_override}),
+        .encoded_result (pc_sel)
+    );
+    assign pc_mux[0] = gc_fetch_pc;
+    assign pc_mux[1] = bp.branch_flush_pc;
+    assign pc_mux[2] = bp.is_return ? ras.addr : bp.predicted_pc;
+    assign pc_mux[3] = pc_plus_4;
+    assign next_pc = pc_mux[pc_sel];
 
     //If an exception occurs here in the fetch logic,
     //hold the fetching of data from memory until the status of the
@@ -156,8 +159,8 @@ module fetch
     assign tlb.virtual_address = pc;
     assign tlb.execute = 1;
     assign tlb.rnw = 0;
-    assign tlb.new_request = tlb.ready & tlb_on;
-    assign translated_address = tlb_on ? tlb.physical_address : pc;
+    assign tlb.new_request = tlb.ready & (ENABLE_S_MODE & tlb_on);
+    assign translated_address = (ENABLE_S_MODE & tlb_on) ? tlb.physical_address : pc;
 
     always_ff @(posedge clk) begin
         if (new_mem_request)
