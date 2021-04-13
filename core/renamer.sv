@@ -139,12 +139,10 @@ module renamer
 
     ////////////////////////////////////////////////////
     //Renamed Outputs
-    always_comb begin
-        for (int i = 0; i < REGFILE_READ_PORTS; i++) begin
-            decode.phys_rs_addr[i] = speculative_rd_to_phys_table[decode.rs_addr[i]];
-            decode.rs_wb_group[i] = spec_wb_group[decode.rs_addr[i]];
-        end
-    end
+    generate for (genvar i = 0; i < REGFILE_READ_PORTS; i++) begin
+        assign decode.phys_rs_addr[i] = speculative_rd_to_phys_table[decode.rs_addr[i]];
+        assign decode.rs_wb_group[i] = spec_wb_group[decode.rs_addr[i]];
+    end endgenerate
 
     assign decode.phys_rd_addr = rename_valid ? free_list.data_out : '0;
     ////////////////////////////////////////////////////
