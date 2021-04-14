@@ -444,9 +444,9 @@ module taiga_sim
     generate  for (i = 0; i < 32; i++) begin
         for (j = 0; j < NUM_WB_GROUPS; j++) begin
             assign sim_registers_unamed_groups[j][i] = 
-            cpu.register_file_block.register_file_gen[j].reg_group.register_file_bank[cpu.renamer_block.speculative_rd_to_phys_table[i]];
+            cpu.register_file_block.register_file_gen[j].reg_group.register_file_bank[cpu.renamer_block.spec_table[i].phys_addr];
         end
-        assign sim_registers_unamed[31-i] = sim_registers_unamed_groups[cpu.renamer_block.spec_wb_group[i]][i];
+        assign sim_registers_unamed[31-i] = sim_registers_unamed_groups[cpu.renamer_block.spec_table[i].wb_group][i];
     end
     endgenerate
 

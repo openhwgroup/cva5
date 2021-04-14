@@ -44,17 +44,11 @@ module renamer
     );
     //////////////////////////////////////////
     (* ramstyle = "MLAB, no_rw_check" *) phys_addr_t architectural_id_to_phys_table [MAX_IDS];
-    (* ramstyle = "MLAB, no_rw_check" *) phys_addr_t speculative_rd_to_phys_table [32];
-
-    (* ramstyle = "MLAB, no_rw_check" *) rs_wb_group_t spec_wb_group [32];
-    (* ramstyle = "MLAB, no_rw_check" *) rs_wb_group_t arch_wb_group [32];
-    rs_wb_group_t rollback_wb_group;
 
     logic [5:0] clear_index;
     fifo_interface #(.DATA_WIDTH(6)) free_list ();
     logic rename_valid;
     logic rollback;
-    phys_addr_t rollback_phys_addr;
     ////////////////////////////////////////////////////
     //Implementation
     assign rename_valid = (~gc_fetch_flush) & decode_advance & decode.uses_rd & |decode.rd_addr;
@@ -90,43 +84,44 @@ module renamer
     //Speculative rd-to-phys Table
     //On rollback restore the previous contents
     //During post reset init, initialize rd_to_phys with in-use list (lower 32 registers)
+    typedef struct packed{
+        phys_addr_t phys_addr;
+        rs_wb_group_t wb_group;
+    } spec_table_t;
+    spec_table_t spec_table_next;
+    spec_table_t spec_table_old;
+    spec_table_t spec_table_old_r;
+
+    (* ramstyle = "MLAB, no_rw_check" *) spec_table_t spec_table [32];
+
     logic spec_table_update;
     logic [4:0] spec_table_write_index;
-    logic [5:0] spec_table_write_data;
-    logic [$clog2(NUM_WB_GROUPS)-1:0] spec_table_wb_group_data;
 
     assign spec_table_update =  rename_valid | rollback | gc_init_clear;
 
     always_comb begin
         if (gc_init_clear) begin
             spec_table_write_index = clear_index[4:0];
-            spec_table_write_data = {1'b0, clear_index[4:0]};
-            spec_table_wb_group_data = '0;
+            spec_table_next.phys_addr = {1'b0, clear_index[4:0]};
+            spec_table_next.wb_group = '0;
         end
         else if (rollback) begin
             spec_table_write_index = issue.rd_addr;
-            spec_table_write_data = rollback_phys_addr;
-            spec_table_wb_group_data = rollback_wb_group;
+            spec_table_next.phys_addr = spec_table_old_r.phys_addr;
+            spec_table_next.wb_group = spec_table_old_r.wb_group;
         end
         else begin
             spec_table_write_index = decode.rd_addr;
-            spec_table_write_data = free_list.data_out;
-            spec_table_wb_group_data = decode.rd_wb_group;
+            spec_table_next.phys_addr = free_list.data_out;
+            spec_table_next.wb_group = decode.rd_wb_group;
         end
     end
 
+    assign spec_table_old = spec_table[spec_table_write_index];
     always_ff @ (posedge clk) begin
         if (spec_table_update) begin
-            speculative_rd_to_phys_table[spec_table_write_index] <= spec_table_write_data;
-            rollback_phys_addr <= speculative_rd_to_phys_table[spec_table_write_index];
-        end
-    end
-    
-    //WB group
-    always_ff @ (posedge clk) begin
-        if (spec_table_update) begin
-            spec_wb_group[spec_table_write_index] <= spec_table_wb_group_data;
-            rollback_wb_group <= spec_wb_group[spec_table_write_index];
+            spec_table[spec_table_write_index] <= spec_table_next;
+            spec_table_old_r <= spec_table_old;
         end
     end
 
@@ -134,17 +129,19 @@ module renamer
     //Arch ID-to-phys Table
     always_ff @ (posedge clk) begin
         if (rename_valid)
-            architectural_id_to_phys_table[decode.id] <= speculative_rd_to_phys_table[spec_table_write_index];
+            architectural_id_to_phys_table[decode.id] <= spec_table_old.phys_addr;
     end
 
     ////////////////////////////////////////////////////
     //Renamed Outputs
+    spec_table_t [REGFILE_READ_PORTS-1:0] spec_table_decode;
     generate for (genvar i = 0; i < REGFILE_READ_PORTS; i++) begin
-        assign decode.phys_rs_addr[i] = speculative_rd_to_phys_table[decode.rs_addr[i]];
-        assign decode.rs_wb_group[i] = spec_wb_group[decode.rs_addr[i]];
+        assign spec_table_decode[i] = spec_table[decode.rs_addr[i]];
+        assign decode.phys_rs_addr[i] = spec_table_decode[i].phys_addr;
+        assign decode.rs_wb_group[i] = spec_table_decode[i].wb_group;
     end endgenerate
 
-    assign decode.phys_rd_addr = rename_valid ? free_list.data_out : '0;
+    assign decode.phys_rd_addr = |decode.rd_addr ? free_list.data_out : '0;
     ////////////////////////////////////////////////////
     //End of Implementation
     ////////////////////////////////////////////////////
