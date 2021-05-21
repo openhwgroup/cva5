@@ -1,9 +1,9 @@
 stages:
   - build-toolchain
   - embench
+  - compliance-test 
   - dhrystone
   - coremark
-  - compliance-test
   #- util_timing_rpt
 
 build-toolchain:
@@ -20,8 +20,8 @@ build-toolchain:
       # create the taiga project file hierachy 
       - cd ..
       - rm -rf taiga-project
-      #- cp -r $CI_PROJECT_TITLE taiga
-      - cp -r project-0 taiga # only used for local tests
+      - cp -r $CI_PROJECT_TITLE taiga
+      #- cp -r project-0 taiga # only used for local tests
       - git clone https://gitlab.com/sfu-rcl/taiga-project.git
       - mv -f taiga taiga-project/
       - cd taiga-project
@@ -31,15 +31,15 @@ build-toolchain:
       - git clone http://git.veripool.org/git/verilator --branch master --single-branch tool-chain/verilator
       - git clone https://sourceware.org/git/binutils-gdb.git --branch binutils-2_35-branch --single-branch tool-chain/binutils-gdb
       - git clone https://sourceware.org/git/newlib-cygwin.git --branch master --single-branch tool-chain/newlib-cygwin
+      - git clone https://gitlab.com/sfu-rcl/taiga-embench.git --branch taiga-picolibc --single-branch benchmarks/embench
+      - git clone https://gitlab.com/sfu-rcl/taiga-riscv-compliance.git --branch taiga-sim --single-branch benchmarks/riscv-compliance
+      - git clone https://gitlab.com/sfu-rcl/taiga-dhrystone.git --branch master --single-branch benchmarks/taiga-dhrystone
+      - git clone https://gitlab.com/sfu-rcl/taiga-coremark.git --branch master --single-branch benchmarks/taiga-coremark
       - cd tool-chain/gcc
       - ./contrib/download_prerequisites
       - cd $TAIGA_PROJECT_ROOT
       - ./build-tool-chain.sh
       - cp -rf $TAIGA_PROJECT_ROOT/tool-chain $CI_PROJECT_DIR #needed for caching
-    cache:
-      key: tool-chain-cache
-      paths:
-        - tool-chain/
 
 embench:
     tags:
@@ -47,82 +47,58 @@ embench:
     stage: embench
     script:
       # create the taiga project file hierachy
-      - cp -rf tool-chain ../taiga-project/tool-chain
+      - pip3 install pandas
       - cd ..
-      #- rm -rf taiga-project
-      #- git clone https://gitlab.com/sfu-rcl/taiga-project.git
-      #- cp -r project-0 taiga
-      ##- cp -r Taiga-dev taiga
-      #- mv -f taiga taiga-project/ 
       - cd taiga-project
       - source settings.sh
-      - git clone https://gitlab.com/sfu-rcl/taiga-embench.git --branch taiga-picolibc --single-branch benchmarks/embench
-      - make build-embench
-      - make run-embench-verilator
-    cache:
-      key: tool-chain-cache
-      paths:
-        - tool-chain/
+      - SCRIPT_DIR=$TAIGA_PROJECT_ROOT/tool-chain/scripts
+      - bash -x $SCRIPT_DIR/embench.sh
+      - python3 $SCRIPT_DIR/embench-check.py
 
 compliance-test:
     tags:
       - new-taiga-ci
     stage: compliance-test
     script: 
-      - cp -rf tool-chain ../taiga-project/tool-chain
       - cd ..
       - cd taiga-project
-      - git clone https://gitlab.com/sfu-rcl/taiga-riscv-compliance.git --branch taiga-sim --single-branch benchmarks/riscv-compliance
       - source settings.sh
+      - SCRIPT_DIR=$TAIGA_PROJECT_ROOT/tool-chain/scripts
+      - bash -x $SCRIPT_DIR/compliance.sh
       - make run-compliance-tests-verilator
-    cache:
-      key: tool-chain
-      paths:
-        - tool-chain/RISCV-compiler/
-
+    allow_failure: true
 
 dhrystone:
     tags:
       - new-taiga-ci
     stage: dhrystone
     script: 
-      - cp -rf tool-chain ../taiga-project/tool-chain
       - cd ..
       - cd taiga-project
-      - git clone https://gitlab.com/sfu-rcl/taiga-dhrystone.git --branch master --single-branch benchmarks/taiga-dhrystone
       - source settings.sh
-      - make run run-dhrystone-verilator
-    cache:
-      key: toolchain
-      paths:
-        - tool-chain/RISCV-compiler/
-
+      - SCRIPT_DIR=$TAIGA_PROJECT_ROOT/tool-chain/scripts
+      - bash -x $SCRIPT_DIR/dhrystone.sh
 
 coremark:
     tags:
       - new-taiga-ci
     stage: coremark
     script:
-      - cp -rf tool-chain ../taiga-project/tool-chain
       - cd ..
       - cd taiga-project
-      - git clone https://gitlab.com/sfu-rcl/taiga-coremark.git --branch master --single-branch benchmarks/taiga-coremark
       - source settings.sh
-      - make run run-coremark-verilator
-    cache:
-      key: toolchain
-      paths:
-        - tool-chain/RISCV-compiler/
-
+      - SCRIPT_DIR=$TAIGA_PROJECT_ROOT/tool-chain/scripts
+      - bash -x $SCRIPT_DIR/coremark.sh
+    allow_failure: true
 
 #util_timing_rpt-test:
     #tags:
     #- new-taiga-ci
     #stage: util_timing_rpt
     #script:
+      #- source settings.sh
       #- cd ..
       #- cd taiga-project
       #- git clone https://gitlab.com/sfu-rcl/taiga-coremark.git --branch master --single-branch benchmarks/taiga-coremark
-      #- source settings.sh
       #- source /exports/rcl-tools/Vivado/Vivado/2019.2/settings64.sh
       #- bash taiga/tools/PPA.sh
