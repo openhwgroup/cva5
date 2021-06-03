@@ -32,15 +32,13 @@ module alu_unit
         unit_issue_interface.unit issue,
         input alu_inputs_t alu_inputs,
         unit_writeback_interface.unit wb
-        );
+    );
 
     logic[XLEN:0] add_sub_result;
     logic add_sub_carry_in;
-    logic[XLEN-1:0] shift_result;
-
     logic[XLEN:0] adder_in1;
     logic[XLEN:0] adder_in2;
-
+    logic[XLEN-1:0] shift_result;
     logic[XLEN-1:0] result;
     //implementation
     ////////////////////////////////////////////////////
@@ -61,20 +59,25 @@ module alu_unit
         endcase
     end
 
-    assign {add_sub_result, add_sub_carry_in} = {adder_in1, alu_inputs.subtract} + {adder_in2, alu_inputs.subtract};
-
+    //Add/Sub ops
+    assign {add_sub_result, add_sub_carry_in} = {adder_in1, 1'b1} + {adder_in2, alu_inputs.subtract};
+    
+    //Shift ops
     barrel_shifter shifter (
-            .shifter_input(alu_inputs.shifter_in),
-            .shift_amount(alu_inputs.shift_amount),
-            .arith(alu_inputs.arith),
-            .lshift(alu_inputs.lshift),
-            .shifted_result(shift_result)
-        );
+        .shifter_input(alu_inputs.shifter_in),
+        .shift_amount(alu_inputs.shift_amount),
+        .arith(alu_inputs.arith),
+        .lshift(alu_inputs.lshift),
+        .shifted_result(shift_result)
+    );
 
     always_comb begin
-        result = (alu_inputs.shifter_path ? shift_result : add_sub_result[31:0]);
-        result[31:1] &= {31{~alu_inputs.slt_path}};
-        result[0] = alu_inputs.slt_path ? add_sub_result[XLEN] : result[0];
+        case (alu_inputs.alu_op)
+            ALU_CONSTANT : result = alu_inputs.constant_adder;
+            ALU_ADD_SUB : result = add_sub_result[31:0];
+            ALU_SLT : result = {31'b0, add_sub_result[XLEN]};
+            default : result = shift_result; //ALU_SHIFT
+        endcase
     end
 
     ////////////////////////////////////////////////////
