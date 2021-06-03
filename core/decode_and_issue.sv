@@ -105,7 +105,7 @@ module decode_and_issue
     logic environment_op;
 
     logic issue_valid;
-    logic [NUM_UNITS-1:0] unit_operands_ready;
+    logic operands_ready;
     logic mult_div_op;
 
     logic [NUM_WB_UNITS-1:0] unit_needed_for_id_gen;
@@ -128,10 +128,9 @@ module decode_and_issue
     //Implementation
     
     //Can move data into issue stage if:
-    // there is no global control hold on the issue stage,
     // there is no instruction currently in the issue stage, or
-    // an instruction could issue (fetch flush and whether the instruction is valid are not needed in this check)
-    assign issue_stage_ready = (~gc_issue_hold) & ((~issue.stage_valid) | (|(unit_operands_ready & issue_ready)));
+    // an instruction could issue (issue_flush, issue_hold and whether the instruction is valid are not needed in this check)
+    assign issue_stage_ready = (~issue.stage_valid) | (issue_valid & |issue_ready);
     assign decode_advance = decode.valid & issue_stage_ready;
 
     //Instruction aliases
@@ -148,13 +147,13 @@ module decode_and_issue
     ////////////////////////////////////////////////////
     //Register File Support
     assign uses_rs1 = !(opcode_trim inside {LUI_T, AUIPC_T, JAL_T, FENCE_T} || csr_imm_op || environment_op);
-    assign uses_rs2 = opcode_trim inside {BRANCH_T, STORE_T, ARITH_T, AMO_T};
+    assign uses_rs2 = opcode_trim inside {BRANCH_T, ARITH_T, AMO_T};//Stores are exempted due to store forwarding
     assign uses_rd = !(opcode_trim inside {BRANCH_T, STORE_T, FENCE_T} || environment_op);
 
     ////////////////////////////////////////////////////
     //Unit Determination
     assign unit_needed[BRANCH_UNIT_ID] = opcode_trim inside {BRANCH_T, JAL_T, JALR_T};
-    assign unit_needed[ALU_UNIT_ID] =  ((opcode_trim == ARITH_T) && ~decode.instruction[25]) || (opcode_trim inside {ARITH_IMM_T, AUIPC_T, LUI_T, JAL_T, JALR_T});
+    assign unit_needed[ALU_UNIT_ID] = (opcode_trim inside {ARITH_T, ARITH_IMM_T, AUIPC_T, LUI_T, JAL_T, JALR_T}) & ~mult_div_op;
     assign unit_needed[LS_UNIT_ID] = opcode_trim inside {LOAD_T, STORE_T, AMO_T};
     assign unit_needed[GC_UNIT_ID] = opcode_trim inside {SYSTEM_T, FENCE_T};
 
@@ -227,21 +226,16 @@ module decode_and_issue
 
     ////////////////////////////////////////////////////
     //Issue Determination
-    assign issue_valid = issue.stage_valid & ~gc_issue_hold & ~gc_fetch_flush;
-
     assign rs1_conflict = rf.inuse[RS1] & issue.uses_rs1;
     assign rs2_conflict = rf.inuse[RS2] & issue.uses_rs2;
-
-    //All units share the same operand ready logic except load-store which has an internal forwarding path
-    always_comb begin
-        unit_operands_ready = {NUM_UNITS{(~rs1_conflict & ~rs2_conflict)}};
-        unit_operands_ready[LS_UNIT_ID] = ~rs1_conflict;
-    end
+    assign operands_ready = (~rs1_conflict) & (~rs2_conflict);
 
     assign issue_ready = unit_needed_issue_stage & unit_ready;
-    assign issue_to = {NUM_UNITS{issue_valid}} & unit_operands_ready & issue_ready;
+    assign issue_valid = issue.stage_valid & operands_ready & ~gc_issue_hold;
 
-    assign instruction_issued = issue_valid & |(unit_operands_ready & issue_ready);
+    assign issue_to = {NUM_UNITS{issue_valid & ~gc_fetch_flush}} & issue_ready;
+
+    assign instruction_issued = issue_valid & ~gc_fetch_flush & |issue_ready;
     assign instruction_issued_with_rd = instruction_issued & issue.uses_rd;
 
     assign rf.phys_rs_addr[RS1] = issue.phys_rs_addr[RS1];
@@ -253,91 +247,69 @@ module decode_and_issue
     assign rf.issued = instruction_issued_with_rd;
     ////////////////////////////////////////////////////
     //ALU unit inputs
-    logic [XLEN-1:0] alu_rs1_data;
     logic [XLEN-1:0] alu_rs2_data;
-    logic [31:0] pre_alu_rs2;
-    logic [31:0] pre_alu_rs2_r;
-    logic [31:0] pre_alu_rs1_r;
-    logic rs1_use_regfile;
     logic rs2_use_regfile;
+    logic [31:0] constant_alu;
+    logic sel_pc;
+    logic sel_4;
+    alu_op_t alu_op;
+    alu_op_t alu_op_r;
+    alu_logic_op_t alu_logic_op;
+    alu_logic_op_t alu_logic_op_r;
+    logic alu_subtract;
+    logic sub_instruction;
 
     always_comb begin
-        if (opcode_trim inside {LUI_T, AUIPC_T}) //LUI or AUIPC
-            pre_alu_rs2 = {decode.instruction[31:12], 12'b0};
-        else if (opcode_trim inside {JAL_T, JALR_T}) //LUI or AUIPC //JAL JALR
-            pre_alu_rs2 = 4;
-        else //ARITH_IMM
-            pre_alu_rs2 = 32'(signed'(decode.instruction[31:20]));
+        if (opcode_trim inside {LUI_T, AUIPC_T, JAL_T, JALR_T})
+            alu_op = ALU_CONSTANT;
+        else if (fn3 inside {SLTU_fn3, SLT_fn3})
+            alu_op = ALU_SLT;
+        else if (fn3 inside {SLL_fn3, SRA_fn3})
+            alu_op = ALU_SHIFT;
+        else
+            alu_op = ALU_ADD_SUB;
     end
 
-    always_ff @(posedge clk) begin
-        if (issue_stage_ready) begin
-            if (opcode_trim inside {AUIPC_T, JAL_T, JALR_T})
-                pre_alu_rs1_r <= decode.pc;
-            else
-                pre_alu_rs1_r <= '0;
-        end
-    end
-
-    always_ff @(posedge clk) begin
-        if (issue_stage_ready) begin
-            pre_alu_rs2_r <= pre_alu_rs2;
-            rs1_use_regfile <= !(opcode_trim inside {LUI_T, AUIPC_T, JAL_T, JALR_T});
-            rs2_use_regfile <= !(opcode_trim inside {LUI_T, AUIPC_T, JAL_T, JALR_T, ARITH_IMM_T});
-        end
-    end
-
-    //Add cases: JAL, JALR, LUI, AUIPC, ADD[I], all logic ops
-    //sub cases: SUB, SLT[U][I]
-    logic sub_instruction;
-    assign sub_instruction = (fn3 == ADD_SUB_fn3) && decode.instruction[30] && opcode[5];//If ARITH instruction
-
-    alu_logic_op_t alu_logic_op;
     always_comb begin
         case (fn3)
-            SLT_fn3 : alu_logic_op = ALU_LOGIC_ADD;
-            SLTU_fn3 : alu_logic_op = ALU_LOGIC_ADD;
-            SLL_fn3 : alu_logic_op = ALU_LOGIC_ADD;
             XOR_fn3 : alu_logic_op = ALU_LOGIC_XOR;
             OR_fn3 : alu_logic_op = ALU_LOGIC_OR;
             AND_fn3 : alu_logic_op = ALU_LOGIC_AND;
-            SRA_fn3 : alu_logic_op = ALU_LOGIC_ADD;
-            ADD_SUB_fn3 : alu_logic_op = ALU_LOGIC_ADD;
+            default : alu_logic_op = ALU_LOGIC_ADD;
         endcase
-        //put LUI, AUIPC, JAL and JALR through adder path
-        alu_logic_op = opcode[2] ? ALU_LOGIC_ADD : alu_logic_op;
     end
 
-    alu_logic_op_t alu_logic_op_r;
-    logic alu_subtract;
-    logic alu_lshift;
-    logic alu_shifter_path;
-    logic alu_slt_path;
+    assign sub_instruction = (fn3 == ADD_SUB_fn3) && decode.instruction[30] && opcode[5];//If ARITH instruction
 
     always_ff @(posedge clk) begin
         if (issue_stage_ready) begin
+            sel_pc <= opcode_trim inside {AUIPC_T, JAL_T, JALR_T};
+            sel_4 <= opcode_trim inside {JAL_T, JALR_T};
+            rs2_use_regfile <= opcode_trim inside {ARITH_T};
+            alu_op_r <= alu_op;
+            alu_subtract <= (fn3 inside {SLTU_fn3, SLT_fn3}) || sub_instruction;
             alu_logic_op_r <= alu_logic_op;
-            alu_subtract <= ~opcode[2] & (fn3 inside {SLTU_fn3, SLT_fn3} || sub_instruction);//opcode[2] covers LUI,AUIPC,JAL,JALR
-            alu_lshift <= ~fn3[2];
-            alu_shifter_path <= ~(opcode[2] | fn3 inside {SLT_fn3, SLTU_fn3, XOR_fn3, OR_fn3, AND_fn3, ADD_SUB_fn3}); //opcode[2] LUI AUIPC JAL JALR
-            alu_slt_path <= ~opcode[2] & fn3 inside {SLT_fn3, SLTU_fn3};
         end
     end
-    assign alu_inputs.logic_op = alu_logic_op_r;
-    assign alu_inputs.subtract = alu_subtract;
-    assign alu_inputs.arith = alu_rs1_data[XLEN-1] & issue.instruction[30];//shift in bit
-    assign alu_inputs.lshift = alu_lshift;
-    assign alu_inputs.shifter_path = alu_shifter_path;
-    assign alu_inputs.slt_path = alu_slt_path;
 
-    assign alu_rs1_data = rs1_use_regfile ? rf.data[RS1] : pre_alu_rs1_r;
-    assign alu_rs2_data = rs2_use_regfile ? rf.data[RS2] : pre_alu_rs2_r;
-
-    assign alu_inputs.in1 = {(rf.data[RS1][XLEN-1] & ~issue.fn3[0]), alu_rs1_data};//(fn3[0]  is SLTU_fn3);
-    assign alu_inputs.in2 = {(alu_rs2_data[XLEN-1] & ~issue.fn3[0]), alu_rs2_data};
-    assign alu_inputs.shifter_in = rf.data[RS1];
+    //Shifter related
+    assign alu_inputs.lshift = ~issue.fn3[2];
     assign alu_inputs.shift_amount = issue.opcode[5] ? rf.data[RS2][4:0] : issue.rs_addr[RS2];
+    assign alu_inputs.arith = rf.data[RS1][XLEN-1] & issue.instruction[30];//shift in bit
+    assign alu_inputs.shifter_in = rf.data[RS1];
 
+    //LUI, AUIPC, JAL, JALR
+    assign constant_alu = (sel_pc ? issue.pc : '0) + (sel_4 ? 4 : {issue.instruction[31:12], 12'b0}); 
+    assign alu_inputs.constant_adder = constant_alu;
+
+    //logic and adder
+    assign alu_inputs.subtract = alu_subtract;
+    assign alu_inputs.logic_op = alu_logic_op_r;
+    assign alu_inputs.in1 = {(rf.data[RS1][XLEN-1] & ~issue.fn3[0]), rf.data[RS1]};//(fn3[0]  is SLTU_fn3);
+    assign alu_rs2_data = rs2_use_regfile ? rf.data[RS2] : 32'(signed'(issue.instruction[31:20]));
+    assign alu_inputs.in2 = {(alu_rs2_data[XLEN-1] & ~issue.fn3[0]), alu_rs2_data};
+
+    assign alu_inputs.alu_op = alu_op_r;
     ////////////////////////////////////////////////////
     //Load Store unit inputs
     logic is_load;
@@ -389,7 +361,7 @@ module decode_and_issue
     assign ls_inputs.fn3 = amo_op ? LS_W_fn3 : issue.fn3;
     assign ls_inputs.rs1 = rf.data[RS1];
     assign ls_inputs.rs2 = rf.data[RS2];
-    assign ls_inputs.forwarded_store = rs2_conflict;
+    assign ls_inputs.forwarded_store = rf.inuse[RS2];
     assign ls_inputs.store_forward_id = rd_to_id_table[issue.rs_addr[RS2]];
 
     ////////////////////////////////////////////////////
@@ -531,9 +503,8 @@ module decode_and_issue
         logic [4:0] prev_div_rs1_addr;
         logic [4:0] prev_div_rs2_addr;
         logic prev_div_result_valid;
-        logic set_prev_div_result_valid;
-        logic clear_prev_div_result_valid;
-        logic current_op_resuses_rs1_rs2;
+        logic div_rs_overwrite;
+        logic div_op_reuse;
 
         always_ff @(posedge clk) begin
             if (issue_to[DIV_UNIT_ID]) begin
@@ -542,23 +513,22 @@ module decode_and_issue
             end
         end
 
-        assign current_op_resuses_rs1_rs2 = (prev_div_rs1_addr == issue.rs_addr[RS1]) && (prev_div_rs2_addr == issue.rs_addr[RS2]);
-        assign set_prev_div_result_valid = unit_needed_issue_stage[DIV_UNIT_ID];
+        assign div_op_reuse = {prev_div_result_valid, prev_div_rs1_addr, prev_div_rs2_addr} == {1'b1, issue.rs_addr[RS1], issue.rs_addr[RS2]};
 
         //If current div operation overwrites an input register OR any other instruction overwrites the last div operations input registers
-        assign clear_prev_div_result_valid = issue.uses_rd & ((issue.rd_addr == (unit_needed_issue_stage[DIV_UNIT_ID] ? issue.rs_addr[RS1] : prev_div_rs1_addr)) || (issue.rd_addr == (unit_needed_issue_stage[DIV_UNIT_ID] ? issue.rs_addr[RS2] : prev_div_rs2_addr)));
+        assign div_rs_overwrite = (issue.rd_addr == (unit_needed_issue_stage[DIV_UNIT_ID] ? issue.rs_addr[RS1] : prev_div_rs1_addr)) || (issue.rd_addr == (unit_needed_issue_stage[DIV_UNIT_ID] ? issue.rs_addr[RS2] : prev_div_rs2_addr));
 
         set_clr_reg_with_rst #(.SET_OVER_CLR(0), .WIDTH(1), .RST_VALUE(0)) prev_div_result_valid_m (
             .clk, .rst,
-            .set(instruction_issued & set_prev_div_result_valid),
-            .clr(instruction_issued & clear_prev_div_result_valid),
+            .set(instruction_issued & unit_needed_issue_stage[DIV_UNIT_ID]),
+            .clr(instruction_issued & issue.uses_rd & div_rs_overwrite),
             .result(prev_div_result_valid)
         );
 
         assign div_inputs.rs1 = rf.data[RS1];
         assign div_inputs.rs2 = rf.data[RS2];
         assign div_inputs.op = issue.fn3[1:0];
-        assign div_inputs.reuse_result = prev_div_result_valid & current_op_resuses_rs1_rs2;
+        assign div_inputs.reuse_result = div_op_reuse;
     end endgenerate
 
     ////////////////////////////////////////////////////
@@ -605,8 +575,8 @@ module decode_and_issue
     ////////////////////////////////////////////////////
     //Trace Interface
     generate if (ENABLE_TRACE_INTERFACE) begin
-        assign tr_operand_stall = |(unit_needed_issue_stage & unit_ready) & issue_valid & ~|(unit_operands_ready & unit_needed_issue_stage);
-        assign tr_unit_stall = ~|(unit_needed_issue_stage & unit_ready) & issue_valid & |(unit_operands_ready & unit_needed_issue_stage);
+        assign tr_operand_stall = issue.stage_valid & ~gc_fetch_flush & ~gc_issue_hold & ~operands_ready & |issue_ready;
+        assign tr_unit_stall = issue_valid & ~gc_fetch_flush & ~|issue_ready;
         assign tr_no_id_stall = (~issue.stage_valid & ~pc_id_available & ~gc_fetch_flush); //All instructions in execution pipeline
         assign tr_no_instruction_stall = (~tr_no_id_stall & ~issue.stage_valid) | gc_fetch_flush;
         assign tr_other_stall = issue.stage_valid & ~instruction_issued & ~(tr_operand_stall | tr_unit_stall | tr_no_id_stall | tr_no_instruction_stall);
