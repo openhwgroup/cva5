@@ -1,13 +1,12 @@
-
 #include <stdlib.h>
 #include <iostream>
 #include <fstream>
-#include "Vtaiga_sim.h"
 #include "verilated.h"
 #include "verilated_vcd_c.h"
+#include "Vtaiga_sim.h"
 #include "TaigaTracer.h"
 
-TaigaTracer<Vtaiga_sim> *taigaTracer;
+TaigaTracer *taigaTracer;
 
 //For time index on assertions
  double sc_time_stamp () {
@@ -62,7 +61,7 @@ int main(int argc, char **argv) {
     }
 
 	// Create an instance of our module under test
-    taigaTracer = new TaigaTracer<Vtaiga_sim>(programFile);
+    taigaTracer = new TaigaTracer(programFile);
     taigaTracer->set_log_file(&logFile);
     #ifdef TRACE_ON
         taigaTracer->start_tracer(argv[4]);

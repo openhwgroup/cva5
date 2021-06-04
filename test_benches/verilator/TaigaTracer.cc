@@ -23,16 +23,14 @@
 #include <iostream>
 #include "TaigaTracer.h"
 
-
-
 //#define TRACE_ON
-template <class TB>
-bool TaigaTracer<TB>::check_instruction_issued(uint32_t inst) {
+
+bool TaigaTracer::check_instruction_issued(uint32_t inst) {
     return (tb->instruction_data_dec == inst && tb->instruction_issued);
 }
 
-template <class TB>
-bool TaigaTracer<TB>::has_terminated() {
+
+bool TaigaTracer::has_terminated() {
 
     if (check_instruction_issued(ERROR_TERMINATION_NOP)) {
         std::cout << "\n\nError!!!!\n\n";
@@ -45,8 +43,8 @@ bool TaigaTracer<TB>::has_terminated() {
     return false;
 }
 
-template <class TB>
-bool TaigaTracer<TB>::has_stalled() {
+
+bool TaigaTracer::has_stalled() {
     if (!tb->instruction_issued) {
         if (stall_count > stall_limit) {
             stall_count = 0;
@@ -62,22 +60,22 @@ bool TaigaTracer<TB>::has_stalled() {
 	return false;
 }
 
-template <class TB>
-void TaigaTracer<TB>::reset_stats() {
+
+void TaigaTracer::reset_stats() {
     for (int i=0; i < numEvents; i++)
          event_counters[i] = 0;
 }
 
-template <class TB>
-void TaigaTracer<TB>::update_stats() {
+
+void TaigaTracer::update_stats() {
     if (collect_stats) {
         for (int i=0; i < numEvents; i++)
             event_counters[i] += tb->taiga_events[i];
     }
 }
 
-template <class TB>
-void TaigaTracer<TB>::print_stats() {
+
+void TaigaTracer::print_stats() {
 	std::cout << "   Taiga trace stats\n";
 	std::cout << "--------------------------------------------------------------\n";
     for (int i=0; i < numEvents; i++)
@@ -87,8 +85,8 @@ void TaigaTracer<TB>::print_stats() {
 }
 
 
-template <class TB>
-void TaigaTracer<TB>::reset() {
+
+void TaigaTracer::reset() {
     tb->clk = 0;
     tb->rst = 1;
     for (int i=0; i <reset_length; i++){
@@ -101,21 +99,21 @@ void TaigaTracer<TB>::reset() {
 
 
 }
-template <class TB>
-void TaigaTracer<TB>::set_log_file(std::ofstream* logFile) {
+
+void TaigaTracer::set_log_file(std::ofstream* logFile) {
     this->logFile = logFile;
 }
 
-template <class TB>
-void TaigaTracer<TB>::update_UART() {
+
+void TaigaTracer::update_UART() {
 	if (tb->write_uart) {
 		std::cout <<  tb->uart_byte << std::flush;
 		*logFile << tb->uart_byte;
 	}
 }
 
-template <class TB>
-void TaigaTracer<TB>::update_memory() {
+
+void TaigaTracer::update_memory() {
     tb->instruction_bram_data_out = instruction_r;
     if (tb->instruction_bram_en)
         instruction_r = mem->read(tb->instruction_bram_addr);
@@ -127,8 +125,8 @@ void TaigaTracer<TB>::update_memory() {
     }
 }
 
-template <class TB>
-void TaigaTracer<TB>::tick() {
+
+void TaigaTracer::tick() {
         cycle_count++;
 
 		tb->clk = 1;
@@ -165,8 +163,8 @@ void TaigaTracer<TB>::tick() {
         update_memory();
 }
 
-template <class TB>
-void TaigaTracer<TB>::start_tracer(const char *trace_file) {
+
+void TaigaTracer::start_tracer(const char *trace_file) {
 	#ifdef TRACE_ON
 		verilatorWaveformTracer = new VerilatedVcdC;
 		tb->trace(verilatorWaveformTracer, 99);
@@ -175,24 +173,24 @@ void TaigaTracer<TB>::start_tracer(const char *trace_file) {
 }
 
 
-template <class TB>
-uint64_t TaigaTracer<TB>::get_cycle_count() {
+
+uint64_t TaigaTracer::get_cycle_count() {
     return cycle_count;
 }
 
-template <class TB>
-TaigaTracer<TB>::TaigaTracer(std::ifstream& programFile) {
+
+TaigaTracer::TaigaTracer(std::ifstream& programFile) {
 	#ifdef TRACE_ON
 		Verilated::traceEverOn(true);
 	#endif
 
 
-    tb = new TB;
+    tb = new Vtaiga_sim;
 
    #ifdef DDR_LOAD_FILE
-        axi_ddr = new axi_ddr_sim<Vtaiga_sim>(DDR_INIT_FILE,DDR_FILE_STARTING_LOCATION,DDR_FILE_NUM_BYTES);
+        axi_ddr = new axi_ddr_sim(DDR_INIT_FILE,DDR_FILE_STARTING_LOCATION,DDR_FILE_NUM_BYTES);
     #else
-        axi_ddr = new axi_ddr_sim<Vtaiga_sim>(programFile, tb);
+        axi_ddr = new axi_ddr_sim(programFile, tb);
         
     #endif
     programFile.clear();
@@ -203,8 +201,8 @@ TaigaTracer<TB>::TaigaTracer(std::ifstream& programFile) {
     data_out_r = 0;
 }
 
-template <class TB>
-TaigaTracer<TB>::~TaigaTracer() {
+
+TaigaTracer::~TaigaTracer() {
 	#ifdef TRACE_ON
 		verilatorWaveformTracer->flush();
 		verilatorWaveformTracer->close();

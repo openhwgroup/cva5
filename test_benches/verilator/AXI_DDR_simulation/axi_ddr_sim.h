@@ -30,8 +30,12 @@
 #include <cmath>
 #include <map>
 #include <random>
+#include "verilated.h"
+#include "verilated_vcd_c.h"
+#include "Vtaiga_sim.h"
 #include "axi_interface.h"
 #include "ddr_page.h"
+
 using namespace std;
 
 
@@ -44,18 +48,18 @@ struct addr_calculation_parameters{
 	int number_of_bursts_left;
 	int delay_cycles_left;
 };
-template <class TB>
+
  class axi_ddr_sim{
  	public:
 	//Functions--------------------------------------------------------------
 	//Init instructions-----------------
  	axi_ddr_sim();
 	//Initialize DDR
- 	axi_ddr_sim(TB * tb);
+ 	axi_ddr_sim(Vtaiga_sim * tb);
 
 	//Initialize DDR from file
- 	axi_ddr_sim(string filepath, uint32_t starting_memory_location, int number_of_bytes, TB * tb);
- 	axi_ddr_sim(ifstream & input_memory_file, TB * tb);
+ 	axi_ddr_sim(string filepath, uint32_t starting_memory_location, int number_of_bytes, Vtaiga_sim * tb);
+ 	axi_ddr_sim(ifstream & input_memory_file, Vtaiga_sim * tb);
  	void step();
  	int get_data(uint32_t data_address);
 
@@ -79,7 +83,7 @@ template <class TB>
 		uniform_int_distribution<int> write_distribution;
 		//Pointers to Data
 		map<uint32_t,ddr_page> ddr_pages;
-		 TB *tb;
+		Vtaiga_sim *tb;
  		void parse_output_signals();
 
  		void parse_input_signals();
@@ -94,7 +98,7 @@ template <class TB>
 		//Read Request Queue
 		queue<AXI_read_address_channel_signals> rd_ad_channel_queue;
 		//Write Request Queue
-		queue<AXI_write_address_channel_signals> wd_ad_channel_queue;
+		queue<AXI_write_address_channel_signals> wr_ad_channel_queue;
 		//Read Data Queue
 		queue<AXI_read_data_channel_signals> r_data_channel_queue;
 		//Write Data Queue
@@ -105,5 +109,4 @@ template <class TB>
 		unsigned starting_location = 0x80000000;
 };
 
-#include "axi_ddr_sim.cc"
 #endif

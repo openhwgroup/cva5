@@ -1,17 +1,20 @@
-#include "axi_ddr_sim.h"
-#include "ddr_page.h"
 #include <stdint.h>
 #include <iostream>
 #include <cstdlib>
 #include <assert.h>
+#include "verilated.h"
+#include "verilated_vcd_c.h"
+#include "Vtaiga_sim.h"
+#include "axi_ddr_sim.h"
+#include "ddr_page.h"
+
 using namespace	 std;
 
-template <class TB>
-axi_ddr_sim<TB>::axi_ddr_sim(TB * tb){
+axi_ddr_sim::axi_ddr_sim(Vtaiga_sim * tb){
     this->tb = tb;
 }
-template <class TB>
-void axi_ddr_sim<TB>::init_signals(){
+
+void axi_ddr_sim::init_signals(){
     tb->ddr_axi_bresp = 0;
     tb->ddr_axi_bvalid = 0;
     tb->ddr_axi_rvalid = 0;
@@ -22,8 +25,8 @@ void axi_ddr_sim<TB>::init_signals(){
     tb->ddr_axi_rvalid = 0;
 }
 
-template <class TB>
-axi_ddr_sim<TB>::axi_ddr_sim(string filepath, uint32_t starting_memory_location, int number_of_bytes, TB * tb){
+
+axi_ddr_sim::axi_ddr_sim(string filepath, uint32_t starting_memory_location, int number_of_bytes, Vtaiga_sim * tb){
     ifstream input_memory_file;
     input_memory_file.open(filepath);
     string line;
@@ -51,8 +54,8 @@ axi_ddr_sim<TB>::axi_ddr_sim(string filepath, uint32_t starting_memory_location,
 }
 
 
-template <class TB>
-axi_ddr_sim<TB>::axi_ddr_sim(ifstream & input_memory_file, TB * tb){
+
+axi_ddr_sim::axi_ddr_sim(ifstream & input_memory_file, Vtaiga_sim * tb){
     string line;
 
     uint32_t max_pages = DDR_SIZE/PAGE_SIZE;
@@ -84,8 +87,8 @@ axi_ddr_sim<TB>::axi_ddr_sim(ifstream & input_memory_file, TB * tb){
     fflush(stdout);
 }
 
-template <class TB>
-int axi_ddr_sim<TB>::get_data(uint32_t data_address){
+
+int axi_ddr_sim::get_data(uint32_t data_address){
     uint32_t starting_address = (data_address / PAGE_SIZE) * PAGE_SIZE;
     if(ddr_pages.count(starting_address)){ //If page exists
         return ddr_pages[starting_address].return_data(data_address%PAGE_SIZE/4);
@@ -97,8 +100,8 @@ int axi_ddr_sim<TB>::get_data(uint32_t data_address){
         return ddr_pages[starting_address].return_data(data_address%PAGE_SIZE/4);
     }
 }
-template <class TB>
-void  axi_ddr_sim<TB>::set_data(uint32_t data_address, uint32_t set_data, uint32_t byte_enable){
+
+void  axi_ddr_sim::set_data(uint32_t data_address, uint32_t set_data, uint32_t byte_enable){
     uint32_t data = get_data(data_address);
     uint32_t starting_address = (data_address / PAGE_SIZE) * PAGE_SIZE;
     data = (data & ~byte_enable) | (set_data & byte_enable);
@@ -106,16 +109,16 @@ void  axi_ddr_sim<TB>::set_data(uint32_t data_address, uint32_t set_data, uint32
 
 };
 
-template <class TB>
-ddr_page axi_ddr_sim<TB>::get_page(uint32_t page_address){
+
+ddr_page axi_ddr_sim::get_page(uint32_t page_address){
     return ddr_pages[page_address];
 }
-template <class TB>
-void axi_ddr_sim<TB>::parse_input_signals(){
+
+void axi_ddr_sim::parse_input_signals(){
     //If the master has a write requests
-    if(tb->ddr_axi_awvalid && wd_ad_channel_queue.size() < MAX_INFLIGHT_WD_REQ){
+    if(tb->ddr_axi_awvalid && wr_ad_channel_queue.size() < MAX_INFLIGHT_WR_REQ){
         AXI_write_address_channel_signals elem{tb->ddr_axi_awaddr, tb->ddr_axi_awlen, tb->ddr_axi_awsize, tb->ddr_axi_awburst,tb->ddr_axi_awcache,tb->ddr_axi_awid};
-        wd_ad_channel_queue.push(elem);
+        wr_ad_channel_queue.push(elem);
     }
     //If the master has write data
     if(tb->ddr_axi_wvalid){
@@ -128,8 +131,8 @@ void axi_ddr_sim<TB>::parse_input_signals(){
         rd_ad_channel_queue.push(elem);
      }
 }
-template <class TB>
-void axi_ddr_sim<TB>::parse_output_signals(){
+
+void axi_ddr_sim::parse_output_signals(){
     if(tb->rst ==1){
         tb->ddr_axi_wready = 0;
         tb->ddr_axi_arready = 0;
@@ -149,7 +152,7 @@ void axi_ddr_sim<TB>::parse_output_signals(){
     tb->ddr_axi_wready = 1;
 
     //Write Req
-    if(wd_ad_channel_queue.size() < MAX_INFLIGHT_WD_REQ)
+    if(wr_ad_channel_queue.size() < MAX_INFLIGHT_WR_REQ)
         tb->ddr_axi_awready = 1;
     else
         tb->ddr_axi_awready = 0;
@@ -202,8 +205,8 @@ void axi_ddr_sim<TB>::parse_output_signals(){
     }
     }
 }
-template <class TB>
-void axi_ddr_sim<TB>::handle_read_req(){
+
+void axi_ddr_sim::handle_read_req(){
     if(rd_ad_channel_queue.size() > 0 ){
         if(current_read_parameters.delay_cycles_left == 0){
             AXI_read_data_channel_signals elem;
@@ -241,8 +244,8 @@ void axi_ddr_sim<TB>::handle_read_req(){
     }
 
 }
-template <class TB>
-void axi_ddr_sim<TB>::handle_write_req(){
+
+void axi_ddr_sim::handle_write_req(){
     //cout << "w_data_channel_queue size: " << w_data_channel_queue.size() << endl;
     //cout << "current_write_parameters.number_of_bursts_left: " << current_write_parameters.number_of_bursts_left << endl;
     if(w_data_channel_queue.size() > 0 && current_write_parameters.number_of_bursts_left > 0){
@@ -270,15 +273,15 @@ void axi_ddr_sim<TB>::handle_write_req(){
             set_data(current_write_parameters.address, elem.wdata, byte_enable);
             current_write_parameters.number_of_bursts_left--;
 
-            if(wd_ad_channel_queue.front().awburst == 0 ){//FIXED
+            if(wr_ad_channel_queue.front().awburst == 0 ){//FIXED
                 //do nothing
             }
-            else if(wd_ad_channel_queue.front().awburst == 1){ //INCR
+            else if(wr_ad_channel_queue.front().awburst == 1){ //INCR
                 //Increment Address by number of bytes in a burst(arsize)
                 current_write_parameters.address += current_write_parameters.increment;
 
             }
-            else if(wd_ad_channel_queue.front().awburst == 2){ //WRAP
+            else if(wr_ad_channel_queue.front().awburst == 2){ //WRAP
                 current_write_parameters.address += current_write_parameters.increment;
                 if(current_write_parameters.address == current_write_parameters.wrap_boundary + current_write_parameters.number_bytes * current_write_parameters.burst_length){
                     current_write_parameters.address = current_write_parameters.wrap_boundary;
@@ -289,7 +292,7 @@ void axi_ddr_sim<TB>::handle_write_req(){
                 AXI_write_response_channel_signals resp_elem;
                 resp_elem.bid = elem.wid;
                 resp_elem.bresp = 0;
-                wd_ad_channel_queue.pop();
+                wr_ad_channel_queue.pop();
                 w_res_channel_queue.push(resp_elem);
             }
         }
@@ -299,8 +302,8 @@ void axi_ddr_sim<TB>::handle_write_req(){
     }
 }
 
-template <class TB>
-void axi_ddr_sim<TB>::update_current_read_parameters(){
+
+void axi_ddr_sim::update_current_read_parameters(){
     //If I can serve a new read request
     if(rd_ad_channel_queue.size() > 0 && current_read_parameters.number_of_bursts_left == 0){
         current_read_parameters.address = rd_ad_channel_queue.front().araddr;
@@ -322,32 +325,32 @@ void axi_ddr_sim<TB>::update_current_read_parameters(){
         }
     }
 }
-template <class TB>
-void axi_ddr_sim<TB>::update_current_write_parameters(){
+
+void axi_ddr_sim::update_current_write_parameters(){
     //If I can serve a new read request
-    if(wd_ad_channel_queue.size() > 0 && current_write_parameters.number_of_bursts_left == 0){
-        current_write_parameters.address = wd_ad_channel_queue.front().awaddr;
-        current_write_parameters.number_of_bursts_left = wd_ad_channel_queue.front().awlen +1;
+    if(wr_ad_channel_queue.size() > 0 && current_write_parameters.number_of_bursts_left == 0){
+        current_write_parameters.address = wr_ad_channel_queue.front().awaddr;
+        current_write_parameters.number_of_bursts_left = wr_ad_channel_queue.front().awlen +1;
         current_write_parameters.delay_cycles_left = write_distribution(generator);
-        if(wd_ad_channel_queue.front().awburst == 0 ){//FIXED
+        if(wr_ad_channel_queue.front().awburst == 0 ){//FIXED
             current_write_parameters.increment = 0;
         }
-        else if(wd_ad_channel_queue.front().awburst == 1){ //INCR
+        else if(wr_ad_channel_queue.front().awburst == 1){ //INCR
             //Increment Address by number of bytes in a burst(arsize)
-            current_write_parameters.increment = pow(2,wd_ad_channel_queue.front().awsize);
+            current_write_parameters.increment = pow(2,wr_ad_channel_queue.front().awsize);
 
         }
-        else if(wd_ad_channel_queue.front().awburst == 2){ //WRAP
-            current_write_parameters.increment = pow(2,wd_ad_channel_queue.front().awsize);
-            current_write_parameters.number_bytes = pow(2,wd_ad_channel_queue.front().awsize);
-            current_write_parameters.burst_length = wd_ad_channel_queue.front().awlen +1;
+        else if(wr_ad_channel_queue.front().awburst == 2){ //WRAP
+            current_write_parameters.increment = pow(2,wr_ad_channel_queue.front().awsize);
+            current_write_parameters.number_bytes = pow(2,wr_ad_channel_queue.front().awsize);
+            current_write_parameters.burst_length = wr_ad_channel_queue.front().awlen +1;
             current_write_parameters.wrap_boundary =  (int)(current_write_parameters.address/(current_write_parameters.number_bytes * current_write_parameters.burst_length)) * (current_write_parameters.number_bytes * current_write_parameters.burst_length);
         }
     }
 }
 
-template <class TB>
-void axi_ddr_sim<TB>::step(){
+
+void axi_ddr_sim::step(){
 
     parse_input_signals();
     update_current_read_parameters();

@@ -25,6 +25,9 @@
 #include <stdlib.h>
 #include <iostream>
 #include <iterator>
+#include "verilated.h"
+#include "verilated_vcd_c.h"
+#include "Vtaiga_sim.h"
 #include "SimMem.h"
 #include "AXI_DDR_simulation/axi_ddr_sim.h"
 //#define TRACE_ON
@@ -73,7 +76,6 @@ static const char * const eventNames[] = {
 static const int numEvents = arraySize(eventNames);
 
 //Testbench with Taiga trace outputs on toplevel
-template <class TB>
 class TaigaTracer {
 public:
   TaigaTracer(std::ifstream& programFile);
@@ -91,9 +93,9 @@ public:
   uint64_t get_cycle_count();
 
   //DDR Simulation
-  TB *tb;
+  Vtaiga_sim *tb;
 private:
-  axi_ddr_sim<TB> * axi_ddr;
+  axi_ddr_sim * axi_ddr;
   SimMem *mem;
 #ifdef TRACE_ON
 		VerilatedVcdC	*verilatorWaveformTracer;
@@ -114,7 +116,4 @@ private:
   uint32_t data_out_r;
 
 };
-#include "TaigaTracer.cc"
-
-
 #endif
