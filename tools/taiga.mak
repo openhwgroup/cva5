@@ -35,7 +35,7 @@ DELAY_SEED = 867583
 ddr_size_def = DDR_SIZE=\(long\)$(DDR_SIZE_GB)*\(long\)1073741824
 page_size_def = PAGE_SIZE=\($(PAGE_SIZE_KB)*1024\)
 max_inflight_read_requests = MAX_INFLIGHT_RD_REQ=$(MAX_READ_REQ)
-max_inflight_write_requests = MAX_INFLIGHT_WD_REQ=$(MAX_WRITE_REQ)
+max_inflight_write_requests = MAX_INFLIGHT_WR_REQ=$(MAX_WRITE_REQ)
 mix_delay_read = MIN_DELAY_RD=$(MIN_RD_DELAY)
 max_delay_read = MAX_DELAY_RD=$(MAX_RD_DELAY)
 min_delay_write = MIN_DELAY_WR=$(MIN_WR_DELAY)
@@ -46,7 +46,7 @@ delay_seed = DELAY_SEED=$(DELAY_SEED)
 #ddr_start_loc = DDR_FILE_STARTING_LOCATION=$(DDR_FILE_STARTING_LOCATION)
 #ddr_num_bytes = DDR_FILE_NUM_BYTES=$(DDR_FILE_NUM_BYTES)
 
-CFLAGS = -g0 -O3 -std=c++11 -march=native -D$(ddr_size_def) -D$(page_size_def) -D$(max_inflight_read_requests) -D$(max_inflight_write_requests)\
+CFLAGS = -g0 -O3 -std=c++14 -march=native -D$(ddr_size_def) -D$(page_size_def) -D$(max_inflight_read_requests) -D$(max_inflight_write_requests)\
 	-D$(mix_delay_read) -D$(max_delay_read) -D$(min_delay_write) -D$(max_delay_write) -D$(delay_seed)
 
 	#(to-do)-D$(ddr_init_file) -D$(ddr_start_loc) -D$(ddr_num_bytes)
@@ -90,7 +90,7 @@ $(TAIGA_SIM): $(TAIGA_HW_SRCS) $(TAIGA_SIM_SRCS)
 	verilator --cc --exe --Mdir $(TAIGA_SIM_DIR) -DENABLE_SIMULATION_ASSERTIONS --assert \
 		-o taiga-sim \
 		$(VERILATOR_LINT_IGNORE) $(VERILATOR_CFLAGS) \
-		$(TAIGA_INCLUDED_SIM_SRCS) \
+		$(TAIGA_SIM_SRCS) \
 		$(TAIGA_HW_SRCS) $(VERILATOR_DIR)/taiga_sim.sv --top-module taiga_sim
 	$(MAKE) -C $(TAIGA_SIM_DIR) -f Vtaiga_sim.mk
 
