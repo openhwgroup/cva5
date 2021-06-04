@@ -51,8 +51,6 @@ module branch_unit
     );
 
     logic branch_issued_r;
-
-    logic [31:0] jump_base;
     logic result;
 
     //Branch Predictor
@@ -60,6 +58,7 @@ module branch_unit
     logic branch_taken_ex;
 
     id_t id_ex;
+    logic [31:0] jump_pc;
     logic [31:0] new_pc;
     logic [31:0] new_pc_ex;
 
@@ -92,26 +91,23 @@ module branch_unit
     //Branch comparison and final address calculation
     //are performed in the issue stage
     branch_comparator bc (
-            .use_signed(branch_inputs.use_signed),
-            .less_than(branch_inputs.fn3[2]),
-            .a(branch_inputs.rs1),
-            .b(branch_inputs.rs2),
-            .xor_result(branch_inputs.fn3[0]),
-            .result(result)
-        );
+        .less_than(branch_inputs.fn3[2]),
+        .a(branch_inputs.rs1),
+        .b(branch_inputs.rs2),
+        .xor_result(branch_inputs.fn3[0]),
+        .result(result)
+    );
+    assign branch_taken = result | branch_inputs.jal_jalr;
 
-    assign branch_taken = result | branch_inputs.jalr | branch_inputs.jal;
-
-    assign jump_base = branch_inputs.jalr ? branch_inputs.rs1 : branch_inputs.issue_pc;
-    assign new_pc = jump_base + (branch_taken ? 32'(signed'(branch_inputs.pc_offset)) : 4);
+    assign jump_pc = (branch_inputs.jalr ? branch_inputs.rs1[31:0] : branch_inputs.issue_pc) + 32'(signed'(branch_inputs.pc_offset));
+    assign new_pc = branch_taken ? jump_pc : branch_inputs.pc_p4;
 
     always_ff @(posedge clk) begin
-        if (instruction_is_completing | ~branch_issued_r) begin
+        if (issue.possible_issue) begin
             branch_taken_ex <= branch_taken;
-            new_pc_ex[31:1] <= new_pc[31:1];
-            new_pc_ex[0] <= new_pc[0] & ~branch_inputs.jalr;
+            new_pc_ex <= {new_pc[31:1], new_pc[0]  & ~branch_inputs.jalr};
             id_ex <= issue.id;
-            jal_jalr_ex <= branch_inputs.jal | branch_inputs.jalr;
+            jal_jalr_ex <= branch_inputs.jal_jalr;
         end
     end
 
@@ -121,9 +117,9 @@ module branch_unit
 
     generate if (ENABLE_M_MODE) begin
         always_ff @(posedge clk) begin
-            if (instruction_is_completing | ~branch_issued_r) begin
+            if (issue.possible_issue) begin
                 jmp_id <= issue.id;
-                branch_exception_is_jump <= (branch_inputs.jal | branch_inputs.jalr);
+                branch_exception_is_jump <= branch_inputs.jal_jalr;
             end
         end
 
@@ -149,7 +145,7 @@ module branch_unit
     logic is_return;
     logic is_call;
     always_ff @(posedge clk) begin
-        if (instruction_is_completing | ~branch_issued_r) begin
+        if (issue.possible_issue) begin
             is_return <= branch_inputs.is_return;
             is_call <= branch_inputs.is_call;
             pc_ex <= branch_inputs.issue_pc;

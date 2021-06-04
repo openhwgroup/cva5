@@ -118,14 +118,15 @@ package taiga_types;
     } alu_inputs_t;
 
     typedef struct packed {
-        logic [XLEN-1:0] rs1;
-        logic [XLEN-1:0] rs2;
+        logic [XLEN:0] rs1;
+        logic [XLEN:0] rs2;
+        logic [31:0] pc_p4;
         logic [2:0] fn3;
         logic [31:0] issue_pc;
         logic issue_pc_valid;
-        logic use_signed;
         logic jal;
         logic jalr;
+        logic jal_jalr;
         logic is_call;
         logic is_return;
         logic [20:0] pc_offset;
