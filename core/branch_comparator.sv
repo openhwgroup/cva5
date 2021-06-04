@@ -27,16 +27,12 @@ module branch_comparator
     import taiga_types::*;
 
     (
-        input logic use_signed,
         input logic less_than,
-        input logic [31:0] a,
-        input logic [31:0] b,
+        input logic [32:0] a,
+        input logic [32:0] b,
         input logic xor_result,
         output logic result
     );
-
-    logic [32:0] sign_extended_a;
-    logic [32:0] sign_extended_b;
 
     logic [31:0] eq_a;
     logic [31:0] eq_b;
@@ -60,26 +56,21 @@ module branch_comparator
     //For equality: carry out from ab + ~a~b + 1 (sums pairs of zeros or ones)
     //For less than:carry out from  a +~b + 1
     ////////////////////////////////////////////////////
-    assign sign_extended_a = {a[31] & use_signed, a};
-    assign sign_extended_b = {b[31] & use_signed, b};
-
     assign eq_carry_in =
-       ((sign_extended_a[0] & sign_extended_b[0]) | (~sign_extended_a[0] & ~sign_extended_b[0])) &
-       ((sign_extended_a[1] & sign_extended_b[1]) | (~sign_extended_a[1] & ~sign_extended_b[1]));
+       ((a[0] & b[0]) | (~a[0] & ~b[0])) &
+       ((a[1] & b[1]) | (~a[1] & ~b[1]));
 
     assign ls_carry_in =
-        ((sign_extended_a[0] | ~sign_extended_b[0]) & (sign_extended_a[1] | ~sign_extended_b[1])) |
-        (sign_extended_a[1] & ~sign_extended_b[1]);
+        ((a[0] | ~b[0]) & (a[1] | ~b[1])) |
+        (a[1] & ~b[1]);
 
     assign carry_in = less_than ? ls_carry_in : eq_carry_in;
 
+    assign ls_a = {1'b0, a[32:2]};
+    assign ls_b = {1'b1, ~b[32:2]};
 
-    assign ls_a = {1'b0, sign_extended_a[32:2]};
-    assign ls_b = {1'b1, ~sign_extended_b[32:2]};
-
-
-    assign eq_a = {1'b0, sign_extended_a[32:2]} & {1'b0, sign_extended_b[32:2]};
-    assign eq_b = {1'b0, ~sign_extended_a[32:2]} & {1'b0, ~sign_extended_b[32:2]};
+    assign eq_a = {1'b0, a[32:2]} & {1'b0, b[32:2]};
+    assign eq_b = {1'b0, ~a[32:2]} & {1'b0, ~b[32:2]};
 
     //Compressor
     //pairwise reduces carry generation
@@ -98,12 +89,6 @@ module branch_comparator
         sub_eq_a[15] ^= xor_result;
     end
 
-
-    assign {result, sub_toss} = less_than ?
-        {sub_ls_a, carry_in} +
-        {sub_ls_b, carry_in}
-         :
-        ({sub_eq_a, carry_in}) +
-        ({16'h0000, carry_in}) ;
+    assign {result, sub_toss} = {less_than ? sub_ls_a : sub_eq_a, carry_in} + {less_than ? sub_ls_b : 16'b0, carry_in};
 
 endmodule

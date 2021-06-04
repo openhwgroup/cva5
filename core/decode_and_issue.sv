@@ -283,8 +283,8 @@ module decode_and_issue
 
     always_ff @(posedge clk) begin
         if (issue_stage_ready) begin
-            sel_pc <= opcode_trim inside {AUIPC_T, JAL_T, JALR_T};
-            sel_4 <= opcode_trim inside {JAL_T, JALR_T};
+            sel_pc <= opcode_trim inside {AUIPC_T, JAL_T, JALR_T, BRANCH_T};
+            sel_4 <= opcode_trim inside {JAL_T, JALR_T, BRANCH_T};
             rs2_use_regfile <= opcode_trim inside {ARITH_T};
             alu_op_r <= alu_op;
             alu_subtract <= (fn3 inside {SLTU_fn3, SLT_fn3}) || sub_instruction;
@@ -408,23 +408,29 @@ module decode_and_issue
             pc_offset = 21'(signed'({br_imm, 1'b0}));
     end
 
+    logic jalr;
     always_ff @(posedge clk) begin
-        if (issue_stage_ready)
+        if (issue_stage_ready) begin
             pc_offset_r <= pc_offset;
+            jalr <= (~opcode[3] & opcode[2]);
+        end
     end
+
+    logic[2:0] br_fn3;
+
     assign branch_inputs.is_return = is_return;
     assign branch_inputs.is_call = is_call;
     assign branch_inputs.fn3 = issue.fn3;
     assign branch_inputs.pc_offset = pc_offset_r;
-    assign branch_inputs.use_signed = br_use_signed;
     assign branch_inputs.jal = issue.opcode[3];//(opcode == JAL);
-    assign branch_inputs.jalr = ~issue.opcode[3] & issue.opcode[2];//(opcode == JALR);
+    assign branch_inputs.jalr = jalr;
+    assign branch_inputs.jal_jalr = issue.opcode[2];
 
     assign branch_inputs.issue_pc = issue.pc;
     assign branch_inputs.issue_pc_valid = issue.stage_valid;
-    assign branch_inputs.rs1 = rf.data[RS1];
-    assign branch_inputs.rs2 = rf.data[RS2];
-
+    assign branch_inputs.rs1 = {(rf.data[RS1][31] & br_use_signed), rf.data[RS1]};
+    assign branch_inputs.rs2 = {(rf.data[RS2][31] & br_use_signed), rf.data[RS2]};
+    assign branch_inputs.pc_p4 = constant_alu;
 
     ////////////////////////////////////////////////////
     //Global Control unit inputs
