@@ -27,6 +27,10 @@ module csr_regs
     import taiga_types::*;
     import csr_types::*;
 
+    # (
+        parameter cpu_config_t CONFIG = EXAMPLE_CONFIG
+    )
+
     (
         input logic clk,
         input logic rst,
@@ -89,9 +93,9 @@ module csr_regs
 
     satp_t satp;
 
-    logic[COUNTER_W-1:0] mcycle;
-    logic[COUNTER_W-1:0] mtime;
-    logic[COUNTER_W-1:0] minst_ret;
+    logic[CONFIG.CSRS.COUNTER_W-1:0] mcycle;
+    logic[CONFIG.CSRS.COUNTER_W-1:0] mtime;
+    logic[CONFIG.CSRS.COUNTER_W-1:0] minst_ret;
     localparam INST_RET_INC_W = 2;
     logic [INST_RET_INC_W-1:0] inst_ret_inc;
 
@@ -152,14 +156,14 @@ module csr_regs
 
     ////////////////////////////////////////////////////
     //Machine ISA register
-    const misa_t misa = '{default:0, mxlen:1, A:(USE_AMO), I:1, M:(USE_MUL && USE_DIV), S:(ENABLE_S_MODE), U:(ENABLE_U_MODE)};
+    const misa_t misa = '{default:0, mxlen:1, A:(CONFIG.INCLUDE_AMO), I:1, M:(CONFIG.INCLUDE_MUL && CONFIG.INCLUDE_DIV), S:(CONFIG.INCLUDE_S_MODE), U:(CONFIG.INCLUDE_U_MODE)};
 
     ////////////////////////////////////////////////////
     //Machine Version Registers
     const logic [XLEN-1:0] mvendorid = 0;
     const logic [XLEN-1:0] marchid = 0;
-    const logic [XLEN-1:0] mimpid = MACHINE_IMPLEMENTATION_ID;
-    const logic [XLEN-1:0] mhartid = CPU_ID;
+    const logic [XLEN-1:0] mimpid = CONFIG.CSRS.MACHINE_IMPLEMENTATION_ID;
+    const logic [XLEN-1:0] mhartid = CONFIG.CSRS.CPU_ID;
 
     ////////////////////////////////////////////////////
     //MSTATUS
@@ -185,14 +189,14 @@ module csr_regs
     //Virtualization support: TSR, TW, TVM unused
     //Extension context status: SD, FS, XS unused
     const mstatus_t mstatus_mask =
-      '{default:0, mprv:(ENABLE_U_MODE | ENABLE_S_MODE), mxr:(ENABLE_S_MODE),
-      sum:(ENABLE_U_MODE & ENABLE_S_MODE), mpp:'1, spp:(ENABLE_S_MODE),
-      mpie:1, spie:(ENABLE_S_MODE), mie:1, sie:(ENABLE_S_MODE)};
+      '{default:0, mprv:(CONFIG.INCLUDE_U_MODE | CONFIG.INCLUDE_S_MODE), mxr:(CONFIG.INCLUDE_S_MODE),
+      sum:(CONFIG.INCLUDE_U_MODE & CONFIG.INCLUDE_S_MODE), mpp:'1, spp:(CONFIG.INCLUDE_S_MODE),
+      mpie:1, spie:(CONFIG.INCLUDE_S_MODE), mie:1, sie:(CONFIG.INCLUDE_S_MODE)};
 
     const mstatus_t sstatus_mask = '{default:0, mxr:1, sum:1, spp:1, spie:1, sie:1};
 
 
-generate if (ENABLE_M_MODE) begin
+generate if (CONFIG.INCLUDE_M_MODE) begin
 
     privilege_t trap_return_privilege_level;
     privilege_t exception_privilege_level;
@@ -207,7 +211,7 @@ generate if (ENABLE_M_MODE) begin
     always_comb begin
         exception_privilege_level = MACHINE_PRIVILEGE;
         interrupt_privilege_level = MACHINE_PRIVILEGE;
-        if (ENABLE_S_MODE && privilege_level inside {SUPERVISOR_PRIVILEGE, USER_PRIVILEGE}) begin
+        if (CONFIG.INCLUDE_S_MODE && privilege_level inside {SUPERVISOR_PRIVILEGE, USER_PRIVILEGE}) begin
             if (medeleg[gc_exception.code])
                 exception_privilege_level = SUPERVISOR_PRIVILEGE;
             if (mideleg[gc_exception.code])
@@ -265,7 +269,7 @@ generate if (ENABLE_M_MODE) begin
         end else if (mret) begin
             mstatus_return.mie = mstatus.mpie;
             mstatus_return.mpie = 1;
-            mstatus_return.mpp = ENABLE_U_MODE ? USER_PRIVILEGE : MACHINE_PRIVILEGE;
+            mstatus_return.mpp = CONFIG.INCLUDE_U_MODE ? USER_PRIVILEGE : MACHINE_PRIVILEGE;
             if (mstatus.mpp != MACHINE_PRIVILEGE)
                 mstatus_return.mprv = 0;
         end
@@ -307,7 +311,7 @@ generate if (ENABLE_M_MODE) begin
     logic [31:0] medeleg_mask;
     always_comb begin
         medeleg_mask = 0;
-        if (ENABLE_S_MODE) begin
+        if (CONFIG.INCLUDE_S_MODE) begin
             medeleg_mask[INST_ADDR_MISSALIGNED] = 1;
             medeleg_mask[INST_ACCESS_FAULT] = 1;
             medeleg_mask[ILLEGAL_INST] = 1;
@@ -335,10 +339,10 @@ generate if (ENABLE_M_MODE) begin
     logic [31:0] mideleg_mask;
     always_comb begin
         mideleg_mask = 0;
-        if (ENABLE_S_MODE) begin
-            mideleg_mask[S_SOFTWARE_INTERRUPT] = ENABLE_S_MODE;
-            mideleg_mask[S_TIMER_INTERRUPT] = ENABLE_S_MODE;
-            mideleg_mask[S_EXTERNAL_INTERRUPT] = ENABLE_S_MODE;
+        if (CONFIG.INCLUDE_S_MODE) begin
+            mideleg_mask[S_SOFTWARE_INTERRUPT] = CONFIG.INCLUDE_S_MODE;
+            mideleg_mask[S_TIMER_INTERRUPT] = CONFIG.INCLUDE_S_MODE;
+            mideleg_mask[S_EXTERNAL_INTERRUPT] = CONFIG.INCLUDE_S_MODE;
         end
     end
     always_ff @(posedge clk) begin
@@ -350,7 +354,7 @@ generate if (ENABLE_M_MODE) begin
 
     ////////////////////////////////////////////////////
     //MIP
-    assign mip_mask = '{default:0, meip:1, seip:ENABLE_S_MODE, mtip:1, stip:ENABLE_S_MODE, msip:1, ssip:ENABLE_S_MODE};
+    assign mip_mask = '{default:0, meip:1, seip:CONFIG.INCLUDE_S_MODE, mtip:1, stip:CONFIG.INCLUDE_S_MODE, msip:1, ssip:CONFIG.INCLUDE_S_MODE};
     always_ff @(posedge clk) begin
         if (rst)
             mip <= 0;
@@ -360,7 +364,7 @@ generate if (ENABLE_M_MODE) begin
 
     ////////////////////////////////////////////////////
     //MIE
-    assign mie_mask = '{default:0, meie:1, seie:ENABLE_S_MODE, mtie:1, stie:ENABLE_S_MODE, msie:1, ssie:ENABLE_S_MODE};
+    assign mie_mask = '{default:0, meie:1, seie:CONFIG.INCLUDE_S_MODE, mtie:1, stie:CONFIG.INCLUDE_S_MODE, msie:1, ssie:CONFIG.INCLUDE_S_MODE};
     assign sie_mask = '{default:0, seie:1, stie:1, ssie:1};
 
     always_ff @(posedge clk) begin
@@ -389,40 +393,40 @@ generate if (ENABLE_M_MODE) begin
     //As the exception and interrupts codes are sparsely populated,
     //to ensure that only legal values are written, a ROM lookup
     //is used to validate the CSR write operation
-    logic MCAUSE_EXCEPTION_MASKING_ROM [2**ECODE_W];
-    logic MCAUSE_INTERRUPT_MASKING_ROM [2**ECODE_W];
+    logic MCAINCLUDE_EXCEPTION_MASKING_ROM [2**ECODE_W];
+    logic MCAINCLUDE_INTERRUPT_MASKING_ROM [2**ECODE_W];
     always_comb begin
-        MCAUSE_EXCEPTION_MASKING_ROM = '{default: 0};
-        MCAUSE_EXCEPTION_MASKING_ROM[INST_ADDR_MISSALIGNED] = 1;
-        MCAUSE_EXCEPTION_MASKING_ROM[INST_ACCESS_FAULT] = ENABLE_S_MODE;
-        MCAUSE_EXCEPTION_MASKING_ROM[ILLEGAL_INST] = 1;
-        MCAUSE_EXCEPTION_MASKING_ROM[BREAK] = 1;
-        MCAUSE_EXCEPTION_MASKING_ROM[LOAD_ADDR_MISSALIGNED] = 1;
-        MCAUSE_EXCEPTION_MASKING_ROM[LOAD_FAULT] = ENABLE_S_MODE;
-        MCAUSE_EXCEPTION_MASKING_ROM[STORE_AMO_ADDR_MISSALIGNED] = 1;
-        MCAUSE_EXCEPTION_MASKING_ROM[STORE_AMO_FAULT] = ENABLE_S_MODE;
-        MCAUSE_EXCEPTION_MASKING_ROM[ECALL_U] = ENABLE_S_MODE;
-        MCAUSE_EXCEPTION_MASKING_ROM[ECALL_S] = ENABLE_S_MODE;
-        MCAUSE_EXCEPTION_MASKING_ROM[ECALL_M] = 1;
-        MCAUSE_EXCEPTION_MASKING_ROM[INST_PAGE_FAULT] = ENABLE_S_MODE;
-        MCAUSE_EXCEPTION_MASKING_ROM[LOAD_PAGE_FAULT] = ENABLE_S_MODE;
-        MCAUSE_EXCEPTION_MASKING_ROM[STORE_OR_AMO_PAGE_FAULT] = ENABLE_S_MODE;
+        MCAINCLUDE_EXCEPTION_MASKING_ROM = '{default: 0};
+        MCAINCLUDE_EXCEPTION_MASKING_ROM[INST_ADDR_MISSALIGNED] = 1;
+        MCAINCLUDE_EXCEPTION_MASKING_ROM[INST_ACCESS_FAULT] = CONFIG.INCLUDE_S_MODE;
+        MCAINCLUDE_EXCEPTION_MASKING_ROM[ILLEGAL_INST] = 1;
+        MCAINCLUDE_EXCEPTION_MASKING_ROM[BREAK] = 1;
+        MCAINCLUDE_EXCEPTION_MASKING_ROM[LOAD_ADDR_MISSALIGNED] = 1;
+        MCAINCLUDE_EXCEPTION_MASKING_ROM[LOAD_FAULT] = CONFIG.INCLUDE_S_MODE;
+        MCAINCLUDE_EXCEPTION_MASKING_ROM[STORE_AMO_ADDR_MISSALIGNED] = 1;
+        MCAINCLUDE_EXCEPTION_MASKING_ROM[STORE_AMO_FAULT] = CONFIG.INCLUDE_S_MODE;
+        MCAINCLUDE_EXCEPTION_MASKING_ROM[ECALL_U] = CONFIG.INCLUDE_S_MODE;
+        MCAINCLUDE_EXCEPTION_MASKING_ROM[ECALL_S] = CONFIG.INCLUDE_S_MODE;
+        MCAINCLUDE_EXCEPTION_MASKING_ROM[ECALL_M] = 1;
+        MCAINCLUDE_EXCEPTION_MASKING_ROM[INST_PAGE_FAULT] = CONFIG.INCLUDE_S_MODE;
+        MCAINCLUDE_EXCEPTION_MASKING_ROM[LOAD_PAGE_FAULT] = CONFIG.INCLUDE_S_MODE;
+        MCAINCLUDE_EXCEPTION_MASKING_ROM[STORE_OR_AMO_PAGE_FAULT] = CONFIG.INCLUDE_S_MODE;
 
-        MCAUSE_INTERRUPT_MASKING_ROM = '{default: 0};
-        MCAUSE_INTERRUPT_MASKING_ROM[S_SOFTWARE_INTERRUPT] = ENABLE_S_MODE;
-        MCAUSE_INTERRUPT_MASKING_ROM[M_SOFTWARE_INTERRUPT] = 1;
-        MCAUSE_INTERRUPT_MASKING_ROM[S_TIMER_INTERRUPT] = ENABLE_S_MODE;
-        MCAUSE_INTERRUPT_MASKING_ROM[M_TIMER_INTERRUPT] = 1;
-        MCAUSE_INTERRUPT_MASKING_ROM[S_EXTERNAL_INTERRUPT] = ENABLE_S_MODE;
-        MCAUSE_INTERRUPT_MASKING_ROM[M_EXTERNAL_INTERRUPT] = 1;
+        MCAINCLUDE_INTERRUPT_MASKING_ROM = '{default: 0};
+        MCAINCLUDE_INTERRUPT_MASKING_ROM[S_SOFTWARE_INTERRUPT] = CONFIG.INCLUDE_S_MODE;
+        MCAINCLUDE_INTERRUPT_MASKING_ROM[M_SOFTWARE_INTERRUPT] = 1;
+        MCAINCLUDE_INTERRUPT_MASKING_ROM[S_TIMER_INTERRUPT] = CONFIG.INCLUDE_S_MODE;
+        MCAINCLUDE_INTERRUPT_MASKING_ROM[M_TIMER_INTERRUPT] = 1;
+        MCAINCLUDE_INTERRUPT_MASKING_ROM[S_EXTERNAL_INTERRUPT] = CONFIG.INCLUDE_S_MODE;
+        MCAINCLUDE_INTERRUPT_MASKING_ROM[M_EXTERNAL_INTERRUPT] = 1;
     end
 
     logic mcause_write_valid;
     always_comb begin
         if (updated_csr[XLEN-1]) //interrupt
-            mcause_write_valid = MCAUSE_INTERRUPT_MASKING_ROM[updated_csr[ECODE_W-1:0]];
+            mcause_write_valid = MCAINCLUDE_INTERRUPT_MASKING_ROM[updated_csr[ECODE_W-1:0]];
         else
-            mcause_write_valid = MCAUSE_EXCEPTION_MASKING_ROM[updated_csr[ECODE_W-1:0]];
+            mcause_write_valid = MCAINCLUDE_EXCEPTION_MASKING_ROM[updated_csr[ECODE_W-1:0]];
     end
 
     always_ff @(posedge clk) begin
@@ -474,11 +478,11 @@ endgenerate
     //BEGIN OF SUPERVISOR REGS
     ////////////////////////////////////////////////////
     //TLB status --- used to mux physical/virtual address
-    assign tlb_on = ENABLE_S_MODE & satp.mode;
+    assign tlb_on = CONFIG.INCLUDE_S_MODE & satp.mode;
     assign asid = satp.asid;
     //******************
 
-generate if (ENABLE_S_MODE) begin
+generate if (CONFIG.INCLUDE_S_MODE) begin
     ////////////////////////////////////////////////////
     //MMU interface
     assign immu.mxr = mstatus.mxr;
@@ -498,7 +502,7 @@ generate if (ENABLE_S_MODE) begin
     logic [31:0] stvec_mask = '1;
     always_ff @(posedge clk) begin
         if (rst)
-            stvec <= {RESET_VEC[XLEN-1:2], 2'b00};
+            stvec <= {CONFIG.CSRS.RESET_VEC[XLEN-1:2], 2'b00};
         else if (swrite_decoder[STVEC[7:0]])
             stvec <= (updated_csr & stvec_mask);
     end
@@ -525,7 +529,7 @@ endgenerate
     ////////////////////////////////////////////////////
     //Timers and Counters
     //Register increment for instructions completed
-    logic[COUNTER_W-1:0] mcycle_next;
+    logic[CONFIG.CSRS.COUNTER_W-1:0] mcycle_next;
     assign mcycle_next = mcycle + 1;
     
     //As the CSR write takes effect after the instruction has otherwise completed,
@@ -535,23 +539,23 @@ endgenerate
     always_ff @(posedge clk) begin
         if (rst) begin
             mcycle[31:0] <= 0;
-            mcycle[COUNTER_W-1:32] <= 0;
+            mcycle[CONFIG.CSRS.COUNTER_W-1:32] <= 0;
         end else begin
             mcycle[31:0] <= mwrite_decoder[MCYCLE[7:0]] ? updated_csr : mcycle_next[31:0];
-            mcycle[COUNTER_W-1:32] <= mwrite_decoder[MCYCLEH[7:0]] ? updated_csr[COUNTER_W-33:0] : mcycle_next[COUNTER_W-1:32];
+            mcycle[CONFIG.CSRS.COUNTER_W-1:32] <= mwrite_decoder[MCYCLEH[7:0]] ? updated_csr[CONFIG.CSRS.COUNTER_W-33:0] : mcycle_next[CONFIG.CSRS.COUNTER_W-1:32];
         end
     end
 
-    logic[COUNTER_W-1:0] minst_ret_next;
-    assign minst_ret_next = minst_ret + COUNTER_W'(retire.count);
+    logic[CONFIG.CSRS.COUNTER_W-1:0] minst_ret_next;
+    assign minst_ret_next = minst_ret + CONFIG.CSRS.COUNTER_W'(retire.count);
 
     always_ff @(posedge clk) begin
         if (rst) begin
             minst_ret[31:0] <= 0;
-            minst_ret[COUNTER_W-1:32] <= 0;
+            minst_ret[CONFIG.CSRS.COUNTER_W-1:32] <= 0;
         end else begin
             minst_ret[31:0] <= mwrite_decoder[MINSTRET[7:0]] ? updated_csr : minst_ret_next[31:0];
-            minst_ret[COUNTER_W-1:32] <= mwrite_decoder[MINSTRETH[7:0]] ? updated_csr[COUNTER_W-33:0] : minst_ret_next[COUNTER_W-1:32];
+            minst_ret[CONFIG.CSRS.COUNTER_W-1:32] <= mwrite_decoder[MINSTRETH[7:0]] ? updated_csr[CONFIG.CSRS.COUNTER_W-33:0] : minst_ret_next[CONFIG.CSRS.COUNTER_W-1:32];
         end
     end
 
@@ -559,51 +563,51 @@ endgenerate
         invalid_addr = 0;
         case (csr_addr) inside
             //Machine info
-            MISA :  selected_csr = ENABLE_M_MODE ? misa : 0;
-            MVENDORID : selected_csr = ENABLE_M_MODE ? mvendorid : 0;
-            MARCHID : selected_csr = ENABLE_M_MODE ? marchid : 0;
-            MIMPID : selected_csr = ENABLE_M_MODE ? mimpid : 0;
-            MHARTID : selected_csr = ENABLE_M_MODE ? mhartid : 0;
+            MISA :  selected_csr = CONFIG.INCLUDE_M_MODE ? misa : 0;
+            MVENDORID : selected_csr = CONFIG.INCLUDE_M_MODE ? mvendorid : 0;
+            MARCHID : selected_csr = CONFIG.INCLUDE_M_MODE ? marchid : 0;
+            MIMPID : selected_csr = CONFIG.INCLUDE_M_MODE ? mimpid : 0;
+            MHARTID : selected_csr = CONFIG.INCLUDE_M_MODE ? mhartid : 0;
             //Machine trap setup
-            MSTATUS : selected_csr = ENABLE_M_MODE ? mstatus : 0;
-            MEDELEG : selected_csr = ENABLE_M_MODE ? medeleg : 0;
-            MIDELEG : selected_csr = ENABLE_M_MODE ? mideleg : 0;
-            MIE : selected_csr = ENABLE_M_MODE ? mie_reg : 0;
-            MTVEC : selected_csr = ENABLE_M_MODE ? mtvec : 0;
+            MSTATUS : selected_csr = CONFIG.INCLUDE_M_MODE ? mstatus : 0;
+            MEDELEG : selected_csr = CONFIG.INCLUDE_M_MODE ? medeleg : 0;
+            MIDELEG : selected_csr = CONFIG.INCLUDE_M_MODE ? mideleg : 0;
+            MIE : selected_csr = CONFIG.INCLUDE_M_MODE ? mie_reg : 0;
+            MTVEC : selected_csr = CONFIG.INCLUDE_M_MODE ? mtvec : 0;
             MCOUNTEREN : selected_csr = 0;
             //Machine trap handling
-            MSCRATCH : selected_csr = ENABLE_M_MODE ? scratch_out : 0;
-            MEPC : selected_csr = ENABLE_M_MODE ? mepc : 0;
-            MCAUSE : selected_csr = ENABLE_M_MODE ? mcause : 0;
-            MTVAL : selected_csr = ENABLE_M_MODE ? mtval : 0;
-            MIP : selected_csr = ENABLE_M_MODE ? mip : 0;
+            MSCRATCH : selected_csr = CONFIG.INCLUDE_M_MODE ? scratch_out : 0;
+            MEPC : selected_csr = CONFIG.INCLUDE_M_MODE ? mepc : 0;
+            MCAUSE : selected_csr = CONFIG.INCLUDE_M_MODE ? mcause : 0;
+            MTVAL : selected_csr = CONFIG.INCLUDE_M_MODE ? mtval : 0;
+            MIP : selected_csr = CONFIG.INCLUDE_M_MODE ? mip : 0;
             //Machine Memory Protection
             [12'h3EF : 12'h3A0] : selected_csr = 0;
             //Machine Timers and Counters
-            MCYCLE : selected_csr = ENABLE_M_MODE ? mcycle[XLEN-1:0] : 0;
-            MINSTRET : selected_csr = ENABLE_M_MODE ? minst_ret[XLEN-1:0] : 0;
+            MCYCLE : selected_csr = CONFIG.INCLUDE_M_MODE ? mcycle[XLEN-1:0] : 0;
+            MINSTRET : selected_csr = CONFIG.INCLUDE_M_MODE ? minst_ret[XLEN-1:0] : 0;
             [12'hB03 : 12'hB1F] : selected_csr = 0;
-            MCYCLEH : selected_csr = ENABLE_M_MODE ? 32'(mcycle[COUNTER_W-1:XLEN]) : 0;
-            MINSTRETH : selected_csr = ENABLE_M_MODE ? 32'(minst_ret[COUNTER_W-1:XLEN]) : 0;
+            MCYCLEH : selected_csr = CONFIG.INCLUDE_M_MODE ? 32'(mcycle[CONFIG.CSRS.COUNTER_W-1:XLEN]) : 0;
+            MINSTRETH : selected_csr = CONFIG.INCLUDE_M_MODE ? 32'(minst_ret[CONFIG.CSRS.COUNTER_W-1:XLEN]) : 0;
             [12'hB83 : 12'hB9F] : selected_csr = 0;
             //Machine Counter Setup
             [12'h320 : 12'h33F] : selected_csr = 0;
 
             //Supervisor Trap Setup
-            SSTATUS : selected_csr = ENABLE_S_MODE ? (mstatus & sstatus_mask) : '0;
+            SSTATUS : selected_csr = CONFIG.INCLUDE_S_MODE ? (mstatus & sstatus_mask) : '0;
             SEDELEG : selected_csr = 0; //No user-level interrupts/exception handling
             SIDELEG : selected_csr = 0;
-            SIE : selected_csr = ENABLE_S_MODE ? (mie_reg & sie_mask) : '0;
-            STVEC : selected_csr = ENABLE_S_MODE ? stvec : '0;
+            SIE : selected_csr = CONFIG.INCLUDE_S_MODE ? (mie_reg & sie_mask) : '0;
+            STVEC : selected_csr = CONFIG.INCLUDE_S_MODE ? stvec : '0;
             SCOUNTEREN : selected_csr = 0;
             //Supervisor trap handling
-            SSCRATCH : selected_csr = ENABLE_S_MODE ? scratch_out : '0;
-            SEPC : selected_csr = ENABLE_S_MODE ? scratch_out : '0;
-            SCAUSE : selected_csr = ENABLE_S_MODE ? scratch_out : '0;
-            STVAL : selected_csr = ENABLE_S_MODE ? scratch_out : '0;
-            SIP : selected_csr = ENABLE_S_MODE ? (mip & sip_mask) : '0;
+            SSCRATCH : selected_csr = CONFIG.INCLUDE_S_MODE ? scratch_out : '0;
+            SEPC : selected_csr = CONFIG.INCLUDE_S_MODE ? scratch_out : '0;
+            SCAUSE : selected_csr = CONFIG.INCLUDE_S_MODE ? scratch_out : '0;
+            STVAL : selected_csr = CONFIG.INCLUDE_S_MODE ? scratch_out : '0;
+            SIP : selected_csr = CONFIG.INCLUDE_S_MODE ? (mip & sip_mask) : '0;
             //Supervisor Protection and Translation
-            SATP : selected_csr = ENABLE_S_MODE ? satp : '0;
+            SATP : selected_csr = CONFIG.INCLUDE_S_MODE ? satp : '0;
 
             //User status
             //Floating point
@@ -615,9 +619,9 @@ endgenerate
             TIME : selected_csr = mcycle[XLEN-1:0];
             INSTRET : selected_csr = minst_ret[XLEN-1:0];
             [12'hC03 : 12'hC1F] : selected_csr = 0;
-            CYCLEH : selected_csr = 32'(mcycle[COUNTER_W-1:XLEN]);
-            TIMEH : selected_csr = 32'(mcycle[COUNTER_W-1:XLEN]);
-            INSTRETH : selected_csr = 32'(minst_ret[COUNTER_W-1:XLEN]);
+            CYCLEH : selected_csr = 32'(mcycle[CONFIG.CSRS.COUNTER_W-1:XLEN]);
+            TIMEH : selected_csr = 32'(mcycle[CONFIG.CSRS.COUNTER_W-1:XLEN]);
+            INSTRETH : selected_csr = 32'(minst_ret[CONFIG.CSRS.COUNTER_W-1:XLEN]);
             [12'hC83 : 12'hC9F] : selected_csr = 0;
 
             default : begin selected_csr = 0; invalid_addr = 1; end

@@ -29,6 +29,10 @@ module taiga
     import riscv_types::*;
     import taiga_types::*;
 
+    #(
+        parameter cpu_config_t CONFIG = EXAMPLE_CONFIG
+    )
+
     (
         input logic clk,
         input logic rst,
@@ -48,6 +52,41 @@ module taiga
         input logic interrupt
         );
 
+    ////////////////////////////////////////////////////
+    //Unit ID Assignment
+    //Generate Issue IDs based on configuration options
+    //Then assigned to a struct for ease in passing to sub modules
+
+    //Units with writeback
+    localparam int unsigned ALU_UNIT_ID = 32'd0;
+    localparam int unsigned LS_UNIT_ID = 32'd1;
+    localparam int unsigned GC_UNIT_ID = 32'd2;
+    localparam int unsigned MUL_UNIT_ID = GC_UNIT_ID + int'(CONFIG.INCLUDE_MUL);
+    localparam int unsigned DIV_UNIT_ID = MUL_UNIT_ID + int'(CONFIG.INCLUDE_DIV);
+    //Non-writeback units
+    localparam int unsigned BRANCH_UNIT_ID = DIV_UNIT_ID + 1;
+
+    //Total number of units
+    localparam int unsigned NUM_UNITS = BRANCH_UNIT_ID + 1; 
+
+    localparam unit_id_param_t UNIT_IDS = '{
+        ALU : ALU_UNIT_ID,
+        LS : LS_UNIT_ID,
+        CSR : GC_UNIT_ID,
+        MUL : MUL_UNIT_ID,
+        DIV : DIV_UNIT_ID,
+        BR : BRANCH_UNIT_ID
+    };
+
+    ////////////////////////////////////////////////////
+    //Writeback Port Assignment
+    //
+    localparam int unsigned NUM_WB_UNITS_GROUP_1 = 1;//ALU
+    localparam int unsigned NUM_WB_UNITS_GROUP_2 = 2 + int'(CONFIG.INCLUDE_MUL) + int'(CONFIG.INCLUDE_DIV);//LS + CSR
+    localparam int unsigned NUM_WB_UNITS = NUM_WB_UNITS_GROUP_1 + NUM_WB_UNITS_GROUP_2;
+
+    ////////////////////////////////////////////////////
+    //Connecting Signals
     l1_arbiter_request_interface l1_request[L1_CONNECTIONS-1:0]();
     l1_arbiter_return_interface l1_response[L1_CONNECTIONS-1:0]();
     logic sc_complete;
@@ -63,7 +102,7 @@ module taiga
     ras_interface ras();
 
     issue_packet_t issue;
-    register_file_issue_interface rf_issue();
+    register_file_issue_interface #(.NUM_WB_GROUPS(CONFIG.NUM_WB_GROUPS)) rf_issue();
 
 
     alu_inputs_t alu_inputs;
@@ -106,23 +145,19 @@ module taiga
     decode_packet_t decode;   
     logic decode_uses_rd;
     rs_addr_t decode_rd_addr;
-     phys_addr_t decode_phys_rd_addr;
-        //Branch predictor
-    id_t branch_id;
-    branch_metadata_t branch_metadata_if;
-    branch_metadata_t branch_metadata_ex;
+    phys_addr_t decode_phys_rd_addr;
         //ID freeing
     retire_packet_t retire;
     id_t retire_ids [RETIRE_PORTS];
     logic retire_port_valid [RETIRE_PORTS];
         //Writeback
-    wb_packet_t wb_packet [NUM_WB_GROUPS];
-    commit_packet_t commit_packet [NUM_WB_GROUPS];
+    wb_packet_t wb_packet [CONFIG.NUM_WB_GROUPS];
+    commit_packet_t commit_packet [CONFIG.NUM_WB_GROUPS];
          //Exception
     id_t exception_id;
     logic [31:0] exception_pc;
 
-    renamer_interface decode_rename_interface ();
+    renamer_interface #(.NUM_WB_GROUPS(CONFIG.NUM_WB_GROUPS)) decode_rename_interface ();
 
     //Global Control
     logic gc_init_clear;
@@ -181,18 +216,16 @@ module taiga
     logic tr_rs2_forwarding_needed;
     logic tr_rs1_and_rs2_forwarding_needed;
 
-    unit_id_t tr_num_instructions_completing;
-    id_t tr_num_instructions_in_flight;
-    id_t tr_num_of_instructions_pending_writeback;
     ////////////////////////////////////////////////////
     //Implementation
 
 
     ////////////////////////////////////////////////////
     // Memory Interface
-    generate if (ENABLE_S_MODE || USE_ICACHE || USE_DCACHE)
+    generate if (CONFIG.INCLUDE_S_MODE || CONFIG.INCLUDE_ICACHE || CONFIG.INCLUDE_DCACHE)
 
-        l1_arbiter arb(
+        l1_arbiter #(.CONFIG(CONFIG))
+        arb(
             .clk (clk),
             .rst (rst),
             .l2 (l2),
@@ -206,7 +239,8 @@ module taiga
 
     ////////////////////////////////////////////////////
     // ID support
-    instruction_metadata_and_id_management id_block (
+    instruction_metadata_and_id_management #(.CONFIG(CONFIG))
+    id_block (
         .clk (clk),
         .rst (rst),
         .gc_init_clear (gc_init_clear),
@@ -228,9 +262,6 @@ module taiga
         .issue (issue),
         .instruction_issued (instruction_issued),
         .instruction_issued_with_rd (instruction_issued_with_rd),
-        .branch_metadata_if (branch_metadata_if),
-        .branch_metadata_ex (branch_metadata_ex),
-        .branch_id (branch_id),
         .wb_packet (wb_packet),
         .commit_packet (commit_packet),
         .retire (retire),
@@ -243,14 +274,16 @@ module taiga
 
     ////////////////////////////////////////////////////
     // Fetch
-    fetch fetch_block (
+    fetch # (.CONFIG(CONFIG))
+    fetch_block (
         .clk (clk),
         .rst (rst),
         .branch_flush (branch_flush),
         .gc_fetch_hold (gc_fetch_hold),
         .gc_fetch_flush (gc_fetch_flush),
         .gc_fetch_pc_override (gc_fetch_pc_override),
-        .gc_fetch_pc (gc_fetch_pc),           
+        .gc_fetch_pc (gc_fetch_pc),
+        .pc_id (pc_id),
         .pc_id_available (pc_id_available),
         .pc_id_assigned (pc_id_assigned),
         .fetch_complete (fetch_complete),
@@ -271,16 +304,17 @@ module taiga
         .tr_early_branch_correction (tr_early_branch_correction)
     );
 
-    branch_predictor bp_block (       
-       .clk (clk),
-       .rst (rst),
-       .bp (bp),
-       .branch_metadata_if (branch_metadata_if),
-       .branch_metadata_ex (branch_metadata_ex),
-       .br_results (br_results)
+    branch_predictor #(.CONFIG(CONFIG))
+    bp_block (       
+        .clk (clk),
+        .rst (rst),
+        .bp (bp),
+        .br_results (br_results),
+        .ras (ras)
     );
 
-    ras ras_block(
+    ras # (.CONFIG(CONFIG))
+    ras_block(
         .clk (clk),
         .rst (rst),
         .gc_fetch_flush (gc_fetch_flush),
@@ -288,9 +322,10 @@ module taiga
         .ras (ras)
     );
 
-    generate if (ENABLE_S_MODE) begin
+    generate if (CONFIG.INCLUDE_S_MODE) begin
 
-        tlb_lut_ram #(ITLB_WAYS, ITLB_DEPTH) i_tlb (       
+        tlb_lut_ram #(.WAYS(CONFIG.ITLB.WAYS), .DEPTH(CONFIG.ITLB.DEPTH))
+        i_tlb (       
             .clk (clk),
             .rst (rst),
             .abort_request (gc_fetch_flush | early_branch_flush),
@@ -319,7 +354,8 @@ module taiga
 
     ////////////////////////////////////////////////////
     //Renamer
-    renamer renamer_block (
+    renamer #(.CONFIG(CONFIG)) 
+    renamer_block (
         .clk (clk),
         .rst (rst),
         .gc_init_clear (gc_init_clear),
@@ -332,7 +368,12 @@ module taiga
 
     ////////////////////////////////////////////////////
     //Decode/Issue
-    decode_and_issue decode_and_issue_block (
+    decode_and_issue #(
+        .CONFIG (CONFIG),
+        .NUM_UNITS (NUM_UNITS),
+        .UNIT_IDS (UNIT_IDS)
+        )
+    decode_and_issue_block (
         .clk (clk),
         .rst (rst),
         .pc_id_available (pc_id_available),
@@ -382,7 +423,8 @@ module taiga
 
     ////////////////////////////////////////////////////
     //Register File
-    register_file register_file_block (
+    register_file #(.CONFIG(CONFIG))
+    register_file_block (
         .clk (clk),
         .rst (rst),
         .gc_init_clear (gc_init_clear),
@@ -392,16 +434,14 @@ module taiga
 
     ////////////////////////////////////////////////////
     //Execution Units
-    branch_unit branch_unit_block ( 
+    branch_unit #(.CONFIG(CONFIG))
+    branch_unit_block ( 
         .clk (clk),
         .rst (rst),                                    
-        .issue (unit_issue[BRANCH_UNIT_ID]),
+        .issue (unit_issue[UNIT_IDS.BR]),
         .branch_inputs (branch_inputs),
         .br_results (br_results),
-        .ras (ras),
         .branch_flush (branch_flush),
-        .branch_id (branch_id),
-        .branch_metadata_ex (branch_metadata_ex),
         .potential_branch_exception (potential_branch_exception),
         .branch_exception_is_jump (branch_exception_is_jump),
         .br_exception (br_exception),
@@ -416,15 +456,16 @@ module taiga
         .clk (clk),
         .rst (rst),
         .alu_inputs (alu_inputs),
-        .issue (unit_issue[ALU_UNIT_ID]), 
-        .wb (unit_wb[ALU_UNIT_ID])
+        .issue (unit_issue[UNIT_IDS.ALU]), 
+        .wb (unit_wb[UNIT_IDS.ALU])
     );
 
-    load_store_unit load_store_unit_block (
+    load_store_unit #(.CONFIG(CONFIG))
+    load_store_unit_block (
         .clk (clk),
         .rst (rst),
         .ls_inputs (ls_inputs),
-        .issue (unit_issue[LS_UNIT_ID]),
+        .issue (unit_issue[UNIT_IDS.LS]),
         .dcache_on (1'b1), 
         .clear_reservation (1'b0), 
         .tlb (dtlb),  
@@ -445,12 +486,13 @@ module taiga
         .ls_is_idle (ls_is_idle),
         .ls_exception (ls_exception),
         .ls_exception_is_store (ls_exception_is_store),
-        .wb (unit_wb[LS_UNIT_ID]),
+        .wb (unit_wb[UNIT_IDS.LS]),
         .tr_load_conflict_delay (tr_load_conflict_delay)
     );
 
-    generate if (ENABLE_S_MODE) begin
-        tlb_lut_ram #(DTLB_WAYS, DTLB_DEPTH) d_tlb (       
+    generate if (CONFIG.INCLUDE_S_MODE) begin
+        tlb_lut_ram #(.WAYS(CONFIG.DTLB.WAYS), .DEPTH(CONFIG.DTLB.DEPTH))
+        d_tlb (       
             .clk (clk),
             .rst (rst),
             .abort_request (1'b0),
@@ -476,10 +518,11 @@ module taiga
     end
     endgenerate
 
-    gc_unit gc_unit_block (
+    gc_unit #(.CONFIG(CONFIG))
+    gc_unit_block (
         .clk (clk),
         .rst (rst),
-        .issue (unit_issue[GC_UNIT_ID]),
+        .issue (unit_issue[UNIT_IDS.CSR]),
         .gc_inputs (gc_inputs),
         .gc_flush_required (gc_flush_required),
         .branch_flush (branch_flush),
@@ -509,33 +552,41 @@ module taiga
         .gc_fetch_pc (gc_fetch_pc),
         .ls_is_idle (ls_is_idle),
         .post_issue_count (post_issue_count),
-        .wb (unit_wb[GC_UNIT_ID])
+        .wb (unit_wb[UNIT_IDS.CSR])
     );
 
-    generate if (USE_MUL)
+    generate if (CONFIG.INCLUDE_MUL)
         mul_unit mul_unit_block (.*,
             .clk (clk),
             .rst (rst),
             .mul_inputs (mul_inputs),
-            .issue (unit_issue[MUL_UNIT_ID]),
-            .wb (unit_wb[MUL_UNIT_ID])
+            .issue (unit_issue[UNIT_IDS.MUL]),
+            .wb (unit_wb[UNIT_IDS.MUL])
         );
     endgenerate
 
-    generate if (USE_DIV)
+    generate if (CONFIG.INCLUDE_DIV)
         div_unit div_unit_block (
             .clk (clk),
             .rst (rst),
             .gc_fetch_flush (gc_fetch_flush),
             .div_inputs (div_inputs),
-            .issue (unit_issue[DIV_UNIT_ID]), 
-            .wb (unit_wb[DIV_UNIT_ID])
+            .issue (unit_issue[UNIT_IDS.DIV]), 
+            .wb (unit_wb[UNIT_IDS.DIV])
         );
     endgenerate
 
     ////////////////////////////////////////////////////
     //Writeback
-    writeback writeback_block (
+    //First writeback port: ALU
+    //Second writeback port: LS, CSR, [MUL], [DIV]
+    localparam int unsigned NUM_UNITS_PER_PORT [CONFIG.NUM_WB_GROUPS] = '{NUM_WB_UNITS_GROUP_1, NUM_WB_UNITS_GROUP_2};
+    writeback #(
+        .CONFIG (CONFIG),
+        .NUM_UNITS (NUM_UNITS_PER_PORT),
+        .NUM_WB_UNITS (NUM_WB_UNITS)
+    )
+    writeback_block (
         .clk (clk),
         .rst (rst),
         .wb_packet (wb_packet),
@@ -587,9 +638,6 @@ module taiga
             tr.events.rs1_forwarding_needed <= tr_rs1_forwarding_needed;
             tr.events.rs2_forwarding_needed <= tr_rs2_forwarding_needed;
             tr.events.rs1_and_rs2_forwarding_needed <= tr_rs1_and_rs2_forwarding_needed;
-            tr.events.num_instructions_completing <= tr_num_instructions_completing;
-            tr.events.num_instructions_in_flight <= tr_num_instructions_in_flight;
-            tr.events.num_of_instructions_pending_writeback <= tr_num_of_instructions_pending_writeback;
             tr.instruction_pc_dec <= tr_instruction_pc_dec;
             tr.instruction_data_dec <= tr_instruction_data_dec;
         end

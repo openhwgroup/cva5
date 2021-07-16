@@ -124,7 +124,7 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
 
     //Priority is for loads over stores.
     //A store will be selected only if either no loads are ready, OR if the store queue is full and a store is ready
-    assign load_selected = lq_output_valid & ~store_conflict & ~(sq_full & sq_output_valid);
+    assign load_selected = lq_output_valid & ~store_conflict;// & ~(sq_full & sq_output_valid);
 
     assign lsq.transaction_ready = (lq_output_valid & ~store_conflict) | sq_output_valid;
     assign load_ack = lsq.accepted & load_selected;
@@ -150,7 +150,7 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
     ////////////////////////////////////////////////////
     //Trace Interface
     generate if (ENABLE_TRACE_INTERFACE) begin
-        assign tr_possible_load_conflict_delay = lq_output_valid & store_conflict;
+        assign tr_possible_load_conflict_delay = lq_output_valid & (store_conflict | (sq_full & sq_output_valid));
     end
     endgenerate
 

@@ -25,125 +25,201 @@ package taiga_config;
     ////////////////////////////////////////////////////
     //Vendor Selection
     localparam FPGA_VENDOR = "xilinx"; //xilinx or intel
-    ////////////////////////////////////////////////////
-    //Privileged ISA Options
-
-    //Enable Machine level privilege spec
-    localparam ENABLE_M_MODE = 1;
-    //Enable Supervisor level privilege spec
-    localparam ENABLE_S_MODE = 1;
-    //Enable User level privilege spec
-    localparam ENABLE_U_MODE = 1;
-
-    localparam MACHINE_IMPLEMENTATION_ID = 0;
-    localparam CPU_ID = 0;//32-bicd ..t value
-
-    //CSR counter width (33-64 bits): 48-bits --> 32 days @ 100MHz
-    localparam COUNTER_W = 33;
 
     ////////////////////////////////////////////////////
-    //ISA Options
-
-    //Multiply and Divide Inclusion
-    localparam USE_MUL = 1;
-    localparam USE_DIV = 1;
-
-    //Enable Atomic extension (cache operations only)
-    localparam USE_AMO = 0;
-
+    //CSR Options
+    typedef struct packed {
+        bit [31:0] MACHINE_IMPLEMENTATION_ID;
+        bit [31:0] CPU_ID;
+        bit [31:0] RESET_VEC; //PC value on reset
+        int unsigned  COUNTER_W; //CSR counter width (33-64 bits): 48-bits --> 32 days @ 100MHz
+    } csr_config_t;
 
     ////////////////////////////////////////////////////
-    //Memory Sources
-    //Must select at least one source for instruction and data interfaces
+    //Cache Options
+    //Size in bytes: (LINES * WAYS * LINE_W * 4)
+    //For optimal BRAM packing, LINES should not be less than 512
+    typedef struct packed {
+        int unsigned LINES;
+        int unsigned LINE_W;// In words
+        int unsigned WAYS;
+        bit USE_EXTERNAL_INVALIDATIONS;
+    } cache_config_t;
 
-    //Local memory
-    localparam USE_I_SCRATCH_MEM = 1;
-    localparam USE_D_SCRATCH_MEM = 1;
+    typedef struct packed {
+        int unsigned LINE_ADDR_W;
+        int unsigned SUB_LINE_ADDR_W;
+        int unsigned TAG_W;
+    } derived_cache_config_t;
 
-    //Peripheral bus
+    //Memory range [L, H]
+    //Address range is inclusive and must be aligned to its size
+    typedef struct packed {
+        bit [31:0] L;
+        bit [31:0] H;
+    } memory_config_t;
+
+    ////////////////////////////////////////////////////
+    //Branch Predictor Options
+    typedef struct packed {
+        int unsigned WAYS;
+        int unsigned ENTRIES;//min512
+        int unsigned RAS_ENTRIES;
+    } branch_predictor_config_t;
+
+    ////////////////////////////////////////////////////
+    //Bus Options
     typedef enum {
         AXI_BUS,
         AVALON_BUS,
         WISHBONE_BUS
-    } bus_type_t;
-
-    localparam USE_BUS = 1;
-    localparam bus_type_t BUS_TYPE = AXI_BUS;
-
-    //Caches
-    localparam USE_DCACHE = 0;
-    localparam USE_ICACHE = 0;
-
+    } peripheral_bus_type_t;
 
     ////////////////////////////////////////////////////
-    //Address space
-    localparam SCRATCH_ADDR_L = 32'h80000000;
-    localparam SCRATCH_ADDR_H = 32'h8001FFFF;
-    localparam SCRATCH_BIT_CHECK = 4;
+    //TLB Options
+    typedef struct packed {
+        int unsigned WAYS;
+        int unsigned DEPTH;
+    } tlb_config_t;
 
-    localparam MEMORY_ADDR_L = 32'h40000000;
-    localparam MEMORY_ADDR_H = 32'h4FFFFFFF;
-    localparam MEMORY_BIT_CHECK = 4;
+    typedef struct packed {
+        //ISA options
+        bit INCLUDE_M_MODE;
+        bit INCLUDE_S_MODE;
+        bit INCLUDE_U_MODE;
+        bit INCLUDE_MUL;
+        bit INCLUDE_DIV;
+        bit INCLUDE_AMO; //Enable Atomic extension (cache operations only)
+        csr_config_t CSRS;
+        //Memory Options
+        bit INCLUDE_ICACHE;
+        cache_config_t ICACHE;
+        memory_config_t ICACHE_ADDR;
+        tlb_config_t ITLB;
+        bit INCLUDE_DCACHE;
+        cache_config_t DCACHE;
+        memory_config_t DCACHE_ADDR;
+        tlb_config_t DTLB;
+        bit INCLUDE_ILOCAL_MEM;
+        memory_config_t ILOCAL_MEM_ADDR;
+        bit INCLUDE_DLOCAL_MEM;
+        memory_config_t DLOCAL_MEM_ADDR;
+        bit INCLUDE_PERIPHERAL_BUS;
+        memory_config_t PERIPHERAL_BUS_ADDR;
+        peripheral_bus_type_t PERIPHERAL_BUS_TYPE;
+        //Branch Predictor Options
+        bit INCLUDE_BRANCH_PREDICTOR;
+        branch_predictor_config_t BP;
+        //Writeback Options
+        int unsigned NUM_WB_GROUPS;
+    } cpu_config_t;
 
-    localparam BUS_ADDR_L = 32'h60000000;
-    localparam BUS_ADDR_H = 32'h6FFFFFFF;
-    localparam BUS_BIT_CHECK = 4;
+    //Function to generate derived cache parameters
+    //Tag width based off of memory size and cache parameters
+    function derived_cache_config_t get_derived_cache_params (input cpu_config_t cpu, input cache_config_t cache, input memory_config_t addr);
+        return '{
+            LINE_ADDR_W : $clog2(cache.LINES),
+            SUB_LINE_ADDR_W : $clog2(cache.LINE_W),
+            TAG_W : $clog2(64'(addr.H)-64'(addr.L)+1) - $clog2(cache.LINES) - $clog2(cache.LINE_W) - 2
+        };
+    endfunction
 
-    //PC address on reset
-    localparam bit[31:0] RESET_VEC = 32'h80000000;
+
+    localparam cpu_config_t EXAMPLE_CONFIG = '{
+        //ISA options
+        INCLUDE_M_MODE : 1,
+        INCLUDE_S_MODE : 1,
+        INCLUDE_U_MODE : 1,
+        INCLUDE_MUL : 1,
+        INCLUDE_DIV : 1,
+        INCLUDE_AMO : 0,
+        CSRS : '{
+            MACHINE_IMPLEMENTATION_ID : 0,
+            CPU_ID : 0,
+            RESET_VEC : 32'h80000000,
+            COUNTER_W : 33
+        },
+        //Memory Options
+        INCLUDE_ICACHE : 0,
+        ICACHE_ADDR : '{
+            L: 32'h40000000,
+            H: 32'h4FFFFFFF
+        },
+        ICACHE : '{
+            LINES : 512,
+            LINE_W : 4,
+            WAYS : 2,
+            USE_EXTERNAL_INVALIDATIONS : 0
+        },
+        ITLB : '{
+            WAYS : 2,
+            DEPTH : 64
+        },
+        INCLUDE_DCACHE : 0,
+        DCACHE_ADDR : '{
+            L: 32'h40000000,
+            H: 32'h4FFFFFFF
+        },
+        DCACHE : '{
+            LINES : 512,
+            LINE_W : 4,
+            WAYS : 2,
+            USE_EXTERNAL_INVALIDATIONS : 0
+        },
+        DTLB : '{
+            WAYS : 2,
+            DEPTH : 64
+        },
+        INCLUDE_ILOCAL_MEM : 1,
+        ILOCAL_MEM_ADDR : '{
+            L : 32'h80000000, 
+            H : 32'h8FFFFFFF
+        },
+        INCLUDE_DLOCAL_MEM : 1,
+        DLOCAL_MEM_ADDR : '{
+            L : 32'h80000000,
+            H : 32'h8FFFFFFF
+        },
+        INCLUDE_PERIPHERAL_BUS : 1,
+        PERIPHERAL_BUS_ADDR : '{
+            L : 32'h60000000,
+            H : 32'h6FFFFFFF
+        },
+        PERIPHERAL_BUS_TYPE : AXI_BUS,
+        //Branch Predictor Options
+        INCLUDE_BRANCH_PREDICTOR : 1,
+        BP : '{
+            WAYS : 2,
+            ENTRIES : 512,
+            RAS_ENTRIES : 8
+        },
+        NUM_WB_GROUPS : 2
+    };
+
+    ////////////////////////////////////////////////////
+    //Unit IDs
+    typedef struct packed {
+        int unsigned ALU;
+        int unsigned LS;
+        int unsigned CSR;
+        int unsigned MUL;
+        int unsigned DIV;
+        int unsigned BR;
+    } unit_id_param_t;
+
+    localparam unit_id_param_t EXAMPLE_UNIT_IDS = '{
+        ALU : 0,
+        LS : 1,
+        CSR : 2,
+        MUL : 3,
+        DIV : 4,
+        BR : 5
+    };
 
     ////////////////////////////////////////////////////
     //Bus Options
     parameter C_M_AXI_ADDR_WIDTH = 32; //Kept as parameter, due to localparam failing with scripted IP packaging
     parameter C_M_AXI_DATA_WIDTH = 32; //Kept as parameter, due to localparam failing with scripted IP packaging
-
-
-    ////////////////////////////////////////////////////
-    //Instruction Cache Options
-    //Size in bytes: (ICACHE_LINES * ICACHE_WAYS * ICACHE_LINE_W * 4)
-    //For optimal BRAM packing, lines should not be less than 512
-    localparam ICACHE_LINES = 512;
-    localparam ICACHE_WAYS = 2;
-    localparam ICACHE_LINE_ADDR_W = $clog2(ICACHE_LINES);
-    localparam ICACHE_LINE_W = 4; //In words
-    localparam ICACHE_SUB_LINE_ADDR_W = $clog2(ICACHE_LINE_W);
-    localparam ICACHE_TAG_W = $clog2(64'(MEMORY_ADDR_H)-64'(MEMORY_ADDR_L)+1) - ICACHE_LINE_ADDR_W - ICACHE_SUB_LINE_ADDR_W - 2;
-
-
-    ////////////////////////////////////////////////////
-    //Data Cache Options
-    //Size in bytes: (DCACHE_LINES * DCACHE_WAYS * DCACHE_LINE_W * 4)
-    //For optimal BRAM packing, lines should not be less than 512
-    localparam DCACHE_LINES = 512;
-    localparam DCACHE_WAYS = 2;
-    localparam DCACHE_LINE_ADDR_W = $clog2(DCACHE_LINES);
-    localparam DCACHE_LINE_W = 4; //In words
-    localparam DCACHE_SUB_LINE_ADDR_W = $clog2(DCACHE_LINE_W);
-    localparam DCACHE_TAG_W = $clog2(64'(MEMORY_ADDR_H)-64'(MEMORY_ADDR_L)+1) - DCACHE_LINE_ADDR_W - DCACHE_SUB_LINE_ADDR_W - 2;
-
-    localparam USE_DTAG_INVALIDATIONS = 0;
-
-
-    ////////////////////////////////////////////////////
-    //Instruction TLB Options
-    localparam ITLB_WAYS = 2;
-    localparam ITLB_DEPTH = 32;
-
-
-    ////////////////////////////////////////////////////
-    //Data TLB Options
-    localparam DTLB_WAYS = 2;
-    localparam DTLB_DEPTH = 32;
-    ///////////////////////////////////////////////////
-
-
-    ////////////////////////////////////////////////////
-    //Branch Predictor Options
-    localparam USE_BRANCH_PREDICTOR = 1;
-    localparam BRANCH_PREDICTOR_WAYS = 2;
-    localparam BRANCH_TABLE_ENTRIES = 512; //min 512
-    localparam RAS_DEPTH = 8;
-
 
     ////////////////////////////////////////////////////
     //ID limit
@@ -154,7 +230,7 @@ package taiga_config;
     //Number of commit ports
     localparam RETIRE_PORTS = 2; //min 1. (Non-powers of two supported) > 1 is recommended to allow stores to commit sooner
     localparam REGFILE_READ_PORTS = 2; //min 2, for RS1 and RS2. (Non-powers of two supported)
-    typedef enum logic {
+    typedef enum bit {
         RS1 = 0,
         RS2 = 1
     } rs1_index_t;
@@ -167,41 +243,13 @@ package taiga_config;
 
     ////////////////////////////////////////////////////
     //L1 Arbiter IDs
-    localparam L1_CONNECTIONS = 4;//USE_ICACHE + USE_DCACHE + ENABLE_S_MODE*2;
-    localparam L1_DCACHE_ID = 0;
-    localparam L1_DMMU_ID = 1;//ENABLE_S_MODE;
-    localparam L1_ICACHE_ID = 2;//ENABLE_S_MODE + USE_DCACHE;
-    localparam L1_IMMU_ID = 3;//ENABLE_S_MODE + USE_DCACHE + USE_ICACHE;
-
-    ////////////////////////////////////////////////////
-    //Write-Back Unit IDs
-    localparam NUM_WB_UNITS_GROUP_1 = 1;//ALU
-    localparam NUM_WB_UNITS_GROUP_2 = 2 + USE_MUL + USE_DIV;//LS + CSR
-    localparam NUM_WB_UNITS = NUM_WB_UNITS_GROUP_1 + NUM_WB_UNITS_GROUP_2;
-    localparam NUM_UNITS = NUM_WB_UNITS + 1;//Branch 
-
-    localparam NUM_WB_GROUPS = 2;
-    localparam int NUM_WB_UNITS_GROUP [2] = '{NUM_WB_UNITS_GROUP_1, NUM_WB_UNITS_GROUP_2};
-    localparam int CUMULATIVE_NUM_WB_UNITS_GROUP [2] = '{0, NUM_WB_UNITS_GROUP_1};
-
-    localparam ALU_UNIT_ID = 0;
-    localparam LS_UNIT_ID = 1;
-    localparam DIV_UNIT_ID = LS_UNIT_ID + USE_DIV;
-    localparam MUL_UNIT_ID = DIV_UNIT_ID + USE_MUL;
-    localparam GC_UNIT_ID = MUL_UNIT_ID + 1;
-    //Non-writeback units
-    localparam BRANCH_UNIT_ID = GC_UNIT_ID + 1;
-
-    //Writeback group 1
-    localparam ALU_UNIT_WB1_ID = 0;
-
-    //Writeback group 2
-    localparam LS_UNIT_WB2_ID = 0;
-    localparam DIV_UNIT_WB2_ID = LS_UNIT_WB2_ID + USE_DIV;
-    localparam MUL_UNIT_WB2_ID = DIV_UNIT_WB2_ID + USE_MUL;
-    localparam GC_UNIT_WB2_ID = MUL_UNIT_WB2_ID + 1;
-
-
+    localparam L1_CONNECTIONS = 4;
+    typedef enum bit [1:0] {
+        L1_DCACHE_ID = 0,
+        L1_DMMU_ID = 1,
+        L1_ICACHE_ID = 2,
+        L1_IMMU_ID = 3
+    } l1_id_t;
 
     ////////////////////////////////////////////////////
     //Debug Parameters

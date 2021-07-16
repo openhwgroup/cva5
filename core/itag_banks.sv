@@ -25,6 +25,11 @@ module itag_banks
     import taiga_config::*;
     import taiga_types::*;
 
+    # (
+        parameter cpu_config_t CONFIG = EXAMPLE_CONFIG,
+        parameter derived_cache_config_t SCONFIG = '{default: 0}
+    )
+
     (
         input logic clk,
         input logic rst,
@@ -32,27 +37,27 @@ module itag_banks
         input logic[31:0] stage1_addr,
         input logic[31:0] stage2_addr,
 
-        input logic[ICACHE_WAYS-1:0] update_way,
+        input logic[CONFIG.ICACHE.WAYS-1:0] update_way,
         input logic update,
 
         input logic stage1_adv,
 
         output tag_hit,
-        output logic[ICACHE_WAYS-1:0] tag_hit_way
+        output logic[CONFIG.ICACHE.WAYS-1:0] tag_hit_way
         );
 
-    typedef logic [ICACHE_TAG_W : 0] itag_entry_t;
+    typedef logic [SCONFIG.TAG_W : 0] itag_entry_t;
 
-    function logic[ICACHE_TAG_W-1:0] getTag(logic[31:0] addr);
-        return addr[2+ICACHE_SUB_LINE_ADDR_W+ICACHE_LINE_ADDR_W +: ICACHE_TAG_W];
+    function logic[SCONFIG.TAG_W-1:0] getTag(logic[31:0] addr);
+        return addr[2+SCONFIG.SUB_LINE_ADDR_W+SCONFIG.LINE_ADDR_W +: SCONFIG.TAG_W];
     endfunction
 
-    function logic[ICACHE_LINE_ADDR_W-1:0] getLineAddr(logic[31:0] addr);
-        return addr[ICACHE_LINE_ADDR_W + ICACHE_SUB_LINE_ADDR_W + 1 : ICACHE_SUB_LINE_ADDR_W + 2];
+    function logic[SCONFIG.LINE_ADDR_W-1:0] getLineAddr(logic[31:0] addr);
+        return addr[SCONFIG.LINE_ADDR_W + SCONFIG.SUB_LINE_ADDR_W + 1 : SCONFIG.SUB_LINE_ADDR_W + 2];
     endfunction
 
     logic hit_allowed;
-    itag_entry_t  tag_line[ICACHE_WAYS-1:0];
+    itag_entry_t  tag_line[CONFIG.ICACHE.WAYS-1:0];
 
     itag_entry_t stage2_tag;
     assign stage2_tag = {1'b1, getTag(stage2_addr)};
@@ -67,9 +72,9 @@ module itag_banks
 
     genvar i;
     generate
-        for (i=0; i < ICACHE_WAYS; i++) begin : tag_bank_gen
+        for (i=0; i < CONFIG.ICACHE.WAYS; i++) begin : tag_bank_gen
 
-            tag_bank #(ICACHE_TAG_W+1, ICACHE_LINES) itag_bank (.*,
+            tag_bank #(SCONFIG.TAG_W+1, CONFIG.ICACHE.LINES) itag_bank (.*,
                     .en_a(stage1_adv), .wen_a('0),
                     .addr_a(getLineAddr(stage1_addr)),
                     .data_in_a('0), .data_out_a(tag_line[i]),

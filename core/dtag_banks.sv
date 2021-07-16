@@ -25,6 +25,11 @@ module dtag_banks
     import taiga_config::*;
     import taiga_types::*;
 
+    # (
+        parameter cpu_config_t CONFIG = EXAMPLE_CONFIG,
+        parameter derived_cache_config_t SCONFIG = '{default: 0}
+    )
+
     (
         input logic clk,
         input logic rst,
@@ -33,7 +38,7 @@ module dtag_banks
         input logic[31:0] stage2_addr,
         input logic[31:0] inv_addr,
 
-        input logic[DCACHE_WAYS-1:0] update_way,
+        input logic[CONFIG.DCACHE.WAYS-1:0] update_way,
         input logic update,
 
         input logic stage1_adv,
@@ -43,36 +48,36 @@ module dtag_banks
         output logic extern_inv_complete,
 
         output tag_hit,
-        output logic[DCACHE_WAYS-1:0] tag_hit_way
+        output logic[CONFIG.DCACHE.WAYS-1:0] tag_hit_way
         );
 
     typedef struct packed{
         logic valid;
-        logic [DCACHE_TAG_W-1:0] tag;
+        logic [SCONFIG.TAG_W-1:0] tag;
     } dtag_entry_t;
 
-    function logic[DCACHE_TAG_W-1:0] getTag(logic[31:0] addr);
-        return addr[2+DCACHE_SUB_LINE_ADDR_W+DCACHE_LINE_ADDR_W +: DCACHE_TAG_W];
+    function logic[SCONFIG.TAG_W-1:0] getTag(logic[31:0] addr);
+        return addr[2+SCONFIG.SUB_LINE_ADDR_W+SCONFIG.LINE_ADDR_W +: SCONFIG.TAG_W];
     endfunction
 
-    function logic[DCACHE_LINE_ADDR_W-1:0] getLineAddr(logic[31:0] addr);
-        return addr[DCACHE_LINE_ADDR_W + DCACHE_SUB_LINE_ADDR_W + 1 : DCACHE_SUB_LINE_ADDR_W + 2];
+    function logic[SCONFIG.LINE_ADDR_W-1:0] getLineAddr(logic[31:0] addr);
+        return addr[SCONFIG.LINE_ADDR_W + SCONFIG.SUB_LINE_ADDR_W + 1 : SCONFIG.SUB_LINE_ADDR_W + 2];
     endfunction
 
-    dtag_entry_t  tag_line [DCACHE_WAYS - 1:0];
-    dtag_entry_t  inv_tag_line [DCACHE_WAYS - 1:0];
+    dtag_entry_t  tag_line [CONFIG.DCACHE.WAYS - 1:0];
+    dtag_entry_t  inv_tag_line [CONFIG.DCACHE.WAYS - 1:0];
 
     dtag_entry_t new_tagline;
 
     logic miss_or_extern_invalidate;
-    logic [DCACHE_WAYS - 1:0] update_tag_way;
+    logic [CONFIG.DCACHE.WAYS - 1:0] update_tag_way;
 
     logic inv_tags_accessed;
 
-    logic[DCACHE_WAYS-1:0] inv_hit_way;
-    logic[DCACHE_WAYS-1:0] inv_hit_way_r;
+    logic[CONFIG.DCACHE.WAYS-1:0] inv_hit_way;
+    logic[CONFIG.DCACHE.WAYS-1:0] inv_hit_way_r;
 
-    logic [DCACHE_LINE_ADDR_W-1:0] update_port_addr;
+    logic [SCONFIG.LINE_ADDR_W-1:0] update_port_addr;
     ////////////////////////////////////////////////////
     //Implementation
 
@@ -106,10 +111,10 @@ module dtag_banks
     	assign inv_hit_comparison_tagline.valid = 1;
         assign inv_hit_comparison_tagline.tag = getTag(inv_addr);
 
-        for (i=0; i < DCACHE_WAYS; i=i+1) begin : dtag_bank_gen
+        for (i=0; i < CONFIG.DCACHE.WAYS; i=i+1) begin : dtag_bank_gen
             assign update_tag_way[i] = update_way[i] | (inv_hit_way[i] & extern_inv_complete);
 
-            tag_bank #($bits(dtag_entry_t), DCACHE_LINES) dtag_bank ( 
+            tag_bank #($bits(dtag_entry_t), CONFIG.DCACHE.LINES) dtag_bank ( 
                 .clk            (clk),
                 .rst            (rst),
                 .en_a           (stage1_adv), 

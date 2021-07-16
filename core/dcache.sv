@@ -25,7 +25,11 @@ module dcache
     import taiga_config::*;
     import riscv_types::*;
     import taiga_types::*;
-    
+
+    # (
+        parameter cpu_config_t CONFIG = EXAMPLE_CONFIG
+    )
+
     (
         input logic clk,
         input logic rst,
@@ -43,26 +47,27 @@ module dcache
         ls_sub_unit_interface.sub_unit ls
     );
 
-    localparam DCACHE_SIZE_IN_WORDS = DCACHE_LINES*DCACHE_LINE_W*DCACHE_WAYS;
+    localparam DCACHE_SIZE_IN_WORDS = CONFIG.DCACHE.LINES*CONFIG.DCACHE.LINE_W*CONFIG.DCACHE.WAYS;
+    localparam derived_cache_config_t SCONFIG = get_derived_cache_params(CONFIG, CONFIG.DCACHE, CONFIG.DCACHE_ADDR);
 
     logic [$clog2(DCACHE_SIZE_IN_WORDS)-1:0] data_bank_addr_a;
     logic [$clog2(DCACHE_SIZE_IN_WORDS)-1:0] data_bank_addr_b;
 
     logic tag_hit;
-    logic [DCACHE_WAYS-1:0] tag_hit_way;
+    logic [CONFIG.DCACHE.WAYS-1:0] tag_hit_way;
 
-    logic [$clog2(DCACHE_WAYS)-1:0] tag_hit_way_int;
+    logic [$clog2(CONFIG.DCACHE.WAYS)-1:0] tag_hit_way_int;
 
     logic tag_update;
-    logic [DCACHE_WAYS-1:0] tag_update_way;
-    logic [DCACHE_WAYS-1:0] replacement_way;
+    logic [CONFIG.DCACHE.WAYS-1:0] tag_update_way;
+    logic [CONFIG.DCACHE.WAYS-1:0] replacement_way;
 
-    logic [$clog2(DCACHE_WAYS)-1:0] replacement_way_int;
-    logic [$clog2(DCACHE_WAYS)-1:0] tag_update_way_int;
+    logic [$clog2(CONFIG.DCACHE.WAYS)-1:0] replacement_way_int;
+    logic [$clog2(CONFIG.DCACHE.WAYS)-1:0] tag_update_way_int;
 
-    logic [DCACHE_SUB_LINE_ADDR_W-1:0] word_count;
-    logic [DCACHE_SUB_LINE_ADDR_W-1:0] sc_write_index;
-    logic [DCACHE_SUB_LINE_ADDR_W-1:0] update_word_index;
+    logic [SCONFIG.SUB_LINE_ADDR_W-1:0] word_count;
+    logic [SCONFIG.SUB_LINE_ADDR_W-1:0] sc_write_index;
+    logic [SCONFIG.SUB_LINE_ADDR_W-1:0] update_word_index;
 
     logic line_complete;
     logic reservation;
@@ -148,7 +153,7 @@ module dcache
     assign l1_request.data = stage2_data;
     assign l1_request.rnw = ~stage2_store;
     assign l1_request.be = stage2_be;
-    assign l1_request.size = stage2_load ? (DCACHE_LINE_W-1) : 0;//LR and AMO ops are included in load
+    assign l1_request.size = stage2_load ? 5'(CONFIG.DCACHE.LINE_W-1) : 0;//LR and AMO ops are included in load
     assign l1_request.is_amo = (stage2_amo.is_amo | stage2_amo.is_lr | stage2_amo.is_sc);
     assign l1_request.amo = stage2_amo.op;
 
@@ -158,7 +163,7 @@ module dcache
         else if (l1_response.data_valid)
             word_count <= word_count + 1;
     end
-    assign is_target_word = (stage2_addr[DCACHE_SUB_LINE_ADDR_W+1:2] == word_count);
+    assign is_target_word = (stage2_addr[SCONFIG.SUB_LINE_ADDR_W+1:2] == word_count);
 
     assign new_arb_request = second_cycle & (~(tag_hit & read_hit_allowed) | ~dcache_on);
     always_ff @ (posedge clk) begin
@@ -173,7 +178,7 @@ module dcache
 
     ////////////////////////////////////////////////////
     //Replacement policy (free runing one-hot cycler, i.e. pseudo random)
-    cycler #(DCACHE_WAYS) replacement_policy (
+    cycler #(CONFIG.DCACHE.WAYS) replacement_policy (
         .clk        (clk),
         .rst        (rst),
         .en         (1'b1), 
@@ -181,13 +186,13 @@ module dcache
     );
 
     //One-hot tag hit / update logic to binary int
-    one_hot_to_integer #(DCACHE_WAYS) hit_way_conv (
+    one_hot_to_integer #(CONFIG.DCACHE.WAYS) hit_way_conv (
         .clk        (clk),
         .rst        (rst), 
         .one_hot(tag_hit_way), 
         .int_out(tag_hit_way_int)
     );
-    one_hot_to_integer #(DCACHE_WAYS) update_way_conv (
+    one_hot_to_integer #(CONFIG.DCACHE.WAYS) update_way_conv (
         .clk        (clk),
         .rst        (rst), 
         .one_hot    (replacement_way), 
@@ -207,20 +212,21 @@ module dcache
 
     ////////////////////////////////////////////////////
     //Tag banks
-    dtag_banks dcache_tag_banks (
-        .clk                    (clk),
-        .rst                    (rst),
-        .stage1_addr            (ls_inputs.addr),
-        .stage2_addr            (stage2_addr),
-        .inv_addr               ({l1_response.inv_addr, 2'b00}),
-        .update_way             (tag_update_way),
-        .update                 (tag_update),
-        .stage1_adv             (ls.new_request),
-        .stage1_inv             (1'b0),//For software invalidation
-        .extern_inv             (l1_response.inv_valid),
-        .extern_inv_complete    (l1_response.inv_ack),
-        .tag_hit                (tag_hit),
-        .tag_hit_way            (tag_hit_way)
+    dtag_banks #(.CONFIG(CONFIG), .SCONFIG(SCONFIG))
+    dcache_tag_banks (
+        .clk (clk),
+        .rst (rst),
+        .stage1_addr (ls_inputs.addr),
+        .stage2_addr (stage2_addr),
+        .inv_addr ({l1_response.inv_addr, 2'b00}),
+        .update_way (tag_update_way),
+        .update (tag_update),
+        .stage1_adv (ls.new_request),
+        .stage1_inv (1'b0),//For software invalidation
+        .extern_inv (l1_response.inv_valid),
+        .extern_inv_complete (l1_response.inv_ack),
+        .tag_hit (tag_hit),
+        .tag_hit_way (tag_hit_way)
     );
 
     ////////////////////////////////////////////////////
@@ -233,10 +239,10 @@ module dcache
     assign amo_alu_inputs.rs2 = amo_rs2;
     assign amo_alu_inputs.op = stage2_amo.op;
 
-    generate if (USE_AMO)
+    generate if (CONFIG.INCLUDE_AMO)
         amo_alu amo_unit (
             .amo_alu_inputs (amo_alu_inputs), 
-            .result         (amo_result)
+            .result (amo_result)
         );
     endgenerate
 
@@ -249,7 +255,7 @@ module dcache
             new_line_data = l1_response.data;
     end
 
-    assign sc_write_index = stage2_addr[DCACHE_SUB_LINE_ADDR_W+1:2];
+    assign sc_write_index = stage2_addr[SCONFIG.SUB_LINE_ADDR_W+1:2];
 
 
     ////////////////////////////////////////////////////
@@ -259,8 +265,8 @@ module dcache
     assign write_hit_be = stage2_be & {4{tag_hit}};
     assign update_word_index = stage2_amo.is_sc ? sc_write_index : word_count;
 
-    assign data_bank_addr_a = {tag_hit_way_int, stage2_addr[DCACHE_LINE_ADDR_W+DCACHE_SUB_LINE_ADDR_W+2-1:2]};
-    assign data_bank_addr_b = {tag_update_way_int, stage2_addr[DCACHE_LINE_ADDR_W+DCACHE_SUB_LINE_ADDR_W+2-1:DCACHE_SUB_LINE_ADDR_W+2], update_word_index};
+    assign data_bank_addr_a = {tag_hit_way_int, stage2_addr[SCONFIG.LINE_ADDR_W+SCONFIG.SUB_LINE_ADDR_W+2-1:2]};
+    assign data_bank_addr_b = {tag_update_way_int, stage2_addr[SCONFIG.LINE_ADDR_W+SCONFIG.SUB_LINE_ADDR_W+2-1:SCONFIG.SUB_LINE_ADDR_W+2], update_word_index};
 
     ddata_bank #(.LINES(DCACHE_SIZE_IN_WORDS)) data_bank (
             .clk(clk),
@@ -287,7 +293,7 @@ module dcache
 
     ////////////////////////////////////////////////////
     //Pipeline Advancement
-    assign line_complete = (l1_response.data_valid && (word_count == $clog2(DCACHE_LINE_W)'(DCACHE_LINE_W-1))); //covers load, LR, AMO
+    assign line_complete = (l1_response.data_valid && (word_count == $clog2(CONFIG.DCACHE.LINE_W)'(CONFIG.DCACHE.LINE_W-1))); //covers load, LR, AMO
     assign store_complete = l1_request.ack & stage2_store & ~stage2_amo.is_sc;
 
     //read miss complete includes store conditional complete

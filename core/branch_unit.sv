@@ -26,6 +26,10 @@ module branch_unit
     import riscv_types::*;
     import taiga_types::*;
 
+    # (
+        parameter cpu_config_t CONFIG = EXAMPLE_CONFIG
+    )
+
     (
         input logic clk,
         input logic rst,
@@ -33,11 +37,7 @@ module branch_unit
         unit_issue_interface.unit issue,
         input branch_inputs_t branch_inputs,
         output branch_results_t br_results,
-        ras_interface.branch_unit ras,
         output logic branch_flush,
-
-        output id_t branch_id,
-        input branch_metadata_t branch_metadata_ex,
 
         output logic potential_branch_exception,
         output logic branch_exception_is_jump,
@@ -115,7 +115,7 @@ module branch_unit
     //Exception support
     id_t jmp_id;
 
-    generate if (ENABLE_M_MODE) begin
+    generate if (CONFIG.INCLUDE_M_MODE) begin
         always_ff @(posedge clk) begin
             if (issue.possible_issue) begin
                 jmp_id <= issue.id;
@@ -132,15 +132,6 @@ module branch_unit
     endgenerate
 
     ////////////////////////////////////////////////////
-    //ID Management
-    assign branch_complete = instruction_is_completing & (~jal_jalr_ex) & (~br_exception.valid);
-    assign branch_id = id_ex;
-
-    ////////////////////////////////////////////////////
-    //RAS support
-    assign ras.branch_retired = branch_complete & branch_metadata_ex.branch_prediction_used;
-
-    ////////////////////////////////////////////////////
     //Predictor support
     logic is_return;
     logic is_call;
@@ -152,13 +143,14 @@ module branch_unit
         end
     end
 
-    assign br_results.pc_ex = pc_ex;
-    assign br_results.new_pc = new_pc_ex;
+    assign br_results.id = id_ex;
+    assign br_results.valid = instruction_is_completing;
+    assign br_results.pc = pc_ex;
+    assign br_results.target_pc = new_pc_ex;
     assign br_results.branch_taken = branch_taken_ex;
-    assign br_results.branch_ex = instruction_is_completing;
-    assign br_results.is_branch_ex = ~jal_jalr_ex;
-    assign br_results.is_return_ex = is_return;
-    assign br_results.is_call_ex = is_call;
+    assign br_results.is_branch = ~jal_jalr_ex;
+    assign br_results.is_return = is_return;
+    assign br_results.is_call = is_call;
 
     assign branch_flush = instruction_is_completing && (branch_inputs.issue_pc[31:1] != new_pc_ex[31:1]);
 

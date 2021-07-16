@@ -26,6 +26,10 @@ module load_store_unit
     import riscv_types::*;
     import taiga_types::*;
 
+    # (
+        parameter cpu_config_t CONFIG = EXAMPLE_CONFIG
+    )
+
     (
         input logic clk,
         input logic rst,
@@ -69,20 +73,20 @@ module load_store_unit
         output logic tr_load_conflict_delay
     );
 
-    localparam NUM_SUB_UNITS = USE_D_SCRATCH_MEM+USE_BUS+USE_DCACHE;
+    localparam NUM_SUB_UNITS = int'(CONFIG.INCLUDE_DLOCAL_MEM) + int'(CONFIG.INCLUDE_PERIPHERAL_BUS) + int'(CONFIG.INCLUDE_DCACHE);
     localparam NUM_SUB_UNITS_W = (NUM_SUB_UNITS == 1) ? 1 : $clog2(NUM_SUB_UNITS);
 
     localparam BRAM_ID = 0;
-    localparam BUS_ID = USE_D_SCRATCH_MEM;
-    localparam DCACHE_ID = USE_D_SCRATCH_MEM+USE_BUS;
+    localparam BUS_ID = int'(CONFIG.INCLUDE_DLOCAL_MEM);
+    localparam DCACHE_ID = int'(CONFIG.INCLUDE_DLOCAL_MEM) + int'(CONFIG.INCLUDE_PERIPHERAL_BUS);
 
     //Should be equal to pipeline depth of longest load/store subunit 
-    localparam ATTRIBUTES_DEPTH = USE_DCACHE ? 2 : 1;
+    localparam ATTRIBUTES_DEPTH = CONFIG.INCLUDE_DCACHE ? 2 : 1;
 
     data_access_shared_inputs_t shared_inputs;
-    ls_sub_unit_interface #(.BASE_ADDR(SCRATCH_ADDR_L), .UPPER_BOUND(SCRATCH_ADDR_H), .BIT_CHECK(SCRATCH_BIT_CHECK)) bram();
-    ls_sub_unit_interface #(.BASE_ADDR(BUS_ADDR_L), .UPPER_BOUND(BUS_ADDR_H), .BIT_CHECK(BUS_BIT_CHECK)) bus();
-    ls_sub_unit_interface #(.BASE_ADDR(MEMORY_ADDR_L), .UPPER_BOUND(MEMORY_ADDR_H), .BIT_CHECK(MEMORY_BIT_CHECK)) cache();
+    ls_sub_unit_interface #(.BASE_ADDR(CONFIG.DLOCAL_MEM_ADDR.L), .UPPER_BOUND(CONFIG.DLOCAL_MEM_ADDR.H)) bram();
+    ls_sub_unit_interface #(.BASE_ADDR(CONFIG.PERIPHERAL_BUS_ADDR.L), .UPPER_BOUND(CONFIG.PERIPHERAL_BUS_ADDR.H)) bus();
+    ls_sub_unit_interface #(.BASE_ADDR(CONFIG.DCACHE_ADDR.L), .UPPER_BOUND(CONFIG.DCACHE_ADDR.H)) cache();
 
     logic units_ready;
     logic unit_switch_stall;
@@ -129,7 +133,7 @@ module load_store_unit
 
     ////////////////////////////////////////////////////
     //Alignment Exception
-generate if (ENABLE_M_MODE) begin
+generate if (CONFIG.INCLUDE_M_MODE) begin
 
     always_comb begin
         case(ls_inputs.fn3)
@@ -261,7 +265,7 @@ endgenerate
 
     ////////////////////////////////////////////////////
     //Unit Instantiation
-    generate if (USE_D_SCRATCH_MEM) begin
+    generate if (CONFIG.INCLUDE_DLOCAL_MEM) begin
             assign sub_unit_address_match[BRAM_ID] = bram.address_range_check(shared_inputs.addr);
             assign bram.new_request = sub_unit_address_match[BRAM_ID] & issue_request;
 
@@ -279,14 +283,14 @@ endgenerate
         end
     endgenerate
 
-    generate if (USE_BUS) begin
+    generate if (CONFIG.INCLUDE_PERIPHERAL_BUS) begin
             assign sub_unit_address_match[BUS_ID] = bus.address_range_check(shared_inputs.addr);
             assign bus.new_request = sub_unit_address_match[BUS_ID] & issue_request;
 
             assign unit_ready[BUS_ID] = bus.ready;
             assign unit_data_valid[BUS_ID] = bus.data_valid;
 
-            if(BUS_TYPE == AXI_BUS)
+            if(CONFIG.PERIPHERAL_BUS_TYPE == AXI_BUS)
                 axi_master axi_bus (
                     .clk            (clk),
                     .rst            (rst),
@@ -297,7 +301,7 @@ endgenerate
                     .ls             (bus)
                 ); //Lower two bits of fn3 match AXI specification for request size (byte/halfword/word)
 
-            else if (BUS_TYPE == WISHBONE_BUS)
+            else if (CONFIG.PERIPHERAL_BUS_TYPE == WISHBONE_BUS)
                 wishbone_master wishbone_bus (
                     .clk            (clk),
                     .rst            (rst),
@@ -306,7 +310,7 @@ endgenerate
                     .ls_inputs      (shared_inputs), 
                     .ls             (bus) 
                 );
-            else if (BUS_TYPE == AVALON_BUS)  begin
+            else if (CONFIG.PERIPHERAL_BUS_TYPE == AVALON_BUS)  begin
                 avalon_master avalon_bus (
                     .clk            (clk),
                     .rst            (rst),
@@ -319,14 +323,15 @@ endgenerate
         end
     endgenerate
 
-    generate if (USE_DCACHE) begin
+    generate if (CONFIG.INCLUDE_DCACHE) begin
             assign sub_unit_address_match[DCACHE_ID] = cache.address_range_check(shared_inputs.addr);
             assign cache.new_request = sub_unit_address_match[DCACHE_ID] & issue_request;
 
             assign unit_ready[DCACHE_ID] = cache.ready;
             assign unit_data_valid[DCACHE_ID] = cache.data_valid;
 
-            dcache data_cache (
+            dcache # (.CONFIG(CONFIG))
+            data_cache (
                 .clk                    (clk),
                 .rst                    (rst),
                 .dcache_on              (dcache_on),

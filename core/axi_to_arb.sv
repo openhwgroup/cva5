@@ -85,7 +85,7 @@ module axi_to_arb
     logic address_phase_complete;
     logic [31:0] amo_result;
     logic [31:0] amo_result_r;
-    logic [DCACHE_SUB_LINE_ADDR_W-1:0] read_count;
+    logic [$clog2(EXAMPLE_CONFIG.DCACHE.LINE_W)-1:0] read_count;
     logic amo_write_ready;
     logic[4:0] write_reference_burst_count;
 
@@ -141,7 +141,7 @@ module axi_to_arb
     //TODO:  assumption that all data caches have same line size, would have to update wrt the burst size to be safe if they have different line lengths
     //also update araddr
     always_ff @ (posedge clk) begin
-        if (axi_rvalid && (read_count == l2.addr[DCACHE_SUB_LINE_ADDR_W-1:0]))
+        if (axi_rvalid && (read_count == l2.addr[$clog2(EXAMPLE_CONFIG.DCACHE.LINE_W)-1:0]))
             amo_result_r <= amo_result;
     end
 
@@ -150,7 +150,7 @@ module axi_to_arb
             amo_write_ready <= 0;
         else if (pop)
             amo_write_ready <= 0;
-        else if (l2.is_amo && axi_rvalid && read_count == l2.addr[DCACHE_SUB_LINE_ADDR_W-1:0])
+        else if (l2.is_amo && axi_rvalid && read_count == l2.addr[$clog2(EXAMPLE_CONFIG.DCACHE.LINE_W)-1:0])
             amo_write_ready <= 1;
     end
     //End AMO
@@ -166,7 +166,7 @@ module axi_to_arb
     assign axi_arprot = '0;
     assign axi_arid = 6'(l2.id);
 
-    assign axi_araddr ={l2.addr[29:DCACHE_SUB_LINE_ADDR_W],  {DCACHE_SUB_LINE_ADDR_W{1'b0}}, 2'b00};
+    assign axi_araddr ={l2.addr[29:$clog2(EXAMPLE_CONFIG.DCACHE.LINE_W)],  {$clog2(EXAMPLE_CONFIG.DCACHE.LINE_W){1'b0}}, 2'b00};
 
     assign write_reference_burst_count = read_modify_write ? 0 : burst_count;
 

@@ -25,17 +25,13 @@ package taiga_types;
     import riscv_types::*;
 
     localparam LOG2_RETIRE_PORTS = $clog2(RETIRE_PORTS);
-    localparam WB_UNITS_WIDTH = $clog2(NUM_WB_UNITS);
-    localparam LOG2_COMMIT_PORTS = $clog2(NUM_WB_GROUPS);
     localparam LOG2_MAX_IDS = $clog2(MAX_IDS);
 
     typedef logic[LOG2_MAX_IDS-1:0] id_t;
-    typedef logic[WB_UNITS_WIDTH-1:0] unit_id_t;
     typedef logic[1:0] branch_predictor_metadata_t;
 
     typedef logic [3:0] addr_hash_t;
     typedef logic [5:0] phys_addr_t;
-    typedef logic [$clog2(NUM_WB_GROUPS)-1:0] rs_wb_group_t;
 
     typedef enum logic [1:0] {
         ALU_CONSTANT = 2'b00,
@@ -57,12 +53,6 @@ package taiga_types;
         logic [31:0] tval;
         id_t id;
     } exception_packet_t;
-
-    typedef struct packed{
-        branch_predictor_metadata_t branch_predictor_metadata;
-        logic branch_prediction_used;
-        logic [BRANCH_PREDICTOR_WAYS-1:0] branch_predictor_update_way;
-    } branch_metadata_t;
 
     typedef enum logic {
         FETCH_ACCESS_FAULT = 1'b0,
@@ -90,15 +80,14 @@ package taiga_types;
 
         rs_addr_t [REGFILE_READ_PORTS-1:0] rs_addr;
         phys_addr_t [REGFILE_READ_PORTS-1:0] phys_rs_addr;
-        rs_wb_group_t [REGFILE_READ_PORTS-1:0] rs_wb_group;
 
         rs_addr_t rd_addr;
         phys_addr_t phys_rd_addr;
-        rs_wb_group_t rd_wb_group;
 
         logic uses_rs1;
         logic uses_rs2;
         logic uses_rd;
+        logic is_multicycle;
         id_t id;
         logic stage_valid;
         fetch_metadata_t fetch_metadata;
@@ -133,13 +122,14 @@ package taiga_types;
     } branch_inputs_t;
 
     typedef struct packed {
-        logic[31:0] pc_ex;
-        logic [31:0] new_pc;
+        id_t id;
+        logic valid;
+        logic [31:0] pc;
+        logic [31:0] target_pc;
         logic branch_taken;
-        logic branch_ex;
-        logic is_branch_ex;
-        logic is_return_ex;
-        logic is_call_ex;
+        logic is_branch;
+        logic is_return;
+        logic is_call;
     } branch_results_t;
 
     typedef struct packed{
@@ -314,10 +304,6 @@ package taiga_types;
         logic rs2_forwarding_needed;
         logic rs1_and_rs2_forwarding_needed;
 
-        //Writeback
-        unit_id_t num_instructions_completing;
-        id_t num_instructions_in_flight;
-        id_t num_of_instructions_pending_writeback;
     } taiga_trace_events_t;
 
     typedef struct packed {

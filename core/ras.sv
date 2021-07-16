@@ -26,6 +26,10 @@ module ras
     import riscv_types::*;
     import taiga_types::*;
 
+    # (
+        parameter cpu_config_t CONFIG = EXAMPLE_CONFIG
+    )
+
     (
         input logic clk,
         input logic rst,
@@ -34,9 +38,9 @@ module ras
         ras_interface.self ras
     );
 
-    (* ramstyle = "MLAB, no_rw_check" *) logic[31:0] lut_ram [RAS_DEPTH];
+    (* ramstyle = "MLAB, no_rw_check" *) logic[31:0] lut_ram [CONFIG.BP.RAS_ENTRIES];
 
-    localparam RAS_DEPTH_W = $clog2(RAS_DEPTH);
+    localparam RAS_DEPTH_W = $clog2(CONFIG.BP.RAS_ENTRIES);
     logic [RAS_DEPTH_W-1:0] read_index;
     logic [RAS_DEPTH_W-1:0] new_index;
     fifo_interface #(.DATA_WIDTH(RAS_DEPTH_W)) ri_fifo();

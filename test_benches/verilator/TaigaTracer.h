@@ -68,10 +68,7 @@ static const char * const eventNames[] = {
     "load_conflict_delay",
     "rs1_forwarding_needed",
     "rs2_forwarding_needed",
-    "rs1_and_rs2_forwarding_needed",
-    "num_instructions_completing",
-    "num_instructions_in_flight",
-    "num_of_instructions_pending_writeback"
+    "rs1_and_rs2_forwarding_needed"
 };
 static const int numEvents = arraySize(eventNames);
 

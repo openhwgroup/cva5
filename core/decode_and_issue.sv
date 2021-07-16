@@ -25,7 +25,13 @@ module decode_and_issue
     import taiga_config::*;
     import riscv_types::*;
     import taiga_types::*;
-    
+
+    # (
+        parameter cpu_config_t CONFIG = EXAMPLE_CONFIG,
+        parameter NUM_UNITS = 5,
+        parameter unit_id_param_t UNIT_IDS = EXAMPLE_UNIT_IDS
+    )
+
     (
         input logic clk,
         input logic rst,
@@ -108,8 +114,6 @@ module decode_and_issue
     logic operands_ready;
     logic mult_div_op;
 
-    logic [NUM_WB_UNITS-1:0] unit_needed_for_id_gen;
-    logic [WB_UNITS_WIDTH-1:0] unit_needed_for_id_gen_int;
     logic [NUM_UNITS-1:0] unit_needed;
     logic [NUM_UNITS-1:0] unit_needed_issue_stage;
     logic [NUM_UNITS-1:0] unit_ready;
@@ -152,18 +156,18 @@ module decode_and_issue
 
     ////////////////////////////////////////////////////
     //Unit Determination
-    assign unit_needed[BRANCH_UNIT_ID] = opcode_trim inside {BRANCH_T, JAL_T, JALR_T};
-    assign unit_needed[ALU_UNIT_ID] = (opcode_trim inside {ARITH_T, ARITH_IMM_T, AUIPC_T, LUI_T, JAL_T, JALR_T}) & ~mult_div_op;
-    assign unit_needed[LS_UNIT_ID] = opcode_trim inside {LOAD_T, STORE_T, AMO_T};
-    assign unit_needed[GC_UNIT_ID] = opcode_trim inside {SYSTEM_T, FENCE_T};
+    assign unit_needed[UNIT_IDS.BR] = opcode_trim inside {BRANCH_T, JAL_T, JALR_T};
+    assign unit_needed[UNIT_IDS.ALU] = (opcode_trim inside {ARITH_T, ARITH_IMM_T, AUIPC_T, LUI_T, JAL_T, JALR_T}) & ~mult_div_op;
+    assign unit_needed[UNIT_IDS.LS] = opcode_trim inside {LOAD_T, STORE_T, AMO_T};
+    assign unit_needed[UNIT_IDS.CSR] = opcode_trim inside {SYSTEM_T, FENCE_T};
 
     assign mult_div_op = (opcode_trim == ARITH_T) && decode.instruction[25];
-    generate if (USE_MUL)
-        assign unit_needed[MUL_UNIT_ID] = mult_div_op && ~fn3[2];
+    generate if (CONFIG.INCLUDE_MUL)
+        assign unit_needed[UNIT_IDS.MUL] = mult_div_op && ~fn3[2];
     endgenerate
 
-    generate if (USE_DIV)
-        assign unit_needed[DIV_UNIT_ID] = mult_div_op && fn3[2];
+    generate if (CONFIG.INCLUDE_DIV)
+        assign unit_needed[UNIT_IDS.DIV] = mult_div_op && fn3[2];
     endgenerate
 
     ////////////////////////////////////////////////////
@@ -172,7 +176,7 @@ module decode_and_issue
     assign renamer.rs_addr[RS1] = rs1_addr;
     assign renamer.rs_addr[RS2] = rs2_addr;
     assign renamer.uses_rd = uses_rd;
-    assign renamer.rd_wb_group = ~unit_needed[ALU_UNIT_ID];//TODO: automate generation of wb group logic
+    assign renamer.rd_wb_group = ~unit_needed[UNIT_IDS.ALU];//TODO: automate generation of wb group logic
     assign renamer.id = decode.id;
 
     ////////////////////////////////////////////////////
@@ -183,6 +187,8 @@ module decode_and_issue
 
     ////////////////////////////////////////////////////
     //Issue
+    logic [REGFILE_READ_PORTS-1:0][$clog2(CONFIG.NUM_WB_GROUPS)-1:0] issue_rs_wb_group;
+
     always_ff @(posedge clk) begin
         if (issue_stage_ready) begin
             issue.pc <= decode.pc;
@@ -194,10 +200,10 @@ module decode_and_issue
             issue.rs_addr[RS2] <= rs2_addr;
             issue.phys_rs_addr[RS1] <= renamer.phys_rs_addr[RS1];
             issue.phys_rs_addr[RS2] <= renamer.phys_rs_addr[RS2];
-            issue.rs_wb_group <= renamer.rs_wb_group;
+            issue_rs_wb_group <= renamer.rs_wb_group;
             issue.rd_addr <= rd_addr;
             issue.phys_rd_addr <= renamer.phys_rd_addr;
-            issue.rd_wb_group <= ~unit_needed[ALU_UNIT_ID];
+            issue.is_multicycle <= ~unit_needed[UNIT_IDS.ALU];
             issue.id <= decode.id;
             issue.uses_rs1 <= uses_rs1;
             issue.uses_rs2 <= uses_rs2;
@@ -241,9 +247,9 @@ module decode_and_issue
     assign rf.phys_rs_addr[RS1] = issue.phys_rs_addr[RS1];
     assign rf.phys_rs_addr[RS2] = issue.phys_rs_addr[RS2];
     assign rf.phys_rd_addr = issue.phys_rd_addr;
-    assign rf.rs_wb_group[RS1] = issue.rs_wb_group[RS1];
-    assign rf.rs_wb_group[RS2] = issue.rs_wb_group[RS2];
-    assign rf.rd_wb_group = issue.rd_wb_group;
+    assign rf.rs_wb_group[RS1] = issue_rs_wb_group[RS1];
+    assign rf.rs_wb_group[RS2] = issue_rs_wb_group[RS2];
+    assign rf.rd_wb_group = issue.is_multicycle;
     assign rf.issued = instruction_issued_with_rd;
     ////////////////////////////////////////////////////
     //ALU unit inputs
@@ -319,12 +325,12 @@ module decode_and_issue
     logic load_reserve;
     logic [4:0] amo_type;
 
-    assign amo_op =  USE_AMO ? (opcode_trim == AMO_T) : 1'b0;
+    assign amo_op =  CONFIG.INCLUDE_AMO ? (opcode_trim == AMO_T) : 1'b0;
     assign amo_type = decode.instruction[31:27];
     assign store_conditional = (amo_type == AMO_SC);
     assign load_reserve = (amo_type == AMO_LR);
 
-    generate if (USE_AMO) begin
+    generate if (CONFIG.INCLUDE_AMO) begin
             assign ls_inputs.amo.is_lr = load_reserve;
             assign ls_inputs.amo.is_sc = store_conditional;
             assign ls_inputs.amo.is_amo = amo_op & ~(load_reserve | store_conditional);
@@ -459,12 +465,12 @@ module decode_and_issue
     always_comb begin
         sys_op_match = '0;
         case (decode.instruction[31:20]) inside
-            ECALL_imm : sys_op_match[ECALL_i] = ENABLE_M_MODE;
-            EBREAK_imm : sys_op_match[EBREAK_i] = ENABLE_M_MODE;
-            URET_imm : sys_op_match[URET_i] = ENABLE_U_MODE;
-            SRET_imm : sys_op_match[SRET_i] = ENABLE_S_MODE;
-            MRET_imm : sys_op_match[MRET_i] = ENABLE_M_MODE;
-            SFENCE_imm : sys_op_match[SFENCE_i] = ENABLE_S_MODE;
+            ECALL_imm : sys_op_match[ECALL_i] = CONFIG.INCLUDE_M_MODE;
+            EBREAK_imm : sys_op_match[EBREAK_i] = CONFIG.INCLUDE_M_MODE;
+            URET_imm : sys_op_match[URET_i] = CONFIG.INCLUDE_U_MODE;
+            SRET_imm : sys_op_match[SRET_i] = CONFIG.INCLUDE_S_MODE;
+            MRET_imm : sys_op_match[MRET_i] = CONFIG.INCLUDE_M_MODE;
+            SFENCE_imm : sys_op_match[SFENCE_i] = CONFIG.INCLUDE_S_MODE;
             default : sys_op_match = '0;
         endcase
     end
@@ -476,7 +482,7 @@ module decode_and_issue
             is_ecall <= environment_op & sys_op_match[ECALL_i];
             is_ebreak <= environment_op & sys_op_match[EBREAK_i];
             is_ret <= environment_op & (sys_op_match[URET_i] | sys_op_match[SRET_i] | sys_op_match[MRET_i]);
-            is_fence <= ENABLE_M_MODE && (opcode_trim == FENCE_T) && ~fn3[0];
+            is_fence <= CONFIG.INCLUDE_M_MODE && (opcode_trim == FENCE_T) && ~fn3[0];
             is_ifence_r <= (opcode_trim == FENCE_T) && fn3[0];
             potential_flush <= (environment_op | ifence);
         end
@@ -489,15 +495,15 @@ module decode_and_issue
     assign gc_inputs.instruction = issue.instruction;
     assign gc_inputs.is_csr = is_csr_r;
     assign gc_inputs.is_fence = is_fence;
-    assign gc_inputs.is_i_fence = ENABLE_M_MODE & issue_to[GC_UNIT_ID] & is_ifence_r;
+    assign gc_inputs.is_i_fence = CONFIG.INCLUDE_M_MODE & issue_to[UNIT_IDS.CSR] & is_ifence_r;
 
     assign gc_inputs.rs1 = rf.data[RS1];
     assign gc_inputs.rs2 = rf.data[RS2];
-    assign gc_flush_required = ENABLE_M_MODE && issue_to[GC_UNIT_ID] && potential_flush;
+    assign gc_flush_required = CONFIG.INCLUDE_M_MODE && issue_to[UNIT_IDS.CSR] && potential_flush;
 
     ////////////////////////////////////////////////////
     //Mul unit inputs
-    generate if (USE_MUL) begin
+    generate if (CONFIG.INCLUDE_MUL) begin
         assign mul_inputs.rs1 = rf.data[RS1];
         assign mul_inputs.rs2 = rf.data[RS2];
         assign mul_inputs.op = issue.fn3[1:0];
@@ -505,7 +511,7 @@ module decode_and_issue
 
     ////////////////////////////////////////////////////
     //Div unit inputs
-    generate if (USE_DIV) begin
+    generate if (CONFIG.INCLUDE_DIV) begin
         logic [4:0] prev_div_rs1_addr;
         logic [4:0] prev_div_rs2_addr;
         logic prev_div_result_valid;
@@ -513,7 +519,7 @@ module decode_and_issue
         logic div_op_reuse;
 
         always_ff @(posedge clk) begin
-            if (issue_to[DIV_UNIT_ID]) begin
+            if (issue_to[UNIT_IDS.DIV]) begin
                 prev_div_rs1_addr <= rs1_addr;
                 prev_div_rs2_addr <= rs2_addr;
             end
@@ -522,11 +528,11 @@ module decode_and_issue
         assign div_op_reuse = {prev_div_result_valid, prev_div_rs1_addr, prev_div_rs2_addr} == {1'b1, issue.rs_addr[RS1], issue.rs_addr[RS2]};
 
         //If current div operation overwrites an input register OR any other instruction overwrites the last div operations input registers
-        assign div_rs_overwrite = (issue.rd_addr == (unit_needed_issue_stage[DIV_UNIT_ID] ? issue.rs_addr[RS1] : prev_div_rs1_addr)) || (issue.rd_addr == (unit_needed_issue_stage[DIV_UNIT_ID] ? issue.rs_addr[RS2] : prev_div_rs2_addr));
+        assign div_rs_overwrite = (issue.rd_addr == (unit_needed_issue_stage[UNIT_IDS.DIV] ? issue.rs_addr[RS1] : prev_div_rs1_addr)) || (issue.rd_addr == (unit_needed_issue_stage[UNIT_IDS.DIV] ? issue.rs_addr[RS2] : prev_div_rs2_addr));
 
         set_clr_reg_with_rst #(.SET_OVER_CLR(0), .WIDTH(1), .RST_VALUE(0)) prev_div_result_valid_m (
             .clk, .rst,
-            .set(instruction_issued & unit_needed_issue_stage[DIV_UNIT_ID]),
+            .set(instruction_issued & unit_needed_issue_stage[UNIT_IDS.DIV]),
             .clr(instruction_issued & issue.uses_rd & div_rs_overwrite),
             .result(prev_div_result_valid)
         );
@@ -551,8 +557,9 @@ module decode_and_issue
     ////////////////////////////////////////////////////
     //Illegal Instruction check
     logic illegal_instruction_pattern_r;
-    generate if (ENABLE_M_MODE) begin
-        illegal_instruction_checker illegal_op_check (
+    generate if (CONFIG.INCLUDE_M_MODE) begin
+        illegal_instruction_checker # (.CONFIG(CONFIG))
+        illegal_op_check (
             .instruction(decode.instruction), .illegal_instruction(illegal_instruction_pattern)
         );
         always_ff @(posedge clk) begin
@@ -586,10 +593,10 @@ module decode_and_issue
         assign tr_no_id_stall = (~issue.stage_valid & ~pc_id_available & ~gc_fetch_flush); //All instructions in execution pipeline
         assign tr_no_instruction_stall = (~tr_no_id_stall & ~issue.stage_valid) | gc_fetch_flush;
         assign tr_other_stall = issue.stage_valid & ~instruction_issued & ~(tr_operand_stall | tr_unit_stall | tr_no_id_stall | tr_no_instruction_stall);
-        assign tr_branch_operand_stall = tr_operand_stall & unit_needed_issue_stage[BRANCH_UNIT_ID];
-        assign tr_alu_operand_stall = tr_operand_stall & unit_needed_issue_stage[ALU_UNIT_ID] & ~unit_needed_issue_stage[BRANCH_UNIT_ID];
-        assign tr_ls_operand_stall = tr_operand_stall & unit_needed_issue_stage[LS_UNIT_ID];
-        assign tr_div_operand_stall = tr_operand_stall & unit_needed_issue_stage[DIV_UNIT_ID];
+        assign tr_branch_operand_stall = tr_operand_stall & unit_needed_issue_stage[UNIT_IDS.BR];
+        assign tr_alu_operand_stall = tr_operand_stall & unit_needed_issue_stage[UNIT_IDS.ALU] & ~unit_needed_issue_stage[UNIT_IDS.BR];
+        assign tr_ls_operand_stall = tr_operand_stall & unit_needed_issue_stage[UNIT_IDS.LS];
+        assign tr_div_operand_stall = tr_operand_stall & unit_needed_issue_stage[UNIT_IDS.DIV];
 
         //Instruction Mix
         always_ff @(posedge clk) begin
@@ -598,8 +605,8 @@ module decode_and_issue
                 tr_branch_or_jump_op <= instruction_issued && (opcode_trim inside {JAL_T, JALR_T, BRANCH_T});
                 tr_load_op <= instruction_issued && (opcode_trim inside {LOAD_T, AMO_T});
                 tr_store_op <= instruction_issued && (opcode_trim inside {STORE_T});
-                tr_mul_op <= instruction_issued && unit_needed_issue_stage[MUL_UNIT_ID];
-                tr_div_op <= instruction_issued && unit_needed_issue_stage[DIV_UNIT_ID];
+                tr_mul_op <= instruction_issued && unit_needed_issue_stage[UNIT_IDS.MUL];
+                tr_div_op <= instruction_issued && unit_needed_issue_stage[UNIT_IDS.DIV];
                 tr_misc_op <= instruction_issued & ~(tr_alu_op | tr_branch_or_jump_op | tr_load_op | tr_store_op | tr_mul_op | tr_div_op);
             end
         end

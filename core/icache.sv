@@ -26,6 +26,10 @@ module icache
     import riscv_types::*;
     import taiga_types::*;
 
+    # (
+        parameter cpu_config_t CONFIG = EXAMPLE_CONFIG
+    )
+
     (
         input logic clk,
         input logic rst,
@@ -36,18 +40,20 @@ module icache
         fetch_sub_unit_interface.sub_unit fetch_sub
     );
 
+    localparam derived_cache_config_t SCONFIG = get_derived_cache_params(CONFIG, CONFIG.ICACHE, CONFIG.ICACHE_ADDR);
+
     logic tag_hit;
-    logic [ICACHE_WAYS-1:0] tag_hit_way;
+    logic [CONFIG.ICACHE.WAYS-1:0] tag_hit_way;
 
     logic tag_update;
-    logic [ICACHE_WAYS-1:0] replacement_way;
-    logic [ICACHE_WAYS-1:0] tag_update_way;
+    logic [CONFIG.ICACHE.WAYS-1:0] replacement_way;
+    logic [CONFIG.ICACHE.WAYS-1:0] tag_update_way;
 
-    logic [$clog2(ICACHE_LINE_W)-1:0] word_count;
+    logic [SCONFIG.SUB_LINE_ADDR_W-1:0] word_count;
     logic is_target_word;
     logic line_complete;
 
-    logic [31:0] data_out [ICACHE_WAYS-1:0];
+    logic [31:0] data_out [CONFIG.ICACHE.WAYS-1:0];
     logic [31:0] miss_data;
 
     logic miss_in_progress;
@@ -92,7 +98,7 @@ module icache
     end
 
     //Replacement policy is psuedo random
-    cycler #(ICACHE_WAYS) replacement_policy (
+    cycler #(CONFIG.ICACHE.WAYS) replacement_policy (
         .clk        (clk), 
         .rst        (rst), 
         .en         (1'b1), 
@@ -112,7 +118,7 @@ module icache
     assign l1_request.data = 0;
     assign l1_request.rnw = 1;
     assign l1_request.be = 0;
-    assign l1_request.size = (ICACHE_LINE_W-1);
+    assign l1_request.size = 5'(CONFIG.ICACHE.LINE_W-1);
     assign l1_request.is_amo = 0;
     assign l1_request.amo = 0;
 
@@ -143,7 +149,8 @@ module icache
 
     ////////////////////////////////////////////////////
     //Tag banks
-    itag_banks icache_tag_banks (
+    itag_banks #(.CONFIG(CONFIG), .SCONFIG(SCONFIG))
+    icache_tag_banks (
             .clk(clk),
             .rst(rst | fetch_sub.flush), //clears the read_hit_allowed flag
             .stage1_addr(fetch_sub.stage1_addr),
@@ -158,11 +165,11 @@ module icache
     ////////////////////////////////////////////////////
     //Data Banks
     genvar i;
-    generate for (i=0; i < ICACHE_WAYS; i++) begin : idata_bank_gen
-        byte_en_BRAM #(ICACHE_LINES*ICACHE_LINE_W) idata_bank (
+    generate for (i=0; i < CONFIG.ICACHE.WAYS; i++) begin : idata_bank_gen
+        byte_en_BRAM #(CONFIG.ICACHE.LINES*CONFIG.ICACHE.LINE_W) idata_bank (
             .clk(clk),
-            .addr_a(fetch_sub.stage1_addr[2 +: ICACHE_LINE_ADDR_W+ICACHE_SUB_LINE_ADDR_W]),
-            .addr_b({fetch_sub.stage2_addr[(2+ICACHE_SUB_LINE_ADDR_W) +: ICACHE_LINE_ADDR_W], word_count}),
+            .addr_a(fetch_sub.stage1_addr[2 +: SCONFIG.LINE_ADDR_W+SCONFIG.SUB_LINE_ADDR_W]),
+            .addr_b({fetch_sub.stage2_addr[(2+SCONFIG.SUB_LINE_ADDR_W) +: SCONFIG.LINE_ADDR_W], word_count}),
             .en_a(fetch_sub.new_request),
             .en_b(tag_update_way[i] & l1_response.data_valid),
             .be_a('0),
@@ -183,7 +190,7 @@ module icache
             word_count <= word_count + 1;
     end
 
-    assign is_target_word = (fetch_sub.stage2_addr[2 +: ICACHE_SUB_LINE_ADDR_W] == word_count);
+    assign is_target_word = (fetch_sub.stage2_addr[2 +: SCONFIG.SUB_LINE_ADDR_W] == word_count);
 
     always_ff @ (posedge clk) begin
         if (l1_response.data_valid & is_target_word)
@@ -199,7 +206,7 @@ module icache
             miss_data_valid <= (miss_in_progress & ~miss_aborted_by_flush) & l1_response.data_valid & is_target_word;
     end
 
-    assign  line_complete = (l1_response.data_valid && (word_count == $clog2(ICACHE_LINE_W)'(ICACHE_LINE_W-1)));
+    assign  line_complete = (l1_response.data_valid && (word_count == SCONFIG.SUB_LINE_ADDR_W'(CONFIG.ICACHE.LINE_W-1)));
     always_ff @ (posedge clk) begin
         if (rst)
             memory_complete <= 0;
@@ -211,7 +218,7 @@ module icache
     //Output muxing
     always_comb begin
         fetch_sub.data_out = miss_data;//zero if not a miss
-        for (int i = 0; i < ICACHE_WAYS; i++) begin
+        for (int i = 0; i < CONFIG.ICACHE.WAYS; i++) begin
             fetch_sub.data_out = fetch_sub.data_out | (data_out[i] & {32{tag_hit_way[i]}});
         end
     end
