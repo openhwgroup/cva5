@@ -28,6 +28,9 @@ interface branch_predictor_interface;
     id_t if_id;
     logic new_mem_request;
     logic [31:0] next_pc;
+
+    id_t pc_id;
+    logic pc_id_assigned;
     
     //Branch Predictor 
     logic [31:0] branch_flush_pc;
@@ -38,12 +41,12 @@ interface branch_predictor_interface;
     logic is_branch;
 
     modport branch_predictor (
-        input if_pc, if_id, new_mem_request, next_pc,
+        input if_pc, if_id, new_mem_request, next_pc, pc_id, pc_id_assigned,
         output branch_flush_pc, predicted_pc, use_prediction, is_return, is_call, is_branch
     );
     modport fetch (
         input branch_flush_pc, predicted_pc, use_prediction, is_return, is_call, is_branch,
-        output if_pc, if_id, new_mem_request, next_pc
+        output if_pc, if_id, new_mem_request, next_pc, pc_id, pc_id_assigned
      );
 
 endinterface
@@ -91,7 +94,7 @@ interface ras_interface;
     logic [31:0] new_addr;
     logic [31:0] addr;
 
-    modport branch_unit (output branch_retired);
+    modport branch_predictor (output branch_retired);
     modport self (input push, pop, new_addr, branch_fetched, branch_retired, output addr);
     modport fetch (input addr, output pop, push, new_addr, branch_fetched);
 endinterface
@@ -239,13 +242,27 @@ interface writeback_store_interface;
         );
 endinterface
 
-interface ls_sub_unit_interface #(parameter BASE_ADDR = 32'h00000000, parameter UPPER_BOUND = 32'hFFFFFFFF, parameter BIT_CHECK = 4);
+interface ls_sub_unit_interface #(parameter bit [31:0] BASE_ADDR = 32'h00000000, parameter bit [31:0] UPPER_BOUND = 32'hFFFFFFFF);
     logic data_valid;
     logic ready;
     logic new_request;
 
-    function  address_range_check (input logic[31:0] addr);
-        return (addr[31:32-BIT_CHECK] == BASE_ADDR[31:32-BIT_CHECK]);
+    //Based on the lower and upper address ranges,
+    //find the number of bits needed to uniquely identify this memory range.
+    //Assumption: address range is aligned to its size
+    function int unsigned bit_range ();
+        int unsigned i = 0;
+        for(; i < 32; i++) begin
+            if (BASE_ADDR[i] == UPPER_BOUND[i])
+                break;
+        end
+        return (32 - i);
+    endfunction
+
+    localparam int unsigned BIT_RANGE = bit_range();
+
+    function address_range_check (input logic[31:0] addr);
+        return (addr[31:32-BIT_RANGE] == BASE_ADDR[31:32-BIT_RANGE]);
     endfunction
 
     modport sub_unit (input new_request, output data_valid, ready);
@@ -254,7 +271,7 @@ interface ls_sub_unit_interface #(parameter BASE_ADDR = 32'h00000000, parameter 
 endinterface
 
 
-interface fetch_sub_unit_interface;
+interface fetch_sub_unit_interface #(parameter bit [31:0] BASE_ADDR = 32'h00000000, parameter bit [31:0] UPPER_BOUND = 32'hFFFFFFFF);
     logic [31:0] stage1_addr;
     logic [31:0] stage2_addr;
 
@@ -263,6 +280,24 @@ interface fetch_sub_unit_interface;
     logic ready;
     logic new_request;
     logic flush;
+
+    //Based on the lower and upper address ranges,
+    //find the number of bits needed to uniquely identify this memory range.
+    //Assumption: address range is aligned to its size
+    function int unsigned bit_range ();
+        int unsigned i = 0;
+        for(; i < 32; i++) begin
+            if (BASE_ADDR[i] == UPPER_BOUND[i])
+                break;
+        end
+        return (32 - i);
+    endfunction
+
+    localparam int unsigned BIT_RANGE = bit_range();
+
+    function address_range_check (input logic[31:0] addr);
+        return (addr[31:32-BIT_RANGE] == BASE_ADDR[31:32-BIT_RANGE]);
+    endfunction
 
     modport sub_unit (input stage1_addr, stage2_addr,  new_request, flush, output data_out, data_valid, ready);
     modport fetch (output stage1_addr, stage2_addr,  new_request, flush, input data_out, data_valid, ready);
@@ -284,21 +319,21 @@ interface unsigned_division_interface #(parameter DATA_WIDTH = 32);
     modport divider (output remainder, quotient, done, input dividend, dividend_CLZ, divisor, divisor_CLZ, divisor_is_zero, start);
 endinterface
 
-interface renamer_interface;
+interface renamer_interface #(parameter NUM_WB_GROUPS = 2);
     import taiga_config::*;
     import riscv_types::*;
     import taiga_types::*;
 
     rs_addr_t rd_addr;
     rs_addr_t [REGFILE_READ_PORTS-1:0] rs_addr;
-    rs_wb_group_t rd_wb_group;
+    logic [$clog2(NUM_WB_GROUPS)-1:0] rd_wb_group;
     logic uses_rd;
     id_t id;
 
     phys_addr_t [REGFILE_READ_PORTS-1:0] phys_rs_addr;
     phys_addr_t phys_rd_addr;
 
-    rs_wb_group_t [REGFILE_READ_PORTS-1:0] rs_wb_group;
+    logic [REGFILE_READ_PORTS-1:0][$clog2(NUM_WB_GROUPS)-1:0] rs_wb_group;
 
     modport renamer (
         input rd_addr, rs_addr, rd_wb_group, uses_rd, id,
@@ -310,20 +345,20 @@ interface renamer_interface;
     );
 endinterface
 
-interface register_file_issue_interface;
+interface register_file_issue_interface #(parameter NUM_WB_GROUPS = 2);
     import taiga_config::*;
     import riscv_types::*;
     import taiga_types::*;
 
     //read interface
     phys_addr_t phys_rs_addr [REGFILE_READ_PORTS];
-    logic [LOG2_COMMIT_PORTS-1:0] rs_wb_group [REGFILE_READ_PORTS];
+    logic [$clog2(NUM_WB_GROUPS)-1:0] rs_wb_group [REGFILE_READ_PORTS];
     logic [31:0] data [REGFILE_READ_PORTS];
     logic inuse [REGFILE_READ_PORTS];
 
     //write interface
     phys_addr_t phys_rd_addr;
-    logic [LOG2_COMMIT_PORTS-1:0] rd_wb_group;
+    logic [$clog2(NUM_WB_GROUPS)-1:0] rd_wb_group;
     logic issued;
 
     modport register_file (

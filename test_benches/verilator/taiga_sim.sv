@@ -286,7 +286,7 @@ module taiga_sim
     assign data_bram_data_in = data_bram.data_in;
     assign data_bram.data_out = data_bram_data_out;
 
-    taiga cpu(.*, .l2(l2[0]));
+    taiga #(.CONFIG(EXAMPLE_CONFIG)) cpu(.*, .l2(l2[0]));
 
     //read channel
     logic[3:0] read_counter;
@@ -436,13 +436,13 @@ module taiga_sim
     ////////////////////////////////////////////////////
     //Performs the lookups to provide the speculative architectural register file with
     //standard register names for simulation purposes
-    logic [31:0][31:0] sim_registers_unamed_groups[NUM_WB_GROUPS];
+    logic [31:0][31:0] sim_registers_unamed_groups[EXAMPLE_CONFIG.NUM_WB_GROUPS];
     logic [31:0][31:0] sim_registers_unamed;
 
     simulation_named_regfile sim_register;
     genvar i, j;
     generate  for (i = 0; i < 32; i++) begin
-        for (j = 0; j < NUM_WB_GROUPS; j++) begin
+        for (j = 0; j < EXAMPLE_CONFIG.NUM_WB_GROUPS; j++) begin
             assign sim_registers_unamed_groups[j][i] = 
             cpu.register_file_block.register_file_gen[j].reg_group.register_file_bank[cpu.renamer_block.spec_table[i].phys_addr];
         end

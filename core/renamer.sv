@@ -25,6 +25,10 @@ module renamer
     import taiga_config::*;
     import taiga_types::*;
 
+    # (
+        parameter cpu_config_t CONFIG = EXAMPLE_CONFIG
+    )
+
     (
         input logic clk,
         input logic rst,
@@ -86,7 +90,7 @@ module renamer
     //During post reset init, initialize rd_to_phys with in-use list (lower 32 registers)
     typedef struct packed{
         phys_addr_t phys_addr;
-        rs_wb_group_t wb_group;
+        logic [$clog2(CONFIG.NUM_WB_GROUPS)-1:0] wb_group;
     } spec_table_t;
     spec_table_t spec_table_next;
     spec_table_t spec_table_old;

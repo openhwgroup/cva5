@@ -26,6 +26,10 @@ module instruction_metadata_and_id_management
     import riscv_types::*;
     import taiga_types::*;
 
+    # (
+        parameter cpu_config_t CONFIG = EXAMPLE_CONFIG
+    )
+
     (
         input logic clk,
         input logic rst,
@@ -58,14 +62,9 @@ module instruction_metadata_and_id_management
         input logic instruction_issued,
         input logic instruction_issued_with_rd,
 
-        //Branch Predictor
-        input branch_metadata_t branch_metadata_if,
-        input id_t branch_id,
-        output branch_metadata_t branch_metadata_ex,
-
         //WB
-        input wb_packet_t wb_packet [NUM_WB_GROUPS],
-        output commit_packet_t commit_packet [NUM_WB_GROUPS],
+        input wb_packet_t wb_packet [CONFIG.NUM_WB_GROUPS],
+        output commit_packet_t commit_packet [CONFIG.NUM_WB_GROUPS],
 
         //Retirer
         output retire_packet_t retire,
@@ -87,12 +86,11 @@ module instruction_metadata_and_id_management
     (* ramstyle = "MLAB, no_rw_check" *) phys_addr_t phys_addr_table [MAX_IDS];
     (* ramstyle = "MLAB, no_rw_check" *) logic [0:0] uses_rd_table [MAX_IDS];
 
-    (* ramstyle = "MLAB, no_rw_check" *) logic [$bits(branch_metadata_t)-1:0] branch_metadata_table [MAX_IDS];
     (* ramstyle = "MLAB, no_rw_check" *) logic [$bits(fetch_metadata_t)-1:0] fetch_metadata_table [MAX_IDS];
 
     id_t decode_id;
 
-    logic [LOG2_MAX_IDS:0] fetched_count; //MSB used as valid for decode stage
+    logic [LOG2_MAX_IDS:0] fetched_count;
     logic [LOG2_MAX_IDS:0] pre_issue_count;
     logic [LOG2_MAX_IDS:0] pre_issue_count_next;
     logic [LOG2_MAX_IDS:0] post_issue_count_next;
@@ -109,14 +107,6 @@ module instruction_metadata_and_id_management
     always_ff @ (posedge clk) begin
         if (pc_id_assigned)
             pc_table[pc_id] <= if_pc;
-    end
-
-    ////////////////////////////////////////////////////
-    //Branch metadata table
-    //Number of read ports = 1 (branch unit)
-    always_ff @ (posedge clk) begin
-        if (pc_id_assigned)
-            branch_metadata_table[pc_id] <= branch_metadata_if;
     end
 
     ////////////////////////////////////////////////////
@@ -235,7 +225,7 @@ module instruction_metadata_and_id_management
         .clk (clk),
         .rst (rst),
         .init_clear (gc_init_clear),
-        .toggle ('{(instruction_issued_with_rd & (issue.rd_wb_group == 1)), wb_packet[1].valid}),
+        .toggle ('{(instruction_issued_with_rd & issue.is_multicycle), wb_packet[1].valid}),
         .toggle_addr ('{issue.id, wb_packet[1].id}),
         .read_addr (retire_ids),
         .in_use (id_inuse)
@@ -293,17 +283,14 @@ module instruction_metadata_and_id_management
     assign decode.instruction = instruction_table[decode_id];
     assign decode.fetch_metadata = fetch_metadata_table[decode_id];
 
-    //Branch Predictor
-    assign branch_metadata_ex = branch_metadata_table[branch_id];
-
     //Writeback/Commit support
-    phys_addr_t commit_phys_addr [NUM_WB_GROUPS];
+    phys_addr_t commit_phys_addr [CONFIG.NUM_WB_GROUPS];
     assign commit_phys_addr[0] = issue.phys_rd_addr;
-     generate for (i = 1; i < NUM_WB_GROUPS; i++) begin
+     generate for (i = 1; i < CONFIG.NUM_WB_GROUPS; i++) begin
         assign commit_phys_addr[i] = phys_addr_table[wb_packet[i].id];
      end endgenerate
 
-     generate for (i = 0; i < NUM_WB_GROUPS; i++) begin
+     generate for (i = 0; i < CONFIG.NUM_WB_GROUPS; i++) begin
         assign commit_packet[i].id = wb_packet[i].id;
         assign commit_packet[i].phys_addr = commit_phys_addr[i];        
         assign commit_packet[i].valid = wb_packet[i].valid & |commit_phys_addr[i];
@@ -311,7 +298,7 @@ module instruction_metadata_and_id_management
      end endgenerate
 
     //Exception Support
-     generate if (ENABLE_M_MODE) begin
+     generate if (CONFIG.INCLUDE_M_MODE) begin
          assign exception_pc = pc_table[exception_id];
      end endgenerate
 

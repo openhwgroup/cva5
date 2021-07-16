@@ -27,6 +27,10 @@ module l1_arbiter
     import taiga_types::*;
     import l2_config_and_types::*;
 
+    # (
+        parameter cpu_config_t CONFIG = EXAMPLE_CONFIG
+    )
+
     (
         input logic clk,
         input logic rst,
@@ -72,12 +76,12 @@ module l1_arbiter
 
     ////////////////////////////////////////////////////
     //Dcache Specific
-    assign l2.wr_data_push = USE_DCACHE & (push_ready & l1_request[L1_DCACHE_ID].request & ~l1_request[L1_DCACHE_ID].rnw); //Assumes data cache has highest priority
+    assign l2.wr_data_push = CONFIG.INCLUDE_DCACHE & (push_ready & l1_request[L1_DCACHE_ID].request & ~l1_request[L1_DCACHE_ID].rnw); //Assumes data cache has highest priority
     assign l2.wr_data = l1_request[L1_DCACHE_ID].data;
 
-    assign l2.inv_ack = USE_DTAG_INVALIDATIONS ? l1_response[L1_DCACHE_ID].inv_ack : l2.inv_valid;
+    assign l2.inv_ack = CONFIG.DCACHE.USE_EXTERNAL_INVALIDATIONS ? l1_response[L1_DCACHE_ID].inv_ack : l2.inv_valid;
     assign l1_response[L1_DCACHE_ID].inv_addr = l2.inv_addr;
-    assign l1_response[L1_DCACHE_ID].inv_valid = USE_DTAG_INVALIDATIONS & l2.inv_valid;
+    assign l1_response[L1_DCACHE_ID].inv_valid = CONFIG.DCACHE.USE_EXTERNAL_INVALIDATIONS & l2.inv_valid;
 
     ////////////////////////////////////////////////////
     //Interface mapping

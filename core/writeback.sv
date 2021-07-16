@@ -26,38 +26,58 @@ module writeback
     import riscv_types::*;
     import taiga_types::*;
     
+    # (
+        parameter cpu_config_t CONFIG = EXAMPLE_CONFIG,
+        parameter int unsigned NUM_UNITS [CONFIG.NUM_WB_GROUPS] = '{1, 4},
+        parameter int unsigned NUM_WB_UNITS = 5
+    )
+
     (
         input logic clk,
         input logic rst,
         //Unit writeback
         unit_writeback_interface.wb unit_wb[NUM_WB_UNITS],
         //WB output
-        output wb_packet_t wb_packet [NUM_WB_GROUPS],
+        output wb_packet_t wb_packet [CONFIG.NUM_WB_GROUPS],
         //Snoop interface (LS unit)
         output wb_packet_t wb_snoop
     );
 
     //Writeback
-    logic [NUM_WB_UNITS-1:0] unit_ack [NUM_WB_GROUPS];
+    logic [NUM_WB_UNITS-1:0] unit_ack [CONFIG.NUM_WB_GROUPS];
     //aliases for write-back-interface signals
-    id_t [NUM_WB_UNITS-1:0] unit_instruction_id [NUM_WB_GROUPS];
-    logic [NUM_WB_UNITS-1:0] unit_done [NUM_WB_GROUPS];
+    id_t [NUM_WB_UNITS-1:0] unit_instruction_id [CONFIG.NUM_WB_GROUPS];
+    logic [NUM_WB_UNITS-1:0] unit_done [CONFIG.NUM_WB_GROUPS];
 
     typedef logic [XLEN-1:0] unit_rd_t [NUM_WB_UNITS];
-    unit_rd_t unit_rd [NUM_WB_GROUPS];
+    unit_rd_t unit_rd [CONFIG.NUM_WB_GROUPS];
     //Per-ID muxes for commit buffer
-    logic [$clog2(NUM_WB_UNITS)-1:0] unit_sel [NUM_WB_GROUPS];
+    logic [$clog2(NUM_WB_UNITS)-1:0] unit_sel [CONFIG.NUM_WB_GROUPS];
+
+    typedef int unsigned unit_count_t [CONFIG.NUM_WB_GROUPS];
+
+    function unit_count_t get_cumulative_unit_count();
+        unit_count_t counts;
+        int unsigned cumulative_count = 0;
+        for (int i = 0; i < CONFIG.NUM_WB_GROUPS; i++) begin
+            counts[i] = cumulative_count;
+            cumulative_count += NUM_UNITS[i];
+        end
+        return counts;
+    endfunction
+
+    localparam unit_count_t CUMULATIVE_NUM_UNITS = get_cumulative_unit_count();
 
     genvar i, j;
     ////////////////////////////////////////////////////
     //Implementation
     //Re-assigning interface inputs to array types so that they can be dynamically indexed
     generate
-        for (i = 0; i < NUM_WB_GROUPS; i++) begin
-            for (j = 0; j < NUM_WB_UNITS_GROUP[i]; j++) begin
-                assign unit_instruction_id[i][j] = unit_wb[CUMULATIVE_NUM_WB_UNITS_GROUP[i] + j].id;
-                assign unit_done[i][j] = unit_wb[CUMULATIVE_NUM_WB_UNITS_GROUP[i] + j].done;
-                assign unit_wb[CUMULATIVE_NUM_WB_UNITS_GROUP[i] + j].ack = unit_ack[i][j];
+        for (i = 0; i < CONFIG.NUM_WB_GROUPS; i++) begin
+            for (j = 0; j < NUM_UNITS[i]; j++) begin
+                assign unit_instruction_id[i][j] = unit_wb[CUMULATIVE_NUM_UNITS[i] + j].id;
+                assign unit_done[i][j] = unit_wb[CUMULATIVE_NUM_UNITS[i] + j].done;
+                assign unit_wb[CUMULATIVE_NUM_UNITS[i] + j].ack = unit_ack[i][j];
             end
         end
     endgenerate
@@ -65,9 +85,9 @@ module writeback
     //As units are selected for commit ports based on their unit ID,
     //for each additional commit port one unit can be skipped for the commit mux
     generate
-        for (i = 0; i < NUM_WB_GROUPS; i++) begin
-            for (j = 0; j < NUM_WB_UNITS_GROUP[i]; j++) begin
-                assign unit_rd[i][j] = unit_wb[CUMULATIVE_NUM_WB_UNITS_GROUP[i] + j].rd;
+        for (i = 0; i < CONFIG.NUM_WB_GROUPS; i++) begin
+            for (j = 0; j < NUM_UNITS[i]; j++) begin
+                assign unit_rd[i][j] = unit_wb[CUMULATIVE_NUM_UNITS[i] + j].rd;
             end
         end
     endgenerate
@@ -77,13 +97,13 @@ module writeback
     //Iterating through all commit ports:
     //   Search for complete units (in fixed unit order)
     //   Assign to a commit port, mask that unit and commit port
-    generate for (i = 0; i < NUM_WB_GROUPS; i++) begin
+    generate for (i = 0; i < CONFIG.NUM_WB_GROUPS; i++) begin
         priority_encoder
-            #(.WIDTH(NUM_WB_UNITS_GROUP[i]))
+            #(.WIDTH(NUM_UNITS[i]))
         unit_done_encoder
         (
-            .priority_vector (unit_done[i][NUM_WB_UNITS_GROUP[i]-1 : 0]),
-            .encoded_result (unit_sel[i][NUM_WB_UNITS_GROUP[i] == 1 ? 0 : ($clog2(NUM_WB_UNITS_GROUP[i])-1) : 0])
+            .priority_vector (unit_done[i][NUM_UNITS[i]-1 : 0]),
+            .encoded_result (unit_sel[i][NUM_UNITS[i] == 1 ? 0 : ($clog2(NUM_UNITS[i])-1) : 0])
         );
         assign wb_packet[i].valid = |unit_done[i];
         assign wb_packet [i].id = unit_instruction_id[i][unit_sel[i]];
@@ -91,7 +111,7 @@ module writeback
     end endgenerate
 
     always_comb begin
-        for (int i = 0; i < NUM_WB_GROUPS; i++) begin
+        for (int i = 0; i < CONFIG.NUM_WB_GROUPS; i++) begin
             unit_ack[i] = '0;
             unit_ack[i][unit_sel[i]] = wb_packet[i].valid;
         end

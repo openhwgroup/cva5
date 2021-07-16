@@ -24,6 +24,10 @@ module  illegal_instruction_checker
 
     import taiga_config::*;
     
+    # (
+        parameter cpu_config_t CONFIG = EXAMPLE_CONFIG
+    )
+
     (
         input logic [31:0] instruction,
         output logic illegal_instruction
@@ -153,11 +157,11 @@ module  illegal_instruction_checker
 
     assign illegal_instruction = ~(
         base_legal |
-        (USE_MUL & mul_legal) |
-        (USE_DIV & div_legal) |
-        (USE_AMO & amo_legal) |
-        (ENABLE_M_MODE & machine_legal) |
-        (ENABLE_S_MODE & supervisor_legal)
+        (CONFIG.INCLUDE_MUL & mul_legal) |
+        (CONFIG.INCLUDE_DIV & div_legal) |
+        (CONFIG.INCLUDE_AMO & amo_legal) |
+        (CONFIG.INCLUDE_M_MODE & machine_legal) |
+        (CONFIG.INCLUDE_S_MODE & supervisor_legal)
     );
 
 endmodule

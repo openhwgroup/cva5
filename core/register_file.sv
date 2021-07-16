@@ -26,6 +26,10 @@ module register_file
     import riscv_types::*;
     import taiga_types::*;
     
+    # (
+        parameter cpu_config_t CONFIG = EXAMPLE_CONFIG
+    )
+
     (
         input logic clk,
         input logic rst,
@@ -36,13 +40,13 @@ module register_file
         register_file_issue_interface.register_file rf_issue,
 
         //Writeback
-        input commit_packet_t commit [NUM_WB_GROUPS]
+        input commit_packet_t commit [CONFIG.NUM_WB_GROUPS]
     );
     typedef logic [31:0] rs_data_set_t [REGFILE_READ_PORTS];
-    rs_data_set_t rs_data_set [NUM_WB_GROUPS];
+    rs_data_set_t rs_data_set [CONFIG.NUM_WB_GROUPS];
 
     typedef logic inuse_t [REGFILE_READ_PORTS]; 
-    inuse_t phys_reg_inuse_set [NUM_WB_GROUPS];
+    inuse_t phys_reg_inuse_set [CONFIG.NUM_WB_GROUPS];
 
     genvar i;
     ////////////////////////////////////////////////////
@@ -82,7 +86,7 @@ module register_file
     //Register Banks
     //Implemented in seperate module as there is not universal tool support for inferring
     //arrays of memory blocks.
-    generate for (i = 0; i < NUM_WB_GROUPS; i++) begin : register_file_gen
+    generate for (i = 0; i < CONFIG.NUM_WB_GROUPS; i++) begin : register_file_gen
         register_bank #(.NUM_READ_PORTS(REGFILE_READ_PORTS)) reg_group (
             .clk, .rst,
             .write_addr(commit[i].phys_addr),
@@ -107,7 +111,7 @@ module register_file
 
     ////////////////////////////////////////////////////
     //Assertions
-    for (genvar i = 0; i < NUM_WB_GROUPS; i++) begin : write_to_rd_zero_assertion
+    for (genvar i = 0; i < CONFIG.NUM_WB_GROUPS; i++) begin : write_to_rd_zero_assertion
         assert property (@(posedge clk) disable iff (rst) (commit[i].valid) |-> (commit[i].phys_addr != 0)) else $error("write to register zero");
     end
 

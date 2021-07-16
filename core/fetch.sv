@@ -26,6 +26,10 @@ module fetch
     import riscv_types::*;
     import taiga_types::*;
 
+    # (
+        parameter cpu_config_t CONFIG = EXAMPLE_CONFIG
+    )
+
     (
         input logic clk,
         input logic rst,
@@ -39,6 +43,7 @@ module fetch
         input logic [31:0] gc_fetch_pc,
 
         //ID Support
+        input id_t pc_id,
         input logic pc_id_available,
         output logic pc_id_assigned,
         output logic fetch_complete,
@@ -63,16 +68,18 @@ module fetch
         output logic tr_early_branch_correction
     );
 
-    localparam NUM_SUB_UNITS = USE_I_SCRATCH_MEM + USE_ICACHE;
+    localparam NUM_SUB_UNITS = int'(CONFIG.INCLUDE_ILOCAL_MEM) + int'(CONFIG.INCLUDE_ICACHE);
     localparam NUM_SUB_UNITS_W = (NUM_SUB_UNITS == 1) ? 1 : $clog2(NUM_SUB_UNITS);
 
     localparam BRAM_ID = 0;
-    localparam ICACHE_ID = USE_I_SCRATCH_MEM;
+    localparam ICACHE_ID = int'(CONFIG.INCLUDE_ILOCAL_MEM);
 
-    localparam NEXT_ID_DEPTH = USE_ICACHE ? 2 : 1;
+    localparam NEXT_ID_DEPTH = CONFIG.INCLUDE_ICACHE ? 2 : 1;
 
     //Subunit signals
-    fetch_sub_unit_interface fetch_sub[NUM_SUB_UNITS-1:0]();
+    fetch_sub_unit_interface #(.BASE_ADDR(CONFIG.ILOCAL_MEM_ADDR.L), .UPPER_BOUND(CONFIG.ILOCAL_MEM_ADDR.H)) bram();
+    fetch_sub_unit_interface #(.BASE_ADDR(CONFIG.ICACHE_ADDR.L), .UPPER_BOUND(CONFIG.ICACHE_ADDR.H)) cache();
+
     logic [NUM_SUB_UNITS-1:0] sub_unit_address_match;
     logic [NUM_SUB_UNITS-1:0] unit_ready;
     logic [NUM_SUB_UNITS-1:0] unit_data_valid;
@@ -117,7 +124,7 @@ module fetch
     assign update_pc = new_mem_request | gc_fetch_flush | early_branch_flush;
     always_ff @(posedge clk) begin
         if (rst)
-            pc <= RESET_VEC;
+            pc <= CONFIG.CSRS.RESET_VEC;
         else if (update_pc)
             pc <= {next_pc[31:2], 2'b0};
     end
@@ -148,6 +155,8 @@ module fetch
     assign bp.new_mem_request = update_pc;
     assign bp.next_pc = next_pc;
     assign bp.if_pc = pc;
+    assign bp.pc_id = pc_id;
+    assign bp.pc_id_assigned = pc_id_assigned;
 
     assign ras.pop = bp.use_prediction & bp.is_return & ~branch_flush & ~gc_fetch_pc_override & new_mem_request & (~early_branch_flush);
     assign ras.push = bp.use_prediction & bp.is_call & ~branch_flush & ~gc_fetch_pc_override & new_mem_request & (~early_branch_flush);
@@ -159,8 +168,8 @@ module fetch
     assign tlb.virtual_address = pc;
     assign tlb.execute = 1;
     assign tlb.rnw = 0;
-    assign tlb.new_request = tlb.ready & (ENABLE_S_MODE & tlb_on);
-    assign translated_address = (ENABLE_S_MODE & tlb_on) ? tlb.physical_address : pc;
+    assign tlb.new_request = tlb.ready & (CONFIG.INCLUDE_S_MODE & tlb_on);
+    assign translated_address = (CONFIG.INCLUDE_S_MODE & tlb_on) ? tlb.physical_address : pc;
 
     always_ff @(posedge clk) begin
         if (new_mem_request)
@@ -193,11 +202,11 @@ module fetch
     assign fetch_attr_fifo.data_in = fetch_attr_next;
 
     taiga_fifo #(.DATA_WIDTH($bits(fetch_attributes_t)), .FIFO_DEPTH(NEXT_ID_DEPTH))
-        attributes_fifo (
-            .clk        (clk), 
-            .rst        (flush_or_rst), 
-            .fifo       (fetch_attr_fifo)
-        );
+    attributes_fifo (
+        .clk        (clk), 
+        .rst        (flush_or_rst), 
+        .fifo       (fetch_attr_fifo)
+    );
 
     assign fetch_attr = fetch_attr_fifo.data_out;
 
@@ -206,42 +215,47 @@ module fetch
     //In the case of a gc_fetch_flush, a request may already be in progress
     //for any sub unit.  That request can either be completed or aborted.
     //In either case, data_valid must NOT be asserted.
-    generate
-        for (i = 0; i < NUM_SUB_UNITS; i++) begin
-            assign unit_ready[i] = fetch_sub[i].ready;
-            assign unit_data_valid[i] = fetch_sub[i].data_valid;
-            assign fetch_sub[i].new_request = new_mem_request & sub_unit_address_match[i];
-            assign fetch_sub[i].stage1_addr = translated_address;
-            assign fetch_sub[i].stage2_addr = stage2_phys_address;
-            assign fetch_sub[i].flush = gc_fetch_flush;
-            assign unit_data_array[i] = fetch_sub[i].data_out;
-        end
+    generate if (CONFIG.INCLUDE_ILOCAL_MEM) begin
+        assign sub_unit_address_match[BRAM_ID] = bram.address_range_check(translated_address);
+        assign unit_ready[BRAM_ID] = bram.ready;
+        assign unit_data_valid[BRAM_ID] = bram.data_valid;
+        assign bram.new_request = new_mem_request & sub_unit_address_match[BRAM_ID];
+        assign bram.stage1_addr = translated_address;
+        assign bram.stage2_addr = stage2_phys_address;
+        assign bram.flush = gc_fetch_flush;
+        assign unit_data_array[BRAM_ID] = bram.data_out;
+
+        ibram i_bram (
+            .clk (clk), 
+            .rst (rst),
+            .fetch_sub (bram),
+            .instruction_bram (instruction_bram)
+        );
+    end
     endgenerate
+    generate if (CONFIG.INCLUDE_ICACHE) begin
+        assign sub_unit_address_match[ICACHE_ID] = cache.address_range_check(translated_address);
+        assign unit_ready[ICACHE_ID] = cache.ready;
+        assign unit_data_valid[ICACHE_ID] = cache.data_valid;
+        assign cache.new_request = new_mem_request & sub_unit_address_match[ICACHE_ID];
+        assign cache.stage1_addr = translated_address;
+        assign cache.stage2_addr = stage2_phys_address;
+        assign cache.flush = gc_fetch_flush;
+        assign unit_data_array[ICACHE_ID] = cache.data_out;
+        icache #(.CONFIG(CONFIG))
+        i_cache (
+            .clk (clk), 
+            .rst (rst),
+            .icache_on (icache_on),
+            .l1_request (l1_request),
+            .l1_response (l1_response),
+            .fetch_sub (cache)
+        );
+    end
+    endgenerate
+
     assign units_ready = &unit_ready;
     assign address_valid = |sub_unit_address_match;
-
-    generate if (USE_I_SCRATCH_MEM) begin
-        ibram i_bram (
-            .clk                (clk), 
-            .rst                (rst),
-            .fetch_sub          (fetch_sub[BRAM_ID]),
-            .instruction_bram   (instruction_bram)
-        );
-        assign sub_unit_address_match[BRAM_ID] = translated_address[31:32-SCRATCH_BIT_CHECK] == SCRATCH_ADDR_L[31:32-SCRATCH_BIT_CHECK];
-    end
-    endgenerate
-    generate if (USE_ICACHE) begin
-        icache i_cache (
-            .clk                (clk), 
-            .rst                (rst),
-            .icache_on          (icache_on),
-            .l1_request         (l1_request),
-            .l1_response        (l1_response),
-            .fetch_sub  (fetch_sub[ICACHE_ID])
-        );
-        assign sub_unit_address_match[ICACHE_ID] = translated_address[31:32-MEMORY_BIT_CHECK] == MEMORY_ADDR_L[31:32-MEMORY_BIT_CHECK];
-    end
-    endgenerate
 
     ////////////////////////////////////////////////////
     //Instruction metada updates

@@ -27,6 +27,10 @@ module gc_unit
     import taiga_types::*;
     import csr_types::*;
 
+    # (
+        parameter cpu_config_t CONFIG = EXAMPLE_CONFIG
+    )
+
     (
         input logic clk,
         input logic rst,
@@ -89,9 +93,9 @@ module gc_unit
     );
 
     //Largest depth for TLBs
-    localparam int TLB_CLEAR_DEPTH = (DTLB_DEPTH > ITLB_DEPTH) ? DTLB_DEPTH : ITLB_DEPTH;
+    localparam int TLB_CLEAR_DEPTH = (CONFIG.DTLB.DEPTH > CONFIG.ITLB.DEPTH) ? CONFIG.DTLB.DEPTH : CONFIG.ITLB.DEPTH;
     //For general reset clear, greater of TLB depth or id-flight memory blocks (MAX_IDS)
-    localparam int INIT_CLEAR_DEPTH = ENABLE_S_MODE ? (TLB_CLEAR_DEPTH > 64 ? TLB_CLEAR_DEPTH : 64) : 64;
+    localparam int INIT_CLEAR_DEPTH = CONFIG.INCLUDE_S_MODE ? (TLB_CLEAR_DEPTH > 64 ? TLB_CLEAR_DEPTH : 64) : 64;
 
     ////////////////////////////////////////////////////
     //Instructions
@@ -301,7 +305,7 @@ module gc_unit
     end
     logic ecall_break_exception;
     assign ecall_break_exception = issue.new_request & (gc_inputs.is_ecall | gc_inputs.is_ebreak);
-    assign gc_exception.valid = ENABLE_M_MODE & (ecall_break_exception | ls_exception.valid | br_exception.valid | illegal_instruction);
+    assign gc_exception.valid = CONFIG.INCLUDE_M_MODE & (ecall_break_exception | ls_exception.valid | br_exception.valid | illegal_instruction);
 
     //PC determination (trap, flush or return)
     //Two cycles: on first cycle the processor front end is flushed,
@@ -325,7 +329,8 @@ module gc_unit
     assign csr_inputs.rs1_is_zero = (rs1_addr == 0);
     assign csr_inputs.rd_is_zero = (rd_addr == 0);
 
-    csr_regs csr_registers (
+    csr_regs # (.CONFIG(CONFIG))
+    csr_registers (
         .clk(clk), .rst(rst),
         .csr_inputs(csr_inputs),
         .new_request(stage1.is_csr),
