@@ -89,9 +89,11 @@ package taiga_config;
         bit INCLUDE_U_MODE;
         bit INCLUDE_MUL;
         bit INCLUDE_DIV;
-        bit INCLUDE_AMO; //Enable Atomic extension (cache operations only)
+        bit INCLUDE_AMO; //cache operations only
+        //CSR constants
         csr_config_t CSRS;
         //Memory Options
+        //Caches
         bit INCLUDE_ICACHE;
         cache_config_t ICACHE;
         memory_config_t ICACHE_ADDR;
@@ -100,10 +102,12 @@ package taiga_config;
         cache_config_t DCACHE;
         memory_config_t DCACHE_ADDR;
         tlb_config_t DTLB;
+        //Local memory
         bit INCLUDE_ILOCAL_MEM;
         memory_config_t ILOCAL_MEM_ADDR;
         bit INCLUDE_DLOCAL_MEM;
         memory_config_t DLOCAL_MEM_ADDR;
+        //Peripheral bus
         bit INCLUDE_PERIPHERAL_BUS;
         memory_config_t PERIPHERAL_BUS_ADDR;
         peripheral_bus_type_t PERIPHERAL_BUS_TYPE;
@@ -133,6 +137,7 @@ package taiga_config;
         INCLUDE_MUL : 1,
         INCLUDE_DIV : 1,
         INCLUDE_AMO : 0,
+        //CSR constants
         CSRS : '{
             MACHINE_IMPLEMENTATION_ID : 0,
             CPU_ID : 0,
@@ -193,6 +198,7 @@ package taiga_config;
             ENTRIES : 512,
             RAS_ENTRIES : 8
         },
+        //Writeback Options
         NUM_WB_GROUPS : 2
     };
 

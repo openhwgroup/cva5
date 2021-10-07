@@ -266,14 +266,15 @@ module decode_and_issue
     logic sub_instruction;
 
     always_comb begin
-        if (opcode_trim inside {LUI_T, AUIPC_T, JAL_T, JALR_T})
-            alu_op = ALU_CONSTANT;
-        else if (fn3 inside {SLTU_fn3, SLT_fn3})
-            alu_op = ALU_SLT;
-        else if (fn3 inside {SLL_fn3, SRA_fn3})
-            alu_op = ALU_SHIFT;
-        else
-            alu_op = ALU_ADD_SUB;
+        case (opcode_trim) inside
+            LUI_T, AUIPC_T, JAL_T, JALR_T : alu_op = ALU_CONSTANT;
+            default : 
+            case (fn3) inside
+                SLTU_fn3, SLT_fn3 : alu_op = ALU_SLT;
+                SLL_fn3, SRA_fn3 : alu_op = ALU_SHIFT;
+                default : alu_op = ALU_ADD_SUB;
+            endcase
+        endcase
     end
 
     always_comb begin
@@ -406,12 +407,11 @@ module decode_and_issue
 
 
     always_comb begin
-        if (~opcode[3] & opcode[2])
-            pc_offset = 21'(signed'(jalr_imm));
-        else if (opcode[3])
-            pc_offset = 21'(signed'({jal_imm, 1'b0}));
-        else
-            pc_offset = 21'(signed'({br_imm, 1'b0}));
+        case (opcode[3:2])
+            2'b11 : pc_offset = 21'(signed'({jal_imm, 1'b0}));
+            2'b01 : pc_offset = 21'(signed'(jalr_imm));
+            default : pc_offset = 21'(signed'({br_imm, 1'b0}));
+        endcase
     end
 
     logic jalr;
