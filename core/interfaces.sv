@@ -99,21 +99,6 @@ interface ras_interface;
     modport fetch (input addr, output pop, push, new_addr, branch_fetched);
 endinterface
 
-interface csr_exception_interface;
-    import riscv_types::*;
-
-    logic valid;
-    exception_code_t code;
-    logic [31:0] pc;
-    logic [31:0] addr;
-
-    logic illegal_instruction; //invalid CSR, invalid CSR op, or priviledge
-    logic[31:0] csr_pc;
-
-    modport csr (input valid, code, pc, addr, output illegal_instruction, csr_pc);
-    modport econtrol (output valid, code, pc, addr, input illegal_instruction, csr_pc);
-
-endinterface
 
 interface exception_interface;
     import riscv_types::*;
@@ -123,12 +108,11 @@ interface exception_interface;
     logic ack;
     
     exception_code_t code;
-    logic [31:0] pc;
-    logic [31:0] addr;
     id_t id;
-
-    modport econtrol (output valid, code, pc, addr, id, input ack);
-    modport unit (input valid, code, pc, addr, id, output ack);
+    logic [31:0] tval;
+    
+    modport unit (output valid, code, id, tval, input ack);
+    modport econtrol (input valid, code, id, tval, output ack);
 endinterface
 
 interface fifo_interface #(parameter DATA_WIDTH = 42);//#(parameter type data_type = logic[31:0]);
@@ -250,7 +234,7 @@ interface ls_sub_unit_interface #(parameter bit [31:0] BASE_ADDR = 32'h00000000,
     //Based on the lower and upper address ranges,
     //find the number of bits needed to uniquely identify this memory range.
     //Assumption: address range is aligned to its size
-    function int unsigned bit_range ();
+    function automatic int unsigned bit_range ();
         int unsigned i = 0;
         for(; i < 32; i++) begin
             if (BASE_ADDR[i] == UPPER_BOUND[i])
@@ -284,7 +268,7 @@ interface fetch_sub_unit_interface #(parameter bit [31:0] BASE_ADDR = 32'h000000
     //Based on the lower and upper address ranges,
     //find the number of bits needed to uniquely identify this memory range.
     //Assumption: address range is aligned to its size
-    function int unsigned bit_range ();
+    function automatic int unsigned bit_range ();
         int unsigned i = 0;
         for(; i < 32; i++) begin
             if (BASE_ADDR[i] == UPPER_BOUND[i])
