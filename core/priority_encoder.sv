@@ -51,7 +51,7 @@ module priority_encoder
             function [2**WIDTH-1:0][LOG2_WIDTH-1 : 0] table_gen ();
                 for (int i = 0; i < 2**WIDTH; i++) begin //Loop through all memory addresses
                     table_gen[i] = LOG2_WIDTH'(WIDTH - 1);//Initialize to lowest priority
-                    for (int j = (WIDTH - 2); j >= 0; j--) begin//Check each bit in increasing priority
+                    for (int j = (int'(WIDTH) - 2); j >= 0; j--) begin//Check each bit in increasing priority
                         if (i[j])//If bit is set update table value with that bit's index
                             table_gen[i] = LOG2_WIDTH'(j);
                     end
