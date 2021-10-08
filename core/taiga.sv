@@ -556,7 +556,7 @@ module taiga
     );
 
     generate if (CONFIG.INCLUDE_MUL)
-        mul_unit mul_unit_block (.*,
+        mul_unit mul_unit_block (
             .clk (clk),
             .rst (rst),
             .mul_inputs (mul_inputs),
