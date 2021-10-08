@@ -49,13 +49,13 @@ module alu_unit
             ALU_LOGIC_XOR : adder_in1 = alu_inputs.in1 ^ alu_inputs.in2;
             ALU_LOGIC_OR : adder_in1 = alu_inputs.in1 | alu_inputs.in2;
             ALU_LOGIC_AND : adder_in1 = alu_inputs.in1 & alu_inputs.in2;
-            ALU_LOGIC_ADD : adder_in1 = alu_inputs.in1;
+            default : adder_in1 = alu_inputs.in1; //ADD/SUB/SLT/SLTU
         endcase
         case (alu_inputs.logic_op)
-            ALU_LOGIC_XOR : adder_in2 = 0;
-            ALU_LOGIC_OR : adder_in2 = 0;
+            ALU_LOGIC_XOR,
+            ALU_LOGIC_OR,
             ALU_LOGIC_AND : adder_in2 = 0;
-            ALU_LOGIC_ADD : adder_in2 = alu_inputs.in2 ^ {33{alu_inputs.subtract}};
+            default : adder_in2 = alu_inputs.in2 ^ {33{alu_inputs.subtract}};
         endcase
     end
 

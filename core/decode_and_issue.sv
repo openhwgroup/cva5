@@ -254,10 +254,8 @@ module decode_and_issue
     ////////////////////////////////////////////////////
     //ALU unit inputs
     logic [XLEN-1:0] alu_rs2_data;
-    logic rs2_use_regfile;
+    logic alu_imm_type;
     logic [31:0] constant_alu;
-    logic sel_pc;
-    logic sel_4;
     alu_op_t alu_op;
     alu_op_t alu_op_r;
     alu_logic_op_t alu_logic_op;
@@ -282,17 +280,20 @@ module decode_and_issue
             XOR_fn3 : alu_logic_op = ALU_LOGIC_XOR;
             OR_fn3 : alu_logic_op = ALU_LOGIC_OR;
             AND_fn3 : alu_logic_op = ALU_LOGIC_AND;
-            default : alu_logic_op = ALU_LOGIC_ADD;
+            default : alu_logic_op = ALU_LOGIC_ADD;//ADD/SUB/SLT/SLTU
         endcase
     end
 
     assign sub_instruction = (fn3 == ADD_SUB_fn3) && decode.instruction[30] && opcode[5];//If ARITH instruction
 
+    //Constant ALU:
+    //  provides LUI, AUIPC, JAL, JALR results for ALU
+    //  provides PC+4 for BRANCH unit
+    // TODO: ifence in GC unit, others?
     always_ff @(posedge clk) begin
         if (issue_stage_ready) begin
-            sel_pc <= opcode_trim inside {AUIPC_T, JAL_T, JALR_T, BRANCH_T};
-            sel_4 <= opcode_trim inside {JAL_T, JALR_T, BRANCH_T};
-            rs2_use_regfile <= opcode_trim inside {ARITH_T};
+            constant_alu <= ((opcode_trim inside {LUI_T}) ? '0 : decode.pc) + ((opcode_trim inside {LUI_T, AUIPC_T}) ? {decode.instruction[31:12], 12'b0} : 4); 
+            alu_imm_type <= opcode_trim inside {ARITH_IMM_T};
             alu_op_r <= alu_op;
             alu_subtract <= (fn3 inside {SLTU_fn3, SLT_fn3}) || sub_instruction;
             alu_logic_op_r <= alu_logic_op;
@@ -301,19 +302,18 @@ module decode_and_issue
 
     //Shifter related
     assign alu_inputs.lshift = ~issue.fn3[2];
-    assign alu_inputs.shift_amount = issue.opcode[5] ? rf.data[RS2][4:0] : issue.rs_addr[RS2];
+    assign alu_inputs.shift_amount = alu_imm_type ? issue.rs_addr[RS2] : rf.data[RS2][4:0];
     assign alu_inputs.arith = rf.data[RS1][XLEN-1] & issue.instruction[30];//shift in bit
     assign alu_inputs.shifter_in = rf.data[RS1];
 
     //LUI, AUIPC, JAL, JALR
-    assign constant_alu = (sel_pc ? issue.pc : '0) + (sel_4 ? 4 : {issue.instruction[31:12], 12'b0}); 
     assign alu_inputs.constant_adder = constant_alu;
 
     //logic and adder
     assign alu_inputs.subtract = alu_subtract;
     assign alu_inputs.logic_op = alu_logic_op_r;
     assign alu_inputs.in1 = {(rf.data[RS1][XLEN-1] & ~issue.fn3[0]), rf.data[RS1]};//(fn3[0]  is SLTU_fn3);
-    assign alu_rs2_data = rs2_use_regfile ? rf.data[RS2] : 32'(signed'(issue.instruction[31:20]));
+    assign alu_rs2_data = alu_imm_type ? 32'(signed'(issue.instruction[31:20])) : rf.data[RS2];
     assign alu_inputs.in2 = {(alu_rs2_data[XLEN-1] & ~issue.fn3[0]), alu_rs2_data};
 
     assign alu_inputs.alu_op = alu_op_r;
