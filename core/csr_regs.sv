@@ -529,34 +529,34 @@ endgenerate
     ////////////////////////////////////////////////////
     //Timers and Counters
     //Register increment for instructions completed
-    logic[CONFIG.CSRS.COUNTER_W-1:0] mcycle_next;
-    assign mcycle_next = mcycle + 1;
-    
-    //As the CSR write takes effect after the instruction has otherwise completed,
-    //we perform the muxing after the addition to handle the rollover case.
-    //Ideally, we would mux the write operation before the adder so that it could
-    //be absorbed into the adder LUT
+    //Increments suppressed on writes to these registers
+    logic[CONFIG.CSRS.COUNTER_W-1:0] mcycle_input_next;
+    logic mcycle_inc;
+
+    assign mcycle_input_next[31:0] = mwrite_decoder[MCYCLE[7:0]] ? updated_csr : mcycle[31:0];
+    assign mcycle_input_next[CONFIG.CSRS.COUNTER_W-1:32] = mwrite_decoder[MCYCLEH[7:0]] ? updated_csr[CONFIG.CSRS.COUNTER_W-33:0] : mcycle[CONFIG.CSRS.COUNTER_W-1:32];
+
+    assign mcycle_inc = ~(mwrite_decoder[MCYCLE[7:0]] | mwrite_decoder[MCYCLEH[7:0]]);
+
     always_ff @(posedge clk) begin
-        if (rst) begin
-            mcycle[31:0] <= 0;
-            mcycle[CONFIG.CSRS.COUNTER_W-1:32] <= 0;
-        end else begin
-            mcycle[31:0] <= mwrite_decoder[MCYCLE[7:0]] ? updated_csr : mcycle_next[31:0];
-            mcycle[CONFIG.CSRS.COUNTER_W-1:32] <= mwrite_decoder[MCYCLEH[7:0]] ? updated_csr[CONFIG.CSRS.COUNTER_W-33:0] : mcycle_next[CONFIG.CSRS.COUNTER_W-1:32];
-        end
+        if (rst) 
+            mcycle <= 0;
+        else
+            mcycle <= mcycle_input_next + CONFIG.CSRS.COUNTER_W'(mcycle_inc);
     end
 
-    logic[CONFIG.CSRS.COUNTER_W-1:0] minst_ret_next;
-    assign minst_ret_next = minst_ret + CONFIG.CSRS.COUNTER_W'(retire.count);
+    logic[CONFIG.CSRS.COUNTER_W-1:0] minst_ret_input_next;
+    logic[LOG2_RETIRE_PORTS:0] minst_ret_inc;
+    assign minst_ret_input_next[31:0] = mwrite_decoder[MINSTRET[7:0]] ? updated_csr : minst_ret[31:0];
+    assign minst_ret_input_next[CONFIG.CSRS.COUNTER_W-1:32] = mwrite_decoder[MINSTRETH[7:0]] ? updated_csr[CONFIG.CSRS.COUNTER_W-33:0] : minst_ret[CONFIG.CSRS.COUNTER_W-1:32];
+
+    assign minst_ret_inc = {(LOG2_RETIRE_PORTS+1){~(mwrite_decoder[MINSTRET[7:0]] | mwrite_decoder[MINSTRETH[7:0]])}} & retire.count;
 
     always_ff @(posedge clk) begin
-        if (rst) begin
-            minst_ret[31:0] <= 0;
-            minst_ret[CONFIG.CSRS.COUNTER_W-1:32] <= 0;
-        end else begin
-            minst_ret[31:0] <= mwrite_decoder[MINSTRET[7:0]] ? updated_csr : minst_ret_next[31:0];
-            minst_ret[CONFIG.CSRS.COUNTER_W-1:32] <= mwrite_decoder[MINSTRETH[7:0]] ? updated_csr[CONFIG.CSRS.COUNTER_W-33:0] : minst_ret_next[CONFIG.CSRS.COUNTER_W-1:32];
-        end
+        if (rst)
+            minst_ret <= 0;
+        else
+            minst_ret <= minst_ret_input_next + CONFIG.CSRS.COUNTER_W'(minst_ret_inc);
     end
 
     always_comb begin
