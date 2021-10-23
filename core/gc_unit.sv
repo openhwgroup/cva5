@@ -144,11 +144,6 @@ module gc_unit
     logic system_op_or_exception_complete;
     logic exception_with_rd_complete;
 
-    //CSR
-    logic mret;
-    logic sret;
-    logic [XLEN-1:0] wb_csr;
-    csr_inputs_t csr_inputs;
     exception_packet_t gc_exception;
     exception_packet_t gc_exception_r;
     id_t exception_or_system_id;
@@ -159,17 +154,13 @@ module gc_unit
     logic [31:0] csr_mepc;
     logic [31:0] csr_sepc;
 
-    //Write-back handshaking
-    logic [2:0] fn3;
-    logic [6:0] opcode;
-    logic [4:0] opcode_trim;
-
-    logic [4:0] rs1_addr;
-    logic [4:0] rs2_addr;
-    logic [4:0] rd_addr;
-
     gc_inputs_t stage1;
+
+    //CSR
     logic processing_csr;
+    logic mret;
+    logic sret;
+    logic [XLEN-1:0] wb_csr;
     logic csr_ready_to_complete;
     logic csr_ready_to_complete_r;
     id_t instruction_id;
@@ -192,13 +183,6 @@ module gc_unit
         exception_id <= exception_or_system_id;
         exception_with_rd_complete <= (ls_exception.valid & ~ls_exception_is_store) | (br_exception.valid & branch_exception_is_jump);
     end
-
-    //Instruction decode
-    assign opcode = stage1.instruction[6:0];
-    assign opcode_trim = opcode[6:2];
-    assign fn3 = stage1.instruction[14:12];
-    assign rs1_addr = stage1.instruction[19:15];
-    assign rd_addr = stage1.instruction[11:7];
 
     ////////////////////////////////////////////////////
     //GC Operation
@@ -323,16 +307,10 @@ module gc_unit
 
     ////////////////////////////////////////////////////
     //CSR registers
-    assign csr_inputs.rs1 = fn3[2] ? {27'b0, rs1_addr} : stage1.rs1;
-    assign csr_inputs.csr_addr = stage1.instruction[31:20];
-    assign csr_inputs.csr_op = fn3[1:0];
-    assign csr_inputs.rs1_is_zero = (rs1_addr == 0);
-    assign csr_inputs.rd_is_zero = (rd_addr == 0);
-
     csr_regs # (.CONFIG(CONFIG))
     csr_registers (
         .clk(clk), .rst(rst),
-        .csr_inputs(csr_inputs),
+        .csr_inputs(stage1.csr_inputs),
         .new_request(stage1.is_csr),
         .read_regs(csr_ready_to_complete),
         .commit(csr_ready_to_complete_r),

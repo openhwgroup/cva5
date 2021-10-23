@@ -23,6 +23,7 @@
 package taiga_types;
     import taiga_config::*;
     import riscv_types::*;
+    import csr_types::*;
 
     localparam LOG2_RETIRE_PORTS = $clog2(RETIRE_PORTS);
     localparam LOG2_MAX_IDS = $clog2(MAX_IDS);
@@ -172,18 +173,17 @@ package taiga_types;
     } div_inputs_t;
 
     typedef struct packed{
-        logic [XLEN-1:0] rs1;
-        logic [11:0] csr_addr;
-        logic [1:0] csr_op;
-        logic rs1_is_zero;
-        logic rd_is_zero;
+        csr_addr_t addr;
+        logic[1:0] op;
+        logic reads;
+        logic writes;
+        logic [XLEN-1:0] data;
     } csr_inputs_t;
 
     typedef struct packed{
         logic [31:0] pc;
         logic [31:0] instruction;
-        logic [XLEN-1:0] rs1;
-        logic [XLEN-1:0] rs2;
+        csr_inputs_t csr_inputs;
         logic is_csr;
         logic is_fence;
         logic is_i_fence;
