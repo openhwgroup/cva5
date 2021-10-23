@@ -187,7 +187,7 @@ package riscv_types;
         DCSR = 12'h7B0,
         DPC = 12'h7B1,
         DSCRATCH = 12'h7B2
-    } csr_t;
+    } csr_reg_addr_t;
 
     typedef enum logic [2:0] {
         NONCSR_fn3 = 3'b000,

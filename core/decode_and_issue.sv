@@ -497,8 +497,14 @@ module decode_and_issue
     assign gc_inputs.is_fence = is_fence;
     assign gc_inputs.is_i_fence = CONFIG.INCLUDE_M_MODE & issue_to[UNIT_IDS.CSR] & is_ifence_r;
 
-    assign gc_inputs.rs1 = rf.data[RS1];
-    assign gc_inputs.rs2 = rf.data[RS2];
+    //CSR support
+    assign gc_inputs.csr_inputs.addr = issue.instruction[31:20];
+    assign gc_inputs.csr_inputs.op = issue.fn3[1:0];
+    assign gc_inputs.csr_inputs.data = issue.fn3[2] ? {27'b0, issue.rs_addr[RS1]} : rf.data[RS1];
+    assign gc_inputs.csr_inputs.reads = ~((issue.fn3[1:0] == CSR_RW) && (issue.rd_addr == 0));
+    assign gc_inputs.csr_inputs.writes = ~((issue.fn3[1:0] == CSR_RC) && (issue.rs_addr[RS1] == 0));
+
+
     assign gc_flush_required = CONFIG.INCLUDE_M_MODE && issue_to[UNIT_IDS.CSR] && potential_flush;
 
     ////////////////////////////////////////////////////

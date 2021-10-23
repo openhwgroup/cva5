@@ -104,7 +104,6 @@ module csr_regs
     logic machine_write;
 
     //Control logic
-    csr_addr_t csr_addr;
     logic privilege_exception;
 
     logic [XLEN-1:0] selected_csr;
@@ -123,27 +122,26 @@ module csr_regs
 
     always_comb begin
         swrite_decoder = 0;
-        swrite_decoder[csr_addr.sub_addr] = supervisor_write ;
+        swrite_decoder[csr_inputs.addr.sub_addr] = supervisor_write ;
         mwrite_decoder = 0;
-        mwrite_decoder[csr_addr.sub_addr] = machine_write ;
+        mwrite_decoder[csr_inputs.addr.sub_addr] = machine_write ;
     end
 
     //convert addr into packed struct form
-    assign csr_addr = csr_inputs.csr_addr;
-    assign supervisor_write = commit && (csr_addr.rw_bits != CSR_READ_ONLY && csr_addr.privilege == SUPERVISOR_PRIVILEGE);
-    assign machine_write = commit && (csr_addr.rw_bits != CSR_READ_ONLY && csr_addr.privilege == MACHINE_PRIVILEGE);
+    assign supervisor_write = commit && (csr_inputs.addr.rw_bits != CSR_READ_ONLY && csr_inputs.addr.privilege == SUPERVISOR_PRIVILEGE);
+    assign machine_write = commit && (csr_inputs.addr.rw_bits != CSR_READ_ONLY && csr_inputs.addr.privilege == MACHINE_PRIVILEGE);
 
     ////////////////////////////////////////////////////
     //Exception Check
-    assign privilege_exception = new_request & (csr_addr.privilege > privilege_level);
+    assign privilege_exception = new_request & (csr_inputs.addr.privilege > privilege_level);
     assign csr_exception.valid = new_request & (invalid_addr | privilege_exception);
 
     always_comb begin
-        case (csr_inputs.csr_op)
-            CSR_RW : updated_csr = csr_inputs.rs1;
-            CSR_RS : updated_csr = selected_csr_r | csr_inputs.rs1;
-            CSR_RC : updated_csr = selected_csr_r & ~csr_inputs.rs1;
-            default : updated_csr = csr_inputs.rs1;
+        case (csr_inputs.op)
+            CSR_RW : updated_csr = csr_inputs.data;
+            CSR_RS : updated_csr = selected_csr_r | csr_inputs.data;
+            CSR_RC : updated_csr = selected_csr_r & ~csr_inputs.data;
+            default : updated_csr = csr_inputs.data;
         endcase
     end
 
@@ -452,9 +450,9 @@ generate if (CONFIG.INCLUDE_M_MODE) begin
 
     always_ff @(posedge clk) begin
         if (scratch_reg_write)
-            scratch_regs[{csr_addr.privilege, csr_addr.sub_addr[2:0]}] <= updated_csr;
+            scratch_regs[{csr_inputs.addr.privilege, csr_inputs.addr.sub_addr[2:0]}] <= updated_csr;
     end
-    assign scratch_out = scratch_regs[{csr_addr.privilege, csr_addr.sub_addr[2:0]}];
+    assign scratch_out = scratch_regs[{csr_inputs.addr.privilege, csr_inputs.addr.sub_addr[2:0]}];
 
 end
 endgenerate
@@ -561,7 +559,7 @@ endgenerate
 
     always_comb begin
         invalid_addr = 0;
-        case (csr_addr) inside
+        case (csr_inputs.addr) inside
             //Machine info
             MISA :  selected_csr = CONFIG.INCLUDE_M_MODE ? misa : 0;
             MVENDORID : selected_csr = CONFIG.INCLUDE_M_MODE ? mvendorid : 0;
