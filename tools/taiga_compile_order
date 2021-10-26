@@ -1,5 +1,6 @@
 core/taiga_config.sv
 core/riscv_types.sv
+core/csr_types.sv  
 core/taiga_types.sv  
 l2_arbiter/l2_config_and_types.sv 
 l2_arbiter/l2_interfaces.sv
@@ -10,7 +11,6 @@ local_memory/local_mem.sv
 core/interfaces.sv  
 core/external_interfaces.sv  
 
-core/csr_types.sv  
 core/csr_regs.sv  
 core/gc_unit.sv  
 

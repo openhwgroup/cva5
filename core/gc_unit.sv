@@ -39,6 +39,7 @@ module gc_unit
         //Decode
         unit_issue_interface.unit issue,
         input gc_inputs_t gc_inputs,
+        input csr_inputs_t csr_inputs,
         input logic gc_flush_required,
         //Branch miss predict
         input logic branch_flush,
@@ -310,10 +311,12 @@ module gc_unit
     csr_regs # (.CONFIG(CONFIG))
     csr_registers (
         .clk(clk), .rst(rst),
-        .csr_inputs(stage1.csr_inputs),
-        .new_request(stage1.is_csr),
-        .read_regs(csr_ready_to_complete),
-        .commit(csr_ready_to_complete_r),
+        .csr_inputs(csr_inputs),
+        .new_request(issue.possible_issue & gc_inputs.is_csr & ~gc_issue_hold),
+        .id(issue.id),
+        .wb(wb),
+        .gc_issue_hold(gc_issue_hold),
+        .commit(csr_ready_to_complete),
         .gc_exception(gc_exception_r),
         .csr_exception(csr_exception),
         .current_privilege(current_privilege),
@@ -354,19 +357,6 @@ module gc_unit
         else
             csr_ready_to_complete_r <= csr_ready_to_complete;
     end
-
-    always_ff @(posedge clk) begin
-        csr_id <= instruction_id;
-        if (issue.new_request) begin
-            instruction_id <= issue.id;
-        end
-    end
-
-    ////////////////////////////////////////////////////
-    //Output
-    assign wb.rd = wb_csr;
-    assign wb.done = csr_ready_to_complete_r;
-    assign wb.id = csr_id;
 
     ////////////////////////////////////////////////////
     //End of Implementation

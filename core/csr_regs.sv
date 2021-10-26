@@ -35,11 +35,15 @@ module csr_regs
         input logic clk,
         input logic rst,
 
-        //GC unit
+        //Unit Interfaces
         input csr_inputs_t csr_inputs,
-        input new_request,
-        input read_regs,
-        input commit,
+        input logic new_request,
+        input id_t id,
+        unit_writeback_interface.unit wb,
+
+        input logic gc_issue_hold,
+        input logic commit,
+
         input exception_packet_t gc_exception,
         output exception_packet_t csr_exception,
         output logic [1:0] current_privilege,
@@ -74,7 +78,8 @@ module csr_regs
     (* ramstyle = "MLAB, no_rw_check" *) logic[XLEN-1:0] scratch_regs [31:0];//Only 0x1 and 0x3 used by supervisor and machine mode respectively
     logic[XLEN-1:0] scratch_out;
 
-    
+    csr_inputs_t csr_inputs_r;
+
     privilege_t privilege_level;
     privilege_t next_privilege_level;
 
@@ -116,32 +121,43 @@ module csr_regs
     logic done;
 
     logic [255:0] swrite_decoder;
+    logic [255:0] swrite_en;
     logic [255:0] mwrite_decoder;
+    logic [255:0] mwrite_en;
     ////////////////////////////////////////////////////
     //Implementation
+    always_ff @(posedge clk) begin
+        if (new_request) begin
+            csr_inputs_r <= csr_inputs;
+        end
+    end
+
+    assign supervisor_write = commit && (csr_inputs_r.addr.rw_bits != CSR_READ_ONLY && csr_inputs_r.addr.privilege == SUPERVISOR_PRIVILEGE);
+    assign machine_write = commit && (csr_inputs_r.addr.rw_bits != CSR_READ_ONLY && csr_inputs_r.addr.privilege == MACHINE_PRIVILEGE);
 
     always_comb begin
         swrite_decoder = 0;
-        swrite_decoder[csr_inputs.addr.sub_addr] = supervisor_write ;
+        swrite_decoder[csr_inputs_r.addr.sub_addr] = supervisor_write ;
         mwrite_decoder = 0;
-        mwrite_decoder[csr_inputs.addr.sub_addr] = machine_write ;
+        mwrite_decoder[csr_inputs_r.addr.sub_addr] = machine_write ;
     end
 
-    //convert addr into packed struct form
-    assign supervisor_write = commit && (csr_inputs.addr.rw_bits != CSR_READ_ONLY && csr_inputs.addr.privilege == SUPERVISOR_PRIVILEGE);
-    assign machine_write = commit && (csr_inputs.addr.rw_bits != CSR_READ_ONLY && csr_inputs.addr.privilege == MACHINE_PRIVILEGE);
+    always_ff @(posedge clk) begin
+        swrite_en <= swrite_decoder;
+        mwrite_en <= mwrite_decoder;
+    end
 
     ////////////////////////////////////////////////////
     //Exception Check
-    assign privilege_exception = new_request & (csr_inputs.addr.privilege > privilege_level);
-    assign csr_exception.valid = new_request & (invalid_addr | privilege_exception);
+    assign privilege_exception = csr_inputs_r.addr.privilege > privilege_level;
+    assign csr_exception.valid = commit & (invalid_addr | privilege_exception);
 
     always_comb begin
-        case (csr_inputs.op)
-            CSR_RW : updated_csr = csr_inputs.data;
-            CSR_RS : updated_csr = selected_csr_r | csr_inputs.data;
-            CSR_RC : updated_csr = selected_csr_r & ~csr_inputs.data;
-            default : updated_csr = csr_inputs.data;
+        case (csr_inputs_r.op)
+            CSR_RW : updated_csr = csr_inputs_r.data;
+            CSR_RS : updated_csr = selected_csr_r | csr_inputs_r.data;
+            CSR_RC : updated_csr = selected_csr_r & ~csr_inputs_r.data;
+            default : updated_csr = csr_inputs_r.data;
         endcase
     end
 
@@ -274,10 +290,10 @@ generate if (CONFIG.INCLUDE_M_MODE) begin
     end
 
     mstatus_t mstatus_write_mask;
-    assign mstatus_write_mask = machine_write ? mstatus_mask : sstatus_mask;
+    assign mstatus_write_mask = mwrite_en[MSTATUS[7:0]] ? mstatus_mask : sstatus_mask;
 
     always_comb begin
-        if (mwrite_decoder[MSTATUS[7:0]] | swrite_decoder[SSTATUS[7:0]])
+        if (mwrite_en[MSTATUS[7:0]] | swrite_en[SSTATUS[7:0]])
             mstatus_new = (mstatus & ~mstatus_write_mask) | (updated_csr & mstatus_write_mask);
         else if (interrupt | gc_exception.valid)
             mstatus_new = mstatus_exception;
@@ -299,7 +315,7 @@ generate if (CONFIG.INCLUDE_M_MODE) begin
     //No vectored mode, mode hard-coded to zero
     always_ff @(posedge clk) begin
         mtvec[1:0] <= '0;
-        if (mwrite_decoder[MTVEC[7:0]])
+        if (mwrite_en[MTVEC[7:0]])
             mtvec[XLEN-1:2] <= updated_csr[XLEN-1:2];
     end
     assign trap_pc = mtvec;
@@ -328,7 +344,7 @@ generate if (CONFIG.INCLUDE_M_MODE) begin
     always_ff @(posedge clk) begin
         if (rst)
             medeleg <= '0;
-        else if (mwrite_decoder[MEDELEG[7:0]])
+        else if (mwrite_en[MEDELEG[7:0]])
             medeleg <= (updated_csr & medeleg_mask);
     end
 
@@ -346,7 +362,7 @@ generate if (CONFIG.INCLUDE_M_MODE) begin
     always_ff @(posedge clk) begin
         if (rst)
             mideleg <= '0;
-        else if (mwrite_decoder[MIDELEG[7:0]])
+        else if (mwrite_en[MIDELEG[7:0]])
             mideleg <= (updated_csr & mideleg_mask);
     end
 
@@ -356,7 +372,7 @@ generate if (CONFIG.INCLUDE_M_MODE) begin
     always_ff @(posedge clk) begin
         if (rst)
             mip <= 0;
-        else if (mwrite_decoder[MIP[7:0]])
+        else if (mwrite_en[MIP[7:0]])
             mip <= (updated_csr & mip_mask);
     end
 
@@ -368,9 +384,9 @@ generate if (CONFIG.INCLUDE_M_MODE) begin
     always_ff @(posedge clk) begin
         if (rst)
             mie_reg <= '0;
-        else if (mwrite_decoder[MIE[7:0]])
+        else if (mwrite_en[MIE[7:0]])
             mie_reg <= (updated_csr & mie_mask);
-        else if (swrite_decoder[SIE[7:0]])
+        else if (swrite_en[SIE[7:0]])
             mie_reg <= (updated_csr & sie_mask);
     end
 
@@ -380,7 +396,7 @@ generate if (CONFIG.INCLUDE_M_MODE) begin
     //exception causing PC.  Lower two bits tied to zero.
     always_ff @(posedge clk) begin
         mepc[1:0] <= '0;
-        if (mwrite_decoder[MEPC[7:0]] | gc_exception.valid)
+        if (mwrite_en[MEPC[7:0]] | gc_exception.valid)
             mepc[XLEN-1:2] <= gc_exception.valid ? exception_pc[XLEN-1:2] : updated_csr[XLEN-1:2];
     end
     assign csr_mepc = mepc;
@@ -429,7 +445,7 @@ generate if (CONFIG.INCLUDE_M_MODE) begin
 
     always_ff @(posedge clk) begin
         mcause.zeroes <= '0;
-        if ((mcause_write_valid & mwrite_decoder[MCAUSE[7:0]]) | gc_exception.valid) begin
+        if ((mcause_write_valid & mwrite_en[MCAUSE[7:0]]) | gc_exception.valid) begin
             mcause.interrupt <= gc_exception.valid ? 1'b0 : updated_csr[XLEN-1];
             mcause.code <= gc_exception.valid ? gc_exception.code : updated_csr[ECODE_W-1:0];
         end
@@ -438,7 +454,7 @@ generate if (CONFIG.INCLUDE_M_MODE) begin
     ////////////////////////////////////////////////////
     //MTVAL
     always_ff @(posedge clk) begin
-        if (mwrite_decoder[MTVAL[7:0]] | gc_exception.valid)
+        if (mwrite_en[MTVAL[7:0]] | gc_exception.valid)
             mtval <=  gc_exception.valid ? gc_exception.tval : updated_csr;
     end
 
@@ -446,13 +462,13 @@ generate if (CONFIG.INCLUDE_M_MODE) begin
     //Scratch regs
     //For efficient LUT-RAM packing, all scratch regs are stored together
     logic scratch_reg_write;
-    assign scratch_reg_write = mwrite_decoder[MSCRATCH[7:0]] | swrite_decoder[SSCRATCH[7:0]];
+    assign scratch_reg_write = mwrite_en[MSCRATCH[7:0]] | swrite_en[SSCRATCH[7:0]];
 
     always_ff @(posedge clk) begin
         if (scratch_reg_write)
-            scratch_regs[{csr_inputs.addr.privilege, csr_inputs.addr.sub_addr[2:0]}] <= updated_csr;
+            scratch_regs[{csr_inputs_r.addr.privilege, csr_inputs_r.addr.sub_addr[2:0]}] <= updated_csr;
     end
-    assign scratch_out = scratch_regs[{csr_inputs.addr.privilege, csr_inputs.addr.sub_addr[2:0]}];
+    assign scratch_out = scratch_regs[{csr_inputs_r.addr.privilege, csr_inputs_r.addr.sub_addr[2:0]}];
 
 end
 endgenerate
@@ -501,7 +517,7 @@ generate if (CONFIG.INCLUDE_S_MODE) begin
     always_ff @(posedge clk) begin
         if (rst)
             stvec <= {CONFIG.CSRS.RESET_VEC[XLEN-1:2], 2'b00};
-        else if (swrite_decoder[STVEC[7:0]])
+        else if (swrite_en[STVEC[7:0]])
             stvec <= (updated_csr & stvec_mask);
     end
 
@@ -512,7 +528,7 @@ generate if (CONFIG.INCLUDE_S_MODE) begin
     always_ff @(posedge clk) begin
         if (rst)
             satp <= 0;
-        else if (swrite_decoder[SATP[7:0]])
+        else if (swrite_en[SATP[7:0]])
             satp <= (updated_csr & satp_mask);
     end
 
@@ -531,10 +547,10 @@ endgenerate
     logic[CONFIG.CSRS.COUNTER_W-1:0] mcycle_input_next;
     logic mcycle_inc;
 
-    assign mcycle_input_next[31:0] = mwrite_decoder[MCYCLE[7:0]] ? updated_csr : mcycle[31:0];
-    assign mcycle_input_next[CONFIG.CSRS.COUNTER_W-1:32] = mwrite_decoder[MCYCLEH[7:0]] ? updated_csr[CONFIG.CSRS.COUNTER_W-33:0] : mcycle[CONFIG.CSRS.COUNTER_W-1:32];
+    assign mcycle_input_next[31:0] = mwrite_en[MCYCLE[7:0]] ? updated_csr : mcycle[31:0];
+    assign mcycle_input_next[CONFIG.CSRS.COUNTER_W-1:32] = mwrite_en[MCYCLEH[7:0]] ? updated_csr[CONFIG.CSRS.COUNTER_W-33:0] : mcycle[CONFIG.CSRS.COUNTER_W-1:32];
 
-    assign mcycle_inc = ~(mwrite_decoder[MCYCLE[7:0]] | mwrite_decoder[MCYCLEH[7:0]]);
+    assign mcycle_inc = ~(mwrite_en[MCYCLE[7:0]] | mwrite_en[MCYCLEH[7:0]]);
 
     always_ff @(posedge clk) begin
         if (rst) 
@@ -545,10 +561,10 @@ endgenerate
 
     logic[CONFIG.CSRS.COUNTER_W-1:0] minst_ret_input_next;
     logic[LOG2_RETIRE_PORTS:0] minst_ret_inc;
-    assign minst_ret_input_next[31:0] = mwrite_decoder[MINSTRET[7:0]] ? updated_csr : minst_ret[31:0];
-    assign minst_ret_input_next[CONFIG.CSRS.COUNTER_W-1:32] = mwrite_decoder[MINSTRETH[7:0]] ? updated_csr[CONFIG.CSRS.COUNTER_W-33:0] : minst_ret[CONFIG.CSRS.COUNTER_W-1:32];
+    assign minst_ret_input_next[31:0] = mwrite_en[MINSTRET[7:0]] ? updated_csr : minst_ret[31:0];
+    assign minst_ret_input_next[CONFIG.CSRS.COUNTER_W-1:32] = mwrite_en[MINSTRETH[7:0]] ? updated_csr[CONFIG.CSRS.COUNTER_W-33:0] : minst_ret[CONFIG.CSRS.COUNTER_W-1:32];
 
-    assign minst_ret_inc = {(LOG2_RETIRE_PORTS+1){~(mwrite_decoder[MINSTRET[7:0]] | mwrite_decoder[MINSTRETH[7:0]])}} & retire.count;
+    assign minst_ret_inc = {(LOG2_RETIRE_PORTS+1){~(mwrite_en[MINSTRET[7:0]] | mwrite_en[MINSTRETH[7:0]])}} & retire.count;
 
     always_ff @(posedge clk) begin
         if (rst)
@@ -557,9 +573,12 @@ endgenerate
             minst_ret <= minst_ret_input_next + CONFIG.CSRS.COUNTER_W'(minst_ret_inc);
     end
 
+
+    ////////////////////////////////////////////////////
+    //CSR mux
     always_comb begin
         invalid_addr = 0;
-        case (csr_inputs.addr) inside
+        case (csr_inputs_r.addr) inside
             //Machine info
             MISA :  selected_csr = CONFIG.INCLUDE_M_MODE ? misa : 0;
             MVENDORID : selected_csr = CONFIG.INCLUDE_M_MODE ? mvendorid : 0;
@@ -626,10 +645,24 @@ endgenerate
         endcase
     end
     always_ff @(posedge clk) begin
-        if (read_regs)
+        if (commit)
             selected_csr_r <= selected_csr;
     end
 
-    assign wb_csr = selected_csr_r;
+    ////////////////////////////////////////////////////
+    //Output
+    always_ff @(posedge clk) begin
+        if (new_request)
+            wb.id <=  id;
+    end
+
+    always_ff @(posedge clk) begin
+        if (rst)
+            wb.done <= 0;
+        else
+            wb.done <= commit;
+    end
+
+    assign wb.rd = selected_csr_r;
 
 endmodule
