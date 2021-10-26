@@ -58,6 +58,7 @@ module decode_and_issue
         output load_store_inputs_t ls_inputs,
         output branch_inputs_t branch_inputs,
         output gc_inputs_t gc_inputs,
+        output csr_inputs_t csr_inputs,
         output mul_inputs_t mul_inputs,
         output div_inputs_t div_inputs,
 
@@ -498,11 +499,11 @@ module decode_and_issue
     assign gc_inputs.is_i_fence = CONFIG.INCLUDE_M_MODE & issue_to[UNIT_IDS.CSR] & is_ifence_r;
 
     //CSR support
-    assign gc_inputs.csr_inputs.addr = issue.instruction[31:20];
-    assign gc_inputs.csr_inputs.op = issue.fn3[1:0];
-    assign gc_inputs.csr_inputs.data = issue.fn3[2] ? {27'b0, issue.rs_addr[RS1]} : rf.data[RS1];
-    assign gc_inputs.csr_inputs.reads = ~((issue.fn3[1:0] == CSR_RW) && (issue.rd_addr == 0));
-    assign gc_inputs.csr_inputs.writes = ~((issue.fn3[1:0] == CSR_RC) && (issue.rs_addr[RS1] == 0));
+    assign csr_inputs.addr = issue.instruction[31:20];
+    assign csr_inputs.op = issue.fn3[1:0];
+    assign csr_inputs.data = issue.fn3[2] ? {27'b0, issue.rs_addr[RS1]} : rf.data[RS1];
+    assign csr_inputs.reads = ~((issue.fn3[1:0] == CSR_RW) && (issue.rd_addr == 0));
+    assign csr_inputs.writes = ~((issue.fn3[1:0] == CSR_RC) && (issue.rs_addr[RS1] == 0));
 
 
     assign gc_flush_required = CONFIG.INCLUDE_M_MODE && issue_to[UNIT_IDS.CSR] && potential_flush;

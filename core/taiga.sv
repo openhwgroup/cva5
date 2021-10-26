@@ -111,6 +111,7 @@ module taiga
     mul_inputs_t mul_inputs;
     div_inputs_t div_inputs;
     gc_inputs_t gc_inputs;
+    csr_inputs_t csr_inputs;
 
     unit_issue_interface unit_issue [NUM_UNITS-1:0]();
 
@@ -391,6 +392,7 @@ module taiga
         .ls_inputs (ls_inputs),
         .branch_inputs (branch_inputs),
         .gc_inputs (gc_inputs),
+        .csr_inputs (csr_inputs),
         .mul_inputs (mul_inputs),
         .div_inputs (div_inputs),
         .unit_issue (unit_issue),
@@ -524,6 +526,7 @@ module taiga
         .rst (rst),
         .issue (unit_issue[UNIT_IDS.CSR]),
         .gc_inputs (gc_inputs),
+        .csr_inputs (csr_inputs),
         .gc_flush_required (gc_flush_required),
         .branch_flush (branch_flush),
         .potential_branch_exception (potential_branch_exception),
