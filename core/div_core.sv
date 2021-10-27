@@ -79,7 +79,7 @@ module div_core
     //Remainder mux, when quotient bits are zero value is held
     always_ff @ (posedge clk) begin
         if (div.start | (running & |new_quotient_bits)) begin  //enable: on div.start for init and so long as we are in the running state and the quotient pair is not zero
-            case ({div.start, sub_1x_overflow})
+            case ({~running, sub_1x_overflow})
                 0 : div.remainder <= sub_1x;
                 1 : div.remainder <= sub_2x;
                 default : div.remainder <= div.dividend;//Overloading the quotient zero case to fit the initial loading of the dividend in
@@ -99,18 +99,11 @@ module div_core
     always_ff @ (posedge clk) begin
         if (rst)
             running <= 0;
-        else if (div.start)
-            running <= ~first_cycle_abort;
-        else if (terminate)
-            running <= 0;
+        else
+            running <= (running & ~terminate) | (div.start & ~first_cycle_abort);
     end
     
-    always_ff @ (posedge clk) begin
-        if (rst)
-            div.done <= 0;
-        else
-            div.done <= (running & terminate) | (div.start & first_cycle_abort);
-    end
+    assign div.done = (running & terminate) | (div.start & first_cycle_abort);
 
     ////////////////////////////////////////////////////
     //End of Implementation
