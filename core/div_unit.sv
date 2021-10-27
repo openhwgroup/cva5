@@ -53,7 +53,8 @@ module div_unit
 
     typedef struct packed{
         logic remainder_op;
-        logic negate_result;
+        logic negate_remainder;
+        logic negate_quotient;
         logic divisor_is_zero;
         logic reuse_result;
         id_t id;
@@ -112,7 +113,8 @@ module div_unit
     assign fifo_inputs.divisor_CLZ = divisor_CLZ;
 
     assign fifo_inputs.attr.remainder_op = div_inputs.op[1];
-    assign fifo_inputs.attr.negate_result = div_inputs.op[1] ? negate_remainder : (~divisor_is_zero & negate_quotient);
+    assign fifo_inputs.attr.negate_remainder = negate_remainder;
+    assign fifo_inputs.attr.negate_quotient = negate_quotient;
     assign fifo_inputs.attr.divisor_is_zero = divisor_is_zero;
     assign fifo_inputs.attr.reuse_result = div_inputs.reuse_result;
     assign fifo_inputs.attr.id = issue.id;
@@ -141,7 +143,7 @@ module div_unit
     ////////////////////////////////////////////////////
     //Control Signals
     assign div.start = input_fifo.valid & div_ready & ~div_op.attr.reuse_result;
-    assign div_done = div.done | (in_progress & in_progress_attr.reuse_result);
+    assign div_done = div.done | (input_fifo.valid & div_ready & div_op.attr.reuse_result);
 
     //If more than one cycle, set in_progress so that multiple div.start signals are not sent to the div unit.
     set_clr_reg_with_rst #(.SET_OVER_CLR(1), .WIDTH(1), .RST_VALUE('0))
@@ -174,16 +176,17 @@ module div_unit
 
     ////////////////////////////////////////////////////
     //Output
-    logic done_r;
-    assign wb.rd = negate_if (in_progress_attr.remainder_op ? div.remainder : ({32{in_progress_attr.divisor_is_zero}} | div.quotient), in_progress_attr.negate_result);
+    logic negate_result;
+    assign negate_result = in_progress_attr.remainder_op ? in_progress_attr.negate_remainder : (~in_progress_attr.divisor_is_zero & in_progress_attr.negate_quotient);
+    assign wb.rd = negate_if (in_progress_attr.remainder_op ? div.remainder : ({32{in_progress_attr.divisor_is_zero}} | div.quotient), negate_result);
 
     always_ff @ (posedge clk) begin
         if (rst)
-            done_r <= 0;
+            wb.done <= 0;
         else
-            done_r <= (div_done | done_r) & ~wb.ack;
+            wb.done <= (wb.done & ~wb.ack) | div_done;
     end
-    assign wb.done = div_done | done_r;
+
     assign wb.id = in_progress_attr.id;
     ////////////////////////////////////////////////////
     //Assertions
