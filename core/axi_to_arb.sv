@@ -103,7 +103,7 @@ module axi_to_arb
 
 
     //AMO read modify write support ****************************************************
-    assign read_modify_write = l2.is_amo && (l2.amo_type_or_burst_size != AMO_LR || l2.amo_type_or_burst_size != AMO_SC);
+    assign read_modify_write = l2.is_amo && (l2.amo_type_or_burst_size != AMO_LR_FN5 || l2.amo_type_or_burst_size != AMO_SC_FN5);
 
     always_ff @ (posedge clk) begin
         if (rst)

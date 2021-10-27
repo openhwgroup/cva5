@@ -44,15 +44,15 @@ module amo_alu
     /* verilator lint_off CASEINCOMPLETE */
     always_comb begin
         case (amo_alu_inputs.op)// <--unique as not all codes are in use
-            AMO_SWAP : result = amo_alu_inputs.rs2;
-            AMO_ADD : result = amo_alu_inputs.rs1_load + amo_alu_inputs.rs2;
-            AMO_XOR : result = amo_alu_inputs.rs1_load ^ amo_alu_inputs.rs2;
-            AMO_AND : result = amo_alu_inputs.rs1_load & amo_alu_inputs.rs2;
-            AMO_OR : result = amo_alu_inputs.rs1_load | amo_alu_inputs.rs2;
-            AMO_MIN : result = rs1_smaller_than_rs2 ? amo_alu_inputs.rs1_load : amo_alu_inputs.rs2;
-            AMO_MAX : result = rs1_smaller_than_rs2 ? amo_alu_inputs.rs2 : amo_alu_inputs.rs1_load;
-            AMO_MINU : result = rs1_smaller_than_rs2 ? amo_alu_inputs.rs1_load : amo_alu_inputs.rs2;
-            AMO_MAXU : result = rs1_smaller_than_rs2 ? amo_alu_inputs.rs2 : amo_alu_inputs.rs1_load;
+            AMO_SWAP_FN5 : result = amo_alu_inputs.rs2;
+            AMO_ADD_FN5 : result = amo_alu_inputs.rs1_load + amo_alu_inputs.rs2;
+            AMO_XOR_FN5 : result = amo_alu_inputs.rs1_load ^ amo_alu_inputs.rs2;
+            AMO_AND_FN5 : result = amo_alu_inputs.rs1_load & amo_alu_inputs.rs2;
+            AMO_OR_FN5 : result = amo_alu_inputs.rs1_load | amo_alu_inputs.rs2;
+            AMO_MIN_FN5 : result = rs1_smaller_than_rs2 ? amo_alu_inputs.rs1_load : amo_alu_inputs.rs2;
+            AMO_MAX_FN5 : result = rs1_smaller_than_rs2 ? amo_alu_inputs.rs2 : amo_alu_inputs.rs1_load;
+            AMO_MINU_FN5 : result = rs1_smaller_than_rs2 ? amo_alu_inputs.rs1_load : amo_alu_inputs.rs2;
+            AMO_MAXU_FN5 : result = rs1_smaller_than_rs2 ? amo_alu_inputs.rs2 : amo_alu_inputs.rs1_load;
         endcase
     end
     /* verilator lint_on CASEINCOMPLETE */

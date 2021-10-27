@@ -192,9 +192,9 @@ module l2_arbiter
             reserv_valid <= advance;
     end
 
-    assign reserv_lr = (reserv_request.is_amo && reserv_request.amo_type_or_burst_size == AMO_LR);
-    assign reserv_sc = (reserv_request.is_amo && reserv_request.amo_type_or_burst_size == AMO_SC);
-    assign reserv_store = ~reserv_request.rnw | (reserv_request.is_amo && reserv_request.amo_type_or_burst_size != AMO_LR);
+    assign reserv_lr = (reserv_request.is_amo && reserv_request.amo_type_or_burst_size == AMO_LR_FN5);
+    assign reserv_sc = (reserv_request.is_amo && reserv_request.amo_type_or_burst_size == AMO_SC_FN5);
+    assign reserv_store = ~reserv_request.rnw | (reserv_request.is_amo && reserv_request.amo_type_or_burst_size != AMO_LR_FN5);
     l2_reservation_logic reserv (.*,
             .addr(reserv_request.addr),
             .id(reserv_id),
