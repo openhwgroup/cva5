@@ -329,8 +329,8 @@ module decode_and_issue
 
     assign amo_op =  CONFIG.INCLUDE_AMO ? (opcode_trim == AMO_T) : 1'b0;
     assign amo_type = decode.instruction[31:27];
-    assign store_conditional = (amo_type == AMO_SC);
-    assign load_reserve = (amo_type == AMO_LR);
+    assign store_conditional = (amo_type == AMO_SC_FN5);
+    assign load_reserve = (amo_type == AMO_LR_FN5);
 
     generate if (CONFIG.INCLUDE_AMO) begin
             assign ls_inputs.amo.is_lr = load_reserve;

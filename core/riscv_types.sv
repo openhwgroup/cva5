@@ -38,22 +38,6 @@ package riscv_types;
         logic [6:0] opcode;
     } common_instruction_t;
 
-    typedef enum logic [6:0] {
-        LUI = 7'b0110111,
-        AUIPC = 7'b0010111,
-        JAL = 7'b1101111,
-        JALR = 7'b1100111,
-        BRANCH = 7'b1100011,
-        LOAD = 7'b0000011,
-        STORE = 7'b0100011,
-        ARITH_IMM = 7'b0010011,
-        ARITH = 7'b0110011,//includes mul/div
-        FENCE = 7'b0001111,
-        AMO = 7'b0101111,
-        SYSTEM = 7'b1110011
-        //end of RV32I
-    } opcodes_t;
-
     typedef enum logic [4:0] {
         LUI_T = 5'b01101,
         AUIPC_T = 5'b00101,
@@ -250,17 +234,17 @@ package riscv_types;
     } interrupt_code_t;
 
     typedef enum bit [4:0] {
-        AMO_LR = 5'b00010,
-        AMO_SC = 5'b00011,
-        AMO_SWAP = 5'b00001,
-        AMO_ADD = 5'b00000,
-        AMO_XOR = 5'b00100,
-        AMO_AND = 5'b01100,
-        AMO_OR = 5'b01000,
-        AMO_MIN = 5'b10000,
-        AMO_MAX = 5'b10100,
-        AMO_MINU = 5'b11000,
-        AMO_MAXU = 5'b11100
+        AMO_LR_FN5 = 5'b00010,
+        AMO_SC_FN5 = 5'b00011,
+        AMO_SWAP_FN5 = 5'b00001,
+        AMO_ADD_FN5 = 5'b00000,
+        AMO_XOR_FN5 = 5'b00100,
+        AMO_AND_FN5 = 5'b01100,
+        AMO_OR_FN5 = 5'b01000,
+        AMO_MIN_FN5 = 5'b10000,
+        AMO_MAX_FN5 = 5'b10100,
+        AMO_MINU_FN5 = 5'b11000,
+        AMO_MAXU_FN5 = 5'b11100
     } amo_t;
 
     //Assembly register definitions for simulation purposes
