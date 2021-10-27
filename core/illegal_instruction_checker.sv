@@ -23,7 +23,8 @@
 module  illegal_instruction_checker
 
     import taiga_config::*;
-    
+    import riscv_types::*;
+
     # (
         parameter cpu_config_t CONFIG = EXAMPLE_CONFIG
     )
@@ -117,6 +118,11 @@ module  illegal_instruction_checker
     localparam [31:0] WFI = 32'b00010000010100000000000001110011;
 
     logic base_legal;
+    logic csr_legal;
+    logic csr_addr_base;
+    logic csr_addr_machine;
+    logic csr_addr_supervisor;
+    logic csr_addr_debug;
     logic mul_legal;
     logic div_legal;
     logic amo_legal;
@@ -130,9 +136,40 @@ module  illegal_instruction_checker
         ADDI, SLLI, SLTI, SLTIU, XORI, SRLI, SRAI, ORI, ANDI,
         ADD, SUB, SLL, SLT, SLTU, XOR, SRL, SRA, OR, AND,
         LB, LH, LW, LBU, LHU, SB, SH, SW,
-        FENCE, FENCE_I,
-        CSRRW, CSRRS, CSRRC, CSRRWI, CSRRSI, CSRRCI
+        FENCE, FENCE_I
     };
+
+    assign csr_addr_base = instruction[31:20] inside {
+        FFLAGS, FRM, FCSR,
+        CYCLE, TIME, INSTRET, CYCLEH, TIMEH, INSTRETH
+    };
+
+    assign csr_addr_machine = instruction[31:20] inside {
+        MVENDORID, MARCHID, MIMPID, MHARTID,
+        MSTATUS, MISA, MEDELEG, MIDELEG, MIE, MTVEC, MCOUNTEREN,
+        MSCRATCH, MEPC, MCAUSE, MTVAL, MIP,
+        MCYCLE, MINSTRET, MCYCLEH, MINSTRETH
+    };
+
+    assign csr_addr_supervisor = instruction[31:20] inside {
+        SSTATUS, SEDELEG, SIDELEG, SIE, STVEC, SCOUNTEREN,
+        SSCRATCH, SEPC, SCAUSE, STVAL, SIP,
+        SATP
+    };
+
+    assign csr_addr_debug = instruction[31:20] inside {
+        DCSR, DPC, DSCRATCH
+    };
+
+    //Privilege check done later on instruction issue
+    //Here we just check instruction encoding and valid CSR address
+    assign csr_legal = instruction inside {
+        CSRRW, CSRRS, CSRRC, CSRRWI, CSRRSI, CSRRCI
+    } && (
+        csr_addr_base |
+        (CONFIG.INCLUDE_M_MODE & csr_addr_machine) |
+        (CONFIG.INCLUDE_S_MODE & csr_addr_supervisor)
+    );
 
     assign mul_legal = instruction inside {
         MUL, MULH, MULHSU, MULHU
@@ -157,6 +194,7 @@ module  illegal_instruction_checker
 
     assign illegal_instruction = ~(
         base_legal |
+        csr_legal |
         (CONFIG.INCLUDE_MUL & mul_legal) |
         (CONFIG.INCLUDE_DIV & div_legal) |
         (CONFIG.INCLUDE_AMO & amo_legal) |
