@@ -71,6 +71,7 @@ module store_queue
 
     //Register-based memory blocks
     logic [DEPTH-1:0] valid;
+    logic [DEPTH-1:0] valid_next;
     addr_hash_t [DEPTH-1:0] hashes;
     logic [DEPTH-1:0] released;
     id_t [DEPTH-1:0] id_needed;
@@ -85,6 +86,7 @@ module store_queue
     load_check_count_t [DEPTH-1:0] load_check_count_next;
 
     logic [LOG2_DEPTH-1:0] sq_index;
+    logic [LOG2_DEPTH-1:0] sq_index_next;
     logic [LOG2_DEPTH-1:0] sq_oldest;
 
     logic [DEPTH-1:0] sq_index_one_hot;
@@ -103,11 +105,12 @@ module store_queue
     assign new_sq_request = lsq.new_issue & lsq.store;
     assign new_load_request = lsq.new_issue & ~lsq.store;
      
+    assign sq_index_next = sq_index + LOG2_DEPTH'(new_sq_request);
     always_ff @ (posedge clk) begin
         if (rst)
             sq_index <= 0;
         else
-            sq_index <= sq_index + LOG2_DEPTH'(new_sq_request);
+            sq_index <= sq_index_next;
     end
 
     always_ff @ (posedge clk) begin
@@ -127,15 +130,22 @@ module store_queue
         issued_one_hot = sq_oldest_one_hot & {DEPTH{store_ack}};
     end
 
+    assign valid_next = (valid | new_request_one_hot) & ~issued_one_hot;
     always_ff @ (posedge clk) begin
         if (rst)
             valid <= '0;
         else
-            valid <= (valid | new_request_one_hot) & ~issued_one_hot;
+            valid <= valid_next;
     end
 
     assign sq_empty = ~|valid;
-    assign sq_full = valid[sq_index] | (|load_check_count[sq_index]);//If next index is valid, or still has a load that must be cleared first
+
+    always_ff @ (posedge clk) begin
+        if (rst)
+            sq_full <= 0;
+        else
+            sq_full <= valid_next[sq_index_next] | (|load_check_count_next[sq_index_next]);
+    end
     
     //Attributes LUTRAM
     always_ff @ (posedge clk) begin
