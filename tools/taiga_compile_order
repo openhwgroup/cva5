@@ -11,7 +11,7 @@ local_memory/local_mem.sv
 core/interfaces.sv  
 core/external_interfaces.sv  
 
-core/csr_regs.sv  
+core/csr_unit.sv  
 core/gc_unit.sv  
 
 core/branch_comparator.sv

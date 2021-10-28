@@ -133,7 +133,6 @@ module gc_unit
     typedef enum {RST_STATE, PRE_CLEAR_STATE, INIT_CLEAR_STATE, IDLE_STATE, TLB_CLEAR_STATE, IQ_DRAIN} gc_state;
     gc_state state;
     gc_state next_state;
-    gc_state prev_state;
 
     logic init_clear_done;
     logic tlb_clear_done;
@@ -204,13 +203,6 @@ module gc_unit
             state <= RST_STATE;
         else
             state <= next_state;
-    end
-
-    always @(posedge clk) begin
-        if (rst)
-            prev_state <= RST_STATE;
-        else
-            prev_state <= state;
     end
 
     always_comb begin
@@ -308,7 +300,7 @@ module gc_unit
 
     ////////////////////////////////////////////////////
     //CSR registers
-    csr_regs # (.CONFIG(CONFIG))
+    csr_unit # (.CONFIG(CONFIG))
     csr_registers (
         .clk(clk), .rst(rst),
         .csr_inputs(csr_inputs),
