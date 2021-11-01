@@ -115,6 +115,20 @@ interface exception_interface;
     modport econtrol (input valid, code, id, tval, output ack);
 endinterface
 
+interface csr_exception_interface;
+    import riscv_types::*;
+    import taiga_types::*;
+
+    logic valid;
+    exception_code_t code;
+    logic [31:0] tval;
+    logic [31:0] exception_pc;
+    logic [31:0] trap_pc;
+
+    modport econtrol (output valid, code, tval, exception_pc, input trap_pc);
+    modport csr (input valid, code, tval, exception_pc, output trap_pc);
+endinterface
+
 interface fifo_interface #(parameter DATA_WIDTH = 42);//#(parameter type data_type = logic[31:0]);
     logic push;
     logic pop;

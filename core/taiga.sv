@@ -60,22 +60,24 @@ module taiga
     //Units with writeback
     localparam int unsigned ALU_UNIT_ID = 32'd0;
     localparam int unsigned LS_UNIT_ID = 32'd1;
-    localparam int unsigned GC_UNIT_ID = 32'd2;
-    localparam int unsigned MUL_UNIT_ID = GC_UNIT_ID + int'(CONFIG.INCLUDE_MUL);
+    localparam int unsigned CSR_UNIT_ID = 32'd2;
+    localparam int unsigned MUL_UNIT_ID = CSR_UNIT_ID + int'(CONFIG.INCLUDE_MUL);
     localparam int unsigned DIV_UNIT_ID = MUL_UNIT_ID + int'(CONFIG.INCLUDE_DIV);
     //Non-writeback units
     localparam int unsigned BRANCH_UNIT_ID = DIV_UNIT_ID + 1;
+    localparam int unsigned IEC_UNIT_ID = BRANCH_UNIT_ID + 1;
 
     //Total number of units
-    localparam int unsigned NUM_UNITS = BRANCH_UNIT_ID + 1; 
+    localparam int unsigned NUM_UNITS = IEC_UNIT_ID + 1; 
 
     localparam unit_id_param_t UNIT_IDS = '{
         ALU : ALU_UNIT_ID,
         LS : LS_UNIT_ID,
-        CSR : GC_UNIT_ID,
+        CSR : CSR_UNIT_ID,
         MUL : MUL_UNIT_ID,
         DIV : DIV_UNIT_ID,
-        BR : BRANCH_UNIT_ID
+        BR : BRANCH_UNIT_ID,
+        IEC : IEC_UNIT_ID
     };
 
     ////////////////////////////////////////////////////
@@ -161,6 +163,8 @@ module taiga
     renamer_interface #(.NUM_WB_GROUPS(CONFIG.NUM_WB_GROUPS)) decode_rename_interface ();
 
     //Global Control
+    csr_exception_interface exception();
+
     logic gc_init_clear;
     logic gc_fetch_hold;
     logic gc_issue_hold;
@@ -172,6 +176,11 @@ module taiga
     logic [31:0] gc_fetch_pc;
     logic ls_is_idle;
     logic [LOG2_MAX_IDS:0] post_issue_count;
+
+    logic [1:0] current_privilege;
+    logic mret;
+    logic sret;
+    logic [31:0] epc;
 
     //Decode Unit and Fetch Unit
     logic illegal_instruction;
@@ -520,13 +529,34 @@ module taiga
     end
     endgenerate
 
+    csr_unit # (.CONFIG(CONFIG))
+    csr_unit_block (
+        .clk(clk),
+        .rst(rst),
+        .csr_inputs (csr_inputs),
+        .issue (unit_issue[UNIT_IDS.CSR]), 
+        .wb (unit_wb[UNIT_IDS.CSR]),
+        .current_privilege(current_privilege),
+        .tlb_on(tlb_on),
+        .asid(asid),
+        .immu(immu),
+        .dmmu(dmmu),
+        .exception(exception),
+        .mret(mret),
+        .sret(sret),
+        .epc(epc),
+        .retire(retire),
+        .retire_ids(retire_ids),
+        .interrupt(interrupt),
+        .timer_interrupt(timer_interrupt)
+    );
+
     gc_unit #(.CONFIG(CONFIG))
     gc_unit_block (
         .clk (clk),
         .rst (rst),
-        .issue (unit_issue[UNIT_IDS.CSR]),
+        .issue (unit_issue[UNIT_IDS.IEC]),
         .gc_inputs (gc_inputs),
-        .csr_inputs (csr_inputs),
         .gc_flush_required (gc_flush_required),
         .branch_flush (branch_flush),
         .potential_branch_exception (potential_branch_exception),
@@ -535,12 +565,11 @@ module taiga
         .illegal_instruction (illegal_instruction),
         .ls_exception (ls_exception),
         .ls_exception_is_store (ls_exception_is_store),
-        .tlb_on (tlb_on),
-        .asid (asid),
-        .immu (immu),
-        .dmmu (dmmu),
         .exception_id (exception_id),
         .exception_pc (exception_pc),
+        .mret(mret),
+        .sret(sret),
+        .epc(epc),
         .retire (retire),
         .interrupt (interrupt),
         .timer_interrupt (timer_interrupt),
@@ -554,8 +583,7 @@ module taiga
         .gc_tlb_flush (gc_tlb_flush),
         .gc_fetch_pc (gc_fetch_pc),
         .ls_is_idle (ls_is_idle),
-        .post_issue_count (post_issue_count),
-        .wb (unit_wb[UNIT_IDS.CSR])
+        .post_issue_count (post_issue_count)
     );
 
     generate if (CONFIG.INCLUDE_MUL)
