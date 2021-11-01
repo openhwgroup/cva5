@@ -39,7 +39,6 @@ module gc_unit
         //Decode
         unit_issue_interface.unit issue,
         input gc_inputs_t gc_inputs,
-        input csr_inputs_t csr_inputs,
         input logic gc_flush_required,
         //Branch miss predict
         input logic branch_flush,
@@ -54,17 +53,13 @@ module gc_unit
         input exception_packet_t ls_exception,
         input logic ls_exception_is_store,
 
-        //TLBs
-        output logic tlb_on,
-        output logic [ASIDLEN-1:0] asid,
-
-        //MMUs
-        mmu_interface.csr immu,
-        mmu_interface.csr dmmu,
-
         //Exception
         output id_t exception_id,
         input logic [31:0] exception_pc,
+
+        output logic mret,
+        output logic sret,
+        input logic [31:0] epc,
 
         //Retire
         input retire_packet_t retire,
@@ -87,10 +82,7 @@ module gc_unit
 
         //Ordering support
         input logic ls_is_idle,
-        input logic [LOG2_MAX_IDS:0] post_issue_count,
-
-        //WB
-        unit_writeback_interface.unit wb
+        input logic [LOG2_MAX_IDS:0] post_issue_count
     );
 
     //Largest depth for TLBs
@@ -151,20 +143,12 @@ module gc_unit
     exception_packet_t csr_exception;
     logic [1:0] current_privilege;
     logic [31:0] trap_pc;
-    logic [31:0] csr_mepc;
-    logic [31:0] csr_sepc;
 
     gc_inputs_t stage1;
 
     //CSR
     logic processing_csr;
-    logic mret;
-    logic sret;
-    logic [XLEN-1:0] wb_csr;
-    logic csr_ready_to_complete;
-    logic csr_ready_to_complete_r;
-    id_t instruction_id;
-    id_t csr_id;
+
     ////////////////////////////////////////////////////
     //Implementation
     //Input registering
@@ -294,39 +278,10 @@ module gc_unit
         if (gc_exception.valid | stage1.is_i_fence | (issue.new_request & gc_inputs.is_ret)) begin
             gc_fetch_pc <= gc_exception.valid ? trap_pc :
                 stage1.is_i_fence ? stage1.pc + 4 : //Could stall on dec_pc valid and use instead of another adder
-                csr_mepc;// gc_inputs.is_ret
+                epc;// gc_inputs.is_ret
         end
     end
 
-    ////////////////////////////////////////////////////
-    //CSR registers
-    csr_unit # (.CONFIG(CONFIG))
-    csr_registers (
-        .clk(clk), .rst(rst),
-        .csr_inputs(csr_inputs),
-        .new_request(issue.possible_issue & gc_inputs.is_csr & ~gc_issue_hold),
-        .id(issue.id),
-        .wb(wb),
-        .gc_issue_hold(gc_issue_hold),
-        .commit(csr_ready_to_complete),
-        .gc_exception(gc_exception_r),
-        .csr_exception(csr_exception),
-        .current_privilege(current_privilege),
-        .exception_pc(exception_pc),
-        .mret(mret),
-        .sret(sret),
-        .tlb_on(tlb_on),
-        .asid(asid),
-        .immu(immu),
-        .dmmu(dmmu),
-        .retire(retire),
-        .interrupt(interrupt),
-        .timer_interrupt(timer_interrupt),
-        .wb_csr(wb_csr),
-        .trap_pc(trap_pc),
-        .csr_mepc(csr_mepc),
-        .csr_sepc(csr_sepc)
-    );
 
     ////////////////////////////////////////////////////
     //Decode / Write-back Handshaking
@@ -334,21 +289,6 @@ module gc_unit
     //A CSR write is only committed once it is the oldest instruction in the pipeline
     //while processing a csr operation, gc_issue_hold prevents further instructions from being issued
     assign issue.ready = 1;
-
-    set_clr_reg_with_rst #(.SET_OVER_CLR(0), .WIDTH(1), .RST_VALUE(0)) processing_csr_m (
-      .clk, .rst,
-      .set(issue.new_request & gc_inputs.is_csr),
-      .clr(csr_ready_to_complete),
-      .result(processing_csr)
-    );
-
-    assign csr_ready_to_complete = processing_csr & (post_issue_count == 1);
-    always_ff @(posedge clk) begin
-        if (rst)
-            csr_ready_to_complete_r <= 0;
-        else
-            csr_ready_to_complete_r <= csr_ready_to_complete;
-    end
 
     ////////////////////////////////////////////////////
     //End of Implementation

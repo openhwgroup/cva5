@@ -211,6 +211,7 @@ package taiga_config;
         int unsigned MUL;
         int unsigned DIV;
         int unsigned BR;
+        int unsigned IEC;
     } unit_id_param_t;
 
     localparam unit_id_param_t EXAMPLE_UNIT_IDS = '{
@@ -219,7 +220,8 @@ package taiga_config;
         CSR : 2,
         MUL : 3,
         DIV : 4,
-        BR : 5
+        BR : 5,
+        IEC : 6
     };
 
     ////////////////////////////////////////////////////

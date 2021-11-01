@@ -20,7 +20,7 @@
  *             Eric Matthews <ematthew@sfu.ca>
  */
 
-module csr_regs
+module csr_unit
 
     import taiga_config::*;
     import riscv_types::*;
@@ -36,24 +36,14 @@ module csr_regs
         input logic rst,
 
         //Unit Interfaces
+        unit_issue_interface.unit issue,
         input csr_inputs_t csr_inputs,
-        input logic new_request,
-        input id_t id,
         unit_writeback_interface.unit wb,
 
-        input logic gc_issue_hold,
-        input logic commit,
-
-        input exception_packet_t gc_exception,
-        output exception_packet_t csr_exception,
+        //Privilege
         output logic [1:0] current_privilege,
-        input logic [31:0] exception_pc,
 
-        //exception_control
-        input logic mret,
-        input logic sret,
-
-        //TLBs
+        //TLB and MMU
         output logic tlb_on,
         output logic [ASIDLEN-1:0] asid,
 
@@ -61,64 +51,44 @@ module csr_regs
         mmu_interface.csr immu,
         mmu_interface.csr dmmu,
 
+        //CSR exception interface
+        csr_exception_interface.csr exception,
+
+        //exception return
+        input logic mret,
+        input logic sret,
+        output logic [31:0] epc,
+
         //Retire
         input retire_packet_t retire,
+        input id_t retire_ids [RETIRE_PORTS],
 
         //External
         input logic interrupt,
-        input logic timer_interrupt,
-
-        output logic [XLEN-1:0] wb_csr,
-        output logic [31:0] trap_pc,
-        output logic [31:0] csr_mepc,
-        output logic [31:0] csr_sepc
+        input logic timer_interrupt
         );
 
     //scratch ram
     (* ramstyle = "MLAB, no_rw_check" *) logic[XLEN-1:0] scratch_regs [31:0];//Only 0x1 and 0x3 used by supervisor and machine mode respectively
     logic[XLEN-1:0] scratch_out;
 
+    logic busy;
+    logic commit;
+    logic commit_in_progress;
+
     csr_inputs_t csr_inputs_r;
 
     privilege_t privilege_level;
     privilege_t next_privilege_level;
 
-    mip_t sip_mask;
-    mie_t sie_mask;
-    logic[XLEN-1:0] sepc;
-
-    logic[XLEN-1:0] stime;
-    logic[XLEN-1:0] stimecmp;
-
-    logic[XLEN-1:0] scause;
-    logic[XLEN-1:0] stval;
-
-    logic[XLEN-1:0] sstatus;
-    logic[XLEN-1:0] stvec;
-
-    satp_t satp;
-
-    logic[CONFIG.CSRS.COUNTER_W-1:0] mcycle;
-    logic[CONFIG.CSRS.COUNTER_W-1:0] mtime;
-    logic[CONFIG.CSRS.COUNTER_W-1:0] minst_ret;
-    localparam INST_RET_INC_W = 2;
-    logic [INST_RET_INC_W-1:0] inst_ret_inc;
-
     //write_logic
     logic supervisor_write;
     logic machine_write;
-
-    //Control logic
-    logic privilege_exception;
 
     logic [XLEN-1:0] selected_csr;
     logic [XLEN-1:0] selected_csr_r;
 
     logic [31:0] updated_csr;
-
-    logic invalid_addr;
-
-    logic done;
 
     logic [255:0] swrite_decoder;
     logic [255:0] swrite_en;
@@ -126,14 +96,51 @@ module csr_regs
     logic [255:0] mwrite_en;
     ////////////////////////////////////////////////////
     //Implementation
+    assign issue.ready = ~busy;
+
     always_ff @(posedge clk) begin
-        if (new_request) begin
-            csr_inputs_r <= csr_inputs;
-        end
+        if (rst)
+            busy <= 0;
+        else
+            busy <= (busy & ~wb.ack) | issue.new_request;
     end
 
-    assign supervisor_write = commit && (csr_inputs_r.addr.rw_bits != CSR_READ_ONLY && csr_inputs_r.addr.privilege == SUPERVISOR_PRIVILEGE);
-    assign machine_write = commit && (csr_inputs_r.addr.rw_bits != CSR_READ_ONLY && csr_inputs_r.addr.privilege == MACHINE_PRIVILEGE);
+    always_ff @(posedge clk) begin
+        if (issue.new_request)
+            csr_inputs_r <= csr_inputs;
+    end
+
+    always_ff @(posedge clk) begin
+        if (rst)
+            commit_in_progress <= 0;
+        else
+            commit_in_progress <= (commit_in_progress & ~issue.new_request) | commit;
+    end
+
+    //Waits until CSR instruction is the oldest issued instruction
+    assign commit = (retire_ids[0] == wb.id) & busy & (~commit_in_progress);
+
+    ////////////////////////////////////////////////////
+    //Output
+
+    always_ff @(posedge clk) begin
+        if (rst)
+            wb.done <= 0;
+        else
+            wb.done <= (wb.done & ~wb.ack) | commit;
+    end
+
+    always_ff @(posedge clk) begin
+        if (issue.new_request)
+            wb.id <= issue.id;
+    end
+
+    assign wb.rd = selected_csr_r;
+
+    ////////////////////////////////////////////////////
+    //Shared logic
+    assign supervisor_write = CONFIG.INCLUDE_S_MODE && commit && (csr_inputs_r.addr.rw_bits != CSR_READ_ONLY && csr_inputs_r.addr.privilege == SUPERVISOR_PRIVILEGE);
+    assign machine_write = CONFIG.INCLUDE_M_MODE && commit && (csr_inputs_r.addr.rw_bits != CSR_READ_ONLY && csr_inputs_r.addr.privilege == MACHINE_PRIVILEGE);
 
     always_comb begin
         swrite_decoder = 0;
@@ -146,11 +153,6 @@ module csr_regs
         swrite_en <= swrite_decoder;
         mwrite_en <= mwrite_decoder;
     end
-
-    ////////////////////////////////////////////////////
-    //Exception Check
-    assign privilege_exception = csr_inputs_r.addr.privilege > privilege_level;
-    assign csr_exception.valid = commit & (invalid_addr | privilege_exception);
 
     always_comb begin
         case (csr_inputs_r.op)
@@ -192,7 +194,9 @@ module csr_regs
     logic[XLEN-1:0] mideleg;
     mip_t mip, mip_mask;
     mie_t mie_reg, mie_mask;
-
+    mip_t sip_mask;
+    mie_t sie_mask;
+    
     logic[XLEN-1:0] mepc;
 
     logic[XLEN-1:0] mtimecmp;
@@ -226,9 +230,9 @@ generate if (CONFIG.INCLUDE_M_MODE) begin
         exception_privilege_level = MACHINE_PRIVILEGE;
         interrupt_privilege_level = MACHINE_PRIVILEGE;
         if (CONFIG.INCLUDE_S_MODE && privilege_level inside {SUPERVISOR_PRIVILEGE, USER_PRIVILEGE}) begin
-            if (medeleg[gc_exception.code])
+            if (medeleg[exception.code])
                 exception_privilege_level = SUPERVISOR_PRIVILEGE;
-            if (mideleg[gc_exception.code])
+            if (mideleg[exception.code])
                 interrupt_privilege_level = SUPERVISOR_PRIVILEGE;
         end
     end
@@ -241,7 +245,7 @@ generate if (CONFIG.INCLUDE_M_MODE) begin
             next_privilege_level = trap_return_privilege_level;
         else if (interrupt)
             next_privilege_level = interrupt_privilege_level;
-        else if (gc_exception.valid)
+        else if (exception.valid)
             next_privilege_level = exception_privilege_level;
         else
             next_privilege_level = privilege_level;
@@ -295,7 +299,7 @@ generate if (CONFIG.INCLUDE_M_MODE) begin
     always_comb begin
         if (mwrite_en[MSTATUS[7:0]] | swrite_en[SSTATUS[7:0]])
             mstatus_new = (mstatus & ~mstatus_write_mask) | (updated_csr & mstatus_write_mask);
-        else if (interrupt | gc_exception.valid)
+        else if (interrupt | exception.valid)
             mstatus_new = mstatus_exception;
         else if (mret | sret)
             mstatus_new = mstatus_return;
@@ -318,7 +322,7 @@ generate if (CONFIG.INCLUDE_M_MODE) begin
         if (mwrite_en[MTVEC[7:0]])
             mtvec[XLEN-1:2] <= updated_csr[XLEN-1:2];
     end
-    assign trap_pc = mtvec;
+    assign exception.trap_pc = mtvec;
 
     ////////////////////////////////////////////////////
     //MEDELEG
@@ -396,10 +400,10 @@ generate if (CONFIG.INCLUDE_M_MODE) begin
     //exception causing PC.  Lower two bits tied to zero.
     always_ff @(posedge clk) begin
         mepc[1:0] <= '0;
-        if (mwrite_en[MEPC[7:0]] | gc_exception.valid)
-            mepc[XLEN-1:2] <= gc_exception.valid ? exception_pc[XLEN-1:2] : updated_csr[XLEN-1:2];
+        if (mwrite_en[MEPC[7:0]] | exception.valid)
+            mepc[XLEN-1:2] <= exception.valid ? exception.exception_pc[XLEN-1:2] : updated_csr[XLEN-1:2];
     end
-    assign csr_mepc = mepc;
+    assign epc = mepc;
 
 
     ////////////////////////////////////////////////////
@@ -445,17 +449,17 @@ generate if (CONFIG.INCLUDE_M_MODE) begin
 
     always_ff @(posedge clk) begin
         mcause.zeroes <= '0;
-        if ((mcause_write_valid & mwrite_en[MCAUSE[7:0]]) | gc_exception.valid) begin
-            mcause.interrupt <= gc_exception.valid ? 1'b0 : updated_csr[XLEN-1];
-            mcause.code <= gc_exception.valid ? gc_exception.code : updated_csr[ECODE_W-1:0];
+        if ((mcause_write_valid & mwrite_en[MCAUSE[7:0]]) | exception.valid) begin
+            mcause.interrupt <= exception.valid ? 1'b0 : updated_csr[XLEN-1];
+            mcause.code <= exception.valid ? exception.code : updated_csr[ECODE_W-1:0];
         end
     end
 
     ////////////////////////////////////////////////////
     //MTVAL
     always_ff @(posedge clk) begin
-        if (mwrite_en[MTVAL[7:0]] | gc_exception.valid)
-            mtval <=  gc_exception.valid ? gc_exception.tval : updated_csr;
+        if (mwrite_en[MTVAL[7:0]] | exception.valid)
+            mtval <=  exception.valid ? exception.tval : updated_csr;
     end
 
     ////////////////////////////////////////////////////
@@ -491,6 +495,19 @@ endgenerate
     ////////////////////////////////////////////////////
     //BEGIN OF SUPERVISOR REGS
     ////////////////////////////////////////////////////
+    logic[XLEN-1:0] sepc;
+
+    logic[XLEN-1:0] stime;
+    logic[XLEN-1:0] stimecmp;
+
+    logic[XLEN-1:0] scause;
+    logic[XLEN-1:0] stval;
+
+    logic[XLEN-1:0] sstatus;
+    logic[XLEN-1:0] stvec;
+
+    satp_t satp;
+
     //TLB status --- used to mux physical/virtual address
     assign tlb_on = CONFIG.INCLUDE_S_MODE & satp.mode;
     assign asid = satp.asid;
@@ -544,6 +561,10 @@ endgenerate
     //Timers and Counters
     //Register increment for instructions completed
     //Increments suppressed on writes to these registers
+    logic[CONFIG.CSRS.COUNTER_W-1:0] mcycle;
+    logic[CONFIG.CSRS.COUNTER_W-1:0] mtime;
+    logic[CONFIG.CSRS.COUNTER_W-1:0] minst_ret;
+
     logic[CONFIG.CSRS.COUNTER_W-1:0] mcycle_input_next;
     logic mcycle_inc;
 
@@ -577,7 +598,6 @@ endgenerate
     ////////////////////////////////////////////////////
     //CSR mux
     always_comb begin
-        invalid_addr = 0;
         case (csr_inputs_r.addr) inside
             //Machine info
             MISA :  selected_csr = CONFIG.INCLUDE_M_MODE ? misa : 0;
@@ -641,28 +661,12 @@ endgenerate
             INSTRETH : selected_csr = 32'(minst_ret[CONFIG.CSRS.COUNTER_W-1:XLEN]);
             [12'hC83 : 12'hC9F] : selected_csr = 0;
 
-            default : begin selected_csr = 0; invalid_addr = 1; end
+            default : selected_csr = 0;
         endcase
     end
     always_ff @(posedge clk) begin
         if (commit)
             selected_csr_r <= selected_csr;
     end
-
-    ////////////////////////////////////////////////////
-    //Output
-    always_ff @(posedge clk) begin
-        if (new_request)
-            wb.id <=  id;
-    end
-
-    always_ff @(posedge clk) begin
-        if (rst)
-            wb.done <= 0;
-        else
-            wb.done <= commit;
-    end
-
-    assign wb.rd = selected_csr_r;
 
 endmodule
