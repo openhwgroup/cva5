@@ -289,6 +289,7 @@ module taiga
         .clk (clk),
         .rst (rst),
         .branch_flush (branch_flush),
+        .gc_init_clear (gc_init_clear),
         .gc_fetch_hold (gc_fetch_hold),
         .gc_fetch_flush (gc_fetch_flush),
         .gc_fetch_pc_override (gc_fetch_pc_override),

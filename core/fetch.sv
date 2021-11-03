@@ -35,6 +35,7 @@ module fetch
         input logic rst,
 
         input logic branch_flush,
+        input logic gc_init_clear,
         input logic gc_fetch_hold,
         input logic gc_fetch_flush,
         input logic gc_fetch_pc_override,
@@ -123,7 +124,7 @@ module fetch
     //Fetch PC
     assign update_pc = new_mem_request | gc_fetch_flush | early_branch_flush;
     always_ff @(posedge clk) begin
-        if (rst)
+        if (gc_init_clear)
             pc <= CONFIG.CSRS.RESET_VEC;
         else if (update_pc)
             pc <= {next_pc[31:2], 2'b0};
