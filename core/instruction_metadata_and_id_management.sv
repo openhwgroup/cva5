@@ -89,12 +89,18 @@ module instruction_metadata_and_id_management
     (* ramstyle = "MLAB, no_rw_check" *) logic [$bits(fetch_metadata_t)-1:0] fetch_metadata_table [MAX_IDS];
 
     id_t decode_id;
+    id_t oldest_pre_issue_id;
 
-    logic [LOG2_MAX_IDS:0] fetched_count;
+    localparam ID_COUNTER_W = LOG2_MAX_IDS+1;
+    logic [LOG2_MAX_IDS:0] fetched_count_neg;
     logic [LOG2_MAX_IDS:0] pre_issue_count;
     logic [LOG2_MAX_IDS:0] pre_issue_count_next;
     logic [LOG2_MAX_IDS:0] post_issue_count_next;
     logic [LOG2_MAX_IDS:0] inflight_count;
+
+    retire_packet_t retire_next;
+    id_t retire_ids_next [RETIRE_PORTS];
+    logic retire_port_valid_next [RETIRE_PORTS];
 
     genvar i;
     ////////////////////////////////////////////////////
@@ -147,23 +153,23 @@ module instruction_metadata_and_id_management
     //On a fetch buffer flush, the next ID is restored to the oldest non-issued ID (decode or issue stage)
     //This prevents a stall in the case where all  IDs are either in-flight or
     //in the fetch buffer at the point of a fetch flush.
-    id_t oldest_pre_issue_id;
-    id_t next_pc_id_base;
-    id_t next_fetch_id_base;
-    assign oldest_pre_issue_id = issue.stage_valid ? issue.id : decode_id;
-    assign next_pc_id_base = gc_fetch_flush ? oldest_pre_issue_id : (early_branch_flush ? fetch_id : pc_id);
-    assign next_fetch_id_base = gc_fetch_flush ? oldest_pre_issue_id : fetch_id;
+    always_ff @ (posedge clk) begin
+        if (rst)
+            oldest_pre_issue_id <= 0;
+        else if (instruction_issued)
+            oldest_pre_issue_id <= oldest_pre_issue_id + 1;
+    end
 
     always_ff @ (posedge clk) begin
-        if (rst) begin
-            pc_id <= 0;
-            fetch_id <= 0;
-            decode_id <= 0;
+        if (gc_fetch_flush) begin
+            pc_id <= oldest_pre_issue_id;
+            fetch_id <= oldest_pre_issue_id;
+            decode_id <= oldest_pre_issue_id;
         end
         else begin
-            pc_id <= next_pc_id_base + LOG2_MAX_IDS'({pc_id_assigned & (~gc_fetch_flush)});
-            fetch_id <= next_fetch_id_base + LOG2_MAX_IDS'({fetch_complete & ~gc_fetch_flush});
-            decode_id <= ((gc_fetch_flush & issue.stage_valid) ? issue.id : decode_id) + LOG2_MAX_IDS'({decode_advance & ~gc_fetch_flush});
+            pc_id <= (early_branch_flush ? fetch_id : pc_id) + LOG2_MAX_IDS'(pc_id_assigned);
+            fetch_id <= fetch_id + LOG2_MAX_IDS'(fetch_complete);
+            decode_id <= decode_id + LOG2_MAX_IDS'(decode_advance );
         end
     end
     //Retire IDs
@@ -171,28 +177,37 @@ module instruction_metadata_and_id_management
      generate for (i = 0; i < RETIRE_PORTS; i++) begin
         always_ff @ (posedge clk) begin
             if (rst)
-                retire_ids[i] <= LOG2_MAX_IDS'(i);
+                retire_ids_next[i] <= LOG2_MAX_IDS'(i);
             else
-                retire_ids[i] <= retire_ids[i] + LOG2_MAX_IDS'(retire.count);
+                retire_ids_next[i] <= retire_ids_next[i] + LOG2_MAX_IDS'(retire_next.count);
         end
+
+        always_ff @ (posedge clk) begin
+            retire_ids[i] <= retire_ids_next[i];
+        end
+        
     end endgenerate
 
+    //Represented as a negative value so that the MSB indicates that the decode stage is valid
     always_ff @ (posedge clk) begin
-        if (rst | gc_fetch_flush)
-            fetched_count <= 0;
+        if (gc_fetch_flush)
+            fetched_count_neg <= 0;
         else
-            fetched_count <= fetched_count + (LOG2_MAX_IDS+1)'(fetch_complete) - (LOG2_MAX_IDS+1)'(decode_advance);
+            fetched_count_neg <= fetched_count_neg + ID_COUNTER_W'(decode_advance) - ID_COUNTER_W'(fetch_complete);
     end
 
-    assign pre_issue_count_next = pre_issue_count  + (LOG2_MAX_IDS+1)'(pc_id_assigned) - (LOG2_MAX_IDS+1)'(instruction_issued);
+    //Full instruction count split into two: pre-issue and post-issue
+    //pre-issue count can be cleared on a fetch flush
+    //post-issue count decremented only on retire
+    assign pre_issue_count_next = pre_issue_count  + ID_COUNTER_W'(pc_id_assigned) - ID_COUNTER_W'(instruction_issued);
     always_ff @ (posedge clk) begin
-        if (rst | gc_fetch_flush)
+        if (gc_fetch_flush)
             pre_issue_count <= 0;
         else
             pre_issue_count <= pre_issue_count_next;
     end
 
-    assign post_issue_count_next = post_issue_count  + (LOG2_MAX_IDS+1)'(instruction_issued) - (LOG2_MAX_IDS+1)'(retire.count);
+    assign post_issue_count_next = post_issue_count + ID_COUNTER_W'(instruction_issued) - ID_COUNTER_W'(retire_next.count);
     always_ff @ (posedge clk) begin
         if (rst)
             post_issue_count <= 0;
@@ -201,10 +216,10 @@ module instruction_metadata_and_id_management
     end
 
     always_ff @ (posedge clk) begin
-        if (rst)
-            inflight_count <= 0;
+        if (gc_fetch_flush)
+            inflight_count <= post_issue_count_next;
         else
-            inflight_count <= (gc_fetch_flush ? '0 : pre_issue_count_next) + post_issue_count_next;
+            inflight_count <= pre_issue_count_next + post_issue_count_next;
     end
 
     ////////////////////////////////////////////////////
@@ -227,7 +242,7 @@ module instruction_metadata_and_id_management
         .init_clear (gc_init_clear),
         .toggle ('{(instruction_issued_with_rd & issue.is_multicycle), wb_packet[1].valid}),
         .toggle_addr ('{issue.id, wb_packet[1].id}),
-        .read_addr (retire_ids),
+        .read_addr (retire_ids_next),
         .in_use (id_inuse)
     );
 
@@ -240,8 +255,10 @@ module instruction_metadata_and_id_management
     logic [RETIRE_PORTS-1:0] retire_id_uses_rd;
     logic [RETIRE_PORTS-1:0] retire_id_inuse;
 
+
+
      generate for (i = 0; i < RETIRE_PORTS; i++) begin
-        assign retire_id_uses_rd[i] = uses_rd_table[retire_ids[i]];
+        assign retire_id_uses_rd[i] = uses_rd_table[retire_ids_next[i]];
         assign retire_id_inuse[i] = id_inuse[i];
      end endgenerate
 
@@ -250,26 +267,31 @@ module instruction_metadata_and_id_management
         .priority_vector (retire_id_uses_rd & ~retire_id_inuse),
         .encoded_result (phys_id_sel)
     );
-    assign retire.phys_id = retire_ids[phys_id_sel];
+    assign retire_next.phys_id = retire_ids_next[phys_id_sel];
 
     always_comb begin
         contiguous_retire = 1;
-        retire.valid = 0;
-        retire.count = 0;
+        retire_next.valid = 0;
+        retire_next.count = 0;
         //Supports retiring up to RETIRE_PORTS instructions.  The retired block of instructions must be
         //contiguous and must start with the first retire port.  Additionally, only one register file writing 
         //instruction is supported per cycle.
         for (int i = 0; i < RETIRE_PORTS; i++) begin
-            id_is_post_issue[i] = post_issue_count > (LOG2_MAX_IDS+1)'(i);
+            id_is_post_issue[i] = post_issue_count > ID_COUNTER_W'(i);
 
             id_ready_to_retire[i] = (id_is_post_issue[i] & contiguous_retire & ~id_inuse[i]);
-            retire_port_valid[i] = id_ready_to_retire[i] & ((~retire_id_uses_rd[i]) | (~retire.valid));
+            retire_port_valid_next[i] = id_ready_to_retire[i] & ((~retire_id_uses_rd[i]) | (~retire_next.valid));
 
-            contiguous_retire &= retire_port_valid[i];
+            contiguous_retire &= retire_port_valid_next[i];
 
-            retire.valid |= retire_port_valid[i] & retire_id_uses_rd[i];
-            retire.count += retire_port_valid[i];
+            retire_next.valid |= retire_port_valid_next[i] & retire_id_uses_rd[i];
+            retire_next.count += retire_port_valid_next[i];
         end
+    end
+
+    always_ff @ (posedge clk) begin
+        retire <= retire_next;
+        retire_port_valid <= retire_port_valid_next;
     end
 
     ////////////////////////////////////////////////////
@@ -278,7 +300,7 @@ module instruction_metadata_and_id_management
 
     //Decode
     assign decode.id = decode_id;
-    assign decode.valid = |fetched_count;
+    assign decode.valid = fetched_count_neg[LOG2_MAX_IDS];
     assign decode.pc = pc_table[decode_id];
     assign decode.instruction = instruction_table[decode_id];
     assign decode.fetch_metadata = fetch_metadata_table[decode_id];

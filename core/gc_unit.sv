@@ -274,7 +274,7 @@ module gc_unit
     always_ff @ (posedge clk) begin
         gc_exception_r <= gc_exception;
         second_cycle_flush <= gc_flush_required;
-        gc_fetch_pc_override <= gc_flush_required | second_cycle_flush | ls_exception.valid | br_exception.valid;
+        gc_fetch_pc_override <= gc_flush_required | second_cycle_flush | ls_exception.valid | br_exception.valid | (next_state == INIT_CLEAR_STATE);
         if (gc_exception.valid | stage1.is_i_fence | (issue.new_request & gc_inputs.is_ret)) begin
             gc_fetch_pc <= gc_exception.valid ? trap_pc :
                 stage1.is_i_fence ? stage1.pc + 4 : //Could stall on dec_pc valid and use instead of another adder
