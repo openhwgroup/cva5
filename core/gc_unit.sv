@@ -175,8 +175,8 @@ module gc_unit
     always_ff @ (posedge clk) begin
         gc_fetch_hold <=  next_state inside {PRE_CLEAR_STATE, INIT_CLEAR_STATE};
         gc_issue_hold <= issue.new_request || second_cycle_flush || processing_csr || (next_state inside {PRE_CLEAR_STATE, INIT_CLEAR_STATE, TLB_CLEAR_STATE, IQ_DRAIN}) || potential_branch_exception;
-        gc_supress_writeback <= next_state inside {PRE_CLEAR_STATE, INIT_CLEAR_STATE, TLB_CLEAR_STATE} ? 1 : 0;
-        gc_init_clear <= (next_state == INIT_CLEAR_STATE);
+        gc_supress_writeback <= next_state inside {PRE_CLEAR_STATE, INIT_CLEAR_STATE, TLB_CLEAR_STATE};
+        gc_init_clear <= next_state inside {INIT_CLEAR_STATE};
         gc_tlb_flush <= next_state inside {INIT_CLEAR_STATE, TLB_CLEAR_STATE};
     end
 
@@ -206,20 +206,17 @@ module gc_unit
         endcase
     end
 
-    //Counters for tlb clearing states
-    shift_counter #(.DEPTH(INIT_CLEAR_DEPTH)) init_clear_counter (
-        .clk    (clk),
-        .rst    (rst), 
-        .start  ((state == PRE_CLEAR_STATE)), 
-        .done   (init_clear_done)
-    );
-
-    shift_counter #(.DEPTH(TLB_CLEAR_DEPTH)) tlb_clear_counter (
-        .clk    (clk),
-        .rst    (rst), 
-        .start  ((state == IDLE_STATE) && (next_state == TLB_CLEAR_STATE)), 
-        .done   (tlb_clear_done)
-    );
+    ////////////////////////////////////////////////////
+    //State Counter
+    logic [$clog2(INIT_CLEAR_DEPTH):0] state_counter;
+    always_ff @ (posedge clk) begin
+        if (rst | next_state inside {IDLE_STATE})
+            state_counter <= 0;
+        else if (next_state inside {INIT_CLEAR_STATE, TLB_CLEAR_STATE})
+            state_counter <= state_counter + 1;
+    end
+    assign init_clear_done = state_counter[$clog2(INIT_CLEAR_DEPTH)];
+    assign tlb_clear_done = state_counter[$clog2(TLB_CLEAR_DEPTH)];
 
     ////////////////////////////////////////////////////
     //mret/sret
