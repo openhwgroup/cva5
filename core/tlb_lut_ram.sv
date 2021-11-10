@@ -74,14 +74,14 @@ module tlb_lut_ram
     //LUTRAM-based
     //Reset is performed sequentially, coordinated by the gc unit
 
-    always_ff @ (posedge clk) begin
-        if (~gc_tlb_flush)
-            flush_addr <= 0;
-        else
-            flush_addr <= flush_addr + 1;
-    end
+    lfsr #(.WIDTH($clog2(DEPTH)))
+    unordered_counter (
+        .clk (clk), .rst (rst),
+        .en(gc_tlb_flush),
+        .value(flush_addr)
+    );
 
-    assign tlb_addr = tlb.virtual_address[12 +: $clog2(DEPTH)];
+    assign tlb_addr = gc_tlb_flush ? flush_addr : tlb.virtual_address[12 +: $clog2(DEPTH)];
     assign tlb_write = {WAYS{gc_tlb_flush}}  | replacement_way;
 
     assign new_entry.valid = ~gc_tlb_flush;

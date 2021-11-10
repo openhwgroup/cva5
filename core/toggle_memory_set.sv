@@ -52,11 +52,12 @@ module toggle_memory_set
     logic [$clog2(DEPTH)-1:0] clear_index;
 
     //counter for indexing through memories for post-reset clearing/initialization
-    initial clear_index = 0;
-    always_ff @ (posedge clk) begin
-        if (init_clear)
-            clear_index <= clear_index + 1;
-    end
+    lfsr #(.WIDTH($clog2(DEPTH)))
+    unordered_counter (
+        .clk (clk), .rst (rst),
+        .en(init_clear),
+        .value(clear_index)
+    );
     
     //muxing of read and write ports to support post-reset clearing/initialization
     always_comb begin
