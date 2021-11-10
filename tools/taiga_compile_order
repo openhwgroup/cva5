@@ -11,6 +11,8 @@ local_memory/local_mem.sv
 core/interfaces.sv  
 core/external_interfaces.sv  
 
+core/lfsr.sv
+
 core/csr_unit.sv  
 core/gc_unit.sv  
 
