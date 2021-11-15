@@ -24,7 +24,11 @@ package taiga_config;
 
     ////////////////////////////////////////////////////
     //Vendor Selection
-    localparam FPGA_VENDOR = "xilinx"; //xilinx or intel
+    typedef enum {
+        XILINX = 0,
+        INTEL = 1
+    } vendor_config_t;
+    localparam vendor_config_t FPGA_VENDOR = XILINX;
 
     ////////////////////////////////////////////////////
     //CSR Options

@@ -49,7 +49,7 @@ module byte_en_BRAM
     );
 
     generate
-        if(FPGA_VENDOR == "xilinx")
+        if(FPGA_VENDOR == XILINX)
             xilinx_byte_enable_ram #(LINES, preload_file, USE_PRELOAD_FILE) ram_block (.*);
         else
             intel_byte_enable_ram #(LINES, preload_file, USE_PRELOAD_FILE) ram_block (.*);
