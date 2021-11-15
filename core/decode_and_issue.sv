@@ -47,6 +47,9 @@ module decode_and_issue
         output logic decode_uses_rd,
         output rs_addr_t decode_rd_addr,
         output phys_addr_t decode_phys_rd_addr,
+        output phys_addr_t decode_phys_rs_addr [REGFILE_READ_PORTS],
+        output logic [$clog2(CONFIG.NUM_WB_GROUPS)-1:0] decode_rs_wb_group [REGFILE_READ_PORTS],
+
         output logic instruction_issued,
         output logic instruction_issued_with_rd,
         output issue_packet_t issue,
@@ -188,6 +191,10 @@ module decode_and_issue
     assign decode_uses_rd = uses_rd;
     assign decode_rd_addr = rd_addr;
     assign decode_phys_rd_addr = renamer.phys_rd_addr;
+    assign decode_phys_rs_addr[RS1] = renamer.phys_rs_addr[RS1];
+    assign decode_phys_rs_addr[RS2] = renamer.phys_rs_addr[RS2];
+    assign decode_rs_wb_group[RS1] = renamer.rs_wb_group[RS1];
+    assign decode_rs_wb_group[RS2] = renamer.rs_wb_group[RS2];
 
     ////////////////////////////////////////////////////
     //Issue
@@ -253,8 +260,8 @@ module decode_and_issue
     assign rf.phys_rd_addr = issue.phys_rd_addr;
     assign rf.rs_wb_group[RS1] = issue_rs_wb_group[RS1];
     assign rf.rs_wb_group[RS2] = issue_rs_wb_group[RS2];
-    assign rf.rd_wb_group = issue.is_multicycle;
-    assign rf.issued = instruction_issued_with_rd;
+    
+    assign rf.single_cycle_or_flush = (instruction_issued_with_rd & |issue.rd_addr & ~issue.is_multicycle) | (issue.stage_valid & issue.uses_rd & |issue.rd_addr & gc_fetch_flush);
     ////////////////////////////////////////////////////
     //ALU unit inputs
     logic [XLEN-1:0] alu_rs2_data;

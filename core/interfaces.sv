@@ -354,17 +354,16 @@ interface register_file_issue_interface #(parameter NUM_WB_GROUPS = 2);
     logic [31:0] data [REGFILE_READ_PORTS];
     logic inuse [REGFILE_READ_PORTS];
 
-    //write interface
+    //issue write interface
     phys_addr_t phys_rd_addr;
-    logic [$clog2(NUM_WB_GROUPS)-1:0] rd_wb_group;
-    logic issued;
+    logic single_cycle_or_flush;
 
     modport register_file (
-        input phys_rs_addr, phys_rd_addr, issued, rs_wb_group, rd_wb_group,
+        input phys_rs_addr, phys_rd_addr, single_cycle_or_flush, rs_wb_group,
         output data, inuse
     );
     modport issue (
-        output phys_rs_addr, phys_rd_addr, issued, rs_wb_group, rd_wb_group,
+        output phys_rs_addr, phys_rd_addr, single_cycle_or_flush, rs_wb_group,
         input data, inuse
     );
 endinterface

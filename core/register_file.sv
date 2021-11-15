@@ -35,6 +35,14 @@ module register_file
         input logic rst,
 
         input logic gc_init_clear,
+        input logic gc_fetch_flush,
+
+        //decode write interface
+        input phys_addr_t decode_phys_rs_addr [REGFILE_READ_PORTS],
+        input logic [$clog2(CONFIG.NUM_WB_GROUPS)-1:0] decode_rs_wb_group [REGFILE_READ_PORTS],
+        input phys_addr_t decode_phys_rd_addr,
+        input logic decode_advance,
+        input logic decode_uses_rd,
 
         //Issue interface
         register_file_issue_interface.register_file rf_issue,
@@ -45,8 +53,8 @@ module register_file
     typedef logic [31:0] rs_data_set_t [REGFILE_READ_PORTS];
     rs_data_set_t rs_data_set [CONFIG.NUM_WB_GROUPS];
 
-    typedef logic inuse_t [REGFILE_READ_PORTS]; 
-    inuse_t phys_reg_inuse_set [CONFIG.NUM_WB_GROUPS];
+    logic decode_inuse [REGFILE_READ_PORTS];
+    logic decode_inuse_r [REGFILE_READ_PORTS];
 
     genvar i;
     ////////////////////////////////////////////////////
@@ -54,16 +62,13 @@ module register_file
 
     ////////////////////////////////////////////////////
     //Phys register inuse
-    //WB group 0 contains the ALU, a single-cycle unit, thus any preceeding
-    //instructions will have written their data to the register file
-    assign phys_reg_inuse_set[0] = '{default : 0};
+    //toggle ports: decode advance, single-cycle/fetch_flush, multi-cycle commit
+    //read ports: rs-decode, rs-issue
 
-    //WB groups 1+ have multiple-cycle operation and thus a status flag is set
-    //for each physical register
     toggle_memory_set # (
         .DEPTH (64),
-        .NUM_WRITE_PORTS (2),
-        .NUM_READ_PORTS (REGFILE_READ_PORTS),
+        .NUM_WRITE_PORTS (3),
+        .NUM_READ_PORTS (REGFILE_READ_PORTS*2),
         .WRITE_INDEX_FOR_RESET (0),
         .READ_INDEX_FOR_RESET (0)
     ) id_inuse_toggle_mem_set
@@ -71,39 +76,62 @@ module register_file
         .clk (clk),
         .rst (rst),
         .init_clear (gc_init_clear),
-        .toggle ('{(rf_issue.issued & (rf_issue.rd_wb_group == 1) & |rf_issue.phys_rd_addr), commit[1].valid}),
-        .toggle_addr ('{rf_issue.phys_rd_addr, commit[1].phys_addr}),
-        .read_addr (rf_issue.phys_rs_addr),
-        .in_use (phys_reg_inuse_set[1])
+        .toggle ('{
+            (decode_advance & decode_uses_rd & |decode_phys_rd_addr & ~gc_fetch_flush),
+            rf_issue.single_cycle_or_flush,
+            commit[1].valid
+        }),
+        .toggle_addr ('{
+            decode_phys_rd_addr, 
+            rf_issue.phys_rd_addr, 
+            commit[1].phys_addr
+        }),
+        .read_addr ('{
+            decode_phys_rs_addr[RS1], 
+            decode_phys_rs_addr[RS2], 
+            rf_issue.phys_rs_addr[RS1], 
+            rf_issue.phys_rs_addr[RS2]
+        }),
+        .in_use ('{
+            decode_inuse[RS1],
+            decode_inuse[RS2],
+            rf_issue.inuse[RS1],
+            rf_issue.inuse[RS2]
+        })
     );
-    always_comb begin
-        for (int i = 0; i < REGFILE_READ_PORTS; i++) begin
-            rf_issue.inuse[i] = phys_reg_inuse_set[rf_issue.rs_wb_group[i]][i];
-        end
+    always_ff @ (posedge clk) begin
+        if (decode_advance)
+            decode_inuse_r <= decode_inuse;
     end
-
     ////////////////////////////////////////////////////
     //Register Banks
     //Implemented in seperate module as there is not universal tool support for inferring
     //arrays of memory blocks.
     generate for (i = 0; i < CONFIG.NUM_WB_GROUPS; i++) begin : register_file_gen
-        register_bank #(.NUM_READ_PORTS(REGFILE_READ_PORTS)) reg_group (
+        register_bank #(.NUM_READ_PORTS(REGFILE_READ_PORTS))
+        reg_group (
             .clk, .rst,
             .write_addr(commit[i].phys_addr),
             .new_data(commit[i].data),
             .commit(commit[i].valid),
-            .read_addr(rf_issue.phys_rs_addr),
+            .read_addr(decode_phys_rs_addr),
             .data(rs_data_set[i])
         );
     end endgenerate
 
     ////////////////////////////////////////////////////
     //Register File Muxing
-    always_comb begin
-        for (int i = 0; i < REGFILE_READ_PORTS; i++) begin
-            rf_issue.data[i] = rs_data_set[rf_issue.rs_wb_group[i]][i];
-        end
-    end
+    logic [$clog2(CONFIG.NUM_WB_GROUPS)-1:0] rs_wb_group [REGFILE_READ_PORTS];
+    logic bypass [REGFILE_READ_PORTS];
+    assign rs_wb_group = decode_advance ? decode_rs_wb_group : rf_issue.rs_wb_group;
+    assign bypass = decode_advance ? decode_inuse : decode_inuse_r;
+
+    always_ff @ (posedge clk) begin
+       for (int i = 0; i < REGFILE_READ_PORTS; i++) begin
+           if (decode_advance | rf_issue.inuse[i])
+               rf_issue.data[i] <= bypass[i] ? commit[rs_wb_group[i]].data : rs_data_set[rs_wb_group[i]][i];
+       end
+   end
 
     ////////////////////////////////////////////////////
     //End of Implementation

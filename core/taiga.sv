@@ -149,6 +149,9 @@ module taiga
     logic decode_uses_rd;
     rs_addr_t decode_rd_addr;
     phys_addr_t decode_phys_rd_addr;
+    phys_addr_t decode_phys_rs_addr [REGFILE_READ_PORTS];
+    logic [$clog2(CONFIG.NUM_WB_GROUPS)-1:0] decode_rs_wb_group [REGFILE_READ_PORTS];
+
         //ID freeing
     retire_packet_t retire;
     id_t retire_ids [RETIRE_PORTS];
@@ -394,6 +397,8 @@ module taiga
         .decode_uses_rd (decode_uses_rd),
         .decode_rd_addr (decode_rd_addr),
         .decode_phys_rd_addr (decode_phys_rd_addr),
+        .decode_phys_rs_addr (decode_phys_rs_addr),
+        .decode_rs_wb_group (decode_rs_wb_group),
         .instruction_issued (instruction_issued),
         .instruction_issued_with_rd (instruction_issued_with_rd),
         .issue (issue),
@@ -440,6 +445,12 @@ module taiga
         .clk (clk),
         .rst (rst),
         .gc_init_clear (gc_init_clear),
+        .gc_fetch_flush (gc_fetch_flush),
+        .decode_phys_rs_addr (decode_phys_rs_addr),
+        .decode_phys_rd_addr (decode_phys_rd_addr),
+        .decode_rs_wb_group (decode_rs_wb_group),
+        .decode_advance (decode_advance),
+        .decode_uses_rd (decode_uses_rd),
         .rf_issue (rf_issue),
         .commit (commit_packet)
     );
