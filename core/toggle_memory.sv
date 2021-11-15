@@ -26,7 +26,8 @@ module toggle_memory
     import taiga_types::*;
     
     # (
-        parameter DEPTH = 8
+        parameter DEPTH = 8,
+        parameter NUM_READ_PORTS = 2
     )
     (
         input logic clk,
@@ -35,8 +36,8 @@ module toggle_memory
         input logic toggle,
         input logic [$clog2(DEPTH)-1:0] toggle_id,
 
-        input logic [$clog2(DEPTH)-1:0] read_id,
-        output logic read_data
+        input logic [$clog2(DEPTH)-1:0] read_id [NUM_READ_PORTS],
+        output logic read_data [NUM_READ_PORTS]
     );
     ////////////////////////////////////////////////////
     //Implementation
@@ -46,8 +47,14 @@ module toggle_memory
     always_ff @ (posedge clk) begin
         id_toggle_memory[toggle_id] <= toggle ^ id_toggle_memory[toggle_id];
     end
+    
+    generate
+    for (genvar i = 0; i < NUM_READ_PORTS; i++) begin : read_port_gen
+        assign read_data[i] = id_toggle_memory[read_id[i]];
+    end
+    endgenerate
+    
 
-    assign read_data = id_toggle_memory[read_id];
 
     ////////////////////////////////////////////////////
     //End of Implementation
