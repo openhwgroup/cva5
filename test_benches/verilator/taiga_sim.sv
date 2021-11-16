@@ -448,7 +448,11 @@ module taiga_sim
     genvar i, j;
     generate  for (i = 0; i < 32; i++) begin
         for (j = 0; j < EXAMPLE_CONFIG.NUM_WB_GROUPS; j++) begin
-            assign translation[i] = cpu.renamer_block.spec_table_ram.xilinx_gen.ram[i];
+            if (FPGA_VENDOR == XILINX)
+                assign translation[i] = cpu.renamer_block.spec_table_ram.xilinx_gen.ram[i];
+            else if (FPGA_VENDOR == INTEL)
+                assign translation[i] = cpu.renamer_block.spec_table_ram.intel_gen.lutrams[0].write_port.ram[i];
+
             assign sim_registers_unamed_groups[j][i] = 
             cpu.register_file_block.register_file_gen[j].reg_group.register_file_bank[translation[i].phys_addr];
         end

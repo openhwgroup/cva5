@@ -60,7 +60,7 @@ generate if (FPGA_VENDOR == XILINX) begin : xilinx_gen
 end
 else if (FPGA_VENDOR == INTEL) begin : intel_gen
 
-    for (genvar i = 0; i < NUM_READ_PORTS; i++) begin
+    for (genvar i = 0; i < NUM_READ_PORTS; i++) begin : lutrams
         lutram_1w_1r #(.WIDTH(WIDTH), .DEPTH(DEPTH))
         write_port (
             .clk(clk),

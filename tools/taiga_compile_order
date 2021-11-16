@@ -74,7 +74,6 @@ core/clz.sv
 core/div_core.sv
 core/div_unit.sv  
 
-core/lut_ram.sv  
 core/tlb_lut_ram.sv  
 core/mmu.sv  
 

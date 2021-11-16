@@ -60,7 +60,7 @@ module tlb_lut_ram
     logic hit;
     logic [WAYS-1:0] replacement_way;
 
-    logic [$bits(tlb_entry_t)-1:0] ram_data [WAYS-1:0][1];
+    logic [$bits(tlb_entry_t)-1:0] ram_data [WAYS-1:0];
     tlb_entry_t ram_entry [WAYS-1:0];
     tlb_entry_t new_entry;
 
@@ -91,16 +91,16 @@ module tlb_lut_ram
     genvar i;
     generate
         for (i=0; i<WAYS; i=i+1) begin : lut_rams
-            lut_ram #(.WIDTH($bits(tlb_entry_t)), .DEPTH(DEPTH), .READ_PORTS(1))
-            ram_block (
+            lutram_1w_1r #(.WIDTH($bits(tlb_entry_t)), .DEPTH(DEPTH))
+            write_port (
                 .clk(clk),
                 .waddr(tlb_addr),
+                .raddr(tlb_addr),
                 .ram_write(tlb_write[i]),
                 .new_ram_data(new_entry),
-                .raddr('{tlb_addr}),
                 .ram_data_out(ram_data[i])
             );
-            assign ram_entry[i] = ram_data[i][0];
+            assign ram_entry[i] = ram_data[i];
         end
     endgenerate
 
