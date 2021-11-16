@@ -92,11 +92,12 @@ module renamer
         phys_addr_t phys_addr;
         logic [$clog2(CONFIG.NUM_WB_GROUPS)-1:0] wb_group;
     } spec_table_t;
+    logic [4:0] spec_table_read_addr [REGFILE_READ_PORTS+1];
+    spec_table_t spec_table_read_data [REGFILE_READ_PORTS+1];
+
     spec_table_t spec_table_next;
     spec_table_t spec_table_old;
     spec_table_t spec_table_old_r;
-
-    (* ramstyle = "MLAB, no_rw_check" *) spec_table_t spec_table [32];
 
     logic spec_table_update;
     logic [4:0] spec_table_write_index;
@@ -121,10 +122,26 @@ module renamer
         end
     end
 
-    assign spec_table_old = spec_table[spec_table_write_index];
+    assign spec_table_read_addr[0] = spec_table_write_index;
+    assign spec_table_read_addr[1:REGFILE_READ_PORTS] = '{decode.rs_addr[RS1], decode.rs_addr[RS2]};
+
+    lutram_1w_mr #(
+        .WIDTH($bits(spec_table_t)),
+        .DEPTH(32),
+        .NUM_READ_PORTS(REGFILE_READ_PORTS+1)
+    )
+    spec_table_ram (
+        .clk(clk),
+        .waddr(spec_table_write_index),
+        .raddr(spec_table_read_addr),
+        .ram_write(spec_table_update),
+        .new_ram_data(spec_table_next),
+        .ram_data_out(spec_table_read_data)
+    );
+    assign spec_table_old = spec_table_read_data[0];
+
     always_ff @ (posedge clk) begin
         if (spec_table_update) begin
-            spec_table[spec_table_write_index] <= spec_table_next;
             spec_table_old_r <= spec_table_old;
         end
     end
@@ -140,7 +157,7 @@ module renamer
     //Renamed Outputs
     spec_table_t [REGFILE_READ_PORTS-1:0] spec_table_decode;
     generate for (genvar i = 0; i < REGFILE_READ_PORTS; i++) begin
-        assign spec_table_decode[i] = spec_table[decode.rs_addr[i]];
+        assign spec_table_decode[i] = spec_table_read_data[i+1];
         assign decode.phys_rs_addr[i] = spec_table_decode[i].phys_addr;
         assign decode.rs_wb_group[i] = spec_table_decode[i].wb_group;
     end endgenerate

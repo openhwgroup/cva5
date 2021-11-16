@@ -42,7 +42,7 @@ module lutram_1w_mr
 
 //For Xilinx with their wider selection of LUTRAMs, infer a multi-read port LUTRAM
 //For Intel, build the multi-read port ram from simple-dual-port LUTRAMs
-generate if (FPGA_VENDOR == XILINX) begin
+generate if (FPGA_VENDOR == XILINX) begin : xilinx_gen
     logic [WIDTH-1:0] ram [DEPTH-1:0];
 
     initial ram = '{default: 0};
@@ -58,7 +58,7 @@ generate if (FPGA_VENDOR == XILINX) begin
     end
 
 end
-else if (FPGA_VENDOR == INTEL) begin
+else if (FPGA_VENDOR == INTEL) begin : intel_gen
 
     for (genvar i = 0; i < NUM_READ_PORTS; i++) begin
         lutram_1w_1r #(.WIDTH(WIDTH), .DEPTH(DEPTH))
