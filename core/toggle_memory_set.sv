@@ -53,7 +53,7 @@ module toggle_memory_set
     logic [$clog2(DEPTH)-1:0] clear_index;
 
     //counter for indexing through memories for post-reset clearing/initialization
-    lfsr #(.WIDTH($clog2(DEPTH)))
+    lfsr #(.WIDTH($clog2(DEPTH)), .NEEDS_RESET(0))
     lfsr_counter (
         .clk (clk), .rst (rst),
         .en(init_clear),

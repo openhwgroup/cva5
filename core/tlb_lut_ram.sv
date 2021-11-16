@@ -74,7 +74,7 @@ module tlb_lut_ram
     //LUTRAM-based
     //Reset is performed sequentially, coordinated by the gc unit
 
-    lfsr #(.WIDTH($clog2(DEPTH)))
+    lfsr #(.WIDTH($clog2(DEPTH)), .NEEDS_RESET(0))
     lfsr_counter (
         .clk (clk), .rst (rst),
         .en(gc_tlb_flush),

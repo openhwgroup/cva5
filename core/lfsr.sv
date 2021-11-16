@@ -25,7 +25,7 @@ module lfsr
 
     #(
         parameter WIDTH = 3,
-        parameter FULL_RANGE = 1
+        parameter NEEDS_RESET = 1
     )
     (
         input logic clk,
@@ -81,21 +81,23 @@ module lfsr
     logic feedback;
     ////////////////////////////////////////////////////
     //Implementation
-
-    generate begin
+    generate if (WIDTH == 2) begin
+        assign feedback = ~value[WIDTH-1];
+    end
+    else begin
         for (genvar i = 0; i < NUM_TAPS[TAPS_INDEX]; i++) begin
             assign feedback_input[i] = value[TAPS[TAPS_INDEX][i + 1] - 1];
         end
         //XNOR of taps and range extension to include all ones
-        if (FULL_RANGE)
-            assign feedback = (~^feedback_input) ^ |value[WIDTH-2:0];
-        else
-            assign feedback = (~^feedback_input);
-    end endgenerate
+        assign feedback = (~^feedback_input) ^ |value[WIDTH-2:0];
+    end
+    endgenerate
 
     initial value = 0;
     always_ff @ (posedge clk) begin
-        if (en)
+        if (NEEDS_RESET & rst)
+            value <= '0;
+        else if (en)
             value <= {value[WIDTH-2:0], feedback};
     end
 
