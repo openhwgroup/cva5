@@ -104,13 +104,13 @@ module taiga_fifo
         assign fifo.valid = inflight_count[LOG2_FIFO_DEPTH];
         assign fifo.full = fifo.valid & ~|inflight_count[LOG2_FIFO_DEPTH-1:0];
 
-        lfsr #(.WIDTH(LOG2_FIFO_DEPTH))
+        lfsr #(.WIDTH(LOG2_FIFO_DEPTH), .NEEDS_RESET(1))
         lfsr_read_index (
             .clk (clk),.rst (rst),
             .en(fifo.pop),
             .value(read_index)
         );
-        lfsr #(.WIDTH(LOG2_FIFO_DEPTH))
+        lfsr #(.WIDTH(LOG2_FIFO_DEPTH), .NEEDS_RESET(1))
         lfsr_write_index (
             .clk (clk), .rst (rst),
             .en(fifo.push),
