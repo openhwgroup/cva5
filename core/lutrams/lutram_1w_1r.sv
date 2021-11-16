@@ -36,7 +36,7 @@ module lutram_1w_1r
         output logic[WIDTH-1:0] ram_data_out
     );
 
-    (* ramstyle = "MLAB, no_rw_check" *) logic [WIDTH-1:0] ram [DEPTH-1:0];
+    (* ramstyle = "MLAB, no_rw_check", ram_style = "distributed" *) logic [WIDTH-1:0] ram [DEPTH-1:0];
 
     initial ram = '{default: 0};
     always_ff @ (posedge clk) begin

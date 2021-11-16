@@ -75,7 +75,7 @@ module tlb_lut_ram
     //Reset is performed sequentially, coordinated by the gc unit
 
     lfsr #(.WIDTH($clog2(DEPTH)))
-    unordered_counter (
+    lfsr_counter (
         .clk (clk), .rst (rst),
         .en(gc_tlb_flush),
         .value(flush_addr)
