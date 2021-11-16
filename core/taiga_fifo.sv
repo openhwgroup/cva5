@@ -104,22 +104,28 @@ module taiga_fifo
         assign fifo.valid = inflight_count[LOG2_FIFO_DEPTH];
         assign fifo.full = fifo.valid & ~|inflight_count[LOG2_FIFO_DEPTH-1:0];
 
-        always_ff @ (posedge clk) begin
-            if (rst) begin
-                read_index <= '0;
-                write_index <= '0;
-            end
-            else begin
-                read_index <= read_index + LOG2_FIFO_DEPTH'(fifo.pop);
-                write_index <= write_index + LOG2_FIFO_DEPTH'(fifo.push);
-            end
-        end
+        lfsr #(.WIDTH(LOG2_FIFO_DEPTH))
+        lfsr_read_index (
+            .clk (clk),.rst (rst),
+            .en(fifo.pop),
+            .value(read_index)
+        );
+        lfsr #(.WIDTH(LOG2_FIFO_DEPTH))
+        lfsr_write_index (
+            .clk (clk), .rst (rst),
+            .en(fifo.push),
+            .value(write_index)
+        );
 
-        always_ff @ (posedge clk) begin
-            if (fifo.potential_push)
-                lut_ram[write_index] <= fifo.data_in;
-        end
-        assign fifo.data_out = lut_ram[read_index];
+        lutram_1w_1r #(.WIDTH(DATA_WIDTH), .DEPTH(FIFO_DEPTH))
+        write_port (
+            .clk(clk),
+            .waddr(write_index),
+            .raddr(read_index),
+            .ram_write(fifo.potential_push),
+            .new_ram_data(fifo.data_in),
+            .ram_data_out(fifo.data_out)
+        );
     end
     endgenerate
 
