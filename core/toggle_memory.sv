@@ -41,20 +41,30 @@ module toggle_memory
     );
     ////////////////////////////////////////////////////
     //Implementation
-    (* ramstyle = "MLAB, no_rw_check" *) logic [0:0] id_toggle_memory [DEPTH];
+    logic new_ram_data;
+    logic _read_data [NUM_READ_PORTS+1];
+    logic [$clog2(DEPTH)-1:0] _read_id [NUM_READ_PORTS+1];
 
-    initial id_toggle_memory = '{default: 0};
-    always_ff @ (posedge clk) begin
-        id_toggle_memory[toggle_id] <= toggle ^ id_toggle_memory[toggle_id];
-    end
-    
-    generate
-    for (genvar i = 0; i < NUM_READ_PORTS; i++) begin : read_port_gen
-        assign read_data[i] = id_toggle_memory[read_id[i]];
-    end
-    endgenerate
-    
+    assign _read_id[0] = toggle_id;
+    assign _read_id[1:NUM_READ_PORTS] = read_id;
 
+    assign new_ram_data = toggle ^ _read_data[0];
+
+    lutram_1w_mr #(
+        .WIDTH(1),
+        .DEPTH(DEPTH),
+        .NUM_READ_PORTS(NUM_READ_PORTS+1)
+    )
+    write_port (
+        .clk(clk),
+        .waddr(toggle_id),
+        .raddr(_read_id),
+        .ram_write(1'b1),
+        .new_ram_data(new_ram_data),
+        .ram_data_out(_read_data)
+    );
+
+    assign read_data = _read_data[1:NUM_READ_PORTS];
 
     ////////////////////////////////////////////////////
     //End of Implementation
