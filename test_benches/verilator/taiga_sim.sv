@@ -440,13 +440,19 @@ module taiga_sim
     logic [31:0][31:0] sim_registers_unamed;
 
     simulation_named_regfile sim_register;
+   typedef struct packed{
+        phys_addr_t phys_addr;
+        logic [$clog2(EXAMPLE_CONFIG.NUM_WB_GROUPS)-1:0] wb_group;
+    } spec_table_t;
+    spec_table_t translation [32];
     genvar i, j;
     generate  for (i = 0; i < 32; i++) begin
         for (j = 0; j < EXAMPLE_CONFIG.NUM_WB_GROUPS; j++) begin
+            assign translation[i] = cpu.renamer_block.spec_table_ram.xilinx_gen.ram[i];
             assign sim_registers_unamed_groups[j][i] = 
-            cpu.register_file_block.register_file_gen[j].reg_group.register_file_bank[cpu.renamer_block.spec_table[i].phys_addr];
+            cpu.register_file_block.register_file_gen[j].reg_group.register_file_bank[translation[i].phys_addr];
         end
-        assign sim_registers_unamed[31-i] = sim_registers_unamed_groups[cpu.renamer_block.spec_table[i].wb_group][i];
+        assign sim_registers_unamed[31-i] = sim_registers_unamed_groups[translation[i].wb_group][i];
     end
     endgenerate
 
