@@ -11,6 +11,9 @@ local_memory/local_mem.sv
 core/interfaces.sv  
 core/external_interfaces.sv  
 
+core/lutrams/lutram_1w_1r.sv
+core/lutrams/lutram_1w_mr.sv
+
 core/lfsr.sv
 
 core/csr_unit.sv  
