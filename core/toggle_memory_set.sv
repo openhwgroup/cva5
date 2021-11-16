@@ -54,7 +54,7 @@ module toggle_memory_set
 
     //counter for indexing through memories for post-reset clearing/initialization
     lfsr #(.WIDTH($clog2(DEPTH)))
-    unordered_counter (
+    lfsr_counter (
         .clk (clk), .rst (rst),
         .en(init_clear),
         .value(clear_index)
