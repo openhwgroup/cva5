@@ -52,7 +52,7 @@ module csr_unit
         mmu_interface.csr dmmu,
 
         //CSR exception interface
-        csr_exception_interface.csr exception,
+        input exception_packet_t exception,
 
         //exception return
         input logic mret,
@@ -154,13 +154,15 @@ module csr_unit
         mwrite_en <= mwrite_decoder;
     end
 
-    always_comb begin
-        case (csr_inputs_r.op)
-            CSR_RW : updated_csr = csr_inputs_r.data;
-            CSR_RS : updated_csr = selected_csr_r | csr_inputs_r.data;
-            CSR_RC : updated_csr = selected_csr_r & ~csr_inputs_r.data;
-            default : updated_csr = csr_inputs_r.data;
-        endcase
+    always_ff @(posedge clk) begin
+        if (commit) begin
+            case (csr_inputs_r.op)
+                CSR_RW : updated_csr = csr_inputs_r.data;
+                CSR_RS : updated_csr = selected_csr | csr_inputs_r.data;
+                CSR_RC : updated_csr = selected_csr & ~csr_inputs_r.data;
+                default : updated_csr = csr_inputs_r.data;
+            endcase
+        end
     end
 
     ////////////////////////////////////////////////////
@@ -322,7 +324,7 @@ generate if (CONFIG.INCLUDE_M_MODE) begin
         if (mwrite_en[MTVEC[7:0]])
             mtvec[XLEN-1:2] <= updated_csr[XLEN-1:2];
     end
-    assign exception.trap_pc = mtvec;
+    //assign exception.trap_pc = mtvec;
 
     ////////////////////////////////////////////////////
     //MEDELEG
@@ -401,7 +403,7 @@ generate if (CONFIG.INCLUDE_M_MODE) begin
     always_ff @(posedge clk) begin
         mepc[1:0] <= '0;
         if (mwrite_en[MEPC[7:0]] | exception.valid)
-            mepc[XLEN-1:2] <= exception.valid ? exception.exception_pc[XLEN-1:2] : updated_csr[XLEN-1:2];
+            mepc[XLEN-1:2] <= exception.valid ? exception.pc[XLEN-1:2] : updated_csr[XLEN-1:2];
     end
     assign epc = mepc;
 
