@@ -74,8 +74,7 @@ module instruction_metadata_and_id_management
         //CSR
         output logic [LOG2_MAX_IDS:0] post_issue_count,
         //Exception
-        input id_t exception_id,
-        output logic [31:0] exception_pc
+        output logic [31:0] oldest_pc
 
     );
     //////////////////////////////////////////
@@ -321,7 +320,7 @@ module instruction_metadata_and_id_management
 
     //Exception Support
      generate if (CONFIG.INCLUDE_M_MODE) begin
-         assign exception_pc = pc_table[exception_id];
+         assign oldest_pc = pc_table[retire_ids[0]];
      end endgenerate
 
     ////////////////////////////////////////////////////

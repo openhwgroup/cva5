@@ -39,9 +39,7 @@ module branch_unit
         output branch_results_t br_results,
         output logic branch_flush,
 
-        output logic potential_branch_exception,
-        output logic branch_exception_is_jump,
-        output exception_packet_t br_exception,
+        exception_interface.unit exception,
 
         //Trace signals
         output logic tr_branch_correct,
@@ -78,7 +76,7 @@ module branch_unit
     set_clr_reg_with_rst #(.SET_OVER_CLR(1), .WIDTH(1), .RST_VALUE(0)) branch_issued_m (
       .clk, .rst,
       .set(issue.new_request),
-      .clr(branch_inputs.issue_pc_valid | br_exception.valid),
+      .clr(branch_inputs.issue_pc_valid | exception.valid),
       .result(branch_issued_r)
     );
 
@@ -113,21 +111,23 @@ module branch_unit
 
     ////////////////////////////////////////////////////
     //Exception support
-    id_t jmp_id;
-
     generate if (CONFIG.INCLUDE_M_MODE) begin
+        logic new_exception;
+
+        assign new_exception = new_pc_ex[1] & branch_taken_ex & branch_issued_r;
         always_ff @(posedge clk) begin
-            if (issue.possible_issue) begin
-                jmp_id <= issue.id;
-                branch_exception_is_jump <= branch_inputs.jal_jalr;
-            end
+            if (rst)
+                exception.valid <= 0;
+            else
+                exception.valid <= (exception.valid & ~exception.ack) | new_exception;
         end
 
-        assign potential_branch_exception = new_pc[1] & issue.new_request;
-        assign br_exception.valid = new_pc_ex[1] & branch_taken_ex & branch_issued_r;
-        assign br_exception.code = INST_ADDR_MISSALIGNED;
-        assign br_exception.tval = new_pc_ex;
-        assign br_exception.id = jmp_id;
+        always_ff @(posedge clk) begin
+            if (issue.possible_issue)
+                exception.id <= issue.id;
+        end
+        assign exception.code = INST_ADDR_MISSALIGNED;
+        assign exception.tval = new_pc_ex;
     end
     endgenerate
 

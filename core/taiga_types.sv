@@ -52,6 +52,7 @@ package taiga_types;
         logic valid;
         exception_code_t code;
         logic [31:0] tval;
+        logic [31:0] pc;
         id_t id;
     } exception_packet_t;
 
