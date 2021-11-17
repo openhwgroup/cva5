@@ -62,12 +62,8 @@ module load_store_unit
         input id_t retire_ids [RETIRE_PORTS],
         input logic retire_port_valid [RETIRE_PORTS],
 
-        //CSR support
-        output logic ls_is_idle,
-
-        output exception_packet_t ls_exception,
-        output logic ls_exception_is_store,
-
+        exception_interface.unit exception,
+        output logic sq_empty,
         unit_writeback_interface.unit wb,
 
         output logic tr_load_conflict_delay
@@ -134,7 +130,7 @@ module load_store_unit
     ////////////////////////////////////////////////////
     //Alignment Exception
 generate if (CONFIG.INCLUDE_M_MODE) begin
-
+    logic new_exception;
     always_comb begin
         case(ls_inputs.fn3)
             LS_H_fn3 : unaligned_addr = virtual_address[0];
@@ -143,12 +139,22 @@ generate if (CONFIG.INCLUDE_M_MODE) begin
             default : unaligned_addr = 0;
         endcase
     end
-    assign ls_exception_is_store = ls_inputs.store;
-    assign ls_exception.valid = unaligned_addr & issue.new_request;
-    assign ls_exception.code = ls_inputs.store ? STORE_AMO_ADDR_MISSALIGNED : LOAD_ADDR_MISSALIGNED;
-    assign ls_exception.tval = virtual_address;
-    assign ls_exception.id = issue.id;
 
+    assign new_exception = unaligned_addr & issue.new_request;
+    always_ff @(posedge clk) begin
+        if (rst)
+            exception.valid <= 0;
+        else
+            exception.valid <= (exception.valid & ~exception.ack) | new_exception;
+    end
+
+    always_ff @(posedge clk) begin
+        if (new_exception) begin
+            exception.code <= ls_inputs.store ? STORE_AMO_ADDR_MISSALIGNED : LOAD_ADDR_MISSALIGNED;
+            exception.tval <= virtual_address;
+            exception.id <= issue.id;
+        end
+    end
 end
 endgenerate
     ////////////////////////////////////////////////////
@@ -229,7 +235,7 @@ endgenerate
 
     ////////////////////////////////////////////////////
     //Primary Control Signals
-    assign ls_is_idle = lsq.empty & (~load_attributes.valid);
+    assign sq_empty = lsq.empty;
 
     assign units_ready = &unit_ready;
     assign load_complete = |unit_data_valid;

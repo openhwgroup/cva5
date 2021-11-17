@@ -160,13 +160,13 @@ module taiga
     wb_packet_t wb_packet [CONFIG.NUM_WB_GROUPS];
     commit_packet_t commit_packet [CONFIG.NUM_WB_GROUPS];
          //Exception
-    id_t exception_id;
-    logic [31:0] exception_pc;
+    logic [31:0] oldest_pc;
 
     renamer_interface #(.NUM_WB_GROUPS(CONFIG.NUM_WB_GROUPS)) decode_rename_interface ();
 
     //Global Control
-    csr_exception_interface exception();
+    exception_interface exception [NUM_EXCEPTION_SOURCES]();
+    logic [$clog2(NUM_EXCEPTION_SOURCES)-1:0] current_exception;
 
     logic gc_init_clear;
     logic gc_fetch_hold;
@@ -176,8 +176,9 @@ module taiga
     logic gc_fetch_pc_override;
     logic gc_supress_writeback;
     logic gc_tlb_flush;
+    exception_packet_t gc_exception;
     logic [31:0] gc_fetch_pc;
-    logic ls_is_idle;
+    logic sq_empty;
     logic [LOG2_MAX_IDS:0] post_issue_count;
 
     logic [1:0] current_privilege;
@@ -281,8 +282,7 @@ module taiga
         .retire_ids (retire_ids),
         .retire_port_valid(retire_port_valid),
         .post_issue_count(post_issue_count),
-        .exception_id (exception_id),
-        .exception_pc (exception_pc)
+        .oldest_pc (oldest_pc)
     );
 
     ////////////////////////////////////////////////////
@@ -465,9 +465,7 @@ module taiga
         .branch_inputs (branch_inputs),
         .br_results (br_results),
         .branch_flush (branch_flush),
-        .potential_branch_exception (potential_branch_exception),
-        .branch_exception_is_jump (branch_exception_is_jump),
-        .br_exception (br_exception),
+        .exception (exception[BR_EXCEPTION]),
         .tr_branch_correct (tr_branch_correct),
         .tr_branch_misspredict (tr_branch_misspredict),
         .tr_return_correct (tr_return_correct),
@@ -506,9 +504,8 @@ module taiga
         .wb_snoop (wb_snoop),
         .retire_ids (retire_ids),
         .retire_port_valid(retire_port_valid),
-        .ls_is_idle (ls_is_idle),
-        .ls_exception (ls_exception),
-        .ls_exception_is_store (ls_exception_is_store),
+        .exception (exception[LS_EXCEPTION]),
+        .sq_empty (sq_empty),
         .wb (unit_wb[UNIT_IDS.LS]),
         .tr_load_conflict_delay (tr_load_conflict_delay)
     );
@@ -553,7 +550,7 @@ module taiga
         .asid(asid),
         .immu(immu),
         .dmmu(dmmu),
-        .exception(exception),
+        .exception(gc_exception),
         .mret(mret),
         .sret(sret),
         .epc(epc),
@@ -571,14 +568,10 @@ module taiga
         .gc_inputs (gc_inputs),
         .gc_flush_required (gc_flush_required),
         .branch_flush (branch_flush),
-        .potential_branch_exception (potential_branch_exception),
-        .branch_exception_is_jump (branch_exception_is_jump),
-        .br_exception (br_exception),
-        .illegal_instruction (illegal_instruction),
-        .ls_exception (ls_exception),
-        .ls_exception_is_store (ls_exception_is_store),
-        .exception_id (exception_id),
-        .exception_pc (exception_pc),
+        .exception (exception),
+        .current_exception (current_exception),
+        .gc_exception (gc_exception),
+        .oldest_pc (oldest_pc),
         .mret(mret),
         .sret(sret),
         .epc(epc),
@@ -594,7 +587,7 @@ module taiga
         .gc_supress_writeback (gc_supress_writeback),
         .gc_tlb_flush (gc_tlb_flush),
         .gc_fetch_pc (gc_fetch_pc),
-        .ls_is_idle (ls_is_idle),
+        .sq_empty (sq_empty),
         .post_issue_count (post_issue_count)
     );
 

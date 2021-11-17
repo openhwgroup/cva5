@@ -247,6 +247,17 @@ package taiga_config;
         RS2 = 1
     } rs1_index_t;
 
+
+    ////////////////////////////////////////////////////
+    //Exceptions
+    localparam NUM_EXCEPTION_SOURCES = 3; //LS, Branch, Illegal
+    //Stored in a ID table on issue, checked at retire
+    typedef enum bit [1:0] {
+        LS_EXCEPTION = 0,
+        BR_EXCEPTION = 1,
+        IEC_EXCEPTION = 2
+    } exception_sources_t;
+
     ////////////////////////////////////////////////////
     //Trace Options
     //Trace interface is necessary for verilator simulation

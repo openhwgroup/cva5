@@ -42,20 +42,11 @@ module gc_unit
         input logic gc_flush_required,
         //Branch miss predict
         input logic branch_flush,
-        //instruction misalignement
-        input logic potential_branch_exception,
-        input logic branch_exception_is_jump,
-        input exception_packet_t br_exception,
-        //Illegal instruction
-        input logic illegal_instruction,
-
-        //Load Store Unit
-        input exception_packet_t ls_exception,
-        input logic ls_exception_is_store,
 
         //Exception
-        output id_t exception_id,
-        input logic [31:0] exception_pc,
+        exception_interface.econtrol exception [NUM_EXCEPTION_SOURCES],
+        input logic [31:0] oldest_pc,
+        output exception_packet_t gc_exception,
 
         output logic mret,
         output logic sret,
@@ -63,6 +54,7 @@ module gc_unit
 
         //Retire
         input retire_packet_t retire,
+        input logic [$clog2(NUM_EXCEPTION_SOURCES)-1:0] current_exception,
 
         //External
         input logic interrupt,
@@ -81,7 +73,7 @@ module gc_unit
         output logic [31:0] gc_fetch_pc,
 
         //Ordering support
-        input logic ls_is_idle,
+        input logic sq_empty,
         input logic [LOG2_MAX_IDS:0] post_issue_count
     );
 
@@ -122,7 +114,7 @@ module gc_unit
     //LS exceptions (miss-aligned, TLB and MMU) (issue stage)
     //fetch flush, take exception. If execute or later exception occurs first, exception is overridden
 
-    typedef enum {RST_STATE, PRE_CLEAR_STATE, INIT_CLEAR_STATE, IDLE_STATE, TLB_CLEAR_STATE, IQ_DRAIN} gc_state;
+    typedef enum {RST_STATE, PRE_CLEAR_STATE, INIT_CLEAR_STATE, IDLE_STATE, HOLD_STATE, TLB_CLEAR_STATE, IQ_DRAIN} gc_state;
     gc_state state;
     gc_state next_state;
 
@@ -136,16 +128,12 @@ module gc_unit
     logic system_op_or_exception_complete;
     logic exception_with_rd_complete;
 
-    exception_packet_t gc_exception;
-    exception_packet_t gc_exception_r;
-    id_t exception_or_system_id;
-
-    exception_packet_t csr_exception;
     logic [1:0] current_privilege;
     logic [31:0] trap_pc;
 
     gc_inputs_t stage1;
 
+    logic post_issue_idle;
     //CSR
     logic processing_csr;
 
@@ -158,23 +146,15 @@ module gc_unit
         end
     end
 
-    ////////////////////////////////////////////////////
-    //ID Management
-    always_ff @(posedge clk) begin
-        system_op_or_exception_complete <=
-                (issue.new_request & (gc_inputs.is_ret | gc_inputs.is_fence | gc_inputs.is_i_fence)) |
-                gc_exception.valid;
-        exception_id <= exception_or_system_id;
-        exception_with_rd_complete <= (ls_exception.valid & ~ls_exception_is_store) | (br_exception.valid & branch_exception_is_jump);
-    end
 
     ////////////////////////////////////////////////////
     //GC Operation
+    assign post_issue_idle = (post_issue_count == 0) & sq_empty;
     assign gc_fetch_flush = branch_flush | gc_fetch_pc_override;
 
     always_ff @ (posedge clk) begin
         gc_fetch_hold <=  next_state inside {PRE_CLEAR_STATE, INIT_CLEAR_STATE};
-        gc_issue_hold <= issue.new_request || second_cycle_flush || processing_csr || (next_state inside {PRE_CLEAR_STATE, INIT_CLEAR_STATE, TLB_CLEAR_STATE, IQ_DRAIN}) || potential_branch_exception;
+        gc_issue_hold <= issue.new_request | processing_csr | (next_state inside {PRE_CLEAR_STATE, INIT_CLEAR_STATE, HOLD_STATE, TLB_CLEAR_STATE, IQ_DRAIN});
         gc_supress_writeback <= next_state inside {PRE_CLEAR_STATE, INIT_CLEAR_STATE, TLB_CLEAR_STATE};
         gc_init_clear <= next_state inside {INIT_CLEAR_STATE};
         gc_tlb_flush <= next_state inside {INIT_CLEAR_STATE, TLB_CLEAR_STATE};
@@ -196,12 +176,16 @@ module gc_unit
             PRE_CLEAR_STATE : next_state = INIT_CLEAR_STATE;
             INIT_CLEAR_STATE : if (init_clear_done) next_state = IDLE_STATE;
             IDLE_STATE : begin
-                if (ls_exception.valid | potential_branch_exception | system_op_or_exception_complete) begin
-                    next_state = IQ_DRAIN;
-                end
+                if (issue.new_request)
+                    next_state = HOLD_STATE;
+                //IF exception and post-issue > 1 OR FLUSHING interrupts
+                //if (ls_exception.valid | potential_branch_exception | system_op_or_exception_complete) begin
+                //    next_state = IQ_DRAIN;
+                //end
             end
+            HOLD_STATE : if (post_issue_idle) next_state = IDLE_STATE;
             TLB_CLEAR_STATE : if (tlb_clear_done) next_state = IDLE_STATE;
-            IQ_DRAIN : if (ls_is_idle) next_state = IDLE_STATE;
+            IQ_DRAIN : if (post_issue_idle) next_state = IDLE_STATE;
             default : next_state = RST_STATE;
         endcase
     end
@@ -237,46 +221,42 @@ module gc_unit
         endcase
     end
 
-    assign exception_or_system_id =
-        br_exception.valid ? br_exception.id :
-        (ls_exception.valid ? ls_exception.id : issue.id);
-
-    //TODO: check if possible to convert to unique if, verify potential for overlap
-    always_comb begin
-        //PC sourced from instruction metadata table
-        if (br_exception.valid) begin
-            gc_exception.code = br_exception.code;
-            gc_exception.tval = br_exception.tval;
-        end else if (illegal_instruction) begin
-            gc_exception.code = ILLEGAL_INST;
-            gc_exception.tval = gc_inputs.instruction;//optional, can be zero instead
-        end else if (ls_exception.valid) begin
-            gc_exception.code = ls_exception.code;
-            gc_exception.tval = ls_exception.tval;
-        end else if (gc_inputs.is_ecall) begin
-            gc_exception.code = ecall_code;
-            gc_exception.tval = '0;
-        end else begin
-            gc_exception.code = BREAK;
-            gc_exception.tval = '0;
+    //Re-assigning interface inputs to array types so that they can be dynamically indexed
+    logic [NUM_EXCEPTION_SOURCES-1:0] ex_pending;
+    exception_code_t [NUM_EXCEPTION_SOURCES-1:0] ex_code;
+    id_t [NUM_EXCEPTION_SOURCES-1:0] ex_id;
+    logic [NUM_EXCEPTION_SOURCES-1:0][31:0] ex_tval;
+    logic [NUM_EXCEPTION_SOURCES-1:0] ex_ack;
+    generate
+        for (genvar i = 0; i < NUM_EXCEPTION_SOURCES; i++) begin
+            assign ex_pending[i] = exception[i].valid;
+            assign ex_code[i] = exception[i].code;
+            assign ex_id[i] = exception[i].id;
+            assign ex_tval[i] = exception[i].tval;
+            assign exception[i].ack = ex_ack[i];
         end
+    endgenerate
+    
+    always_comb begin
+        gc_exception.valid = |ex_pending;
+        gc_exception.pc = oldest_pc;
+        gc_exception.code = ex_code[current_exception];
+        gc_exception.tval = ex_tval[current_exception];
     end
-    logic ecall_break_exception;
-    assign ecall_break_exception = issue.new_request & (gc_inputs.is_ecall | gc_inputs.is_ebreak);
-    assign gc_exception.valid = CONFIG.INCLUDE_M_MODE & (ecall_break_exception | ls_exception.valid | br_exception.valid | illegal_instruction);
-
+    
     //PC determination (trap, flush or return)
     //Two cycles: on first cycle the processor front end is flushed,
     //on the second cycle the new PC is fetched
     always_ff @ (posedge clk) begin
-        gc_exception_r <= gc_exception;
         second_cycle_flush <= gc_flush_required;
-        gc_fetch_pc_override <= gc_flush_required | second_cycle_flush | ls_exception.valid | br_exception.valid | (next_state == INIT_CLEAR_STATE);
-        if (gc_exception.valid | stage1.is_i_fence | (issue.new_request & gc_inputs.is_ret)) begin
-            gc_fetch_pc <= gc_exception.valid ? trap_pc :
-                stage1.is_i_fence ? stage1.pc + 4 : //Could stall on dec_pc valid and use instead of another adder
-                epc;// gc_inputs.is_ret
-        end
+        gc_fetch_pc_override <= gc_flush_required | second_cycle_flush | gc_exception.valid | (next_state == INIT_CLEAR_STATE);
+        gc_fetch_pc <= stage1.pc + 4;
+        //IFENCE only flush once sq_empty!
+        //if (gc_exception.valid | stage1.is_i_fence | (issue.new_request & gc_inputs.is_ret)) begin
+        //    gc_fetch_pc <= gc_exception.valid ? trap_pc :
+        //        stage1.is_i_fence ? stage1.pc + 4 : //Could stall on dec_pc valid and use instead of another adder
+        //        epc;// gc_inputs.is_ret
+        //end
     end
 
 
