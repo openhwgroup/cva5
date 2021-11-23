@@ -54,7 +54,7 @@ module gc_unit
 
         //Retire
         input retire_packet_t retire,
-        input logic [$clog2(NUM_EXCEPTION_SOURCES)-1:0] current_exception,
+        input logic [$clog2(NUM_EXCEPTION_SOURCES)-1:0] current_exception_unit,
 
         //External
         input logic interrupt,
@@ -240,8 +240,8 @@ module gc_unit
     always_comb begin
         gc_exception.valid = |ex_pending;
         gc_exception.pc = oldest_pc;
-        gc_exception.code = ex_code[current_exception];
-        gc_exception.tval = ex_tval[current_exception];
+        gc_exception.code = ex_code[current_exception_unit];
+        gc_exception.tval = ex_tval[current_exception_unit];
     end
     
     //PC determination (trap, flush or return)

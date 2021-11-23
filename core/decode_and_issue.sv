@@ -196,6 +196,17 @@ module decode_and_issue
     assign decode_rs_wb_group[RS1] = renamer.rs_wb_group[RS1];
     assign decode_rs_wb_group[RS2] = renamer.rs_wb_group[RS2];
 
+
+    //TODO: Consider ways of parameterizing so that any exception generating unit
+    //can be automatically added to this expression
+    exception_sources_t decode_exception_unit;
+    always_comb begin
+        unique case (1'b1)
+            unit_needed[UNIT_IDS.LS] : decode_exception_unit = LS_EXCEPTION;
+            unit_needed[UNIT_IDS.BR] : decode_exception_unit = BR_EXCEPTION;
+            default : decode_exception_unit = IEC_EXCEPTION;
+        endcase
+    end
     ////////////////////////////////////////////////////
     //Issue
     logic [REGFILE_READ_PORTS-1:0][$clog2(CONFIG.NUM_WB_GROUPS)-1:0] issue_rs_wb_group;
@@ -216,6 +227,7 @@ module decode_and_issue
             issue.phys_rd_addr <= renamer.phys_rd_addr;
             issue.is_multicycle <= ~unit_needed[UNIT_IDS.ALU];
             issue.id <= decode.id;
+            issue.exception_unit <= decode_exception_unit;
             issue.uses_rs1 <= uses_rs1;
             issue.uses_rs2 <= uses_rs2;
             issue.uses_rd <= uses_rd;

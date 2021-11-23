@@ -91,6 +91,7 @@ package taiga_types;
         logic uses_rd;
         logic is_multicycle;
         id_t id;
+        exception_sources_t exception_unit;
         logic stage_valid;
         fetch_metadata_t fetch_metadata;
     } issue_packet_t;
