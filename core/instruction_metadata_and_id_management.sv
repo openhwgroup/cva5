@@ -74,7 +74,8 @@ module instruction_metadata_and_id_management
         //CSR
         output logic [LOG2_MAX_IDS:0] post_issue_count,
         //Exception
-        output logic [31:0] oldest_pc
+        output logic [31:0] oldest_pc,
+        output logic [$clog2(NUM_EXCEPTION_SOURCES)-1:0] current_exception_unit
 
     );
     //////////////////////////////////////////
@@ -86,6 +87,8 @@ module instruction_metadata_and_id_management
     (* ramstyle = "MLAB, no_rw_check" *) logic [0:0] uses_rd_table [MAX_IDS];
 
     (* ramstyle = "MLAB, no_rw_check" *) logic [$bits(fetch_metadata_t)-1:0] fetch_metadata_table [MAX_IDS];
+
+    (* ramstyle = "MLAB, no_rw_check" *) logic [$bits(exception_sources_t)-1:0] exception_unit_table [MAX_IDS];
 
     id_t decode_id;
     id_t oldest_pre_issue_id;
@@ -144,7 +147,15 @@ module instruction_metadata_and_id_management
     always_ff @ (posedge clk) begin
         if (decode_advance)
             uses_rd_table[decode_id] <= decode_uses_rd & |decode_rd_addr;
-    end    
+    end
+
+    ////////////////////////////////////////////////////
+    //Exception unit table
+    always_ff @ (posedge clk) begin
+        if (instruction_issued)
+            exception_unit_table[issue.id] <= issue.exception_unit;
+    end
+
     ////////////////////////////////////////////////////
     //ID Management
     
@@ -320,7 +331,8 @@ module instruction_metadata_and_id_management
 
     //Exception Support
      generate if (CONFIG.INCLUDE_M_MODE) begin
-         assign oldest_pc = pc_table[retire_ids[0]];
+        assign oldest_pc = pc_table[retire_ids[0]];
+        assign current_exception_unit = exception_unit_table[retire_ids[0]];
      end endgenerate
 
     ////////////////////////////////////////////////////

@@ -166,7 +166,7 @@ module taiga
 
     //Global Control
     exception_interface exception [NUM_EXCEPTION_SOURCES]();
-    logic [$clog2(NUM_EXCEPTION_SOURCES)-1:0] current_exception;
+    logic [$clog2(NUM_EXCEPTION_SOURCES)-1:0] current_exception_unit;
 
     logic gc_init_clear;
     logic gc_fetch_hold;
@@ -282,7 +282,8 @@ module taiga
         .retire_ids (retire_ids),
         .retire_port_valid(retire_port_valid),
         .post_issue_count(post_issue_count),
-        .oldest_pc (oldest_pc)
+        .oldest_pc (oldest_pc),
+        .current_exception_unit (current_exception_unit)
     );
 
     ////////////////////////////////////////////////////
@@ -569,7 +570,7 @@ module taiga
         .gc_flush_required (gc_flush_required),
         .branch_flush (branch_flush),
         .exception (exception),
-        .current_exception (current_exception),
+        .current_exception_unit (current_exception_unit),
         .gc_exception (gc_exception),
         .oldest_pc (oldest_pc),
         .mret(mret),
