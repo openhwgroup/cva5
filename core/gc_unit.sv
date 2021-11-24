@@ -47,6 +47,7 @@ module gc_unit
         exception_interface.econtrol exception [NUM_EXCEPTION_SOURCES],
         input logic [31:0] oldest_pc,
         output exception_packet_t gc_exception,
+        output logic gc_exception_pending,
 
         output logic mret,
         output logic sret,
@@ -237,8 +238,10 @@ module gc_unit
         end
     endgenerate
     
+    assign gc_exception_pending = |ex_pending;
+
     always_comb begin
-        gc_exception.valid = |ex_pending;
+        gc_exception.valid = gc_exception_pending;
         gc_exception.pc = oldest_pc;
         gc_exception.code = ex_code[current_exception_unit];
         gc_exception.tval = ex_tval[current_exception_unit];
