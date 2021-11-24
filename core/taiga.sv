@@ -177,6 +177,8 @@ module taiga
     logic gc_supress_writeback;
     logic gc_tlb_flush;
     exception_packet_t gc_exception;
+    logic gc_exception_pending;
+
     logic [31:0] gc_fetch_pc;
     logic sq_empty;
     logic [LOG2_MAX_IDS:0] post_issue_count;
@@ -283,7 +285,8 @@ module taiga
         .retire_port_valid(retire_port_valid),
         .post_issue_count(post_issue_count),
         .oldest_pc (oldest_pc),
-        .current_exception_unit (current_exception_unit)
+        .current_exception_unit (current_exception_unit),
+        .gc_exception_pending (gc_exception_pending)
     );
 
     ////////////////////////////////////////////////////
@@ -572,6 +575,7 @@ module taiga
         .exception (exception),
         .current_exception_unit (current_exception_unit),
         .gc_exception (gc_exception),
+        .gc_exception_pending (gc_exception_pending),
         .oldest_pc (oldest_pc),
         .mret(mret),
         .sret(sret),
