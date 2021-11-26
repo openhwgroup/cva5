@@ -68,10 +68,6 @@ module csr_unit
         input logic timer_interrupt
         );
 
-    //scratch ram
-    (* ramstyle = "MLAB, no_rw_check" *) logic[XLEN-1:0] scratch_regs [31:0];//Only 0x1 and 0x3 used by supervisor and machine mode respectively
-    logic[XLEN-1:0] scratch_out;
-
     logic busy;
     logic commit;
     logic commit_in_progress;
@@ -90,10 +86,15 @@ module csr_unit
 
     logic [31:0] updated_csr;
 
-    logic [255:0] swrite_decoder;
-    logic [255:0] swrite_en;
-    logic [255:0] mwrite_decoder;
-    logic [255:0] mwrite_en;
+    logic swrite;
+    logic mwrite;
+
+    function logic mwrite_en (input csr_addr_t addr);
+        return mwrite & (csr_inputs_r.addr.sub_addr == addr.sub_addr);
+    endfunction
+    function logic swrite_en (input csr_addr_t addr);
+        return swrite & (csr_inputs_r.addr.sub_addr == addr.sub_addr);
+    endfunction
     ////////////////////////////////////////////////////
     //Implementation
     assign issue.ready = ~busy;
@@ -139,19 +140,9 @@ module csr_unit
 
     ////////////////////////////////////////////////////
     //Shared logic
-    assign supervisor_write = CONFIG.INCLUDE_S_MODE && commit && (csr_inputs_r.addr.rw_bits != CSR_READ_ONLY && csr_inputs_r.addr.privilege == SUPERVISOR_PRIVILEGE);
-    assign machine_write = CONFIG.INCLUDE_M_MODE && commit && (csr_inputs_r.addr.rw_bits != CSR_READ_ONLY && csr_inputs_r.addr.privilege == MACHINE_PRIVILEGE);
-
-    always_comb begin
-        swrite_decoder = 0;
-        swrite_decoder[csr_inputs_r.addr.sub_addr] = supervisor_write ;
-        mwrite_decoder = 0;
-        mwrite_decoder[csr_inputs_r.addr.sub_addr] = machine_write ;
-    end
-
     always_ff @(posedge clk) begin
-        swrite_en <= swrite_decoder;
-        mwrite_en <= mwrite_decoder;
+        mwrite <= CONFIG.INCLUDE_M_MODE && commit && (csr_inputs_r.addr.rw_bits != CSR_READ_ONLY && csr_inputs_r.addr.privilege == MACHINE_PRIVILEGE);
+        swrite <= CONFIG.INCLUDE_S_MODE && commit && (csr_inputs_r.addr.rw_bits != CSR_READ_ONLY && csr_inputs_r.addr.privilege == SUPERVISOR_PRIVILEGE);
     end
 
     always_ff @(posedge clk) begin
@@ -205,6 +196,8 @@ module csr_unit
 
     mcause_t mcause;
     logic[XLEN-1:0] mtval;
+
+    logic[XLEN-1:0] mscratch;
 
     //Virtualization support: TSR, TW, TVM unused
     //Extension context status: SD, FS, XS unused
@@ -286,7 +279,8 @@ generate if (CONFIG.INCLUDE_M_MODE) begin
             mstatus_return.spie = 1;
             mstatus_return.spp = USER_PRIVILEGE[0];
             mstatus_return.mprv = 0;
-        end else if (mret) begin
+        end
+        else if (mret) begin
             mstatus_return.mie = mstatus.mpie;
             mstatus_return.mpie = 1;
             mstatus_return.mpp = CONFIG.INCLUDE_U_MODE ? USER_PRIVILEGE : MACHINE_PRIVILEGE;
@@ -296,17 +290,16 @@ generate if (CONFIG.INCLUDE_M_MODE) begin
     end
 
     mstatus_t mstatus_write_mask;
-    assign mstatus_write_mask = mwrite_en[MSTATUS[7:0]] ? mstatus_mask : sstatus_mask;
+    assign mstatus_write_mask = swrite ? sstatus_mask : mstatus_mask;
 
     always_comb begin
-        if (mwrite_en[MSTATUS[7:0]] | swrite_en[SSTATUS[7:0]])
+        mstatus_new = mstatus;
+        if (mwrite_en(MSTATUS) | swrite_en(SSTATUS))
             mstatus_new = (mstatus & ~mstatus_write_mask) | (updated_csr & mstatus_write_mask);
         else if (interrupt | exception.valid)
             mstatus_new = mstatus_exception;
         else if (mret | sret)
             mstatus_new = mstatus_return;
-        else
-            mstatus_new = mstatus;
     end
 
     always_ff @(posedge clk) begin
@@ -321,7 +314,7 @@ generate if (CONFIG.INCLUDE_M_MODE) begin
     //No vectored mode, mode hard-coded to zero
     always_ff @(posedge clk) begin
         mtvec[1:0] <= '0;
-        if (mwrite_en[MTVEC[7:0]])
+        if (mwrite_en(MTVEC))
             mtvec[XLEN-1:2] <= updated_csr[XLEN-1:2];
     end
     //assign exception.trap_pc = mtvec;
@@ -350,7 +343,7 @@ generate if (CONFIG.INCLUDE_M_MODE) begin
     always_ff @(posedge clk) begin
         if (rst)
             medeleg <= '0;
-        else if (mwrite_en[MEDELEG[7:0]])
+        else if (mwrite_en(MEDELEG))
             medeleg <= (updated_csr & medeleg_mask);
     end
 
@@ -368,7 +361,7 @@ generate if (CONFIG.INCLUDE_M_MODE) begin
     always_ff @(posedge clk) begin
         if (rst)
             mideleg <= '0;
-        else if (mwrite_en[MIDELEG[7:0]])
+        else if (mwrite_en(MIDELEG))
             mideleg <= (updated_csr & mideleg_mask);
     end
 
@@ -378,7 +371,7 @@ generate if (CONFIG.INCLUDE_M_MODE) begin
     always_ff @(posedge clk) begin
         if (rst)
             mip <= 0;
-        else if (mwrite_en[MIP[7:0]])
+        else if (mwrite_en(MIP))
             mip <= (updated_csr & mip_mask);
     end
 
@@ -390,10 +383,8 @@ generate if (CONFIG.INCLUDE_M_MODE) begin
     always_ff @(posedge clk) begin
         if (rst)
             mie_reg <= '0;
-        else if (mwrite_en[MIE[7:0]])
-            mie_reg <= (updated_csr & mie_mask);
-        else if (swrite_en[SIE[7:0]])
-            mie_reg <= (updated_csr & sie_mask);
+        else if (mwrite_en(MIE) | swrite_en(SIE))
+            mie_reg <= updated_csr & (swrite ? sie_mask : mie_mask);
     end
 
     ////////////////////////////////////////////////////
@@ -402,7 +393,7 @@ generate if (CONFIG.INCLUDE_M_MODE) begin
     //exception causing PC.  Lower two bits tied to zero.
     always_ff @(posedge clk) begin
         mepc[1:0] <= '0;
-        if (mwrite_en[MEPC[7:0]] | exception.valid)
+        if (mwrite_en(MEPC) | exception.valid)
             mepc[XLEN-1:2] <= exception.valid ? exception.pc[XLEN-1:2] : updated_csr[XLEN-1:2];
     end
     assign epc = mepc;
@@ -413,45 +404,45 @@ generate if (CONFIG.INCLUDE_M_MODE) begin
     //As the exception and interrupts codes are sparsely populated,
     //to ensure that only legal values are written, a ROM lookup
     //is used to validate the CSR write operation
-    logic MCAINCLUDE_EXCEPTION_MASKING_ROM [2**ECODE_W];
-    logic MCAINCLUDE_INTERRUPT_MASKING_ROM [2**ECODE_W];
+    logic M_EXCEPTION_MASKING_ROM [2**ECODE_W];
+    logic M_INTERRUPT_MASKING_ROM [2**ECODE_W];
     always_comb begin
-        MCAINCLUDE_EXCEPTION_MASKING_ROM = '{default: 0};
-        MCAINCLUDE_EXCEPTION_MASKING_ROM[INST_ADDR_MISSALIGNED] = 1;
-        MCAINCLUDE_EXCEPTION_MASKING_ROM[INST_ACCESS_FAULT] = CONFIG.INCLUDE_S_MODE;
-        MCAINCLUDE_EXCEPTION_MASKING_ROM[ILLEGAL_INST] = 1;
-        MCAINCLUDE_EXCEPTION_MASKING_ROM[BREAK] = 1;
-        MCAINCLUDE_EXCEPTION_MASKING_ROM[LOAD_ADDR_MISSALIGNED] = 1;
-        MCAINCLUDE_EXCEPTION_MASKING_ROM[LOAD_FAULT] = CONFIG.INCLUDE_S_MODE;
-        MCAINCLUDE_EXCEPTION_MASKING_ROM[STORE_AMO_ADDR_MISSALIGNED] = 1;
-        MCAINCLUDE_EXCEPTION_MASKING_ROM[STORE_AMO_FAULT] = CONFIG.INCLUDE_S_MODE;
-        MCAINCLUDE_EXCEPTION_MASKING_ROM[ECALL_U] = CONFIG.INCLUDE_S_MODE;
-        MCAINCLUDE_EXCEPTION_MASKING_ROM[ECALL_S] = CONFIG.INCLUDE_S_MODE;
-        MCAINCLUDE_EXCEPTION_MASKING_ROM[ECALL_M] = 1;
-        MCAINCLUDE_EXCEPTION_MASKING_ROM[INST_PAGE_FAULT] = CONFIG.INCLUDE_S_MODE;
-        MCAINCLUDE_EXCEPTION_MASKING_ROM[LOAD_PAGE_FAULT] = CONFIG.INCLUDE_S_MODE;
-        MCAINCLUDE_EXCEPTION_MASKING_ROM[STORE_OR_AMO_PAGE_FAULT] = CONFIG.INCLUDE_S_MODE;
+        M_EXCEPTION_MASKING_ROM = '{default: 0};
+        M_EXCEPTION_MASKING_ROM[INST_ADDR_MISSALIGNED] = 1;
+        M_EXCEPTION_MASKING_ROM[INST_ACCESS_FAULT] = CONFIG.INCLUDE_S_MODE;
+        M_EXCEPTION_MASKING_ROM[ILLEGAL_INST] = 1;
+        M_EXCEPTION_MASKING_ROM[BREAK] = 1;
+        M_EXCEPTION_MASKING_ROM[LOAD_ADDR_MISSALIGNED] = 1;
+        M_EXCEPTION_MASKING_ROM[LOAD_FAULT] = CONFIG.INCLUDE_S_MODE;
+        M_EXCEPTION_MASKING_ROM[STORE_AMO_ADDR_MISSALIGNED] = 1;
+        M_EXCEPTION_MASKING_ROM[STORE_AMO_FAULT] = CONFIG.INCLUDE_S_MODE;
+        M_EXCEPTION_MASKING_ROM[ECALL_U] = CONFIG.INCLUDE_S_MODE;
+        M_EXCEPTION_MASKING_ROM[ECALL_S] = CONFIG.INCLUDE_S_MODE;
+        M_EXCEPTION_MASKING_ROM[ECALL_M] = 1;
+        M_EXCEPTION_MASKING_ROM[INST_PAGE_FAULT] = CONFIG.INCLUDE_S_MODE;
+        M_EXCEPTION_MASKING_ROM[LOAD_PAGE_FAULT] = CONFIG.INCLUDE_S_MODE;
+        M_EXCEPTION_MASKING_ROM[STORE_OR_AMO_PAGE_FAULT] = CONFIG.INCLUDE_S_MODE;
 
-        MCAINCLUDE_INTERRUPT_MASKING_ROM = '{default: 0};
-        MCAINCLUDE_INTERRUPT_MASKING_ROM[S_SOFTWARE_INTERRUPT] = CONFIG.INCLUDE_S_MODE;
-        MCAINCLUDE_INTERRUPT_MASKING_ROM[M_SOFTWARE_INTERRUPT] = 1;
-        MCAINCLUDE_INTERRUPT_MASKING_ROM[S_TIMER_INTERRUPT] = CONFIG.INCLUDE_S_MODE;
-        MCAINCLUDE_INTERRUPT_MASKING_ROM[M_TIMER_INTERRUPT] = 1;
-        MCAINCLUDE_INTERRUPT_MASKING_ROM[S_EXTERNAL_INTERRUPT] = CONFIG.INCLUDE_S_MODE;
-        MCAINCLUDE_INTERRUPT_MASKING_ROM[M_EXTERNAL_INTERRUPT] = 1;
+        M_INTERRUPT_MASKING_ROM = '{default: 0};
+        M_INTERRUPT_MASKING_ROM[S_SOFTWARE_INTERRUPT] = CONFIG.INCLUDE_S_MODE;
+        M_INTERRUPT_MASKING_ROM[M_SOFTWARE_INTERRUPT] = 1;
+        M_INTERRUPT_MASKING_ROM[S_TIMER_INTERRUPT] = CONFIG.INCLUDE_S_MODE;
+        M_INTERRUPT_MASKING_ROM[M_TIMER_INTERRUPT] = 1;
+        M_INTERRUPT_MASKING_ROM[S_EXTERNAL_INTERRUPT] = CONFIG.INCLUDE_S_MODE;
+        M_INTERRUPT_MASKING_ROM[M_EXTERNAL_INTERRUPT] = 1;
     end
 
     logic mcause_write_valid;
     always_comb begin
         if (updated_csr[XLEN-1]) //interrupt
-            mcause_write_valid = MCAINCLUDE_INTERRUPT_MASKING_ROM[updated_csr[ECODE_W-1:0]];
+            mcause_write_valid = M_INTERRUPT_MASKING_ROM[updated_csr[ECODE_W-1:0]];
         else
-            mcause_write_valid = MCAINCLUDE_EXCEPTION_MASKING_ROM[updated_csr[ECODE_W-1:0]];
+            mcause_write_valid = M_EXCEPTION_MASKING_ROM[updated_csr[ECODE_W-1:0]];
     end
 
     always_ff @(posedge clk) begin
         mcause.zeroes <= '0;
-        if ((mcause_write_valid & mwrite_en[MCAUSE[7:0]]) | exception.valid) begin
+        if ((mcause_write_valid & mwrite_en(MCAUSE)) | exception.valid) begin
             mcause.interrupt <= exception.valid ? 1'b0 : updated_csr[XLEN-1];
             mcause.code <= exception.valid ? exception.code : updated_csr[ECODE_W-1:0];
         end
@@ -460,21 +451,16 @@ generate if (CONFIG.INCLUDE_M_MODE) begin
     ////////////////////////////////////////////////////
     //MTVAL
     always_ff @(posedge clk) begin
-        if (mwrite_en[MTVAL[7:0]] | exception.valid)
+        if (mwrite_en(MTVAL) | exception.valid)
             mtval <=  exception.valid ? exception.tval : updated_csr;
     end
 
     ////////////////////////////////////////////////////
-    //Scratch regs
-    //For efficient LUT-RAM packing, all scratch regs are stored together
-    logic scratch_reg_write;
-    assign scratch_reg_write = mwrite_en[MSCRATCH[7:0]] | swrite_en[SSCRATCH[7:0]];
-
+    //MSCRATCH
     always_ff @(posedge clk) begin
-        if (scratch_reg_write)
-            scratch_regs[{csr_inputs_r.addr.privilege, csr_inputs_r.addr.sub_addr[2:0]}] <= updated_csr;
+        if (mwrite_en(MSCRATCH))
+            mscratch <= updated_csr;
     end
-    assign scratch_out = scratch_regs[{csr_inputs_r.addr.privilege, csr_inputs_r.addr.sub_addr[2:0]}];
 
 end
 endgenerate
@@ -510,6 +496,8 @@ endgenerate
 
     satp_t satp;
 
+    logic[XLEN-1:0] sscratch;
+
     //TLB status --- used to mux physical/virtual address
     assign tlb_on = CONFIG.INCLUDE_S_MODE & satp.mode;
     assign asid = satp.asid;
@@ -536,7 +524,7 @@ generate if (CONFIG.INCLUDE_S_MODE) begin
     always_ff @(posedge clk) begin
         if (rst)
             stvec <= {CONFIG.CSRS.RESET_VEC[XLEN-1:2], 2'b00};
-        else if (swrite_en[STVEC[7:0]])
+        else if (swrite_en(STVEC))
             stvec <= (updated_csr & stvec_mask);
     end
 
@@ -547,8 +535,15 @@ generate if (CONFIG.INCLUDE_S_MODE) begin
     always_ff @(posedge clk) begin
         if (rst)
             satp <= 0;
-        else if (swrite_en[SATP[7:0]])
+        else if (swrite_en(SATP))
             satp <= (updated_csr & satp_mask);
+    end
+
+    ////////////////////////////////////////////////////
+    //SSCRATCH
+    always_ff @(posedge clk) begin
+        if (swrite_en(SSCRATCH))
+            sscratch <= updated_csr;
     end
 
 end
@@ -568,12 +563,19 @@ endgenerate
     logic[CONFIG.CSRS.COUNTER_W-1:0] minst_ret;
 
     logic[CONFIG.CSRS.COUNTER_W-1:0] mcycle_input_next;
+    logic[CONFIG.CSRS.COUNTER_W-1:0] minst_ret_input_next;
+    logic[LOG2_RETIRE_PORTS:0] minst_ret_inc;
     logic mcycle_inc;
 
-    assign mcycle_input_next[31:0] = mwrite_en[MCYCLE[7:0]] ? updated_csr : mcycle[31:0];
-    assign mcycle_input_next[CONFIG.CSRS.COUNTER_W-1:32] = mwrite_en[MCYCLEH[7:0]] ? updated_csr[CONFIG.CSRS.COUNTER_W-33:0] : mcycle[CONFIG.CSRS.COUNTER_W-1:32];
+    always_comb begin
+        mcycle_input_next = mcycle;
+        if (mwrite_en(MCYCLE))
+            mcycle_input_next[31:0] = updated_csr;
+        if (mwrite_en(MCYCLEH))
+            mcycle_input_next[CONFIG.CSRS.COUNTER_W-1:32] = updated_csr[CONFIG.CSRS.COUNTER_W-33:0];
+    end
 
-    assign mcycle_inc = ~(mwrite_en[MCYCLE[7:0]] | mwrite_en[MCYCLEH[7:0]]);
+    assign mcycle_inc = ~(mwrite_en(MCYCLE) | mwrite_en(MCYCLEH));
 
     always_ff @(posedge clk) begin
         if (rst) 
@@ -582,12 +584,15 @@ endgenerate
             mcycle <= mcycle_input_next + CONFIG.CSRS.COUNTER_W'(mcycle_inc);
     end
 
-    logic[CONFIG.CSRS.COUNTER_W-1:0] minst_ret_input_next;
-    logic[LOG2_RETIRE_PORTS:0] minst_ret_inc;
-    assign minst_ret_input_next[31:0] = mwrite_en[MINSTRET[7:0]] ? updated_csr : minst_ret[31:0];
-    assign minst_ret_input_next[CONFIG.CSRS.COUNTER_W-1:32] = mwrite_en[MINSTRETH[7:0]] ? updated_csr[CONFIG.CSRS.COUNTER_W-33:0] : minst_ret[CONFIG.CSRS.COUNTER_W-1:32];
+    always_comb begin
+        minst_ret_input_next = minst_ret;
+        if (mwrite_en(MINSTRET))
+            minst_ret_input_next[31:0] = updated_csr;
+        if (mwrite_en(MINSTRETH))
+            minst_ret_input_next[CONFIG.CSRS.COUNTER_W-1:32] = updated_csr[CONFIG.CSRS.COUNTER_W-33:0];
+    end
 
-    assign minst_ret_inc = {(LOG2_RETIRE_PORTS+1){~(mwrite_en[MINSTRET[7:0]] | mwrite_en[MINSTRETH[7:0]])}} & retire.count;
+    assign minst_ret_inc = {(LOG2_RETIRE_PORTS+1){~(mwrite_en(MINSTRET) | mwrite_en(MINSTRETH))}} & retire.count;
 
     always_ff @(posedge clk) begin
         if (rst)
@@ -615,7 +620,7 @@ endgenerate
             MTVEC : selected_csr = CONFIG.INCLUDE_M_MODE ? mtvec : 0;
             MCOUNTEREN : selected_csr = 0;
             //Machine trap handling
-            MSCRATCH : selected_csr = CONFIG.INCLUDE_M_MODE ? scratch_out : 0;
+            MSCRATCH : selected_csr = CONFIG.INCLUDE_M_MODE ? mscratch : 0;
             MEPC : selected_csr = CONFIG.INCLUDE_M_MODE ? mepc : 0;
             MCAUSE : selected_csr = CONFIG.INCLUDE_M_MODE ? mcause : 0;
             MTVAL : selected_csr = CONFIG.INCLUDE_M_MODE ? mtval : 0;
@@ -640,10 +645,10 @@ endgenerate
             STVEC : selected_csr = CONFIG.INCLUDE_S_MODE ? stvec : '0;
             SCOUNTEREN : selected_csr = 0;
             //Supervisor trap handling
-            SSCRATCH : selected_csr = CONFIG.INCLUDE_S_MODE ? scratch_out : '0;
-            SEPC : selected_csr = CONFIG.INCLUDE_S_MODE ? scratch_out : '0;
-            SCAUSE : selected_csr = CONFIG.INCLUDE_S_MODE ? scratch_out : '0;
-            STVAL : selected_csr = CONFIG.INCLUDE_S_MODE ? scratch_out : '0;
+            SSCRATCH : selected_csr = CONFIG.INCLUDE_S_MODE ? sscratch : '0;
+            SEPC : selected_csr = CONFIG.INCLUDE_S_MODE ? sscratch : '0;
+            SCAUSE : selected_csr = CONFIG.INCLUDE_S_MODE ? sscratch : '0;
+            STVAL : selected_csr = CONFIG.INCLUDE_S_MODE ? sscratch : '0;
             SIP : selected_csr = CONFIG.INCLUDE_S_MODE ? (mip & sip_mask) : '0;
             //Supervisor Protection and Translation
             SATP : selected_csr = CONFIG.INCLUDE_S_MODE ? satp : '0;
