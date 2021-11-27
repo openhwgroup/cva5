@@ -35,13 +35,9 @@ module fetch
         input logic rst,
 
         input logic branch_flush,
-        input logic gc_init_clear,
-        input logic gc_fetch_hold,
-        input logic gc_fetch_flush,
-        input logic gc_fetch_pc_override,
+        input gc_outputs_t gc,
         input logic tlb_on,
         input logic exception,
-        input logic [31:0] gc_fetch_pc,
 
         //ID Support
         input id_t pc_id,
@@ -122,9 +118,9 @@ module fetch
     //Implementation
     ////////////////////////////////////////////////////
     //Fetch PC
-    assign update_pc = new_mem_request | gc_fetch_flush | early_branch_flush;
+    assign update_pc = new_mem_request | gc.fetch_flush | early_branch_flush;
     always_ff @(posedge clk) begin
-        if (gc_init_clear)
+        if (gc.init_clear)
             pc <= CONFIG.CSRS.RESET_VEC;
         else if (update_pc)
             pc <= {next_pc[31:2], 2'b0};
@@ -134,10 +130,10 @@ module fetch
 
     priority_encoder #(.WIDTH(4))
     pc_sel_encoder (
-        .priority_vector ({1'b1, (bp.use_prediction & ~early_branch_flush), branch_flush, gc_fetch_pc_override}),
+        .priority_vector ({1'b1, (bp.use_prediction & ~early_branch_flush), branch_flush, gc.pc_override}),
         .encoded_result (pc_sel)
     );
-    assign pc_mux[0] = gc_fetch_pc;
+    assign pc_mux[0] = gc.pc;
     assign pc_mux[1] = bp.branch_flush_pc;
     assign pc_mux[2] = bp.is_return ? ras.addr : bp.predicted_pc;
     assign pc_mux[3] = pc_plus_4;
@@ -159,8 +155,8 @@ module fetch
     assign bp.pc_id = pc_id;
     assign bp.pc_id_assigned = pc_id_assigned;
 
-    assign ras.pop = bp.use_prediction & bp.is_return & ~branch_flush & ~gc_fetch_pc_override & new_mem_request & (~early_branch_flush);
-    assign ras.push = bp.use_prediction & bp.is_call & ~branch_flush & ~gc_fetch_pc_override & new_mem_request & (~early_branch_flush);
+    assign ras.pop = bp.use_prediction & bp.is_return & ~branch_flush & ~gc.pc_override & new_mem_request & (~early_branch_flush);
+    assign ras.push = bp.use_prediction & bp.is_call & ~branch_flush & ~gc.pc_override & new_mem_request & (~early_branch_flush);
     assign ras.new_addr = pc_plus_4;
     assign ras.branch_fetched = bp.use_prediction & bp.is_branch & new_mem_request & (~early_branch_flush); //flush not needed as FIFO resets inside of RAS
 
@@ -179,9 +175,9 @@ module fetch
 
     //////////////////////////////////////////////
     //Issue Control Signals
-    assign flush_or_rst = (rst | gc_fetch_flush | early_branch_flush);
+    assign flush_or_rst = (rst | gc.fetch_flush | early_branch_flush);
 
-    assign new_mem_request = (~tlb_on | tlb.done) & pc_id_available & units_ready & (~gc_fetch_hold) & (~exception_pending);
+    assign new_mem_request = (~tlb_on | tlb.done) & pc_id_available & units_ready & (~gc.fetch_hold) & (~exception_pending);
     assign pc_id_assigned = new_mem_request | tlb.is_fault;
 
     //////////////////////////////////////////////
@@ -213,7 +209,7 @@ module fetch
 
     ////////////////////////////////////////////////////
     //Subunit Interfaces
-    //In the case of a gc_fetch_flush, a request may already be in progress
+    //In the case of a gc.fetch_flush, a request may already be in progress
     //for any sub unit.  That request can either be completed or aborted.
     //In either case, data_valid must NOT be asserted.
     generate if (CONFIG.INCLUDE_ILOCAL_MEM) begin
@@ -223,7 +219,7 @@ module fetch
         assign bram.new_request = new_mem_request & sub_unit_address_match[BRAM_ID];
         assign bram.stage1_addr = translated_address;
         assign bram.stage2_addr = stage2_phys_address;
-        assign bram.flush = gc_fetch_flush;
+        assign bram.flush = gc.fetch_flush;
         assign unit_data_array[BRAM_ID] = bram.data_out;
 
         ibram i_bram (
@@ -241,7 +237,7 @@ module fetch
         assign cache.new_request = new_mem_request & sub_unit_address_match[ICACHE_ID];
         assign cache.stage1_addr = translated_address;
         assign cache.stage2_addr = stage2_phys_address;
-        assign cache.flush = gc_fetch_flush;
+        assign cache.flush = gc.fetch_flush;
         assign unit_data_array[ICACHE_ID] = cache.data_out;
         icache #(.CONFIG(CONFIG))
         i_cache (

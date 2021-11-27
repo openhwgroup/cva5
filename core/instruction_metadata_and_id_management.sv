@@ -33,9 +33,7 @@ module instruction_metadata_and_id_management
     (
         input logic clk,
         input logic rst,
-
-        input logic gc_init_clear,
-        input logic gc_fetch_flush,
+        input gc_outputs_t gc,
 
         //Fetch
         output id_t pc_id,
@@ -75,9 +73,7 @@ module instruction_metadata_and_id_management
         output logic [LOG2_MAX_IDS:0] post_issue_count,
         //Exception
         output logic [31:0] oldest_pc,
-        output logic [$clog2(NUM_EXCEPTION_SOURCES)-1:0] current_exception_unit,
-        input logic gc_exception_pending
-
+        output logic [$clog2(NUM_EXCEPTION_SOURCES)-1:0] current_exception_unit
     );
     //////////////////////////////////////////
     (* ramstyle = "MLAB, no_rw_check" *) logic [31:0] pc_table [MAX_IDS];
@@ -172,7 +168,7 @@ module instruction_metadata_and_id_management
     end
 
     always_ff @ (posedge clk) begin
-        if (gc_fetch_flush) begin
+        if (gc.fetch_flush) begin
             pc_id <= oldest_pre_issue_id;
             fetch_id <= oldest_pre_issue_id;
             decode_id <= oldest_pre_issue_id;
@@ -201,7 +197,7 @@ module instruction_metadata_and_id_management
 
     //Represented as a negative value so that the MSB indicates that the decode stage is valid
     always_ff @ (posedge clk) begin
-        if (gc_fetch_flush)
+        if (gc.fetch_flush)
             fetched_count_neg <= 0;
         else
             fetched_count_neg <= fetched_count_neg + ID_COUNTER_W'(decode_advance) - ID_COUNTER_W'(fetch_complete);
@@ -212,7 +208,7 @@ module instruction_metadata_and_id_management
     //post-issue count decremented only on retire
     assign pre_issue_count_next = pre_issue_count  + ID_COUNTER_W'(pc_id_assigned) - ID_COUNTER_W'(instruction_issued);
     always_ff @ (posedge clk) begin
-        if (gc_fetch_flush)
+        if (gc.fetch_flush)
             pre_issue_count <= 0;
         else
             pre_issue_count <= pre_issue_count_next;
@@ -227,7 +223,7 @@ module instruction_metadata_and_id_management
     end
 
     always_ff @ (posedge clk) begin
-        if (gc_fetch_flush)
+        if (gc.fetch_flush)
             inflight_count <= post_issue_count_next;
         else
             inflight_count <= pre_issue_count_next + post_issue_count_next;
@@ -250,7 +246,7 @@ module instruction_metadata_and_id_management
     (
         .clk (clk),
         .rst (rst),
-        .init_clear (gc_init_clear),
+        .init_clear (gc.init_clear),
         .toggle ('{(instruction_issued_with_rd & issue.is_multicycle), wb_packet[1].valid}),
         .toggle_addr ('{issue.id, wb_packet[1].id}),
         .read_addr (retire_ids_next),
@@ -295,7 +291,7 @@ module instruction_metadata_and_id_management
             id_ready_to_retire[i] = (id_is_post_issue[i] & contiguous_retire & ~id_inuse[i]);
             retire_port_valid_next[i] = id_ready_to_retire[i] & ((~retire_id_uses_rd[i]) | (~retire_next.valid));
 
-            contiguous_retire &= retire_port_valid_next[i] & ~gc_exception_pending;
+            contiguous_retire &= retire_port_valid_next[i] & ~gc.exception_pending;
 
             retire_next.valid |= retire_port_valid_next[i] & retire_id_uses_rd[i];
             retire_next.count += retire_port_valid_next[i];

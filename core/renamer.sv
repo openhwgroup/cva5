@@ -32,9 +32,7 @@ module renamer
     (
         input logic clk,
         input logic rst,
-
-        input logic gc_init_clear,
-        input logic gc_fetch_flush,
+        input gc_outputs_t gc,
 
         //Decode
         input logic decode_advance,
@@ -55,10 +53,10 @@ module renamer
     logic rollback;
     ////////////////////////////////////////////////////
     //Implementation
-    assign rename_valid = (~gc_fetch_flush) & decode_advance & decode.uses_rd & |decode.rd_addr;
+    assign rename_valid = (~gc.fetch_flush) & decode_advance & decode.uses_rd & |decode.rd_addr;
 
     //Revert physcial address assignment on a flush
-    assign rollback = gc_fetch_flush & issue.stage_valid & issue.uses_rd & |issue.rd_addr;
+    assign rollback = gc.fetch_flush & issue.stage_valid & issue.uses_rd & |issue.rd_addr;
 
     //counter for indexing through memories for post-reset clearing/initialization
     initial clear_index = 0;
@@ -66,7 +64,7 @@ module renamer
         if (rst)
             clear_index <= 0;
         else
-            clear_index <= clear_index + 6'(gc_init_clear);
+            clear_index <= clear_index + 6'(gc.init_clear);
     end
     ////////////////////////////////////////////////////
     //Free list FIFO
@@ -78,10 +76,10 @@ module renamer
     );
 
     //During post reset init, initialize FIFO with free list (registers 32-63)
-    assign free_list.potential_push = (gc_init_clear & ~clear_index[5]) | (retire.valid);
+    assign free_list.potential_push = (gc.init_clear & ~clear_index[5]) | (retire.valid);
     assign free_list.push = free_list.potential_push;
     //TODO: restore spec if instruction has been discarded due to a speculation failure
-    assign free_list.data_in = gc_init_clear ? {1'b1, clear_index[4:0]} : architectural_id_to_phys_table[retire.phys_id];
+    assign free_list.data_in = gc.init_clear ? {1'b1, clear_index[4:0]} : architectural_id_to_phys_table[retire.phys_id];
     assign free_list.pop = rename_valid;
 
     ////////////////////////////////////////////////////
@@ -102,10 +100,10 @@ module renamer
     logic spec_table_update;
     logic [4:0] spec_table_write_index;
 
-    assign spec_table_update =  rename_valid | rollback | gc_init_clear;
+    assign spec_table_update =  rename_valid | rollback | gc.init_clear;
 
     always_comb begin
-        if (gc_init_clear) begin
+        if (gc.init_clear) begin
             spec_table_write_index = clear_index[4:0];
             spec_table_next.phys_addr = {1'b0, clear_index[4:0]};
             spec_table_next.wb_group = '0;

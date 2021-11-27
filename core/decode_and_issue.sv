@@ -67,10 +67,7 @@ module decode_and_issue
 
         unit_issue_interface.decode unit_issue [NUM_UNITS-1:0],
 
-        input logic gc_fetch_hold,
-        input logic gc_issue_hold,
-        input logic gc_fetch_flush,
-        input logic gc_issue_flush,
+        input gc_outputs_t gc,
         output logic gc_flush_required,
 
         output logic illegal_instruction,
@@ -240,7 +237,7 @@ module decode_and_issue
     end
 
     always_ff @(posedge clk) begin
-        if (rst | gc_fetch_flush)
+        if (rst | gc.fetch_flush)
             issue.stage_valid <= 0;
         else if (issue_stage_ready)
             issue.stage_valid <= decode.valid;
@@ -260,11 +257,11 @@ module decode_and_issue
     assign operands_ready = (~rs1_conflict) & (~rs2_conflict);
 
     assign issue_ready = unit_needed_issue_stage & unit_ready;
-    assign issue_valid = issue.stage_valid & operands_ready & ~gc_issue_hold;
+    assign issue_valid = issue.stage_valid & operands_ready & ~gc.issue_hold;
 
-    assign issue_to = {NUM_UNITS{issue_valid & ~gc_fetch_flush}} & issue_ready;
+    assign issue_to = {NUM_UNITS{issue_valid & ~gc.fetch_flush}} & issue_ready;
 
-    assign instruction_issued = issue_valid & ~gc_fetch_flush & |issue_ready;
+    assign instruction_issued = issue_valid & ~gc.fetch_flush & |issue_ready;
     assign instruction_issued_with_rd = instruction_issued & issue.uses_rd;
 
     assign rf.phys_rs_addr[RS1] = issue.phys_rs_addr[RS1];
@@ -273,7 +270,7 @@ module decode_and_issue
     assign rf.rs_wb_group[RS1] = issue_rs_wb_group[RS1];
     assign rf.rs_wb_group[RS2] = issue_rs_wb_group[RS2];
     
-    assign rf.single_cycle_or_flush = (instruction_issued_with_rd & |issue.rd_addr & ~issue.is_multicycle) | (issue.stage_valid & issue.uses_rd & |issue.rd_addr & gc_fetch_flush);
+    assign rf.single_cycle_or_flush = (instruction_issued_with_rd & |issue.rd_addr & ~issue.is_multicycle) | (issue.stage_valid & issue.uses_rd & |issue.rd_addr & gc.fetch_flush);
     ////////////////////////////////////////////////////
     //ALU unit inputs
     logic [XLEN-1:0] alu_rs2_data;
@@ -594,7 +591,7 @@ module decode_and_issue
 
 
         //Illegal instruction if the instruction is invalid, but could otherwise be issued
-        assign illegal_instruction = illegal_instruction_pattern_r & issue.stage_valid & ~gc_issue_hold & ~gc_fetch_flush;
+        assign illegal_instruction = illegal_instruction_pattern_r & issue.stage_valid & ~gc.issue_hold & ~gc.fetch_flush;
     end endgenerate
     ////////////////////////////////////////////////////
     //End of Implementation
@@ -605,16 +602,16 @@ module decode_and_issue
     //TODO: convert into exception and expand support into all fetch stage exceptions
     //If an invalid fetch address has reached the issue stage and has not been flushed as a branch, processor state is corrupted
     invalid_fetch_address_assertion:
-        assert property (@(posedge clk) disable iff (rst) (issue.stage_valid & (~issue.fetch_metadata.ok & issue.fetch_metadata.error_code == FETCH_ACCESS_FAULT)) |-> (gc_fetch_flush))
+        assert property (@(posedge clk) disable iff (rst) (issue.stage_valid & (~issue.fetch_metadata.ok & issue.fetch_metadata.error_code == FETCH_ACCESS_FAULT)) |-> (gc.fetch_flush))
         else $error("invalid fetch address");
 
     ////////////////////////////////////////////////////
     //Trace Interface
     generate if (ENABLE_TRACE_INTERFACE) begin
-        assign tr_operand_stall = issue.stage_valid & ~gc_fetch_flush & ~gc_issue_hold & ~operands_ready & |issue_ready;
-        assign tr_unit_stall = issue_valid & ~gc_fetch_flush & ~|issue_ready;
-        assign tr_no_id_stall = (~issue.stage_valid & ~pc_id_available & ~gc_fetch_flush); //All instructions in execution pipeline
-        assign tr_no_instruction_stall = (~tr_no_id_stall & ~issue.stage_valid) | gc_fetch_flush;
+        assign tr_operand_stall = issue.stage_valid & ~gc.fetch_flush & ~gc.issue_hold & ~operands_ready & |issue_ready;
+        assign tr_unit_stall = issue_valid & ~gc.fetch_flush & ~|issue_ready;
+        assign tr_no_id_stall = (~issue.stage_valid & ~pc_id_available & ~gc.fetch_flush); //All instructions in execution pipeline
+        assign tr_no_instruction_stall = (~tr_no_id_stall & ~issue.stage_valid) | gc.fetch_flush;
         assign tr_other_stall = issue.stage_valid & ~instruction_issued & ~(tr_operand_stall | tr_unit_stall | tr_no_id_stall | tr_no_instruction_stall);
         assign tr_branch_operand_stall = tr_operand_stall & unit_needed_issue_stage[UNIT_IDS.BR];
         assign tr_alu_operand_stall = tr_operand_stall & unit_needed_issue_stage[UNIT_IDS.ALU] & ~unit_needed_issue_stage[UNIT_IDS.BR];

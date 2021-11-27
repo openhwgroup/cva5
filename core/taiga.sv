@@ -167,19 +167,7 @@ module taiga
     //Global Control
     exception_interface exception [NUM_EXCEPTION_SOURCES]();
     logic [$clog2(NUM_EXCEPTION_SOURCES)-1:0] current_exception_unit;
-
-    logic gc_init_clear;
-    logic gc_fetch_hold;
-    logic gc_issue_hold;
-    logic gc_issue_flush;
-    logic gc_fetch_flush;
-    logic gc_fetch_pc_override;
-    logic gc_supress_writeback;
-    logic gc_tlb_flush;
-    exception_packet_t gc_exception;
-    logic gc_exception_pending;
-
-    logic [31:0] gc_fetch_pc;
+    gc_outputs_t gc;
     logic sq_empty;
     logic [LOG2_MAX_IDS:0] post_issue_count;
 
@@ -259,8 +247,7 @@ module taiga
     id_block (
         .clk (clk),
         .rst (rst),
-        .gc_init_clear (gc_init_clear),
-        .gc_fetch_flush (gc_fetch_flush),
+        .gc (gc),
         .pc_id (pc_id),
         .pc_id_available (pc_id_available),
         .if_pc (if_pc),
@@ -285,8 +272,7 @@ module taiga
         .retire_port_valid(retire_port_valid),
         .post_issue_count(post_issue_count),
         .oldest_pc (oldest_pc),
-        .current_exception_unit (current_exception_unit),
-        .gc_exception_pending (gc_exception_pending)
+        .current_exception_unit (current_exception_unit)
     );
 
     ////////////////////////////////////////////////////
@@ -296,11 +282,7 @@ module taiga
         .clk (clk),
         .rst (rst),
         .branch_flush (branch_flush),
-        .gc_init_clear (gc_init_clear),
-        .gc_fetch_hold (gc_fetch_hold),
-        .gc_fetch_flush (gc_fetch_flush),
-        .gc_fetch_pc_override (gc_fetch_pc_override),
-        .gc_fetch_pc (gc_fetch_pc),
+        .gc (gc),
         .pc_id (pc_id),
         .pc_id_available (pc_id_available),
         .pc_id_assigned (pc_id_assigned),
@@ -335,7 +317,7 @@ module taiga
     ras_block(
         .clk (clk),
         .rst (rst),
-        .gc_fetch_flush (gc_fetch_flush),
+        .gc (gc),
         .early_branch_flush_ras_adjust (early_branch_flush_ras_adjust),
         .ras (ras)
     );
@@ -346,8 +328,8 @@ module taiga
         i_tlb (       
             .clk (clk),
             .rst (rst),
-            .abort_request (gc_fetch_flush | early_branch_flush),
-            .gc_tlb_flush (gc_tlb_flush),
+            .gc (gc),
+            .abort_request (gc.fetch_flush | early_branch_flush),
             .asid (asid),
             .tlb (itlb), 
             .mmu (immu)
@@ -357,7 +339,7 @@ module taiga
             .clk (clk),
             .rst (rst),
             .mmu (immu) , 
-            .abort_request (gc_fetch_flush),
+            .abort_request (gc.fetch_flush),
             .l1_request (l1_request[L1_IMMU_ID]), 
             .l1_response (l1_response[L1_IMMU_ID])
         );
@@ -376,8 +358,7 @@ module taiga
     renamer_block (
         .clk (clk),
         .rst (rst),
-        .gc_init_clear (gc_init_clear),
-        .gc_fetch_flush (gc_fetch_flush),
+        .gc (gc),
         .decode_advance (decode_advance),
         .decode (decode_rename_interface),
         .issue (issue), //packet
@@ -415,10 +396,7 @@ module taiga
         .mul_inputs (mul_inputs),
         .div_inputs (div_inputs),
         .unit_issue (unit_issue),
-        .gc_fetch_hold (gc_fetch_hold),
-        .gc_issue_hold (gc_issue_hold),
-        .gc_fetch_flush (gc_fetch_flush),
-        .gc_issue_flush (gc_issue_flush),
+        .gc (gc),
         .gc_flush_required (gc_flush_required),
         .illegal_instruction (illegal_instruction),
         .tr_operand_stall (tr_operand_stall),
@@ -448,8 +426,7 @@ module taiga
     register_file_block (
         .clk (clk),
         .rst (rst),
-        .gc_init_clear (gc_init_clear),
-        .gc_fetch_flush (gc_fetch_flush),
+        .gc (gc),
         .decode_phys_rs_addr (decode_phys_rs_addr),
         .decode_phys_rd_addr (decode_phys_rd_addr),
         .decode_rs_wb_group (decode_rs_wb_group),
@@ -489,13 +466,12 @@ module taiga
     load_store_unit_block (
         .clk (clk),
         .rst (rst),
+        .gc (gc),
         .ls_inputs (ls_inputs),
         .issue (unit_issue[UNIT_IDS.LS]),
         .dcache_on (1'b1), 
         .clear_reservation (1'b0), 
-        .tlb (dtlb),  
-        .gc_fetch_flush (gc_fetch_flush),
-        .gc_issue_flush (gc_issue_flush),           
+        .tlb (dtlb),
         .tlb_on (tlb_on),                            
         .l1_request (l1_request[L1_DCACHE_ID]), 
         .l1_response (l1_response[L1_DCACHE_ID]),
@@ -519,8 +495,8 @@ module taiga
         d_tlb (       
             .clk (clk),
             .rst (rst),
+            .gc (gc),
             .abort_request (1'b0),
-            .gc_tlb_flush (gc_tlb_flush),
             .asid (asid),
             .tlb (dtlb), 
             .mmu (dmmu)
@@ -554,7 +530,7 @@ module taiga
         .asid(asid),
         .immu(immu),
         .dmmu(dmmu),
-        .exception(gc_exception),
+        .exception(gc.exception),
         .mret(mret),
         .sret(sret),
         .epc(epc),
@@ -574,8 +550,7 @@ module taiga
         .branch_flush (branch_flush),
         .exception (exception),
         .current_exception_unit (current_exception_unit),
-        .gc_exception (gc_exception),
-        .gc_exception_pending (gc_exception_pending),
+        .gc (gc),
         .oldest_pc (oldest_pc),
         .mret(mret),
         .sret(sret),
@@ -583,15 +558,6 @@ module taiga
         .retire (retire),
         .interrupt (interrupt),
         .timer_interrupt (timer_interrupt),
-        .gc_init_clear (gc_init_clear),
-        .gc_fetch_hold (gc_fetch_hold),
-        .gc_issue_hold (gc_issue_hold),
-        .gc_issue_flush (gc_issue_flush),
-        .gc_fetch_flush (gc_fetch_flush),
-        .gc_fetch_pc_override (gc_fetch_pc_override),
-        .gc_supress_writeback (gc_supress_writeback),
-        .gc_tlb_flush (gc_tlb_flush),
-        .gc_fetch_pc (gc_fetch_pc),
         .sq_empty (sq_empty),
         .post_issue_count (post_issue_count)
     );
@@ -610,7 +576,6 @@ module taiga
         div_unit div_unit_block (
             .clk (clk),
             .rst (rst),
-            .gc_fetch_flush (gc_fetch_flush),
             .div_inputs (div_inputs),
             .issue (unit_issue[UNIT_IDS.DIV]), 
             .wb (unit_wb[UNIT_IDS.DIV])

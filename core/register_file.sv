@@ -33,9 +33,7 @@ module register_file
     (
         input logic clk,
         input logic rst,
-
-        input logic gc_init_clear,
-        input logic gc_fetch_flush,
+        input gc_outputs_t gc,
 
         //decode write interface
         input phys_addr_t decode_phys_rs_addr [REGFILE_READ_PORTS],
@@ -75,9 +73,9 @@ module register_file
     (
         .clk (clk),
         .rst (rst),
-        .init_clear (gc_init_clear),
+        .init_clear (gc.init_clear),
         .toggle ('{
-            (decode_advance & decode_uses_rd & |decode_phys_rd_addr & ~gc_fetch_flush),
+            (decode_advance & decode_uses_rd & |decode_phys_rd_addr & ~gc.fetch_flush),
             rf_issue.single_cycle_or_flush,
             commit[1].valid
         }),

@@ -35,7 +35,7 @@ module tlb_lut_ram
     (
         input logic clk,
         input logic rst,
-        input logic gc_tlb_flush,
+        input gc_outputs_t gc,
         input logic abort_request,
         input logic [ASIDLEN-1:0] asid,
         mmu_interface.tlb mmu,
@@ -77,14 +77,14 @@ module tlb_lut_ram
     lfsr #(.WIDTH($clog2(DEPTH)), .NEEDS_RESET(0))
     lfsr_counter (
         .clk (clk), .rst (rst),
-        .en(gc_tlb_flush),
+        .en(gc.tlb_flush),
         .value(flush_addr)
     );
 
-    assign tlb_addr = gc_tlb_flush ? flush_addr : tlb.virtual_address[12 +: $clog2(DEPTH)];
-    assign tlb_write = {WAYS{gc_tlb_flush}}  | replacement_way;
+    assign tlb_addr = gc.tlb_flush ? flush_addr : tlb.virtual_address[12 +: $clog2(DEPTH)];
+    assign tlb_write = {WAYS{gc.tlb_flush}}  | replacement_way;
 
-    assign new_entry.valid = ~gc_tlb_flush;
+    assign new_entry.valid = ~gc.tlb_flush;
     assign new_entry.tag = virtual_tag;
     assign new_entry.phys_addr = mmu.upper_physical_address;
 
