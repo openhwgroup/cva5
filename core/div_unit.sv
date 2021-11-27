@@ -30,8 +30,6 @@ module div_unit
         input logic clk,
         input logic rst,
 
-        input logic gc_fetch_flush,
-
         input div_inputs_t div_inputs,
         unit_issue_interface.unit issue,
         unit_writeback_interface.unit wb

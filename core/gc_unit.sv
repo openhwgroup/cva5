@@ -46,8 +46,6 @@ module gc_unit
         //Exception
         exception_interface.econtrol exception [NUM_EXCEPTION_SOURCES],
         input logic [31:0] oldest_pc,
-        output exception_packet_t gc_exception,
-        output logic gc_exception_pending,
 
         output logic mret,
         output logic sret,
@@ -62,16 +60,7 @@ module gc_unit
         input logic timer_interrupt,
 
         //Output controls
-        output logic gc_init_clear,
-        output logic gc_fetch_hold,
-        output logic gc_issue_hold,
-        output logic gc_issue_flush,
-        output logic gc_fetch_flush,
-        output logic gc_fetch_pc_override,
-        output logic gc_supress_writeback,
-        output logic gc_tlb_flush,
-
-        output logic [31:0] gc_fetch_pc,
+        output gc_outputs_t gc,
 
         //Ordering support
         input logic sq_empty,
@@ -138,11 +127,22 @@ module gc_unit
     //CSR
     logic processing_csr;
 
+    //GC registered global outputs
+    logic gc_init_clear;
+    logic gc_fetch_hold;
+    logic gc_issue_hold;
+    logic gc_issue_flush;
+    logic gc_fetch_flush;
+    logic gc_supress_writeback;
+    logic gc_tlb_flush;
+    logic gc_pc_override;
+    logic [31:0] gc_pc;
+
     ////////////////////////////////////////////////////
     //Implementation
     //Input registering
     always_ff @(posedge clk) begin
-        if (issue.possible_issue & ~gc_issue_hold) begin
+        if (issue.possible_issue & ~gc.issue_hold) begin
             stage1 <= gc_inputs;
         end
     end
@@ -151,7 +151,7 @@ module gc_unit
     ////////////////////////////////////////////////////
     //GC Operation
     assign post_issue_idle = (post_issue_count == 0) & sq_empty;
-    assign gc_fetch_flush = branch_flush | gc_fetch_pc_override;
+    assign gc.fetch_flush = branch_flush | gc_pc_override;
 
     always_ff @ (posedge clk) begin
         gc_fetch_hold <=  next_state inside {PRE_CLEAR_STATE, INIT_CLEAR_STATE};
@@ -160,7 +160,12 @@ module gc_unit
         gc_init_clear <= next_state inside {INIT_CLEAR_STATE};
         gc_tlb_flush <= next_state inside {INIT_CLEAR_STATE, TLB_CLEAR_STATE};
     end
-
+    //work-around for verilator BLKANDNBLK signal optimizations
+    assign gc.fetch_hold = gc_fetch_hold;
+    assign gc.issue_hold = gc_issue_hold;
+    assign gc.supress_writeback = gc_supress_writeback;
+    assign gc.init_clear = gc_init_clear;
+    assign gc.tlb_flush = gc_tlb_flush;
     ////////////////////////////////////////////////////
     //GC State Machine
     always @(posedge clk) begin
@@ -238,13 +243,12 @@ module gc_unit
         end
     endgenerate
     
-    assign gc_exception_pending = |ex_pending;
-
     always_comb begin
-        gc_exception.valid = gc_exception_pending;
-        gc_exception.pc = oldest_pc;
-        gc_exception.code = ex_code[current_exception_unit];
-        gc_exception.tval = ex_tval[current_exception_unit];
+        gc.exception_pending = |ex_pending;
+        gc.exception.valid = |ex_pending;
+        gc.exception.pc = oldest_pc;
+        gc.exception.code = ex_code[current_exception_unit];
+        gc.exception.tval = ex_tval[current_exception_unit];
     end
     
     //PC determination (trap, flush or return)
@@ -252,8 +256,8 @@ module gc_unit
     //on the second cycle the new PC is fetched
     always_ff @ (posedge clk) begin
         second_cycle_flush <= gc_flush_required;
-        gc_fetch_pc_override <= gc_flush_required | second_cycle_flush | gc_exception.valid | (next_state == INIT_CLEAR_STATE);
-        gc_fetch_pc <= stage1.pc + 4;
+        gc_pc_override <= gc_flush_required | second_cycle_flush | gc.exception.valid | (next_state == INIT_CLEAR_STATE);
+        gc_pc <= stage1.pc + 4;
         //IFENCE only flush once sq_empty!
         //if (gc_exception.valid | stage1.is_i_fence | (issue.new_request & gc_inputs.is_ret)) begin
         //    gc_fetch_pc <= gc_exception.valid ? trap_pc :
@@ -261,7 +265,9 @@ module gc_unit
         //        epc;// gc_inputs.is_ret
         //end
     end
-
+    //work-around for verilator BLKANDNBLK signal optimizations
+    assign gc.pc_override = gc_pc_override;
+    assign gc.pc = gc_pc;
 
     ////////////////////////////////////////////////////
     //Decode / Write-back Handshaking
@@ -279,8 +285,8 @@ module gc_unit
     `ifdef ENABLE_SIMULATION_ASSERTIONS
     generate if (DEBUG_CONVERT_EXCEPTIONS_INTO_ASSERTIONS) begin
         unexpected_exception_assertion:
-            assert property (@(posedge clk) disable iff (rst) (~gc_exception.valid))
-            else $error("unexpected exception occured: %s", gc_exception.code.name());
+            assert property (@(posedge clk) disable iff (rst) (~gc.exception.valid))
+            else $error("unexpected exception occured: %s", gc.exception.code.name());
     end endgenerate
     `endif
 

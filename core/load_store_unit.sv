@@ -33,15 +33,14 @@ module load_store_unit
     (
         input logic clk,
         input logic rst,
+        input gc_outputs_t gc,
+
         input load_store_inputs_t ls_inputs,
         unit_issue_interface.unit issue,
 
         input logic dcache_on,
         input logic clear_reservation,
         tlb_interface.requester tlb,
-
-        input logic gc_fetch_flush,
-        input logic gc_issue_flush,
         input logic tlb_on,
 
         l1_arbiter_request_interface.master l1_request,
@@ -202,8 +201,7 @@ endgenerate
     load_store_queue lsq_block (
         .clk (clk),
         .rst (rst),
-        .gc_fetch_flush (gc_fetch_flush),
-        .gc_issue_flush (gc_issue_flush),
+        .gc (gc),
         .lsq (lsq),
         .wb_snoop (wb_snoop),
         .retire_ids (retire_ids),

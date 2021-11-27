@@ -266,6 +266,20 @@ package taiga_types;
         NON_MUXED_OUTPUT_FIFO
     } fifo_type_t;
 
+    typedef struct packed{
+        logic init_clear;
+        logic fetch_hold;
+        logic issue_hold;
+        logic issue_flush;
+        logic fetch_flush;
+        logic supress_writeback;
+        logic tlb_flush;
+        logic exception_pending;
+        exception_packet_t exception;
+        logic pc_override;
+        logic [31:0] pc;
+    } gc_outputs_t;
+
     typedef struct packed {
         //Fetch
         logic early_branch_correction;

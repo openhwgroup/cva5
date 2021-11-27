@@ -29,8 +29,7 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
     (
         input logic clk,
         input logic rst,
-        input logic gc_fetch_flush,
-        input logic gc_issue_flush,
+        input gc_outputs_t gc,
 
         load_store_queue_interface.queue lsq,
         //Writeback snooping
@@ -70,7 +69,7 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
     //Address hash for load-store collision checking
     addr_hash lsq_addr_hash (
         .clk (clk),
-        .rst (rst | gc_issue_flush),
+        .rst (rst | gc.issue_flush),
         .addr (lsq.addr),
         .addr_hash (addr_hash)
     );
@@ -89,7 +88,7 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
 
     load_queue #(.SQ_DEPTH(SQ_DEPTH)) lq_block (
         .clk (clk),
-        .rst (rst | gc_issue_flush),
+        .rst (rst | gc.issue_flush),
         .lsq (lsq_entry),
         .lq_entry (lq_entry),
         .potential_store_conflicts (potential_store_conflicts),
@@ -100,7 +99,7 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
 
     store_queue #(.DEPTH(SQ_DEPTH)) sq_block (
         .clk (clk),
-        .rst (rst | gc_issue_flush),
+        .rst (rst | gc.issue_flush),
         .lsq (lsq_entry),
         .sq_empty (sq_empty),
         .sq_full (sq_full),
