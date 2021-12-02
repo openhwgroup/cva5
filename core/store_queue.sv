@@ -69,6 +69,9 @@ module store_queue
     localparam LOG2_DEPTH = $clog2(DEPTH);
     typedef logic [LOG2_MAX_IDS-1:0] load_check_count_t;
 
+
+    wb_packet_t wb_snoop_r;
+
     //Register-based memory blocks
     logic [DEPTH-1:0] valid;
     logic [DEPTH-1:0] valid_next;
@@ -201,12 +204,6 @@ module store_queue
             id_needed[sq_index] <= lsq.data_id;
     end
 
-    always_comb begin
-        for (int i = 0; i < DEPTH; i++) begin
-            wb_id_match[i] = (wb_snoop.id == id_needed[i]);
-        end
-    end
-
     ////////////////////////////////////////////////////
     //Release Handling
     logic [DEPTH-1:0] newly_released;
@@ -228,11 +225,16 @@ module store_queue
     ////////////////////////////////////////////////////
     //Store Data
     always_ff @ (posedge clk) begin
+        wb_snoop_r <= wb_snoop;
+    end
+
+    always_ff @ (posedge clk) begin
         for (int i = 0; i < DEPTH; i++) begin
-            if ((wb_id_match[i] | new_request_one_hot[i]) & wb_snoop.valid & (~released[i] | new_request_one_hot[i]))
-                store_data_from_wb[i] <= wb_snoop.data;
+            if ({1'b0, wb_snoop_r.valid, wb_snoop_r.id} == {released[i], 1'b1, id_needed[i]})
+                store_data_from_wb[i] <= wb_snoop_r.data;
         end
     end
+    
     always_ff @ (posedge clk) begin
         if (new_sq_request & ~lsq.forwarded_store)
             store_data_from_issue[sq_index] <= lsq.data_in;
