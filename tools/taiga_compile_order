@@ -100,14 +100,11 @@ core/register_file.sv
 core/writeback.sv
 
 
-core/fpu/rng.sv
 core/fpu/unsigned_multiplier.sv
 core/fpu/fp_mul_madd_fused.sv
 core/fpu/fp_madd_fused.sv
 core/fpu/sticky_generator.sv
 core/fpu/fp_add_madd_fused.sv
-core/fpu/fp_barrel_shifter.sv
-core/fpu/fp_class.sv
 core/fpu/fp_cmp.sv
 core/fpu/fp_cvt_top.sv
 core/fpu/fp_f2i.sv
@@ -115,9 +112,6 @@ core/fpu/fp_i2f.sv
 core/fpu/fp_DS.sv
 core/fpu/fp_normalize.sv
 core/fpu/fp_rounding_simplified.sv
-core/fpu/fp_normalize_mp.sv
-core/fpu/fp_rounding_mp.sv
-core/fpu/barrel_shifter64.sv
 core/fpu/fp_sign_inj.sv
 core/fpu/fp_div.sv
 core/fpu/fp_div_core.sv
