@@ -74,14 +74,15 @@ interface unit_writeback_interface;
         id_t id;
         logic done;
         logic [XLEN-1:0] rd;
+        logic [4:0] fflags;
 
         modport unit (
             input ack,
-            output id, done, rd
+            output id, done, rd, fflags
         );
         modport wb (
             output ack,
-            input id, done, rd
+            input id, done, rd, fflags
         );
 endinterface
 
@@ -217,8 +218,15 @@ interface load_store_queue_interface;
 
     logic accepted;
 
-    modport queue (input addr, load, store, be, fn3, data_in, id, forwarded_store, data_id, possible_issue, new_issue, accepted, output ready, transaction_out, transaction_ready, sq_empty, empty, no_released_stores_pending);
-    modport ls  (output addr, load, store, be, fn3, data_in, id, forwarded_store, data_id, possible_issue, new_issue, accepted, input ready, transaction_out, transaction_ready, sq_empty, empty, no_released_stores_pending);
+    //FPU support
+    logic is_float;
+    logic fp_forwarded_store;
+    logic [ARITH_FLEN-1:0] fp_data_in;
+    logic we; //word select signal
+
+    modport queue (input addr, load, store, is_float, be, we, fn3, data_in, fp_data_in, id, forwarded_store, fp_forwarded_store, data_id, possible_issue, new_issue, accepted, output ready, transaction_out, transaction_ready, sq_empty, empty, no_released_stores_pending);
+    modport ls  (output addr, load, store, is_float, be, we, fn3, data_in, fp_data_in, id, forwarded_store, fp_forwarded_store, data_id, possible_issue, new_issue, accepted, input ready, transaction_out, transaction_ready, sq_empty, empty, no_released_stores_pending);
+    
 endinterface
 
 interface writeback_store_interface;

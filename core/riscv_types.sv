@@ -282,4 +282,62 @@ package riscv_types;
         logic [XLEN-1:0] t5;
         logic [XLEN-1:0] t6;
     } simulation_named_regfile;
+
+    typedef enum bit [4:0]{
+        FLD_T = 5'b00001,
+        FSD_T = 5'b01001,
+        FMADD_T = 5'b10000,
+        FMSUB_T = 5'b10001,
+        FNMSUB_T = 5'b10010,
+        FNMADD_T = 5'b10011,
+        FOP_T = 5'b10100
+        //end of RV32D
+    } opcodes_fp_trimmed_t;
+
+    typedef enum bit [6:0]{
+        FADD            = 7'b0000001,
+        FSUB            = 7'b0000101,
+        FMUL            = 7'b0001001,
+        FDIV            = 7'b0001101,
+        FSQRT           = 7'b0101101,
+        FSIGN_INJECTION = 7'b0010001,
+        FMIN_MAX        = 7'b0010101,
+        FCVT_SD         = 7'b0100000,
+        FCVT_DS         = 7'b0100001,
+        FCMP            = 7'b1010001,
+        FCLASS          = 7'b1110001,
+        FCVT_WD         = 7'b1100001,       //double only double -> int
+        FCVT_DW         = 7'b1101001,       //double only int -> double
+        FMV_XW          = 7'b1110000,       //single f to 32bit int
+        FMV_WX          = 7'b1111000,        //32bit int to single f
+        FCVT_SW         = 7'b1101000,       //single only int -> f
+        FCVT_WS         = 7'b1100000        //single only f -> int
+    } fn7_arith_fp_t;
+
+    typedef enum bit [2:0]{
+        FSGNJ = 3'b000,
+        FSGNJN = 3'b001,
+        FSGNJX = 3'b010
+    } fn3_fp_sign_injection_t;
+
+    typedef enum bit [2:0]{
+        FMIN = 3'b000,
+        FMAX = 3'b001
+    } fn3_fp_min_max_t;
+
+    typedef enum bit [2:0]{
+        FEQ = 3'b010,
+        FLT = 3'b001,
+        FLE = 3'b000
+    } fn3_fp_cmp_t;
+
+    typedef enum bit [4:0]{
+        FCVT_W_D = 5'b00000,
+        FCVT_WU_D = 5'b00001
+    } rs2_fp_cvt_wd_t;
+
+    typedef enum bit [4:0]{
+        FCVT_D_W = 5'b00000,
+        FCVTT_D_WU = 5'b00001
+    } rs2_fp_cvt_dw_t;
 endpackage

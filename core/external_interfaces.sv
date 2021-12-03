@@ -79,11 +79,11 @@ interface axi_interface;
             wready,
             bvalid, bresp, bid);
 
-    modport formal (input arready, arvalid, araddr, arlen, arsize, arburst, arcache,
-                          rready, rvalid, rdata, rresp, rlast, rid,
-                          awready, awvalid, awaddr, awlen, awsize, awburst, awcache, arid,
-                          wready, wvalid, wdata, wstrb, wlast, awid,
-                          bready, bvalid, bresp, bid);
+    //modport formal (input arready, arvalid, araddr, arlen, arsize, arburst, arcache,
+                          //rready, rvalid, rdata, rresp, rlast, rid,
+                          //awready, awvalid, awaddr, awlen, awsize, awburst, awcache, arid,
+                          //wready, wvalid, wdata, wstrb, wlast, awid,
+                          //bready, bvalid, bresp, bid);
 
 endinterface
 
@@ -102,8 +102,8 @@ interface avalon_interface;
             output addr, read, write, byteenable, writedata);
     modport slave (output readdata, waitrequest, readdatavalid, writeresponsevalid,
             input addr, read, write, byteenable, writedata);
-    modport formal (input readdata, waitrequest, readdatavalid, writeresponsevalid,
-                          addr, read, write, byteenable, writedata);
+    //modport formal (input readdata, waitrequest, readdatavalid, writeresponsevalid,
+                          //addr, read, write, byteenable, writedata);
 
 endinterface
 
@@ -121,7 +121,7 @@ interface wishbone_interface;
             output addr, we, sel, writedata, stb, cyc);
     modport slave (output readdata, ack,
             input addr, we, sel, writedata, stb, cyc);
-    modport formal (input readdata, ack, addr, we, sel, writedata, stb, cyc);
+    //modport formal (input readdata, ack, addr, we, sel, writedata, stb, cyc);
 
 endinterface
 
@@ -141,7 +141,7 @@ interface l1_arbiter_request_interface;
 
     modport master (output addr, data, rnw, be, size, is_amo, amo, request, input ack);
     modport slave (input addr, data, rnw, be, size, is_amo, amo, request, output ack);
-    modport formal (input addr, data, rnw, be, size, is_amo, amo, request, ack);
+    //modport formal (input addr, data, rnw, be, size, is_amo, amo, request, ack);
 
 endinterface
 
@@ -154,7 +154,7 @@ interface l1_arbiter_return_interface;
 
     modport master (input inv_addr, inv_valid, data, data_valid, output inv_ack);
     modport slave (output inv_addr, inv_valid, data, data_valid, input inv_ack);
-    modport formal (input inv_addr, inv_valid, data, data_valid, inv_ack);
+    //modport formal (input inv_addr, inv_valid, data, data_valid, inv_ack);
 
 endinterface
 

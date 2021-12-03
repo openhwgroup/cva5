@@ -55,15 +55,19 @@ module instruction_metadata_and_id_management
         input exception_sources_t decode_exception_unit,
         //renamer
         input phys_addr_t decode_phys_rd_addr,
+        input phys_addr_t fp_decode_phys_rd_addr,
 
         //Issue stage
         input issue_packet_t issue,
         input logic instruction_issued,
         input logic instruction_issued_with_rd,
+        input logic fp_instruction_issued_with_rd,
 
         //WB
         input wb_packet_t wb_packet [CONFIG.NUM_WB_GROUPS],
         output commit_packet_t commit_packet [CONFIG.NUM_WB_GROUPS],
+        input fp_wb_packet_t fp_wb_packet [CONFIG.FP.FP_NUM_WB_GROUPS],
+        output fp_commit_packet_t fp_commit_packet [CONFIG.FP.FP_NUM_WB_GROUPS],
 
         //Retirer
         output retire_packet_t retire,
@@ -72,6 +76,8 @@ module instruction_metadata_and_id_management
 
         //CSR
         output logic [LOG2_MAX_IDS:0] post_issue_count,
+        output fcsr_fifo_data_t oldest_fp_issued_fifo_data_out, //FCSR
+        output logic oldest_fp_issued_fifo_pop, //FCSR
         //Exception
         output logic [31:0] oldest_pc,
         output logic [$clog2(NUM_EXCEPTION_SOURCES)-1:0] current_exception_unit
@@ -102,10 +108,11 @@ module instruction_metadata_and_id_management
     id_t retire_ids_next [RETIRE_PORTS];
     logic retire_port_valid_next [RETIRE_PORTS];
 
+    logic decode_wb2_float, decode_is_float, decode_accu_fcsr;
     genvar i;
     ////////////////////////////////////////////////////
     //Implementation
-
+    
     ////////////////////////////////////////////////////
     //Instruction Metadata
     //PC table
@@ -136,7 +143,7 @@ module instruction_metadata_and_id_management
     //Number of read ports = (NUM_WB_GROUPS - 1)  (ALU WB group uses issue_phys_rd_addr)
     always_ff @ (posedge clk) begin
         if (decode_advance)
-            phys_addr_table[decode_id] <= decode_phys_rd_addr;
+            phys_addr_table[decode_id] <= decode_wb2_float ? fp_decode_phys_rd_addr : decode_phys_rd_addr;
     end
 
     ////////////////////////////////////////////////////
@@ -144,7 +151,7 @@ module instruction_metadata_and_id_management
     //Number of read ports = RETIRE_PORTS
     always_ff @ (posedge clk) begin
         if (decode_advance)
-            uses_rd_table[decode_id] <= decode_uses_rd & |decode_rd_addr;
+            uses_rd_table[decode_id] <= (decode_uses_rd & |decode_rd_addr) | (decode_wb2_float);
     end
 
     ////////////////////////////////////////////////////
@@ -153,6 +160,35 @@ module instruction_metadata_and_id_management
         if (decode_advance)
             exception_unit_table[decode_id] <= decode_exception_unit;
     end
+
+    ////////////////////////////////////////////////////
+    //FPU support
+    generate if (CONFIG.FP.INCLUDE_FPU) begin
+        fp_instruction_metadata_and_id_management 
+        fp_inst_id_management(
+            .clk                            (clk),
+            .rst                            (rst),
+            .fetch_id                       (fetch_id),
+            .fetch_complete                 (fetch_complete),
+            .fetch_instruction              (fetch_instruction),
+            .retire                         (retire_next),
+            .decode_id                      (decode_id),
+            .decode_wb2_float               (decode_wb2_float),
+            .decode_is_float                (decode_is_float),
+            .decode_accu_fcsr               (decode_accu_fcsr),
+            .instruction_issued             (instruction_issued),
+            .issue                          (issue),
+            .retire_ids_next                (retire_ids_next),
+            .retire_is_float                (retire_is_float),
+            .retire_is_accu_fcsr            (retire_is_accu_fcsr),
+            .retire_is_wb2_float            (retire_is_wb2_float),
+            .phys_addr_table                (phys_addr_table),
+            .fp_wb_packet                   (fp_wb_packet),
+            .fp_commit_packet               (fp_commit_packet),
+            .oldest_fp_issued_fifo_data_out (oldest_fp_issued_fifo_data_out),
+            .oldest_fp_issued_fifo_pop      (oldest_fp_issued_fifo_pop)
+        );
+    end endgenerate
 
     ////////////////////////////////////////////////////
     //ID Management
@@ -239,7 +275,7 @@ module instruction_metadata_and_id_management
     //exception after that point
     toggle_memory_set # (
         .DEPTH (MAX_IDS),
-        .NUM_WRITE_PORTS (2),
+        .NUM_WRITE_PORTS (3),
         .NUM_READ_PORTS (RETIRE_PORTS),
         .WRITE_INDEX_FOR_RESET (0),
         .READ_INDEX_FOR_RESET (0)
@@ -248,8 +284,8 @@ module instruction_metadata_and_id_management
         .clk (clk),
         .rst (rst),
         .init_clear (gc.init_clear),
-        .toggle ('{(instruction_issued_with_rd & issue.is_multicycle), wb_packet[1].valid}),
-        .toggle_addr ('{issue.id, wb_packet[1].id}),
+        .toggle ('{((instruction_issued_with_rd | fp_instruction_issued_with_rd) & issue.is_multicycle), wb_packet[1].valid, fp_wb_packet[0].valid}), //isseu.is_multicycle is asserted for FP instructions
+        .toggle_addr ('{issue.id, wb_packet[1].id, fp_wb_packet[0].id}),
         .read_addr (retire_ids_next),
         .in_use (id_inuse)
     );
@@ -262,13 +298,14 @@ module instruction_metadata_and_id_management
     logic [LOG2_RETIRE_PORTS-1:0] phys_id_sel;
     logic [RETIRE_PORTS-1:0] retire_id_uses_rd;
     logic [RETIRE_PORTS-1:0] retire_id_inuse;
+    logic [RETIRE_PORTS-1:0] retire_is_wb2_float;
+    logic [RETIRE_PORTS-1:0] retire_is_float;
+    logic [RETIRE_PORTS-1:0] retire_is_accu_fcsr;
 
-
-
-     generate for (i = 0; i < RETIRE_PORTS; i++) begin
+    generate for (i = 0; i < RETIRE_PORTS; i++) begin
         assign retire_id_uses_rd[i] = uses_rd_table[retire_ids_next[i]];
         assign retire_id_inuse[i] = id_inuse[i];
-     end endgenerate
+    end endgenerate
 
     priority_encoder #(.WIDTH(RETIRE_PORTS))
     phys_id_sel_encoder (
@@ -281,6 +318,8 @@ module instruction_metadata_and_id_management
         contiguous_retire = 1;
         retire_next.valid = 0;
         retire_next.count = 0;
+        retire_next.wb2_float = 0;
+        retire_next.accumulating_csrs = 0;
         //Supports retiring up to RETIRE_PORTS instructions.  The retired block of instructions must be
         //contiguous and must start with the first retire port.  Additionally, only one register file writing 
         //instruction is supported per cycle.
@@ -296,6 +335,8 @@ module instruction_metadata_and_id_management
 
             retire_next.valid |= retire_port_valid_next[i] & retire_id_uses_rd[i];
             retire_next.count += retire_port_valid_next[i];
+            retire_next.wb2_float |= retire_port_valid_next[i] & retire_id_uses_rd[i] & retire_is_wb2_float[i];
+            retire_next.accumulating_csrs |= retire_port_valid_next[i] & retire_is_accu_fcsr[i]; 
         end
     end
 
@@ -314,21 +355,24 @@ module instruction_metadata_and_id_management
     assign decode.pc = pc_table[decode_id];
     assign decode.instruction = instruction_table[decode_id];
     assign decode.fetch_metadata = fetch_metadata_table[decode_id];
+    assign decode.is_float = decode_is_float;
+    assign decode.wb2_float = decode_wb2_float;
+    assign decode.accumulating_csrs = decode_accu_fcsr;
 
     //Writeback/Commit support
     phys_addr_t commit_phys_addr [CONFIG.NUM_WB_GROUPS];
     assign commit_phys_addr[0] = issue.phys_rd_addr;
-     generate for (i = 1; i < CONFIG.NUM_WB_GROUPS; i++) begin
-        assign commit_phys_addr[i] = phys_addr_table[wb_packet[i].id];
-     end endgenerate
+    generate for (i = 1; i < CONFIG.NUM_WB_GROUPS; i++) begin
+       assign commit_phys_addr[i] = phys_addr_table[wb_packet[i].id];
+    end endgenerate
 
-     generate for (i = 0; i < CONFIG.NUM_WB_GROUPS; i++) begin
-        assign commit_packet[i].id = wb_packet[i].id;
-        assign commit_packet[i].phys_addr = commit_phys_addr[i];        
-        assign commit_packet[i].valid = wb_packet[i].valid & |commit_phys_addr[i];
-        assign commit_packet[i].data = wb_packet[i].data;
-     end endgenerate
-
+    generate for (i = 0; i < CONFIG.NUM_WB_GROUPS; i++) begin
+       assign commit_packet[i].id = wb_packet[i].id;
+       assign commit_packet[i].phys_addr = commit_phys_addr[i];        
+       assign commit_packet[i].valid = wb_packet[i].valid & |commit_phys_addr[i];
+       assign commit_packet[i].data = wb_packet[i].data;
+    end endgenerate
+        
     //Exception Support
      generate if (CONFIG.INCLUDE_M_MODE) begin
         assign oldest_pc = pc_table[retire_ids[0]];

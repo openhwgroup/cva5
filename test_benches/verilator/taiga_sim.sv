@@ -28,7 +28,8 @@ module taiga_sim
     import taiga_types::*;
 
     # (
-        parameter MEMORY_FILE = "/home/ematthew/Research/RISCV/software/riscv-tools/riscv-tests/benchmarks/dhrystone.riscv.hw_init" //change this to appropriate location "/home/ematthew/Downloads/dhrystone.riscv.sim_init"
+        parameter MEMORY_FILE = "/home/ematthew/Research/RISCV/software/riscv-tools/riscv-tests/benchmarks/dhrystone.riscv.hw_init", //change this to appropriate location "/home/ematthew/Downloads/dhrystone.riscv.sim_init"
+        parameter INTERFACE_FLEN = 64
     )
     (
         input logic clk,
@@ -152,11 +153,12 @@ module taiga_sim
         output logic [31:0] instruction_bram_data_in,
         input logic [31:0] instruction_bram_data_out,
 
-        output logic [29:0] data_bram_addr,
+        output logic [28:0] data_bram_addr,
+        output logic [1:0] data_bram_we, // <= {is_float, we} 
         output logic data_bram_en,
         output logic [3:0] data_bram_be,
-        output logic [31:0] data_bram_data_in,
-        input logic [31:0] data_bram_data_out,
+        output logic [INTERFACE_FLEN-1:0] data_bram_data_in,
+        input logic [INTERFACE_FLEN-1:0] data_bram_data_out,
 
         //Used by verilator
         output logic write_uart,
@@ -243,7 +245,7 @@ module taiga_sim
     l2_memory_interface mem();
 
     local_memory_interface instruction_bram();
-    local_memory_interface data_bram();
+    fp_local_memory_interface data_bram();
 
     //    assign m_axi.arready = bus_axi_arready;
     //    assign bus_axi_arvalid = m_axi.arvalid;
@@ -291,6 +293,7 @@ module taiga_sim
     assign data_bram_addr = data_bram.addr;
     assign data_bram_en = data_bram.en;
     assign data_bram_be = data_bram.be;
+    assign data_bram_we = data_bram.we;
     assign data_bram_data_in = data_bram.data_in;
     assign data_bram.data_out = data_bram_data_out;
 

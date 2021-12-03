@@ -125,12 +125,13 @@ void TaigaTracer::update_UART() {
 void TaigaTracer::update_memory() {
     tb->instruction_bram_data_out = instruction_r;
     if (tb->instruction_bram_en)
-        instruction_r = mem->read(tb->instruction_bram_addr);
+        //std::cout << std::hex << "pc 0x"<< tb->instruction_bram_addr << " -> inst 0x" << instruction_r << "\n"; 
+        instruction_r = mem->read_instruction(tb->instruction_bram_addr);
 
     tb->data_bram_data_out = data_out_r;
     if (tb->data_bram_en) {
         data_out_r = mem->read(tb->data_bram_addr);
-        mem->write(tb->data_bram_addr, tb->data_bram_data_in, tb->data_bram_be);
+        mem->write(tb->data_bram_addr, tb->data_bram_data_in, tb->data_bram_be, tb->data_bram_we);
     }
 }
 
@@ -205,6 +206,8 @@ TaigaTracer::TaigaTracer(std::ifstream& programFile) {
     programFile.clear();
     programFile.seekg(0, ios::beg);
     mem = new SimMem(programFile, 128);
+    std::string mem_log_file_name = "/localhdd/yuhuig/Research/Tests/taiga-project/logs/verilator/initialized_mem.txt";
+    mem->printMem(mem_log_file_name);
 
     instruction_r = mem->read(tb->instruction_bram_addr);
     data_out_r = 0;

@@ -31,7 +31,7 @@ module  local_mem
         input logic clk,
         input logic rst,
         local_memory_interface.slave portA,
-        local_memory_interface.slave portB
+        fp_local_memory_interface.slave portB
         );
         
         localparam LINES = (RAM_SIZE/4)*1024; //RAM width is 32-bits, so for RAM_SIZE in KB, divide by 4 and multiply by 1024.

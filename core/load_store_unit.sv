@@ -52,10 +52,11 @@ module load_store_unit
         avalon_interface.master m_avalon,
         wishbone_interface.master m_wishbone,
 
-        local_memory_interface.master data_bram,
+        fp_local_memory_interface.master data_bram,
 
         //Writeback-Store Interface
         input wb_packet_t wb_snoop,
+        input fp_wb_packet_t fp_wb_snoop,
 
         //Retire release
         input id_t retire_ids [RETIRE_PORTS],
@@ -66,6 +67,7 @@ module load_store_unit
         output logic no_released_stores_pending,
         output logic load_store_idle,
         unit_writeback_interface.unit wb,
+        fp_unit_writeback_interface.unit fp_wb,
 
         output logic tr_load_conflict_delay
     );
@@ -96,8 +98,10 @@ module load_store_unit
     logic [31:0] unit_muxed_load_data;
     logic [31:0] aligned_load_data;
     logic [31:0] final_load_data;
+    logic [INTERFACE_FLEN-1:0] fp_final_load_data;
 
-    logic [31:0] unit_data_array [NUM_SUB_UNITS-1:0];
+    //logic [31:0] unit_data_array [NUM_SUB_UNITS-1:0];
+    logic [INTERFACE_FLEN-1:0] unit_data_array [NUM_SUB_UNITS-1:0];
     logic [NUM_SUB_UNITS-1:0] unit_ready;
     logic [NUM_SUB_UNITS-1:0] unit_data_valid;
     logic [NUM_SUB_UNITS-1:0] last_unit;
@@ -112,8 +116,10 @@ module load_store_unit
     typedef struct packed{
         logic [2:0] fn3;
         logic [1:0] byte_addr;
+        logic is_float;
         id_t id;
         logic [NUM_SUB_UNITS_W-1:0] subunit_id;
+        logic we;
     } load_attributes_t;
     load_attributes_t  load_attributes_in, stage2_attr;
 
@@ -177,7 +183,7 @@ endgenerate
 
     ////////////////////////////////////////////////////
     //Byte enable generation
-    //Only set on store
+    //Only set on store, float default to all 1s
     //  SW: all bytes
     //  SH: upper or lower half of bytes
     //  SB: specific byte
@@ -191,6 +197,7 @@ endgenerate
             end
             default : be = '1;
         endcase
+        be = be | {4{ls_inputs.is_float}};
     end
 
     ////////////////////////////////////////////////////
@@ -204,6 +211,13 @@ endgenerate
     assign lsq.id = issue.id;
     assign lsq.forwarded_store = ls_inputs.forwarded_store;
     assign lsq.data_id = ls_inputs.store_forward_id;
+    //FPU support
+    generate if (CONFIG.FP.INCLUDE_FPU) begin
+        assign lsq.is_float = ls_inputs.is_float;
+        assign lsq.fp_data_in = ls_inputs.fp_rs2;
+        assign lsq.fp_forwarded_store = ls_inputs.fp_forwarded_store;
+        assign lsq.we = virtual_address[2]; //word select signal
+    end endgenerate
 
     assign lsq.possible_issue = issue.possible_issue;
     assign lsq.new_issue = issue.new_request & ~unaligned_addr & (~tlb_on | tlb.done) & ~ls_inputs.fence;
@@ -214,13 +228,13 @@ endgenerate
         .gc (gc),
         .lsq (lsq),
         .wb_snoop (wb_snoop),
+        .fp_wb_snoop (fp_wb_snoop),
         .retire_ids (retire_ids),
         .retire_port_valid (retire_port_valid),
         .tr_possible_load_conflict_delay (tr_possible_load_conflict_delay)
     );
     assign shared_inputs = lsq.transaction_out;
     assign lsq.accepted = issue_request;
-
 
     ////////////////////////////////////////////////////
     //Unit tracking
@@ -277,6 +291,8 @@ endgenerate
     assign load_attributes_in.fn3 = shared_inputs.fn3;
     assign load_attributes_in.byte_addr = shared_inputs.addr[1:0];
     assign load_attributes_in.id = shared_inputs.id;
+    assign load_attributes_in.is_float = shared_inputs.is_float;
+    assign load_attributes_in.we = shared_inputs.we;
 
     assign load_attributes.data_in = load_attributes_in;
     assign load_attributes.push = issue_request & shared_inputs.load;
@@ -294,7 +310,7 @@ endgenerate
             assign unit_ready[BRAM_ID] = bram.ready;
             assign unit_data_valid[BRAM_ID] = bram.data_valid;
 
-            dbram d_bram (
+            fp_dbram d_bram (
                 .clk        (clk),
                 .rst        (rst),  
                 .ls_inputs  (shared_inputs), 
@@ -318,7 +334,7 @@ endgenerate
                     .rst            (rst),
                     .m_axi          (m_axi),
                     .size           ({1'b0,shared_inputs.fn3[1:0]}),
-                    .data_out       (unit_data_array[BUS_ID]),
+                    .data_out       (unit_data_array[BUS_ID][31:0]),
                     .ls_inputs      (shared_inputs),
                     .ls             (bus)
                 ); //Lower two bits of fn3 match AXI specification for request size (byte/halfword/word)
@@ -328,7 +344,7 @@ endgenerate
                     .clk            (clk),
                     .rst            (rst),
                     .m_wishbone     (m_wishbone),
-                    .data_out       (unit_data_array[BUS_ID]),
+                    .data_out       (unit_data_array[BUS_ID][31:0]),
                     .ls_inputs      (shared_inputs), 
                     .ls             (bus) 
                 );
@@ -372,7 +388,9 @@ endgenerate
 
     ////////////////////////////////////////////////////
     //Output Muxing
-    assign unit_muxed_load_data = unit_data_array[stage2_attr.subunit_id];
+    //assign unit_muxed_load_data = unit_data_array[stage2_attr.subunit_id];
+    assign unit_muxed_load_data = stage2_attr.we ? unit_data_array[stage2_attr.subunit_id][0+:32] : unit_data_array[stage2_attr.subunit_id][SOFTWARE_FLEN-1-:XLEN]; 
+    assign fp_final_load_data = {unit_data_array[stage2_attr.subunit_id][0+:32], unit_data_array[stage2_attr.subunit_id][SOFTWARE_FLEN-1-:32]}; //double float data 
 
     //Byte/halfword select: assumes aligned operations
     always_comb begin
@@ -400,8 +418,16 @@ endgenerate
     ////////////////////////////////////////////////////
     //Output bank
     assign wb.rd = final_load_data;
-    assign wb.done = load_complete | load_exception_complete;
+    assign wb.done = (load_complete | load_exception_complete) & ~stage2_attr.is_float;
     assign wb.id = load_exception_complete ? exception.id : stage2_attr.id;
+
+    //FPU support
+    logic [ARITH_FLEN-1:0] fp_rd;
+    assign fp_rd = fp_final_load_data[SOFTWARE_FLEN-1-:ARITH_FLEN];
+    assign fp_wb.rd = fp_rd;
+    assign fp_wb.hidden = |fp_rd[ARITH_FLEN-1-:CONFIG.FP.EXPO_WIDTH];
+    assign fp_wb.done = (load_complete | load_exception_complete) & stage2_attr.is_float;
+    assign fp_wb.id = load_exception_complete ? exception.id : stage2_attr.id;
 
     ////////////////////////////////////////////////////
     //End of Implementation

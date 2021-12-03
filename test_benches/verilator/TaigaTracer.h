@@ -112,7 +112,7 @@ private:
   void update_UART();
   void update_memory();
   uint32_t instruction_r;
-  uint32_t data_out_r;
+  uint64_t data_out_r;
 
 };
 #endif

@@ -38,7 +38,7 @@ module taiga
         input logic rst,
 
         local_memory_interface.master instruction_bram,
-        local_memory_interface.master data_bram,
+        fp_local_memory_interface.master data_bram,
 
         axi_interface.master m_axi,
         avalon_interface.master m_avalon,
@@ -63,29 +63,68 @@ module taiga
     localparam int unsigned CSR_UNIT_ID = 32'd2;
     localparam int unsigned MUL_UNIT_ID = CSR_UNIT_ID + int'(CONFIG.INCLUDE_MUL);
     localparam int unsigned DIV_UNIT_ID = MUL_UNIT_ID + int'(CONFIG.INCLUDE_DIV);
+    localparam int unsigned F2I_UNIT_ID = DIV_UNIT_ID + 1;
+    localparam int unsigned FCMP_UNIT_ID = F2I_UNIT_ID + 1;
     //Non-writeback units
     localparam int unsigned BRANCH_UNIT_ID = DIV_UNIT_ID + 1;
     localparam int unsigned IEC_UNIT_ID = BRANCH_UNIT_ID + 1;
+    //FP units
+    localparam int unsigned FMADD_UNIT_ID = 32'd0;//IEC_UNIT_ID + 1;
+    localparam int unsigned FDIV_SQRT_UNIT_ID = FMADD_UNIT_ID + 1;
+    localparam int unsigned FMINMAX_CMP_UNIT_ID = FDIV_SQRT_UNIT_ID + 1;
+    localparam int unsigned FCVT_UNIT_ID = FMINMAX_CMP_UNIT_ID + 1;
+    //FP Writeback units
+    localparam int unsigned FLS_WB_ID = 32'd0;
+    localparam int unsigned FMADD_WB_ID = FLS_WB_ID + 1;
+    localparam int unsigned FMUL_WB_ID = FMADD_WB_ID + 1;
+    localparam int unsigned FDIV_SQRT_WB_ID = FMUL_WB_ID + 1;
+    localparam int unsigned FMINMAX_WB_ID = FDIV_SQRT_WB_ID + 1;
+    localparam int unsigned FCVT_I2F_WB_ID = FMINMAX_WB_ID + 1;
 
     //Total number of units
     localparam int unsigned NUM_UNITS = IEC_UNIT_ID + 1; 
+    localparam int unsigned FP_NUM_UNITS = FCVT_UNIT_ID + 1; 
+    localparam int unsigned TOTAL_NUM_UNITS = NUM_UNITS + FP_NUM_UNITS;
 
     localparam unit_id_param_t UNIT_IDS = '{
         ALU : ALU_UNIT_ID,
-        LS : LS_UNIT_ID,
+        LS  : LS_UNIT_ID,
         CSR : CSR_UNIT_ID,
         MUL : MUL_UNIT_ID,
         DIV : DIV_UNIT_ID,
-        BR : BRANCH_UNIT_ID,
+        BR  : BRANCH_UNIT_ID,
         IEC : IEC_UNIT_ID
+    };
+
+    localparam fp_unit_id_param_t FP_UNIT_IDS = '{
+        FMADD       : FMADD_UNIT_ID,
+        FDIV_SQRT   : FDIV_SQRT_UNIT_ID,
+        FMINMAX_CMP : FMINMAX_CMP_UNIT_ID,
+        FCVT        : FCVT_UNIT_ID
     };
 
     ////////////////////////////////////////////////////
     //Writeback Port Assignment
-    //
     localparam int unsigned NUM_WB_UNITS_GROUP_1 = 1;//ALU
-    localparam int unsigned NUM_WB_UNITS_GROUP_2 = 2 + int'(CONFIG.INCLUDE_MUL) + int'(CONFIG.INCLUDE_DIV);//LS + CSR
-    localparam int unsigned NUM_WB_UNITS = NUM_WB_UNITS_GROUP_1 + NUM_WB_UNITS_GROUP_2;
+    localparam int unsigned NUM_WB_UNITS_GROUP_2 = 2 + int'(CONFIG.INCLUDE_MUL) + int'(CONFIG.INCLUDE_DIV) + int'(INCLUDE_FPU)*2;//LS + CSR + (F2I + FCMP)
+    localparam int unsigned NUM_WB_UNITS = NUM_WB_UNITS_GROUP_1 + NUM_WB_UNITS_GROUP_2; //F2I + CMP
+    localparam int unsigned FP_WB_INT_NUM_UNITS = 2;
+
+    //FP Writeback ports
+    localparam fp_wb_id_param_t FP_WB_IDS = '{
+        FLS       : FLS_WB_ID,
+        FMADD     : FMADD_WB_ID,
+        FMUL      : FMUL_WB_ID,
+        FDIV_SQRT : FDIV_SQRT_WB_ID,
+        FMINMAX   : FMINMAX_WB_ID,
+        FCVT_I2F  : FCVT_I2F_WB_ID
+    };
+    localparam int unsigned FP_NUM_WB_UNITS = FCVT_I2F_WB_ID + 1;
+
+    localparam fp_wb_int_id_param_t FP_WB_INT_IDS = '{
+        FCVT_F2I : 0,
+        FCMP     : 1
+    };
 
     ////////////////////////////////////////////////////
     //Connecting Signals
@@ -105,7 +144,7 @@ module taiga
 
     issue_packet_t issue;
     register_file_issue_interface #(.NUM_WB_GROUPS(CONFIG.NUM_WB_GROUPS)) rf_issue();
-
+    fp_register_file_issue_interface #(.NUM_WB_GROUPS(FP_NUM_WB_GROUPS)) fp_rf_issue();
 
     alu_inputs_t alu_inputs;
     load_store_inputs_t ls_inputs;
@@ -114,13 +153,18 @@ module taiga
     div_inputs_t div_inputs;
     gc_inputs_t gc_inputs;
     csr_inputs_t csr_inputs;
+    fp_madd_inputs_t fp_madd_inputs;
+    fp_cmp_inputs_t fp_cmp_inputs;
+    fp_div_sqrt_inputs_t fp_div_sqrt_inputs;
+    fp_cvt_mv_inputs_t fp_cvt_mv_inputs;
 
-    unit_issue_interface unit_issue [NUM_UNITS-1:0]();
+    unit_issue_interface unit_issue [NUM_UNITS+FP_NUM_UNITS-1:0]();
 
     exception_packet_t  ls_exception;
     logic ls_exception_is_store;
 
     unit_writeback_interface unit_wb  [NUM_WB_UNITS]();
+    fp_unit_writeback_interface fp_unit_wb  [FP_NUM_WB_UNITS]();
 
     mmu_interface immu();
     mmu_interface dmmu();
@@ -147,11 +191,17 @@ module taiga
     logic decode_advance;
     decode_packet_t decode;   
     logic decode_uses_rd;
+    logic fp_decode_uses_rd;
     rs_addr_t decode_rd_addr;
     exception_sources_t decode_exception_unit;
     phys_addr_t decode_phys_rd_addr;
     phys_addr_t decode_phys_rs_addr [REGFILE_READ_PORTS];
     logic [$clog2(CONFIG.NUM_WB_GROUPS)-1:0] decode_rs_wb_group [REGFILE_READ_PORTS];
+    rs_addr_t fp_decode_rd_addr;
+    phys_addr_t fp_decode_phys_rd_addr;
+    phys_addr_t fp_decode_phys_rs_addr [FP_REGFILE_READ_PORTS];
+    //logic [$clog2(FP_NUM_WB_GROUPS)-1:0] fp_decode_rs_wb_group [FP_REGFILE_READ_PORTS];
+    logic fp_decode_rs_wb_group [FP_REGFILE_READ_PORTS];
 
         //ID freeing
     retire_packet_t retire;
@@ -160,10 +210,20 @@ module taiga
         //Writeback
     wb_packet_t wb_packet [CONFIG.NUM_WB_GROUPS];
     commit_packet_t commit_packet [CONFIG.NUM_WB_GROUPS];
+    fp_wb_packet_t fp_wb_packet [FP_NUM_WB_GROUPS];
+    fp_commit_packet_t fp_commit_packet [FP_NUM_WB_GROUPS];
          //Exception
     logic [31:0] oldest_pc;
+        //FCSR 
+    logic oldest_fp_issued_fifo_pop;
+    fcsr_fifo_data_t oldest_fp_issued_fifo_data_out;
+    logic [4:0] fflags_unit;
+    logic [2:0] dyn_rm;
+    fflags_writeback_t fp_unit_fflag_wb_packet;
+    fflags_writeback_t unit_fflag_wb_packet;
 
     renamer_interface #(.NUM_WB_GROUPS(CONFIG.NUM_WB_GROUPS)) decode_rename_interface ();
+    fp_renamer_interface #(.NUM_WB_GROUPS(FP_NUM_WB_GROUPS)) fp_decode_rename_interface ();
 
     //Global Control
     exception_interface exception [NUM_EXCEPTION_SOURCES]();
@@ -189,9 +249,12 @@ module taiga
     logic illegal_instruction;
     logic instruction_issued;
     logic instruction_issued_with_rd;
+    logic fp_instruction_issued_with_rd;
+    logic gc_flush_required;
 
     //LS
     wb_packet_t wb_snoop;
+    fp_wb_packet_t fp_wb_snoop;
 
     //Trace Interface Signals
     logic tr_early_branch_correction;
@@ -231,7 +294,6 @@ module taiga
     ////////////////////////////////////////////////////
     //Implementation
 
-
     ////////////////////////////////////////////////////
     // Memory Interface
     generate if (CONFIG.INCLUDE_S_MODE || CONFIG.INCLUDE_ICACHE || CONFIG.INCLUDE_DCACHE)
@@ -252,7 +314,7 @@ module taiga
     ////////////////////////////////////////////////////
     // ID support
     instruction_metadata_and_id_management #(.CONFIG(CONFIG))
-    id_block (
+    id_block(
         .clk (clk),
         .rst (rst),
         .gc (gc),
@@ -271,15 +333,21 @@ module taiga
         .decode_rd_addr (decode_rd_addr),
         .decode_phys_rd_addr (decode_phys_rd_addr),
         .decode_exception_unit (decode_exception_unit),
+        .fp_decode_phys_rd_addr (fp_decode_phys_rd_addr),
         .issue (issue),
         .instruction_issued (instruction_issued),
         .instruction_issued_with_rd (instruction_issued_with_rd),
+        .fp_instruction_issued_with_rd (fp_instruction_issued_with_rd),
         .wb_packet (wb_packet),
         .commit_packet (commit_packet),
+        .fp_wb_packet (fp_wb_packet),
+        .fp_commit_packet (fp_commit_packet),
         .retire (retire),
         .retire_ids (retire_ids),
         .retire_port_valid(retire_port_valid),
         .post_issue_count(post_issue_count),
+        .oldest_fp_issued_fifo_data_out (oldest_fp_issued_fifo_data_out),
+        .oldest_fp_issued_fifo_pop (oldest_fp_issued_fifo_pop), //FCSR
         .oldest_pc (oldest_pc),
         .current_exception_unit (current_exception_unit)
     );
@@ -287,7 +355,7 @@ module taiga
     ////////////////////////////////////////////////////
     // Fetch
     fetch # (.CONFIG(CONFIG))
-    fetch_block (
+    fetch_block(
         .clk (clk),
         .rst (rst),
         .branch_flush (branch_flush),
@@ -314,7 +382,7 @@ module taiga
     );
 
     branch_predictor #(.CONFIG(CONFIG))
-    bp_block (       
+    bp_block(       
         .clk (clk),
         .rst (rst),
         .bp (bp),
@@ -334,7 +402,7 @@ module taiga
     generate if (CONFIG.INCLUDE_S_MODE) begin
 
         tlb_lut_ram #(.WAYS(CONFIG.ITLB.WAYS), .DEPTH(CONFIG.ITLB.DEPTH))
-        i_tlb (       
+        i_tlb(       
             .clk (clk),
             .rst (rst),
             .gc (gc),
@@ -344,7 +412,7 @@ module taiga
             .mmu (immu)
         );
 
-        mmu i_mmu (
+        mmu i_mmu(
             .clk (clk),
             .rst (rst),
             .mmu (immu) , 
@@ -374,30 +442,53 @@ module taiga
         .retire (retire) //packet
     );
 
+    fp_renamer #(.CONFIG(CONFIG)) 
+    fp_renamer_block(
+        .clk (clk),
+        .rst (rst),
+        .gc (gc),
+        .decode_advance (decode_advance),
+        .decode (fp_decode_rename_interface),
+        .issue (issue), //packet
+        .retire (retire) //packet
+    );
+
     ////////////////////////////////////////////////////
     //Decode/Issue
     decode_and_issue #(
         .CONFIG (CONFIG),
         .NUM_UNITS (NUM_UNITS),
-        .UNIT_IDS (UNIT_IDS)
+        .UNIT_IDS (UNIT_IDS),
+        .FP_NUM_UNITS (FP_NUM_UNITS),
+        .FP_UNIT_IDS (FP_UNIT_IDS),
+        .TOTAL_NUM_UNITS (TOTAL_NUM_UNITS)
         )
-    decode_and_issue_block (
+    decode_and_issue_block(
         .clk (clk),
         .rst (rst),
+        .post_issue_count (post_issue_count),
         .pc_id_available (pc_id_available),
         .decode (decode),
         .decode_advance (decode_advance),
         .renamer (decode_rename_interface),
+        .fp_renamer (fp_decode_rename_interface),
         .decode_uses_rd (decode_uses_rd),
+        .fp_decode_uses_rd (fp_decode_uses_rd),
         .decode_rd_addr (decode_rd_addr),
         .decode_exception_unit (decode_exception_unit),
         .decode_phys_rd_addr (decode_phys_rd_addr),
         .decode_phys_rs_addr (decode_phys_rs_addr),
         .decode_rs_wb_group (decode_rs_wb_group),
+        .fp_decode_phys_rd_addr (fp_decode_phys_rd_addr),
+        .fp_decode_phys_rs_addr (fp_decode_phys_rs_addr),
+        .fp_decode_rs_wb_group (fp_decode_rs_wb_group),
         .instruction_issued (instruction_issued),
         .instruction_issued_with_rd (instruction_issued_with_rd),
+        .fp_instruction_issued_with_rd (fp_instruction_issued_with_rd),
         .issue (issue),
         .rf (rf_issue),
+        .fp_rf (fp_rf_issue),
+        .dyn_rm (dyn_rm),
         .alu_inputs (alu_inputs),
         .ls_inputs (ls_inputs),
         .branch_inputs (branch_inputs),
@@ -405,6 +496,10 @@ module taiga
         .csr_inputs (csr_inputs),
         .mul_inputs (mul_inputs),
         .div_inputs (div_inputs),
+        .fp_madd_inputs (fp_madd_inputs),
+        .fp_div_sqrt_inputs (fp_div_sqrt_inputs),
+        .fp_cvt_mv_inputs (fp_cvt_mv_inputs),
+        .fp_cmp_inputs (fp_cmp_inputs),
         .unit_issue (unit_issue),
         .gc (gc),
         .current_privilege (current_privilege),
@@ -433,7 +528,7 @@ module taiga
     ////////////////////////////////////////////////////
     //Register File
     register_file #(.CONFIG(CONFIG))
-    register_file_block (
+    register_file_block(
         .clk (clk),
         .rst (rst),
         .gc (gc),
@@ -444,6 +539,20 @@ module taiga
         .decode_uses_rd (decode_uses_rd),
         .rf_issue (rf_issue),
         .commit (commit_packet)
+    );
+
+    fp_register_file #(.CONFIG(CONFIG))
+    fp_register_file_block(
+        .clk (clk),
+        .rst (rst),
+        .gc (gc),
+        .decode_phys_rs_addr (fp_decode_phys_rs_addr),
+        .decode_phys_rd_addr (fp_decode_phys_rd_addr),
+        .decode_rs_wb_group (fp_decode_rs_wb_group),
+        .decode_advance (decode_advance),
+        .decode_uses_rd (fp_decode_uses_rd),
+        .rf_issue (fp_rf_issue),
+        .commit (fp_commit_packet)
     );
 
     ////////////////////////////////////////////////////
@@ -462,7 +571,6 @@ module taiga
         .tr_return_correct (tr_return_correct),
         .tr_return_misspredict (tr_return_misspredict)
     );
-
 
     alu_unit alu_unit_block (
         .clk (clk),
@@ -492,6 +600,7 @@ module taiga
         .m_wishbone (m_wishbone),                                       
         .data_bram (data_bram),
         .wb_snoop (wb_snoop),
+        .fp_wb_snoop (fp_wb_snoop),
         .retire_ids (retire_ids),
         .retire_port_valid(retire_port_valid),
         .exception (exception[LS_EXCEPTION]),
@@ -499,6 +608,7 @@ module taiga
         .no_released_stores_pending (no_released_stores_pending),
         .load_store_idle (load_store_idle),
         .wb (unit_wb[UNIT_IDS.LS]),
+        .fp_wb (fp_unit_wb[FP_WB_IDS.FLS]),
         .tr_load_conflict_delay (tr_load_conflict_delay)
     );
 
@@ -537,6 +647,8 @@ module taiga
         .csr_inputs (csr_inputs),
         .issue (unit_issue[UNIT_IDS.CSR]), 
         .wb (unit_wb[UNIT_IDS.CSR]),
+        .fflags (fflags_unit),
+        .dyn_rm (dyn_rm),
         .current_privilege(current_privilege),
         .interrupt_taken(interrupt_taken),
         .interrupt_pending(interrupt_pending),
@@ -601,6 +713,37 @@ module taiga
         );
     endgenerate
 
+    generate if (INCLUDE_FPU)
+        fpu_top #(
+            .FP_NUM_UNITS(FP_NUM_UNITS),
+            .FP_UNIT_IDS(FP_UNIT_IDS),
+            .FP_NUM_WB_UNITS(FP_NUM_WB_UNITS),
+            .FP_WB_IDS(FP_WB_IDS),
+            .FP_WB_INT_NUM_UNITS(FP_WB_INT_NUM_UNITS),
+            .FP_WB_INT_IDS(FP_WB_INT_IDS)
+            )
+        fpu_block (
+            .clk (clk),
+            .rst (rst),
+            .fp_madd_inputs (fp_madd_inputs),
+            .fp_cmp_inputs (fp_cmp_inputs),
+            .fp_div_sqrt_inputs (fp_div_sqrt_inputs),
+            .fp_cvt_mv_inputs (fp_cvt_mv_inputs),
+            .fp_unit_issue (unit_issue[NUM_UNITS+FP_UNIT_IDS.FCVT:NUM_UNITS+FP_UNIT_IDS.FMADD]),
+            .fp_unit_wb (fp_unit_wb), //FLS is not assigned in fpu_top;included for coding simplicity
+            .unit_wb (unit_wb[NUM_WB_UNITS-2+FP_WB_INT_IDS.FCVT_F2I:NUM_WB_UNITS-2+FP_WB_INT_IDS.FCMP])
+        );
+
+        fflag_mux fflag_mux_inst (
+            .clk (clk),
+            .unit_fflag_wb_packet (unit_fflag_wb_packet),
+            .fp_unit_fflag_wb_packet (fp_unit_fflag_wb_packet),
+            .oldest_fp_issued_fifo_data_in (oldest_fp_issued_fifo_data_out),
+            .oldest_fp_issued_fifo_pop (oldest_fp_issued_fifo_pop),
+            .fflags (fflags_unit)
+        );
+    endgenerate
+
     ////////////////////////////////////////////////////
     //Writeback
     //First writeback port: ALU
@@ -616,8 +759,25 @@ module taiga
         .rst (rst),
         .wb_packet (wb_packet),
         .unit_wb (unit_wb),
+        .fflags_wb_packet (unit_fflag_wb_packet),
         .wb_snoop (wb_snoop)
     );
+
+    localparam int unsigned FP_NUM_UNITS_PER_PORT [FP_NUM_WB_GROUPS] = '{FP_NUM_WB_UNITS};
+    fp_writeback #(
+        .CONFIG (CONFIG),
+        .NUM_UNITS (FP_NUM_UNITS_PER_PORT),
+        .NUM_WB_UNITS (FP_NUM_WB_UNITS)
+    )
+    fp_writeback_block (
+        .clk (clk),
+        .rst (rst),
+        .wb_packet (fp_wb_packet),
+        .unit_wb (fp_unit_wb),
+        .fflags_wb_packet (fp_unit_fflag_wb_packet),
+        .wb_snoop (fp_wb_snoop)
+    );
+
 
     ////////////////////////////////////////////////////
     //End of Implementation

@@ -228,7 +228,7 @@ module taiga_wrapper (
 
 
     local_memory_interface instruction_bram();
-    local_memory_interface data_bram();
+    fp_local_memory_interface data_bram();
 
     taiga cpu(.*, .l2(l2[0]));
 

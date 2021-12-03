@@ -53,6 +53,7 @@ module store_queue
 
         //Writeback snooping
         input wb_packet_t wb_snoop,
+        input fp_wb_packet_t fp_wb_snoop,
 
         //Retire
         input id_t retire_ids [RETIRE_PORTS],
@@ -61,6 +62,7 @@ module store_queue
         //lsq output
         output sq_entry_t sq_entry,
         output logic [31:0] sq_data,
+        output logic [ARITH_FLEN-1:0] fp_sq_data,
 
         //lsq request handling
         output logic sq_output_valid,
@@ -72,6 +74,7 @@ module store_queue
 
 
     wb_packet_t wb_snoop_r;
+    fp_wb_packet_t fp_wb_snoop_r;
 
     //Register-based memory blocks
     logic [DEPTH-1:0] valid;
@@ -83,6 +86,8 @@ module store_queue
     load_check_count_t [DEPTH-1:0] load_check_count;
     (* ramstyle = "MLAB, no_rw_check" *) logic [31:0] store_data_from_issue [DEPTH];
     logic [31:0] store_data_from_wb [DEPTH];
+    (* ramstyle = "MLAB, no_rw_check" *) logic [ARITH_FLEN-1:0] fp_store_data_from_issue [DEPTH];
+    logic [ARITH_FLEN-1:0] fp_store_data_from_wb [DEPTH];
 
     //LUTRAM-based memory blocks
     (* ramstyle = "MLAB, no_rw_check" *) logic [$bits(sq_entry_t)-1:0] store_attr [DEPTH];
@@ -101,8 +106,6 @@ module store_queue
 
     logic new_sq_request;
     logic new_load_request;
-
-    logic [DEPTH-1:0] wb_id_match;
 
     ////////////////////////////////////////////////////
     //Implementation
@@ -154,7 +157,7 @@ module store_queue
     //Attributes LUTRAM
     always_ff @ (posedge clk) begin
         if (new_sq_request)
-            store_attr[sq_index] <= {lsq.addr, lsq.be, lsq.fn3, lsq.forwarded_store};
+            store_attr[sq_index] <= {lsq.addr, lsq.be, lsq.fn3, lsq.forwarded_store, lsq.is_float, lsq.we, lsq.fp_forwarded_store};
     end
 
     //Hash mem
@@ -189,7 +192,6 @@ module store_queue
 
     //If a potential blocking store has not been issued yet, the load is blocked until the store(s) complete
     assign store_conflict = |(prev_store_conflicts & valid);
-
 
     ////////////////////////////////////////////////////
     //ID Handling
@@ -226,6 +228,7 @@ module store_queue
     //Store Data
     always_ff @ (posedge clk) begin
         wb_snoop_r <= wb_snoop;
+        fp_wb_snoop_r <= fp_wb_snoop;
     end
 
     always_ff @ (posedge clk) begin
@@ -240,6 +243,19 @@ module store_queue
             store_data_from_issue[sq_index] <= lsq.data_in;
     end
 
+    //FPU support
+    always_ff @ (posedge clk) begin
+        for (int i = 0; i < DEPTH; i++) begin
+            if ({1'b0, fp_wb_snoop_r.valid, fp_wb_snoop_r.id} == {released[i], 1'b1, id_needed[i]})
+                fp_store_data_from_wb[i] <= fp_wb_snoop_r.data;
+        end
+    end
+    
+    always_ff @ (posedge clk) begin
+        if (new_sq_request & ~lsq.fp_forwarded_store)
+            fp_store_data_from_issue[sq_index] <= lsq.fp_data_in;
+    end
+
     ////////////////////////////////////////////////////
     //Store Transaction Outputs
     logic [31:0] data_for_alignment;
@@ -252,6 +268,8 @@ module store_queue
     assign sq_entry.addr = output_attr.addr;
     assign sq_entry.be = output_attr.be;
     assign sq_entry.fn3 = output_attr.fn3;
+    assign sq_entry.is_float = output_attr.is_float;
+    assign sq_entry.we = output_attr.we;
 
     always_comb begin
         //Input: ABCD
@@ -269,6 +287,7 @@ module store_queue
         endcase
     end
 
+    assign fp_sq_data = output_attr.fp_forwarded_store ? fp_store_data_from_wb[sq_oldest] : fp_store_data_from_issue[sq_oldest];
     ////////////////////////////////////////////////////
     //End of Implementation
     ////////////////////////////////////////////////////

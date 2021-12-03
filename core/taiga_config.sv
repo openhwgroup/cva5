@@ -86,6 +86,30 @@ package taiga_config;
         int unsigned DEPTH;
     } tlb_config_t;
 
+    ////////////////////////////////////////////////////
+    //FP Options
+    parameter INCLUDE_FPU = 1;
+    parameter EXPO_WIDTH = 11;
+    parameter FRAC_WIDTH = 52;
+    parameter FLEN = 1 + EXPO_WIDTH + FRAC_WIDTH;
+    parameter INTERFACE_EXPO_WIDTH = 11;
+    parameter INTERFACE_FRAC_WIDTH = 52;
+    parameter INTERFACE_FLEN = 1 + INTERFACE_EXPO_WIDTH + INTERFACE_FRAC_WIDTH;
+    parameter FP_NUM_WB_GROUPS = 1;
+
+    typedef struct packed {
+      bit INCLUDE_FPU;
+      int unsigned EXPO_WIDTH;
+      int unsigned FRAC_WIDTH;
+      int unsigned INTERFACE_EXPO_WIDTH;
+      int unsigned INTERFACE_FRAC_WIDTH;
+      int unsigned FP_NUM_WB_GROUPS;
+    } fpu_config_t;
+    localparam int unsigned ARITH_FLEN = EXAMPLE_CONFIG.FP.EXPO_WIDTH + EXAMPLE_CONFIG.FP.FRAC_WIDTH + 1;
+    localparam int unsigned SOFTWARE_FLEN = EXAMPLE_CONFIG.FP.INTERFACE_EXPO_WIDTH + EXAMPLE_CONFIG.FP.INTERFACE_FRAC_WIDTH + 1;
+
+    ////////////////////////////////////////////////////
+    //CPU configs
     typedef struct packed {
         //ISA options
         bit INCLUDE_M_MODE;
@@ -120,6 +144,9 @@ package taiga_config;
         branch_predictor_config_t BP;
         //Writeback Options
         int unsigned NUM_WB_GROUPS;
+        
+        //FPU
+        fpu_config_t FP;
     } cpu_config_t;
 
     //Function to generate derived cache parameters
@@ -132,11 +159,10 @@ package taiga_config;
         };
     endfunction
 
-
     localparam cpu_config_t EXAMPLE_CONFIG = '{
         //ISA options
         INCLUDE_M_MODE : 1,
-        INCLUDE_S_MODE : 1,
+        INCLUDE_S_MODE : 0,
         INCLUDE_U_MODE : 1,
         INCLUDE_MUL : 1,
         INCLUDE_DIV : 1,
@@ -203,7 +229,17 @@ package taiga_config;
             RAS_ENTRIES : 8
         },
         //Writeback Options
-        NUM_WB_GROUPS : 2
+        NUM_WB_GROUPS : 2,
+
+        //FPU options
+        FP : '{
+          INCLUDE_FPU : 1,
+          EXPO_WIDTH : 11,
+          FRAC_WIDTH : 52,
+          INTERFACE_EXPO_WIDTH : 11,
+          INTERFACE_FRAC_WIDTH : 52,
+          FP_NUM_WB_GROUPS : 1
+        }
     };
 
     ////////////////////////////////////////////////////
@@ -217,16 +253,46 @@ package taiga_config;
         int unsigned BR;
         int unsigned IEC;
     } unit_id_param_t;
-
+      
     localparam unit_id_param_t EXAMPLE_UNIT_IDS = '{
         ALU : 0,
-        LS : 1,
+        LS  : 1,
         CSR : 2,
         MUL : 3,
         DIV : 4,
-        BR : 5,
+        BR  : 5,
         IEC : 6
     };
+
+    typedef struct packed {
+        int unsigned FMADD;
+        int unsigned FDIV_SQRT;
+        int unsigned FMINMAX_CMP;
+        int unsigned FCVT;
+    } fp_unit_id_param_t;
+
+    localparam fp_unit_id_param_t FP_EXAMPLE_UNIT_IDS = '{
+        FMADD       : 0,
+        FDIV_SQRT   : 1,
+        FMINMAX_CMP : 2,
+        FCVT        : 3
+    };
+
+    ////////////////////////////////////////////////////
+    //FPU Writeback IDs
+    typedef struct packed {
+        int unsigned FLS;
+        int unsigned FMADD;
+        int unsigned FMUL;
+        int unsigned FDIV_SQRT;
+        int unsigned FMINMAX;
+        int unsigned FCVT_I2F;
+    } fp_wb_id_param_t;
+
+    typedef struct packed {
+        int unsigned FCVT_F2I;
+        int unsigned FCMP;
+    } fp_wb_int_id_param_t;
 
     ////////////////////////////////////////////////////
     //Bus Options
@@ -242,11 +308,18 @@ package taiga_config;
     //Number of commit ports
     localparam RETIRE_PORTS = 2; //min 1. (Non-powers of two supported) > 1 is recommended to allow stores to commit sooner
     localparam REGFILE_READ_PORTS = 2; //min 2, for RS1 and RS2. (Non-powers of two supported)
-    typedef enum bit {
+    typedef enum {
         RS1 = 0,
-        RS2 = 1
+        RS2 = 1,
+        RS3 = 2
     } rs1_index_t;
 
+    localparam FP_REGFILE_READ_PORTS = 3; //min 2, for RS1 and RS2. (Non-powers of two supported)
+    //typedef enum bit {
+        //RS1 = 0,
+        //RS2 = 1,
+        //RS3 = 2
+    //} fp_rs1_index_t;
 
     ////////////////////////////////////////////////////
     //Exceptions

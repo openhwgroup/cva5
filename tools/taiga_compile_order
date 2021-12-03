@@ -2,6 +2,7 @@ core/taiga_config.sv
 core/riscv_types.sv
 core/csr_types.sv  
 core/taiga_types.sv  
+core/fpu/fpu_types.sv
 l2_arbiter/l2_config_and_types.sv 
 l2_arbiter/l2_interfaces.sv
 l2_arbiter/l2_external_interfaces.sv
@@ -9,15 +10,11 @@ local_memory/local_memory_interface.sv
 local_memory/local_mem.sv
 
 core/interfaces.sv  
+core/fpu/fp_interfaces.sv
 core/external_interfaces.sv  
 
-core/lutrams/lutram_1w_1r.sv
-core/lutrams/lutram_1w_mr.sv
-
-core/lfsr.sv
-
-core/csr_unit.sv  
 core/gc_unit.sv  
+core/csr_unit.sv
 
 core/branch_comparator.sv
 core/branch_unit.sv  
@@ -33,9 +30,9 @@ core/axi_to_arb.sv
 
 core/one_hot_occupancy.sv 
 core/binary_occupancy.sv 
+core/lfsr.sv
 core/taiga_fifo.sv  
 core/shift_counter.sv
-core/priority_encoder.sv
 
 core/set_clr_reg_with_rst.sv
 
@@ -44,9 +41,9 @@ core/xilinx/xilinx_byte_enable_ram.sv
 core/byte_en_BRAM.sv 
 
 core/one_hot_to_integer.sv  
-  
+
 core/cycler.sv  
-  
+
 core/tag_bank.sv  
 core/dbram.sv  
 core/ddata_bank.sv  
@@ -71,9 +68,14 @@ core/icache.sv
 
 
 core/clz.sv
+core/fpu/clz_tree.sv
 core/div_core.sv
+core/div_algorithms/div_quick_clz.sv
+core/div_algorithms/div_algorithm.sv  
 core/div_unit.sv  
 
+core/lutrams/lutram_1w_mr.sv
+core/lutrams/lutram_1w_1r.sv
 core/tlb_lut_ram.sv  
 core/mmu.sv  
 
@@ -97,6 +99,45 @@ core/register_bank.sv
 core/register_file.sv
 core/writeback.sv
 
+
+core/fpu/rng.sv
+core/fpu/unsigned_multiplier.sv
+core/fpu/fp_mul_madd_fused.sv
+core/fpu/fp_madd_fused.sv
+core/fpu/sticky_generator.sv
+core/fpu/fp_add_madd_fused.sv
+core/fpu/fp_barrel_shifter.sv
+core/fpu/fp_class.sv
+core/fpu/fp_cmp.sv
+core/fpu/fp_cvt_top.sv
+core/fpu/fp_f2i.sv
+core/fpu/fp_i2f.sv
+core/fpu/fp_DS.sv
+core/fpu/fp_normalize.sv
+core/fpu/fp_rounding_simplified.sv
+core/fpu/fp_normalize_mp.sv
+core/fpu/fp_rounding_mp.sv
+core/fpu/barrel_shifter64.sv
+core/fpu/fp_sign_inj.sv
+core/fpu/fp_div.sv
+core/fpu/fp_div_core.sv
+core/fpu/fp_special_case_detection.sv
+core/div_algorithms/fp_div_quick_clz.sv
+core/div_algorithms/fp_div_radix2.sv
+core/fpu/fp_illegal_instruction_checker.sv
+core/fpu/fp_decode_and_issue.sv
+core/fpu/fp_renamer.sv
+core/fpu/fp_register_bank.sv
+core/fpu/fp_register_file.sv
+core/fpu/fp_writeback.sv
+core/fpu/sqrt_mantissa.sv
+core/fpu/fp_sqrt.sv
+core/fpu/fp_div_sqrt_wrapper.sv
+core/fpu/fflags_mux.sv
+core/fpu/sandbox.sv
+core/fpu/fpu_top.sv
+
+
 core/placer_randomizer.sv
 
 l2_arbiter/l2_fifo.sv
@@ -106,7 +147,9 @@ l2_arbiter/l2_arbiter.sv
 
 core/toggle_memory.sv
 core/toggle_memory_set.sv
+core/priority_encoder.sv
 core/instruction_metadata_and_id_management.sv
+core/fpu/fp_instruction_metadata_and_id_management.sv
 
 core/taiga.sv
 

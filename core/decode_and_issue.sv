@@ -26,11 +26,15 @@ module decode_and_issue
     import riscv_types::*;
     import taiga_types::*;
     import csr_types::*;
+    import fpu_types::*;
 
     # (
         parameter cpu_config_t CONFIG = EXAMPLE_CONFIG,
         parameter NUM_UNITS = 7,
-        parameter unit_id_param_t UNIT_IDS = EXAMPLE_UNIT_IDS
+        parameter unit_id_param_t UNIT_IDS = EXAMPLE_UNIT_IDS,
+        parameter FP_NUM_UNITS = 4,
+        parameter fp_unit_id_param_t FP_UNIT_IDS = FP_EXAMPLE_UNIT_IDS,
+        parameter TOTAL_NUM_UNITS = NUM_UNITS + FP_NUM_UNITS
     )
 
     (
@@ -39,12 +43,14 @@ module decode_and_issue
 
         //ID Management
         input logic pc_id_available,
+        input logic [LOG2_MAX_IDS:0] post_issue_count,
         input decode_packet_t decode,
         output logic decode_advance,
         output exception_sources_t decode_exception_unit,
 
         //Renamer
         renamer_interface.decode renamer,
+        fp_renamer_interface.decode fp_renamer,
 
         output logic decode_uses_rd,
         output rs_addr_t decode_rd_addr,
@@ -52,12 +58,21 @@ module decode_and_issue
         output phys_addr_t decode_phys_rs_addr [REGFILE_READ_PORTS],
         output logic [$clog2(CONFIG.NUM_WB_GROUPS)-1:0] decode_rs_wb_group [REGFILE_READ_PORTS],
 
+        output logic fp_decode_uses_rd,
+        output phys_addr_t fp_decode_phys_rd_addr,
+        output phys_addr_t fp_decode_phys_rs_addr [FP_REGFILE_READ_PORTS],
+        //output logic [$clog2(CONFIG.FP.FP_NUM_WB_GROUPS)-1:0] fp_decode_rs_wb_group [FP_REGFILE_READ_PORTS],
+        output logic fp_decode_rs_wb_group [FP_REGFILE_READ_PORTS],
+
         output logic instruction_issued,
         output logic instruction_issued_with_rd,
+        output logic fp_instruction_issued_with_rd,
         output issue_packet_t issue,
 
         //Register File
         register_file_issue_interface.issue rf,
+        fp_register_file_issue_interface.issue fp_rf,
+        input logic [2:0] dyn_rm,
 
         output alu_inputs_t alu_inputs,
         output load_store_inputs_t ls_inputs,
@@ -66,8 +81,12 @@ module decode_and_issue
         output csr_inputs_t csr_inputs,
         output mul_inputs_t mul_inputs,
         output div_inputs_t div_inputs,
+        output fp_madd_inputs_t fp_madd_inputs,
+        output fp_cmp_inputs_t fp_cmp_inputs,
+        output fp_div_sqrt_inputs_t fp_div_sqrt_inputs,
+        output fp_cvt_mv_inputs_t fp_cvt_mv_inputs,
 
-        unit_issue_interface.decode unit_issue [NUM_UNITS-1:0],
+        unit_issue_interface.decode unit_issue [TOTAL_NUM_UNITS-1:0],
 
         input gc_outputs_t gc,
         input logic [1:0] current_privilege,
@@ -100,6 +119,7 @@ module decode_and_issue
 
     logic [2:0] fn3;
     logic [6:0] opcode;
+    logic [6:0] fn7;
     logic [4:0] opcode_trim;
 
     logic uses_rs1;
@@ -108,6 +128,7 @@ module decode_and_issue
 
     logic [4:0] rs1_addr;
     logic [4:0] rs2_addr;
+    logic [4:0] rs3_addr;
     logic [4:0] rd_addr;
 
     logic is_csr;
@@ -115,16 +136,21 @@ module decode_and_issue
     logic is_ifence;
     logic csr_imm_op;
     logic environment_op;
+    logic is_i2f;
+    logic is_f2i;
+    logic is_class;
+    logic is_fcmp;     
 
     logic issue_valid;
     logic operands_ready;
+    logic fp_operands_ready;
     logic mult_div_op;
 
-    logic [NUM_UNITS-1:0] unit_needed;
-    logic [NUM_UNITS-1:0] unit_needed_issue_stage;
-    logic [NUM_UNITS-1:0] unit_ready;
-    logic [NUM_UNITS-1:0] issue_ready;
-    logic [NUM_UNITS-1:0] issue_to;
+    logic [TOTAL_NUM_UNITS-1:0] unit_needed;
+    logic [TOTAL_NUM_UNITS-1:0] unit_needed_issue_stage;
+    logic [TOTAL_NUM_UNITS-1:0] unit_ready;
+    logic [TOTAL_NUM_UNITS-1:0] issue_ready;
+    logic [TOTAL_NUM_UNITS-1:0] issue_to;
 
     logic pre_issue_exception_pending;
     logic illegal_instruction_pattern;
@@ -147,9 +173,11 @@ module decode_and_issue
     //Instruction aliases
     assign opcode = decode.instruction[6:0];
     assign opcode_trim = opcode[6:2];
+    assign fn7 = decode.instruction[31:25];
     assign fn3 = decode.instruction[14:12];
     assign rs1_addr = decode.instruction[19:15];
     assign rs2_addr = decode.instruction[24:20];
+    assign rs3_addr = decode.instruction[31:27];
     assign rd_addr = decode.instruction[11:7];
 
     assign is_csr = (opcode_trim == SYSTEM_T) & (fn3 != 0);
@@ -160,15 +188,18 @@ module decode_and_issue
 
     ////////////////////////////////////////////////////
     //Register File Support
-    assign uses_rs1 = opcode_trim inside {JALR_T, BRANCH_T, LOAD_T, STORE_T, ARITH_IMM_T, ARITH_T, AMO_T} | is_csr;
+    assign uses_rs1 = opcode_trim inside {JALR_T, BRANCH_T, LOAD_T, STORE_T, ARITH_IMM_T, ARITH_T, AMO_T} | is_csr | is_i2f;
     assign uses_rs2 = opcode_trim inside {BRANCH_T, ARITH_T, AMO_T};//Stores are exempted due to store forwarding
-    assign uses_rd = opcode_trim inside {LUI_T, AUIPC_T, JAL_T, JALR_T, LOAD_T, ARITH_IMM_T, ARITH_T} | is_csr;
+    assign uses_rd = opcode_trim inside {LUI_T, AUIPC_T, JAL_T, JALR_T, LOAD_T, ARITH_IMM_T, ARITH_T} | is_csr | is_f2i | is_fcmp | is_class; 
+    //assign uses_rs1 = !(opcode_trim inside {LUI_T, AUIPC_T, JAL_T, FENCE_T, FMADD_T, FMSUB_T, FNMADD_T, FNMSUB_T} || csr_imm_op || environment_op || (opcode_trim == FOP_T && fn7 != FCVT_DW));
+    //assign uses_rs2 = opcode_trim inside {BRANCH_T, ARITH_T, AMO_T};//Stores are exempted due to store forwarding
+    //assign uses_rd = (!(opcode_trim inside {BRANCH_T, STORE_T, FENCE_T, FSD_T} || environment_op) || is_f2i || is_class || is_fcmp) & ~decode.wb2_float;
 
     ////////////////////////////////////////////////////
     //Unit Determination
     assign unit_needed[UNIT_IDS.BR] = opcode_trim inside {BRANCH_T, JAL_T, JALR_T};
     assign unit_needed[UNIT_IDS.ALU] = (opcode_trim inside {ARITH_T, ARITH_IMM_T, AUIPC_T, LUI_T, JAL_T, JALR_T}) & ~mult_div_op;
-    assign unit_needed[UNIT_IDS.LS] = opcode_trim inside {LOAD_T, STORE_T, AMO_T} | is_fence;
+    assign unit_needed[UNIT_IDS.LS] = opcode_trim inside {LOAD_T, STORE_T, AMO_T, FLD_T, FSD_T};
     assign unit_needed[UNIT_IDS.CSR] = is_csr;
     assign unit_needed[UNIT_IDS.IEC] = (opcode_trim inside {SYSTEM_T} & ~is_csr) | is_ifence;
 
@@ -189,7 +220,7 @@ module decode_and_issue
     assign renamer.uses_rd = uses_rd;
     assign renamer.rd_wb_group = ~unit_needed[UNIT_IDS.ALU];//TODO: automate generation of wb group logic
     assign renamer.id = decode.id;
-
+    
     ////////////////////////////////////////////////////
     //Decode ID Support
     assign decode_uses_rd = uses_rd;
@@ -202,6 +233,8 @@ module decode_and_issue
 
     //TODO: Consider ways of parameterizing so that any exception generating unit
     //can be automatically added to this expression
+    //TODO: Does FPU need to be added here?
+    exception_sources_t decode_exception_unit;
     always_comb begin
         unique case (1'b1)
             unit_needed[UNIT_IDS.LS] : decode_exception_unit = LS_EXCEPTION;
@@ -250,10 +283,9 @@ module decode_and_issue
             issue.stage_valid <= decode.valid;
     end
 
-
     ////////////////////////////////////////////////////
     //Unit ready
-    generate for (i=0; i<NUM_UNITS; i++) begin
+    generate for (i=0; i<TOTAL_NUM_UNITS; i++) begin
         assign unit_ready[i] = unit_issue[i].ready;
     end endgenerate
 
@@ -264,20 +296,21 @@ module decode_and_issue
     assign operands_ready = (~rs1_conflict) & (~rs2_conflict);
 
     assign issue_ready = unit_needed_issue_stage & unit_ready;
-    assign issue_valid = issue.stage_valid & operands_ready & ~gc.issue_hold & ~pre_issue_exception_pending;
+    //TODO: may need to fix operand_ready logic to avoid waiting for unneeded register conflicts
+    assign issue_valid = issue.stage_valid & operands_ready & fp_operands_ready & ~gc.issue_hold & ~pre_issue_exception_pending;
 
-    assign issue_to = {NUM_UNITS{issue_valid & ~gc.fetch_flush}} & issue_ready;
+    assign issue_to = {TOTAL_NUM_UNITS{issue_valid & ~gc.fetch_flush}} & issue_ready;
 
     assign instruction_issued = issue_valid & ~gc.fetch_flush & |issue_ready;
-    assign instruction_issued_with_rd = instruction_issued & issue.uses_rd;
+    assign instruction_issued_with_rd = instruction_issued & ~issue.wb2_float & issue.uses_rd;
 
     assign rf.phys_rs_addr[RS1] = issue.phys_rs_addr[RS1];
     assign rf.phys_rs_addr[RS2] = issue.phys_rs_addr[RS2];
     assign rf.phys_rd_addr = issue.phys_rd_addr;
     assign rf.rs_wb_group[RS1] = issue_rs_wb_group[RS1];
     assign rf.rs_wb_group[RS2] = issue_rs_wb_group[RS2];
-    
     assign rf.single_cycle_or_flush = (instruction_issued_with_rd & |issue.rd_addr & ~issue.is_multicycle) | (issue.stage_valid & issue.uses_rd & |issue.rd_addr & gc.fetch_flush);
+    
     ////////////////////////////////////////////////////
     //ALU unit inputs
     logic [XLEN-1:0] alu_rs2_data;
@@ -369,8 +402,8 @@ module decode_and_issue
         end
     endgenerate
 
-    assign is_load = (opcode_trim inside {LOAD_T, AMO_T}) && !(amo_op & store_conditional); //LR and AMO_ops perform a read operation as well
-    assign is_store = (opcode_trim == STORE_T) || (amo_op && store_conditional);//Used for LS unit and for ID tracking
+    assign is_load = (opcode_trim inside {LOAD_T, FLD_T, AMO_T}) && !(amo_op & store_conditional); //LR and AMO_ops perform a read operation as well
+    assign is_store = (opcode_trim inside {STORE_T, FSD_T}) || (amo_op && store_conditional);//Used for LS unit and for ID tracking
 
     logic [11:0] ls_offset;
     logic is_load_r;
@@ -387,7 +420,7 @@ module decode_and_issue
 
     (* ramstyle = "MLAB, no_rw_check" *) id_t rd_to_id_table [32];
     always_ff @ (posedge clk) begin
-        if (instruction_issued_with_rd)
+        if (instruction_issued_with_rd | fp_instruction_issued_with_rd)
             rd_to_id_table[issue.rd_addr] <= issue.id;
     end
 
@@ -400,6 +433,15 @@ module decode_and_issue
     assign ls_inputs.rs2 = rf.data[RS2];
     assign ls_inputs.forwarded_store = rf.inuse[RS2];
     assign ls_inputs.store_forward_id = rd_to_id_table[issue.rs_addr[RS2]];
+
+    //FPU support
+    assign ls_inputs.is_float = issue.is_float;
+    assign ls_inputs.fp_rs2 = fp_rf.data[RS2];
+    assign ls_inputs.fp_forwarded_store = fp_rf.inuse[RS2];
+
+    ls_input_assertion:
+        assert property (@(posedge clk) disable iff (rst) instruction_issued  & issue_to[UNIT_IDS.LS] &ls_inputs.store|-> !(issue.fp_uses_rd | issue.uses_rd))
+        else $error("store issued with uses_rd");
 
     ////////////////////////////////////////////////////
     //Branch unit inputs
@@ -565,13 +607,51 @@ module decode_and_issue
 
     ////////////////////////////////////////////////////
     //Unit EX signals
-    generate for (i = 0; i < NUM_UNITS; i++) begin
+    generate for (i = 0; i < TOTAL_NUM_UNITS; i++) begin
         assign unit_issue[i].possible_issue = issue.stage_valid & unit_needed_issue_stage[i] & unit_issue[i].ready;
         assign unit_issue[i].new_request = issue_to[i];
         assign unit_issue[i].id = issue.id;
         always_ff @(posedge clk) begin
             unit_issue[i].new_request_r <= issue_to[i];
         end
+    end endgenerate
+
+    ////////////////////////////////////////////////////
+    //FPU support
+    generate if (CONFIG.FP.INCLUDE_FPU) begin
+        fp_decode_and_issue #(
+            .CONFIG(CONFIG),
+            .FP_NUM_UNITS(FP_NUM_UNITS),
+            .FP_UNIT_IDS(FP_UNIT_IDS)
+            )
+        fp_decode_and_issue_block (
+            .clk (clk),
+            .rst (rst),
+            .decode (decode),
+            .fp_renamer (fp_renamer),
+            .fp_decode_uses_rd (fp_decode_uses_rd),
+            .fp_decode_phys_rd_addr (fp_decode_phys_rd_addr),
+            .fp_decode_phys_rs_addr (fp_decode_phys_rs_addr),
+            .fp_decode_rs_wb_group (fp_decode_rs_wb_group),
+            .unit_needed (unit_needed[TOTAL_NUM_UNITS-1-:FP_NUM_UNITS]),
+            .is_i2f (is_i2f),
+            .is_f2i (is_f2i),
+            .is_class (is_class),
+            .is_fcmp (is_fcmp),
+            .issue (issue),
+            .issue_stage_ready (issue_stage_ready),
+            .instruction_issued (instruction_issued),
+            .fp_instruction_issued_with_rd (fp_instruction_issued_with_rd),
+            .int_rs1_data (rf.data[RS1]),
+            .fp_rf (fp_rf),
+            .dyn_rm (dyn_rm),
+            .fp_operands_ready (fp_operands_ready),
+            .fp_madd_inputs (fp_madd_inputs),
+            .fp_cmp_inputs (fp_cmp_inputs),
+            .fp_div_sqrt_inputs (fp_div_sqrt_inputs),
+            .fp_cvt_mv_inputs (fp_cvt_mv_inputs),
+            .gc_fetch_flush (gc.fetch_flush)
+        );
     end endgenerate
 
     ////////////////////////////////////////////////////
@@ -644,6 +724,14 @@ module decode_and_issue
 
     ////////////////////////////////////////////////////
     //Assertions
+
+    instruction_issued_with_rd_assertion:
+        assert property (@(posedge clk) disable iff (rst) instruction_issued |-> ~(instruction_issued_with_rd & fp_instruction_issued_with_rd))
+        else $error("both instruction_issued_with_rd set");
+
+    decode_uses_rd_assertion:
+        assert property (@(posedge clk) disable iff (rst) decode_advance |-> ~(decode_uses_rd & fp_decode_uses_rd))
+        else $error("both decode uses rd are asserted");
 
     ////////////////////////////////////////////////////
     //Trace Interface

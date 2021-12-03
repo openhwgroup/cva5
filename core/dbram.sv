@@ -20,12 +20,11 @@
  *             Eric Matthews <ematthew@sfu.ca>
  */
 
-module dbram
+import taiga_config::*;
+import taiga_types::*;
+import fpu_types::*;
 
-    import taiga_config::*;
-    import taiga_types::*;
-
-    (
+module dbram(
         input logic clk,
         input logic rst,
 
@@ -34,7 +33,7 @@ module dbram
         output logic[31:0] data_out,
 
         local_memory_interface.master data_bram
-    );
+        );
 
     assign ls.ready = 1;
 
@@ -51,5 +50,35 @@ module dbram
             ls.data_valid <= ls.new_request & ls_inputs.load;
     end
 
+endmodule
+
+module fp_dbram #(parameter INTERFACE_FLEN = 64) (
+        input logic clk,
+        input logic rst,
+
+        input data_access_shared_inputs_t ls_inputs,
+        ls_sub_unit_interface.sub_unit ls,
+        output logic[INTERFACE_FLEN-1:0] data_out,
+
+        fp_local_memory_interface.master data_bram
+        );
+
+    logic [INTERFACE_FLEN-1:0] little_endian_data_in;
+    assign little_endian_data_in = {ls_inputs.fp_data_in[0+:32], ls_inputs.fp_data_in[INTERFACE_FLEN-1-:32]};
+    assign ls.ready = 1;
+
+    assign data_bram.addr = ls_inputs.addr[31:3];
+    assign data_bram.en = ls.new_request;
+    assign data_bram.be = ls_inputs.be;
+    assign data_bram.we = {ls_inputs.is_float, ls_inputs.we};
+    assign data_bram.data_in = ls_inputs.is_float ? little_endian_data_in : INTERFACE_FLEN'(ls_inputs.data_in); //prepend with 32'b0
+    assign data_out = data_bram.data_out;
+
+    always_ff @ (posedge clk) begin
+        if (rst)
+            ls.data_valid <= 0;
+        else
+            ls.data_valid <= ls.new_request & ls_inputs.load;
+    end
 
 endmodule

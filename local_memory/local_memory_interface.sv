@@ -30,8 +30,20 @@ interface local_memory_interface;
 
     modport slave (input addr, en, be, data_in, output data_out);
     modport master (output addr, en, be, data_in, input data_out);
-    modport formal (input addr, en, be, data_in, data_out);
+    //modport formal (input addr, en, be, data_in, data_out);
 endinterface
 
+interface fp_local_memory_interface;
+    logic[28:0] addr;
+    logic en;
+    logic[3:0] be;
+    logic [1:0] we;
+    logic[63:0] data_in;
+    logic[63:0] data_out;
+
+    modport slave (input addr, en, be, we, data_in, output data_out);
+    modport master (output addr, en, be, we, data_in, input data_out);
+    //modport formal (input addr, en, be, we, data_in, data_out);
+endinterface
 
 

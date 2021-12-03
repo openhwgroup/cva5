@@ -31,5 +31,5 @@ interface l2_arbitration_interface;
 
     modport slave (input requests, strobe, output grantee_i, grantee_v , grantee_valid);
     modport master (output requests, strobe, input grantee_i, grantee_v , grantee_valid);
-    modport formal (input requests, strobe, output grantee_i, grantee_v , grantee_valid);
+    //modport formal (input requests, strobe, output grantee_i, grantee_v , grantee_valid);
 endinterface

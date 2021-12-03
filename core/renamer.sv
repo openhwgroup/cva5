@@ -80,7 +80,7 @@ module renamer
     );
 
     //During post reset init, initialize FIFO with free list (registers 32-63)
-    assign free_list.potential_push = (gc.init_clear & ~clear_index[5]) | (retire.valid);
+    assign free_list.potential_push = (gc.init_clear & ~clear_index[5]) | (retire.valid & ~retire.wb2_float);
     assign free_list.push = free_list.potential_push;
     //TODO: restore spec if instruction has been discarded due to a speculation failure
     assign free_list.data_in = gc.init_clear ? {1'b1, clear_index[4:0]} : (gc.supress_writeback ? architectural_id_to_current_phys_table[retire.phys_id] : architectural_id_to_old_phys_table[retire.phys_id]);
