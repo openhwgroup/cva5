@@ -134,9 +134,8 @@ module branch_predictor
     ////////////////////////////////////////////////////
     //Instruction Fetch Response
     generate if (CONFIG.BP.WAYS > 1)
-        one_hot_to_integer #(CONFIG.BP.WAYS) hit_way_conv (       
-            .clk            (clk),
-            .rst            (rst), 
+        one_hot_to_integer #(CONFIG.BP.WAYS)
+        hit_way_conv (       
             .one_hot(tag_matches), 
             .int_out(hit_way)
         );

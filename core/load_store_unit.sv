@@ -245,11 +245,10 @@ endgenerate
 
     ////////////////////////////////////////////////////
     //Load attributes FIFO
-    one_hot_to_integer #(NUM_SUB_UNITS) sub_unit_select (
-        .clk        (clk),
-        .rst        (rst), 
-        .one_hot    (sub_unit_address_match), 
-        .int_out    (load_attributes_in.subunit_id)
+    one_hot_to_integer #(NUM_SUB_UNITS)
+    sub_unit_select (
+        .one_hot (sub_unit_address_match), 
+        .int_out (load_attributes_in.subunit_id)
     );
     taiga_fifo #(.DATA_WIDTH($bits(load_attributes_t)), .FIFO_DEPTH(ATTRIBUTES_DEPTH)) attributes_fifo (
         .clk        (clk),
