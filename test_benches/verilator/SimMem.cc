@@ -3,29 +3,43 @@
 #include <fstream>
 #include <iostream>
 #include "SimMem.h"
-
-
+#include <iomanip>
 
 SimMem::SimMem(std::ifstream& program, uint32_t mem_size) : mem_size(mem_size) {
-    memory = new uint32_t[mem_size*256]();//mem_size in KB
+    memory1 = new uint32_t[mem_size*256]();//mem_size in KB
+    memory2 = new uint32_t[mem_size*256]();//mem_size in KB
     address_mask = (mem_size*256) - 1; //mask to prevent any out-of-bounds array access.  Assumes power-of-two memory size
 
     std::string line;
     for (int i =0; (i < mem_size*256) && (std::getline(program, line)); i++) {
-        memory[i] = std::stoul(line, 0, 16);
+        memory1[i] = std::stoul(line, 0, 16);
+        std::getline(program, line);
+        memory2[i] = std::stoul(line, 0, 16);
     }
-
+    mem_counter = 0;
 }
 
-uint32_t SimMem::read(uint32_t addr) {
-    return memory[addr & address_mask];
+uint32_t SimMem::read_instruction(uint32_t addr) {
+    uint32_t we = addr & 0x1; //extract word select bit
+    uint32_t new_addr = addr >> 1;
+    if (we) 
+        return memory2[new_addr & address_mask];
+    else 
+        return memory1[new_addr & address_mask];
 }
 
-void SimMem::write(uint32_t addr, uint32_t data, uint32_t be) {
-    uint32_t write_mask, old_word;
+uint64_t SimMem::read(uint32_t addr) {
+    uint32_t data1 = memory1[addr & address_mask];
+    uint32_t data2 = memory2[addr & address_mask];
+    return ((uint64_t(data1) << 32) | data2);
+}
 
+void SimMem::write(uint32_t addr, uint64_t data, uint32_t be, uint32_t we) {
+    uint32_t write_mask, old_word1, old_word2; 
+    uint32_t data2 = uint32_t(data);            //lower 32 bits 
+    uint32_t data1 = uint32_t(data >> 32);      //upper 32 bits 
+ 
     write_mask = 0;
-
     if (be & 0x1)
         write_mask |= 0x000000FFL;
     if (be & 0x2)
@@ -35,10 +49,42 @@ void SimMem::write(uint32_t addr, uint32_t data, uint32_t be) {
     if (be & 0x8)
         write_mask |= 0xFF000000L;
 
-    old_word = memory[addr & address_mask];
-    memory[addr & address_mask] = (old_word & ~write_mask) | (data & write_mask);
+    if (we == 0) {
+        //integer bank1
+        old_word1 = memory1[addr & address_mask];
+        memory1[addr & address_mask] = (old_word1 & ~write_mask) | (data2 & write_mask);
+    } else if (we == 1) {
+        //integer bank2
+        old_word2 = memory2[addr & address_mask];
+        memory2[addr & address_mask] = (old_word2 & ~write_mask) | (data2 & write_mask);
+    } else if (we == 2) {
+        //double bank1 and bank2
+        old_word1 = memory1[addr & address_mask];
+        old_word2 = memory2[addr & address_mask];
+        memory1[addr & address_mask] = (old_word1 & ~write_mask) | (data1 & write_mask);
+        memory2[addr & address_mask] = (old_word2 & ~write_mask) | (data2 & write_mask);
+    }
+}
+
+void SimMem::printMem(std::string logfile) {
+    std::ofstream mem_log;
+    mem_log.open(logfile, std::ofstream::trunc);
+    for (int i =0; (i < mem_size*256); i++) {
+        //std::cout << std::hex << "0x" << std::setw(8) << std::setfill('0') << i << 
+        mem_log << std::hex << "0x" << std::setw(8) << std::setfill('0') << i << 
+        " " << std::setw(8) << std::setfill('0') << memory1[i] << " " <<
+               std::setw(8) << std::setfill('0') << memory2[i] << std::endl;
+    }
+    mem_log.close();
+}
+
+void SimMem::printMemLoca(uint32_t addr){
+    std::cout << std::hex << "0x" << std::setw(8) << std::setfill('0') << addr << 
+        " " << std::setw(8) << std::setfill('0') << memory1[addr & address_mask] << " " <<
+               std::setw(8) << std::setfill('0') << memory2[addr & address_mask] << std::endl;
 }
 
 SimMem::~SimMem() {
-    delete[] memory;
+    delete[] memory1;
+    delete[] memory2;
 }

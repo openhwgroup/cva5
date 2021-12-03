@@ -39,6 +39,8 @@ module csr_unit
         unit_issue_interface.unit issue,
         input csr_inputs_t csr_inputs,
         unit_writeback_interface.unit wb,
+        input logic [4:0] fflags,
+        output logic [2:0] dyn_rm,
 
         //Privilege
         output logic [1:0] current_privilege,
@@ -80,6 +82,7 @@ module csr_unit
     //write_logic
     logic supervisor_write;
     logic machine_write;
+    logic user_write;
 
     logic [XLEN-1:0] selected_csr;
     logic [XLEN-1:0] selected_csr_r;
@@ -88,6 +91,7 @@ module csr_unit
 
     logic swrite;
     logic mwrite;
+    logic uwrite;
 
     function logic mwrite_en (input csr_addr_t addr);
         return mwrite & (csr_inputs_r.addr.sub_addr == addr.sub_addr);
@@ -95,6 +99,10 @@ module csr_unit
     function logic swrite_en (input csr_addr_t addr);
         return swrite & (csr_inputs_r.addr.sub_addr == addr.sub_addr);
     endfunction
+    function logic uwrite_en (input csr_addr_t addr);
+        return uwrite & (csr_inputs_r.addr.sub_addr == addr.sub_addr);
+    endfunction
+
     ////////////////////////////////////////////////////
     //Implementation
     assign issue.ready = ~busy;
@@ -143,6 +151,7 @@ module csr_unit
     always_ff @(posedge clk) begin
         mwrite <= CONFIG.INCLUDE_M_MODE && commit && (csr_inputs_r.addr.rw_bits != CSR_READ_ONLY && csr_inputs_r.addr.privilege == MACHINE_PRIVILEGE);
         swrite <= CONFIG.INCLUDE_S_MODE && commit && (csr_inputs_r.addr.rw_bits != CSR_READ_ONLY && csr_inputs_r.addr.privilege == SUPERVISOR_PRIVILEGE);
+        uwrite = CONFIG.INCLUDE_U_MODE && commit && (csr_inputs_r.addr.rw_bits != CSR_READ_ONLY && csr_inputs_r.addr.privilege == USER_PRIVILEGE);
     end
 
     always_ff @(posedge clk) begin
@@ -601,6 +610,40 @@ endgenerate
             minst_ret <= minst_ret_input_next + CONFIG.CSRS.COUNTER_W'(minst_ret_inc);
     end
 
+    ////////////////////////////////////////////////////
+    //Floating Point CSRs
+    logic [31:0] fcsr, next_fcsr;
+    logic [2:0] frm, next_frm;
+    logic [4:0] next_fflags;
+    always_comb begin
+        if (uwrite_en(FRM))
+            next_frm = updated_csr[2:0];
+        else if (uwrite_en(FCSR))
+            next_frm = updated_csr[7:5];
+        else 
+            next_frm = fcsr[7:5]; 
+    end
+
+    logic debug_uwrite_en_fflags, debug_uwrite_en_fcsr;
+    assign debug_uwrite_en_fcsr = uwrite_en(FCSR);
+    assign debug_uwrite_en_fflags = uwrite_en(FFLAGS);
+    always_comb begin
+        if (uwrite_en(FFLAGS) | uwrite_en(FCSR))
+            next_fflags = updated_csr[4:0];
+        else
+            next_fflags = fcsr[4:0] | fflags;
+    end
+
+    assign next_fcsr = uwrite_en(FCSR) ? updated_csr : 32'({next_frm, next_fflags}); 
+
+    always_ff @ (posedge clk) begin
+        if (rst) begin
+            fcsr <= '0;
+        end else begin
+            fcsr <= next_fcsr;
+        end
+    end
+    assign dyn_rm = fcsr[7:5];
 
     ////////////////////////////////////////////////////
     //CSR mux
@@ -655,9 +698,9 @@ endgenerate
 
             //User status
             //Floating point
-            FFLAGS : selected_csr = 0;
-            FRM : selected_csr = 0;
-            FCSR : selected_csr = 0;
+            FFLAGS : selected_csr = 32'(fcsr[4:0]);
+            FRM : selected_csr = 32'(fcsr[7:5]);
+            FCSR : selected_csr = 32'(fcsr);
             //User Counter Timers
             CYCLE : selected_csr = mcycle[XLEN-1:0];
             TIME : selected_csr = mcycle[XLEN-1:0];

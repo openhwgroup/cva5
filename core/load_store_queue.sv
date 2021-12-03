@@ -34,6 +34,7 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
         load_store_queue_interface.queue lsq,
         //Writeback snooping
         input wb_packet_t wb_snoop,
+        input fp_wb_packet_t fp_wb_snoop,
 
         //Retire release
         input id_t retire_ids [RETIRE_PORTS],
@@ -59,15 +60,16 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
     logic store_ack;
     logic sq_output_valid;
 
+    //FPU support
+    logic [ARITH_FLEN-1:0] fp_sq_data;
     ////////////////////////////////////////////////////
     //Implementation
 
     //Can accept requests so long as store queue is not needed or is not full
     assign lsq.ready = lsq.load | (~sq_full);
 
-
     //Address hash for load-store collision checking
-    addr_hash lsq_addr_hash (
+    addr_hash lsq_addr_hash(
         .clk (clk),
         .rst (rst | gc.issue_flush),
         .addr (lsq.addr),
@@ -85,8 +87,15 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
     assign lsq_entry.data_id = lsq.data_id;
     assign lsq_entry.possible_issue = lsq.possible_issue;
     assign lsq_entry.new_issue = lsq.new_issue;
+    //FPU support
+    generate if (INCLUDE_FPU) begin
+        assign lsq_entry.is_float = lsq.is_float;
+        assign lsq_entry.fp_forwarded_store = lsq.fp_forwarded_store;
+        assign lsq_entry.fp_data_in = lsq.fp_data_in;
+        assign lsq_entry.we = lsq.we;
+    end endgenerate
 
-    load_queue #(.SQ_DEPTH(SQ_DEPTH)) lq_block (
+    load_queue #(.SQ_DEPTH(SQ_DEPTH)) lq_block(
         .clk (clk),
         .rst (rst | gc.issue_flush),
         .lsq (lsq_entry),
@@ -96,8 +105,7 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
         .lq_output_valid (lq_output_valid)
     );
 
-
-    store_queue #(.DEPTH(SQ_DEPTH)) sq_block (
+    store_queue #(.DEPTH(SQ_DEPTH)) sq_block(
         .clk (clk),
         .rst (rst | gc.issue_flush),
         .lsq (lsq_entry),
@@ -110,7 +118,9 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
         .store_conflict (store_conflict),
         .sq_entry (sq_entry),
         .sq_data (sq_data),
+        .fp_sq_data (fp_sq_data),
         .wb_snoop (wb_snoop),
+        .fp_wb_snoop (fp_wb_snoop),
         .retire_ids (retire_ids),
         .retire_port_valid (retire_port_valid),
         .store_ack (store_ack),
@@ -136,6 +146,10 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
     assign lsq.transaction_out.fn3 = load_selected ? lq_entry.fn3 : sq_entry.fn3;
     assign lsq.transaction_out.data_in = sq_data;
     assign lsq.transaction_out.id = lq_entry.id;
+    //FPU support
+    assign lsq.transaction_out.is_float = load_selected ? lq_entry.is_float : sq_entry.is_float;
+    assign lsq.transaction_out.fp_data_in = {fp_sq_data, {(INTERFACE_FLEN-FLEN){1'b0}}};
+    assign lsq.transaction_out.we = load_selected ? lq_entry.we : sq_entry.we;
 
     assign lsq.empty = ~lq_output_valid & sq_empty;
 

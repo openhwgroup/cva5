@@ -39,6 +39,8 @@ module writeback
         unit_writeback_interface.wb unit_wb[NUM_WB_UNITS],
         //WB output
         output wb_packet_t wb_packet [CONFIG.NUM_WB_GROUPS],
+        //FCSR output
+        output fflags_writeback_t fflags_wb_packet,
         //Snoop interface (LS unit)
         output wb_packet_t wb_snoop
     );
@@ -51,6 +53,9 @@ module writeback
 
     typedef logic [XLEN-1:0] unit_rd_t [NUM_WB_UNITS];
     unit_rd_t unit_rd [CONFIG.NUM_WB_GROUPS];
+
+    typedef logic [4:0] unit_fflags_t [NUM_WB_UNITS];
+    unit_fflags_t unit_fflags [CONFIG.NUM_WB_GROUPS];
     //Per-ID muxes for commit buffer
     logic [$clog2(NUM_WB_UNITS)-1:0] unit_sel [CONFIG.NUM_WB_GROUPS];
 
@@ -88,6 +93,7 @@ module writeback
         for (i = 0; i < CONFIG.NUM_WB_GROUPS; i++) begin
             for (j = 0; j < NUM_UNITS[i]; j++) begin
                 assign unit_rd[i][j] = unit_wb[CUMULATIVE_NUM_UNITS[i] + j].rd;
+                assign unit_fflags[i][j] = unit_wb[CUMULATIVE_NUM_UNITS[i] + j].fflags; //TODO: optimize true integer units away 
             end
         end
     endgenerate
@@ -117,6 +123,9 @@ module writeback
         end
     end
 
+    assign fflags_wb_packet.fflags = unit_fflags[1][unit_sel[1]];
+    assign fflags_wb_packet.valid = wb_packet[1].valid;
+    assign fflags_wb_packet.id = wb_packet[1].id;
     ////////////////////////////////////////////////////
     //Store Forwarding Support
     //TODO: support additional writeback groups

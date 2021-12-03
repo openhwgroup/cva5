@@ -86,7 +86,7 @@ if { $::argc > 0 } {
 set orig_proj_dir "[file normalize "$origin_dir/"]"
 
 # Create project
-create_project ${_xil_proj_name_} $origin_dir/${_xil_proj_name_} -part xc7z020clg484-1
+create_project -force ${_xil_proj_name_} $origin_dir/${_xil_proj_name_} -part xc7z020clg484-1
 
 # Set the directory path for the new project
 set proj_dir [get_property directory [current_project]]
@@ -115,6 +115,7 @@ import_files -norecurse $origin_dir/../../core/byte_en_BRAM.sv -force
 import_files -norecurse $origin_dir/../../core/xilinx/xilinx_byte_enable_ram.sv -force
 import_files -norecurse $origin_dir/../../core/taiga_config.sv -force
 import_files -norecurse $origin_dir/../../core/taiga_types.sv -force
+import_files -norecurse $origin_dir/../../core/csr_types.sv -force
 import_files -norecurse $origin_dir/../../core/riscv_types.sv -force
 
 # Set IP repository paths
@@ -163,4 +164,5 @@ ipx::update_checksums [ipx::current_core]
 ipx::save_core [ipx::current_core]
 current_project local_memory_IP
 update_ip_catalog -rebuild -repo_path $origin_dir/${_xil_proj_name_}
+
 

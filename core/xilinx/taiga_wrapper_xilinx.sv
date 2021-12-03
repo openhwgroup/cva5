@@ -33,7 +33,7 @@ module taiga_wrapper_xilinx
         input logic rst,
 
         local_memory_interface.master instruction_bram,
-        local_memory_interface.master data_bram,
+        fp_local_memory_interface.master data_bram,
 
        	l2_requester_interface.master l2,
 

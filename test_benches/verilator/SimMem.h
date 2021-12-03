@@ -26,15 +26,34 @@
 #include <iostream>
 #include <fstream>
 
+// class SimMem {
+// public:
+//   SimMem(std::ifstream& program, uint32_t mem_size);
+//   ~SimMem();
+//   void write (uint32_t addr, uint32_t data, uint32_t be);
+//   uint32_t read (uint32_t addr);
+// private:
+//   uint32_t mem_size;
+//   uint32_t *memory;
+//   uint32_t address_mask;
+// };
+
 class SimMem {
 public:
   SimMem(std::ifstream& program, uint32_t mem_size);
   ~SimMem();
-  void write (uint32_t addr, uint32_t data, uint32_t be);
-  uint32_t read (uint32_t addr);
+  void write (uint32_t addr, uint64_t data, uint32_t be, uint32_t we);
+  uint64_t read (uint32_t addr);
+  uint32_t read_instruction (uint32_t addr);
+  void debug (uint32_t addr, uint64_t datain, uint64_t dataout, uint32_t be, uint32_t we);
+  void printMem(std::string logfile);
+  void printMemLoca(uint32_t addr);
 private:
   uint32_t mem_size;
-  uint32_t *memory;
+  uint32_t *memory1;
+  uint32_t *memory2;
   uint32_t address_mask;
+  int mem_counter;
 };
+
 #endif

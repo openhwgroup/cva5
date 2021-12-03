@@ -166,5 +166,9 @@ package csr_types;
         logic [21:0] ppn;
     } satp_t;
 
-
+    typedef struct packed {
+        logic [23:0] zeros;
+        logic [2:0] frm;
+        logic [4:0] fflags;
+    } fcsr_t;
 endpackage

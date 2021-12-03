@@ -72,15 +72,21 @@ package taiga_types;
         logic [31:0] instruction;
         logic valid;
         fetch_metadata_t fetch_metadata;
+        
+        //FPU support
+        logic is_float;
+        logic wb2_float;
+        logic accumulating_csrs;
     } decode_packet_t;
 
     typedef struct packed{
         logic [31:0] pc;
         logic [31:0] instruction;
         logic [2:0] fn3;
+        logic [6:0] fn7;
         logic [6:0] opcode;
 
-        rs_addr_t [REGFILE_READ_PORTS-1:0] rs_addr;
+        rs_addr_t [FP_REGFILE_READ_PORTS-1:0] rs_addr;
         phys_addr_t [REGFILE_READ_PORTS-1:0] phys_rs_addr;
 
         rs_addr_t rd_addr;
@@ -94,6 +100,19 @@ package taiga_types;
         exception_sources_t exception_unit;
         logic stage_valid;
         fetch_metadata_t fetch_metadata;
+
+        //FPU support
+        //architectual rs_addr and rd_addr can be shared with integer side
+        phys_addr_t [FP_REGFILE_READ_PORTS-1:0] fp_phys_rs_addr;
+        phys_addr_t fp_phys_rd_addr;
+
+        logic fp_uses_rs1;
+        logic fp_uses_rs2;
+        logic fp_uses_rs3;
+        logic fp_uses_rd;
+        logic accumulating_csrs;
+        logic wb2_float;
+        logic is_float;
     } issue_packet_t;
 
     typedef struct packed{
@@ -159,6 +178,11 @@ package taiga_types;
         id_t store_forward_id;
         //amo support
         amo_details_t amo;
+
+        //FPU support
+        logic is_float; 
+        logic [ARITH_FLEN-1:0] fp_rs2;
+        logic fp_forwarded_store;
     } load_store_inputs_t;
 
     typedef struct packed{
@@ -215,6 +239,11 @@ package taiga_types;
 
         logic possible_issue;
         logic new_issue;
+        //FPU support
+        logic is_float;
+        logic fp_forwarded_store;
+        logic [ARITH_FLEN-1:0] fp_data_in;
+        logic we; //word select signal
     } lsq_entry_t;
 
     typedef struct packed {
@@ -222,6 +251,9 @@ package taiga_types;
         logic [2:0] fn3;
         id_t id;
         logic [3:0] potential_store_conflicts;
+        //FPU support
+        logic is_float;
+        logic we;
     } lq_entry_t;
 
     typedef struct packed {
@@ -229,6 +261,10 @@ package taiga_types;
         logic [3:0] be;
         logic [2:0] fn3;
         logic forwarded_store;
+        //FPU support
+        logic is_float;
+        logic we;
+        logic fp_forwarded_store;
     } sq_entry_t;
 
     typedef struct packed{
@@ -248,6 +284,9 @@ package taiga_types;
         logic valid;
         id_t phys_id;
         logic [LOG2_RETIRE_PORTS : 0] count;
+        //FPU support
+        logic wb2_float;
+        logic accumulating_csrs;
     } retire_packet_t;
 
     typedef struct packed {
@@ -258,6 +297,11 @@ package taiga_types;
         logic [2:0] fn3;
         logic [31:0] data_in;
         id_t id;
+
+        //FPU support
+        logic is_float;
+        logic [SOFTWARE_FLEN-1:0] fp_data_in;
+        logic we;
     } data_access_shared_inputs_t;
 
     typedef enum  {

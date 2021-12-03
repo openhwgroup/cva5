@@ -106,14 +106,14 @@ if { $::argc > 0 } {
 
 # Create project
 set project_location "$origin_dir"
-create_project ${_xil_proj_name_} $project_location/${_xil_proj_name_} -part xc7z020clg484-1
+create_project -force ${_xil_proj_name_} $project_location/${_xil_proj_name_} -part xc7z020clg484-1
 
 # Set the directory path for the new project
 set proj_dir [get_property directory [current_project]]
 
 # Set project properties
 set obj [current_project]
-set_property -name "board_part" -value "digilentinc.com:zedboard:part0:1.0" -objects $obj
+set_property -name "board_part" -value "em.avnet.com:zed:part0:1.4" -objects $obj
 #set_property -name "board_part_repo_paths" -value "[file normalize "$origin_dir/.Xilinx/Vivado/2019.2/xhub/board_store"]" -objects $obj
 set_property -name "compxlib.activehdl_compiled_library_dir" -value "$proj_dir/${_xil_proj_name_}.cache/compile_simlib/activehdl" -objects $obj
 set_property -name "compxlib.funcsim" -value "1" -objects $obj
@@ -1178,3 +1178,12 @@ move_dashboard_gadget -name {drc_1} -row 2 -col 0
 move_dashboard_gadget -name {timing_1} -row 0 -col 1
 move_dashboard_gadget -name {utilization_2} -row 1 -col 1
 move_dashboard_gadget -name {methodology_1} -row 2 -col 1
+
+open_bd_design "$proj_dir/${_xil_proj_name_}.srcs/sources_1/bd/design_1/design_1.bd"
+
+startgroup
+set_property -dict [list CONFIG.PCW_FPGA0_PERIPHERAL_FREQMHZ {114}] [get_bd_cells processing_system7_0]
+endgroup
+save_bd_design
+launch_runs impl_1 -jobs 48
+

@@ -87,7 +87,7 @@ if { $::argc > 0 } {
 set orig_proj_dir "[file normalize "$origin_dir/"]"
 
 # Create project
-create_project ${_xil_proj_name_} $origin_dir/${_xil_proj_name_} -part xc7z020clg484-1
+create_project -force ${_xil_proj_name_} $origin_dir/${_xil_proj_name_} -part xc7z020clg484-1
 
 # Set the directory path for the new project
 set proj_dir [get_property directory [current_project]]
@@ -122,6 +122,7 @@ import_files -norecurse $origin_dir/../../l2_arbiter/l2_external_interfaces.sv -
 import_files -norecurse $origin_dir/../../local_memory/local_memory_interface.sv -force
 import_files -norecurse $origin_dir/../../core/external_interfaces.sv -force
 import_files -norecurse $origin_dir/../../core/taiga_config.sv -force
+import_files -norecurse $origin_dir/../../core/csr_types.sv -force
 import_files -norecurse $origin_dir/../../l2_arbiter/l2_config_and_types.sv -force
 
 # Set IP repository paths
@@ -243,7 +244,7 @@ set_property physical_name m_axi_awburst [ipx::get_port_maps AWBURST -of_objects
 #import_files -norecurse $origin_dir/core/interfaces.sv -force
 
 #####Re-Adding of project files
-set_property  ip_repo_paths  $origin_dir/../../${_xil_proj_name_} [current_project]
+set_property  ip_repo_paths  $origin_dir/${_xil_proj_name_} [current_project]
 current_project $_xil_proj_name_
 update_ip_catalog
 import_files -fileset [get_filesets sources_1] $origin_dir/../../core
@@ -260,4 +261,5 @@ ipx::save_core [ipx::current_core]
 current_project taiga_wrapper_IP
 set_property "ip_repo_paths" "[file normalize "$origin_dir/taiga_wrapper_IP"]" $obj
 update_ip_catalog -rebuild
+
 
