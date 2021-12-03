@@ -186,15 +186,13 @@ module dcache
     );
 
     //One-hot tag hit / update logic to binary int
-    one_hot_to_integer #(CONFIG.DCACHE.WAYS) hit_way_conv (
-        .clk        (clk),
-        .rst        (rst), 
+    one_hot_to_integer #(CONFIG.DCACHE.WAYS)
+    hit_way_conv (
         .one_hot(tag_hit_way), 
         .int_out(tag_hit_way_int)
     );
-    one_hot_to_integer #(CONFIG.DCACHE.WAYS) update_way_conv (
-        .clk        (clk),
-        .rst        (rst), 
+    one_hot_to_integer #(CONFIG.DCACHE.WAYS)
+    update_way_conv (
         .one_hot    (replacement_way), 
         .int_out    (replacement_way_int)
     );

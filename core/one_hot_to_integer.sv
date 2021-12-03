@@ -27,38 +27,25 @@ module one_hot_to_integer
         parameter C_WIDTH = 40
     )
     (
-        //clk and rst for assertion purposes
-        input logic clk,
-        input logic rst,
         input logic [C_WIDTH-1:0] one_hot,
         output logic [(C_WIDTH == 1) ? 0 : ($clog2(C_WIDTH)-1) : 0] int_out
     );
     ////////////////////////////////////////////////////
-    //Implementation
-    localparam LOG2_WIDTH = $clog2(C_WIDTH);
-    logic [LOG2_WIDTH-1 : 0] int_array [C_WIDTH];
-    
+    //Implementation    
     generate if (C_WIDTH == 1)
-        assign int_out[0] = 0;
+        assign int_out = 0;
     else begin
         always_comb begin
             int_out = 0;
-            int_array = '{default :'0};
-            foreach(one_hot[i]) begin
-                if (one_hot[i])  begin
-                    int_array[i] = LOG2_WIDTH'(i);
-                end
-            end
-            foreach(int_array[i]) begin
-                int_out |= int_array[i];
-            end
+            foreach(one_hot[i])
+                int_out |= one_hot[i] ? $clog2(C_WIDTH)'(i) : 0;
         end
     end
     endgenerate
 
     ////////////////////////////////////////////////////
     //Assertions
-   // always_ff @ (posedge clk) begin
+    // always_ff @ (posedge clk) begin
     //    assert (rst || (~rst && $onehot0(one_hot))) else $error("One-hot signal has multiple bits set!");
     //end
 

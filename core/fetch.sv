@@ -185,9 +185,8 @@ module fetch
     assign fetch_attr_fifo.push = new_mem_request | tlb.is_fault;
     assign fetch_attr_fifo.potential_push = new_mem_request | tlb.is_fault;
     assign fetch_attr_fifo.pop = fetch_complete;
-    one_hot_to_integer #(NUM_SUB_UNITS) hit_way_conv (
-        .clk        (clk), 
-        .rst        (rst),
+    one_hot_to_integer #(NUM_SUB_UNITS)
+    hit_way_conv (
         .one_hot    (sub_unit_address_match), 
         .int_out    (fetch_attr_next.subunit_id)
     );
