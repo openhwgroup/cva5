@@ -40,23 +40,17 @@ module branch_predictor_ram
         output logic [C_DATA_WIDTH-1:0] read_data
     );
     (* ram_style = "block" *)logic [C_DATA_WIDTH-1:0] branch_ram [C_DEPTH-1:0];
-    //implementation
     ////////////////////////////////////////////////////
-
-    //Write first RAM needed to handle the following potential collision:
-    //An update from a miss occurs on the same cycle as a subsequent fetch to the same instruction
+    //Implementation
     initial branch_ram = '{default: 0};
     always_ff @(posedge clk) begin
         if (write_en)
             branch_ram[write_addr] <= write_data;
-    // synthesis translate_off
-        if (write_en)
-            branch_ram[write_addr] = write_data;//Forcing write first behaviour for simulation
-    // synthesis translate_on
+    end
+    always_ff @(posedge clk) begin
         if (read_en)
             read_data <= branch_ram[read_addr];
     end
-
     ////////////////////////////////////////////////////
     //End of Implementation
     ////////////////////////////////////////////////////
