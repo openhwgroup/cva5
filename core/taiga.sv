@@ -175,6 +175,7 @@ module taiga
     logic mret;
     logic sret;
     logic [31:0] epc;
+    logic [31:0] exception_target_pc;
 
     //Decode Unit and Fetch Unit
     logic illegal_instruction;
@@ -531,6 +532,7 @@ module taiga
         .immu(immu),
         .dmmu(dmmu),
         .exception(gc.exception),
+        .exception_target_pc (exception_target_pc),
         .mret(mret),
         .sret(sret),
         .epc(epc),
@@ -549,6 +551,7 @@ module taiga
         .gc_flush_required (gc_flush_required),
         .branch_flush (branch_flush),
         .exception (exception),
+        .exception_target_pc (exception_target_pc),
         .current_exception_unit (current_exception_unit),
         .gc (gc),
         .oldest_pc (oldest_pc),
@@ -556,6 +559,7 @@ module taiga
         .sret(sret),
         .epc(epc),
         .retire (retire),
+        .retire_ids (retire_ids),
         .interrupt (interrupt),
         .timer_interrupt (timer_interrupt),
         .sq_empty (sq_empty),
