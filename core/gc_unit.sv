@@ -45,6 +45,7 @@ module gc_unit
 
         //Exception
         exception_interface.econtrol exception [NUM_EXCEPTION_SOURCES],
+        input logic [31:0] exception_target_pc,
         input logic [31:0] oldest_pc,
 
         output logic mret,
@@ -53,6 +54,7 @@ module gc_unit
 
         //Retire
         input retire_packet_t retire,
+        input id_t retire_ids [RETIRE_PORTS],
         input logic [$clog2(NUM_EXCEPTION_SOURCES)-1:0] current_exception_unit,
 
         //External
@@ -119,7 +121,6 @@ module gc_unit
     logic exception_with_rd_complete;
 
     logic [1:0] current_privilege;
-    logic [31:0] trap_pc;
 
     gc_inputs_t stage1;
 
@@ -232,38 +233,41 @@ module gc_unit
     exception_code_t [NUM_EXCEPTION_SOURCES-1:0] ex_code;
     id_t [NUM_EXCEPTION_SOURCES-1:0] ex_id;
     logic [NUM_EXCEPTION_SOURCES-1:0][31:0] ex_tval;
-    logic [NUM_EXCEPTION_SOURCES-1:0] ex_ack;
+    logic ex_ack;
     generate
         for (genvar i = 0; i < NUM_EXCEPTION_SOURCES; i++) begin
             assign ex_pending[i] = exception[i].valid;
             assign ex_code[i] = exception[i].code;
             assign ex_id[i] = exception[i].id;
             assign ex_tval[i] = exception[i].tval;
-            assign exception[i].ack = ex_ack[i];
+            assign exception[i].ack = ex_ack;
         end
     endgenerate
     
+    //Exception valid when the oldest instruction is a valid ID.  This is done with a level of indirection (through the exception unit table)
+    //for better scalability, avoiding the need to compare against all exception sources.
     always_comb begin
         gc.exception_pending = |ex_pending;
-        gc.exception.valid = |ex_pending;
+        gc.exception.valid = (retire_ids[0] == ex_id[current_exception_unit]) & ex_pending[current_exception_unit];
         gc.exception.pc = oldest_pc;
         gc.exception.code = ex_code[current_exception_unit];
         gc.exception.tval = ex_tval[current_exception_unit];
     end
-    
+
+    always_ff @ (posedge clk) begin
+        ex_ack <= gc.exception.valid;
+    end
+
     //PC determination (trap, flush or return)
     //Two cycles: on first cycle the processor front end is flushed,
     //on the second cycle the new PC is fetched
     always_ff @ (posedge clk) begin
         second_cycle_flush <= gc_flush_required;
         gc_pc_override <= gc_flush_required | second_cycle_flush | gc.exception.valid | (next_state == INIT_CLEAR_STATE);
-        gc_pc <= stage1.pc + 4;
-        //IFENCE only flush once sq_empty!
-        //if (gc_exception.valid | stage1.is_i_fence | (issue.new_request & gc_inputs.is_ret)) begin
-        //    gc_fetch_pc <= gc_exception.valid ? trap_pc :
-        //        stage1.is_i_fence ? stage1.pc + 4 : //Could stall on dec_pc valid and use instead of another adder
-        //        epc;// gc_inputs.is_ret
-        //end
+        gc_pc <=
+                        gc.exception.valid ? exception_target_pc :
+                        gc_inputs.is_ret ? epc :
+                        stage1.pc_p4; //ifence
     end
     //work-around for verilator BLKANDNBLK signal optimizations
     assign gc.pc_override = gc_pc_override;

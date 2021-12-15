@@ -183,7 +183,7 @@ package taiga_types;
     } csr_inputs_t;
 
     typedef struct packed{
-        logic [31:0] pc;
+        logic [31:0] pc_p4;
         logic [31:0] instruction;
         logic is_csr;
         logic is_fence;

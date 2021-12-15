@@ -53,6 +53,7 @@ module csr_unit
 
         //CSR exception interface
         input exception_packet_t exception,
+        output logic [31:0] exception_target_pc,
 
         //exception return
         input logic mret,
@@ -317,7 +318,7 @@ generate if (CONFIG.INCLUDE_M_MODE) begin
         if (mwrite_en(MTVEC))
             mtvec[XLEN-1:2] <= updated_csr[XLEN-1:2];
     end
-    //assign exception.trap_pc = mtvec;
+    assign exception_target_pc = mtvec;
 
     ////////////////////////////////////////////////////
     //MEDELEG
@@ -442,7 +443,11 @@ generate if (CONFIG.INCLUDE_M_MODE) begin
 
     always_ff @(posedge clk) begin
         mcause.zeroes <= '0;
-        if ((mcause_write_valid & mwrite_en(MCAUSE)) | exception.valid) begin
+        if (rst) begin
+            mcause.interrupt <= 0;
+            mcause.code <= 0;
+        end
+        else if ((mcause_write_valid & mwrite_en(MCAUSE)) | exception.valid) begin
             mcause.interrupt <= exception.valid ? 1'b0 : updated_csr[XLEN-1];
             mcause.code <= exception.valid ? exception.code : updated_csr[ECODE_W-1:0];
         end
