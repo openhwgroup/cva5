@@ -221,7 +221,7 @@ package riscv_types;
     typedef enum logic [ECODE_W-1:0] {
         //RESERVED
         S_SOFTWARE_INTERRUPT = 5'd1,
-        //RESERVED
+        //ECODE_W
         M_SOFTWARE_INTERRUPT = 5'd3,
         //RESERVED
         S_TIMER_INTERRUPT = 5'd5,

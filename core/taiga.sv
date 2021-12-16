@@ -48,8 +48,8 @@ module taiga
 
         l2_requester_interface.master l2,
 
-        input logic timer_interrupt,
-        input logic interrupt
+        input interrupt_t s_interrupt,
+        input interrupt_t m_interrupt
         );
 
     ////////////////////////////////////////////////////
@@ -176,6 +176,9 @@ module taiga
     logic sret;
     logic [31:0] epc;
     logic [31:0] exception_target_pc;
+
+    logic interrupt_taken;
+    logic interrupt_pending;
 
     //Decode Unit and Fetch Unit
     logic illegal_instruction;
@@ -527,6 +530,8 @@ module taiga
         .issue (unit_issue[UNIT_IDS.CSR]), 
         .wb (unit_wb[UNIT_IDS.CSR]),
         .current_privilege(current_privilege),
+        .interrupt_taken(interrupt_taken),
+        .interrupt_pending(interrupt_pending),
         .tlb_on(tlb_on),
         .asid(asid),
         .immu(immu),
@@ -538,8 +543,8 @@ module taiga
         .epc(epc),
         .retire(retire),
         .retire_ids(retire_ids),
-        .interrupt(interrupt),
-        .timer_interrupt(timer_interrupt)
+        .s_interrupt(s_interrupt),
+        .m_interrupt(m_interrupt)
     );
 
     gc_unit #(.CONFIG(CONFIG))
@@ -560,8 +565,8 @@ module taiga
         .epc(epc),
         .retire (retire),
         .retire_ids (retire_ids),
-        .interrupt (interrupt),
-        .timer_interrupt (timer_interrupt),
+        .interrupt_taken(interrupt_taken),
+        .interrupt_pending(interrupt_pending),
         .sq_empty (sq_empty),
         .post_issue_count (post_issue_count)
     );
