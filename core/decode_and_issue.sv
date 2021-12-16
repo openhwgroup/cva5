@@ -506,7 +506,7 @@ module decode_and_issue
     assign gc_inputs.is_ecall = is_ecall;
     assign gc_inputs.is_ebreak = is_ebreak;
     assign gc_inputs.is_ret = is_ret;
-    assign gc_inputs.pc = issue.pc;
+    assign gc_inputs.pc_p4 = constant_alu;
     assign gc_inputs.instruction = issue.instruction;
     assign gc_inputs.is_fence = is_fence;
     assign gc_inputs.is_i_fence = CONFIG.INCLUDE_M_MODE & issue_to[UNIT_IDS.IEC] & is_ifence_r;

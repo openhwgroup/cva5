@@ -57,9 +57,9 @@ module gc_unit
         input id_t retire_ids [RETIRE_PORTS],
         input logic [$clog2(NUM_EXCEPTION_SOURCES)-1:0] current_exception_unit,
 
-        //External
-        input logic interrupt,
-        input logic timer_interrupt,
+        //CSR Interrupts
+        input logic interrupt_pending,
+        output logic interrupt_taken,
 
         //Output controls
         output gc_outputs_t gc,

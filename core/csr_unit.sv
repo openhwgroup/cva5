@@ -43,6 +43,10 @@ module csr_unit
         //Privilege
         output logic [1:0] current_privilege,
 
+        //GC
+        input logic interrupt_taken,
+        output logic interrupt_pending,
+
         //TLB and MMU
         output logic tlb_on,
         output logic [ASIDLEN-1:0] asid,
@@ -65,8 +69,8 @@ module csr_unit
         input id_t retire_ids [RETIRE_PORTS],
 
         //External
-        input logic interrupt,
-        input logic timer_interrupt
+        input interrupt_t s_interrupt,
+        input interrupt_t m_interrupt
         );
 
     logic busy;
@@ -186,8 +190,8 @@ module csr_unit
     logic[XLEN-1:0] mtvec;
     logic[XLEN-1:0] medeleg;
     logic[XLEN-1:0] mideleg;
-    mip_t mip, mip_mask;
-    mie_t mie_reg, mie_mask;
+    mip_t mip, mip_mask, mip_w_mask, mip_new;
+    mie_t mie, mie_mask;
     mip_t sip_mask;
     mie_t sie_mask;
     
@@ -226,9 +230,9 @@ generate if (CONFIG.INCLUDE_M_MODE) begin
         exception_privilege_level = MACHINE_PRIVILEGE;
         interrupt_privilege_level = MACHINE_PRIVILEGE;
         if (CONFIG.INCLUDE_S_MODE && privilege_level inside {SUPERVISOR_PRIVILEGE, USER_PRIVILEGE}) begin
-            if (medeleg[exception.code])
+            if (exception.valid & medeleg[exception.code])
                 exception_privilege_level = SUPERVISOR_PRIVILEGE;
-            if (mideleg[exception.code])
+            if (interrupt_taken & mideleg[interrupt_cause_r])
                 interrupt_privilege_level = SUPERVISOR_PRIVILEGE;
         end
     end
@@ -239,7 +243,7 @@ generate if (CONFIG.INCLUDE_M_MODE) begin
     always_comb begin
         if(mret | sret)
             next_privilege_level = trap_return_privilege_level;
-        else if (interrupt)
+        else if (interrupt_taken)
             next_privilege_level = interrupt_privilege_level;
         else if (exception.valid)
             next_privilege_level = exception_privilege_level;
@@ -297,7 +301,7 @@ generate if (CONFIG.INCLUDE_M_MODE) begin
         mstatus_new = mstatus;
         if (mwrite_en(MSTATUS) | swrite_en(SSTATUS))
             mstatus_new = (mstatus & ~mstatus_write_mask) | (updated_csr & mstatus_write_mask);
-        else if (interrupt | exception.valid)
+        else if (interrupt_taken | exception.valid)
             mstatus_new = mstatus_exception;
         else if (mret | sret)
             mstatus_new = mstatus_return;
@@ -369,12 +373,28 @@ generate if (CONFIG.INCLUDE_M_MODE) begin
     ////////////////////////////////////////////////////
     //MIP
     assign mip_mask = '{default:0, meip:1, seip:CONFIG.INCLUDE_S_MODE, mtip:1, stip:CONFIG.INCLUDE_S_MODE, msip:1, ssip:CONFIG.INCLUDE_S_MODE};
+    assign mip_w_mask = '{default:0, seip:CONFIG.INCLUDE_S_MODE, stip:CONFIG.INCLUDE_S_MODE, ssip:CONFIG.INCLUDE_S_MODE};
+
+    always_comb begin
+        mip_new = '0;
+        mip_new.ssip = s_interrupt.software;
+        mip_new.stip = s_interrupt.timer;
+        mip_new.seip = s_interrupt.external;
+
+        mip_new.msip = m_interrupt.software;
+        mip_new.mtip = m_interrupt.timer;
+        mip_new.meip = m_interrupt.external;
+
+        mip_new |= mip_mask;
+    end
+    
     always_ff @(posedge clk) begin
         if (rst)
             mip <= 0;
-        else if (mwrite_en(MIP))
-            mip <= (updated_csr & mip_mask);
+        else if (mwrite_en(MIP) | (|mip_new))
+            mip <= (updated_csr & mip_w_mask) | mip_new;
     end
+    assign interrupt_pending = |(mip & mie);
 
     ////////////////////////////////////////////////////
     //MIE
@@ -383,9 +403,9 @@ generate if (CONFIG.INCLUDE_M_MODE) begin
 
     always_ff @(posedge clk) begin
         if (rst)
-            mie_reg <= '0;
+            mie <= '0;
         else if (mwrite_en(MIE) | swrite_en(SIE))
-            mie_reg <= updated_csr & (swrite ? sie_mask : mie_mask);
+            mie <= updated_csr & (swrite ? sie_mask : mie_mask);
     end
 
     ////////////////////////////////////////////////////
@@ -441,15 +461,37 @@ generate if (CONFIG.INCLUDE_M_MODE) begin
             mcause_write_valid = M_EXCEPTION_MASKING_ROM[updated_csr[ECODE_W-1:0]];
     end
 
+    mip_t mip_cause;
+    logic [5:0] mip_priority_vector;
+    logic [2:0] mip_cause_sel;
+    logic [ECODE_W-1:0] interrupt_cause_r;
+
+    const logic [ECODE_W-1:0] interruput_code_table [8] = '{ 0, 0, 
+        M_EXTERNAL_INTERRUPT, M_TIMER_INTERRUPT, M_SOFTWARE_INTERRUPT,
+        S_EXTERNAL_INTERRUPT, S_TIMER_INTERRUPT, S_SOFTWARE_INTERRUPT
+    };
+
+    assign mip_priority_vector = {mip_cause.meip, mip_cause.mtip, mip_cause.msip, mip_cause.seip, mip_cause.stip, mip_cause.ssip};
+
+    priority_encoder #(.WIDTH(6))
+    interrupt_cause_encoder (
+        .priority_vector (mip_priority_vector),
+        .encoded_result (mip_cause_sel)
+    );
+
+    always_ff @(posedge clk) begin
+        interrupt_cause_r <= interruput_code_table[mip_cause_sel];
+    end
+
     always_ff @(posedge clk) begin
         mcause.zeroes <= '0;
         if (rst) begin
             mcause.interrupt <= 0;
             mcause.code <= 0;
         end
-        else if ((mcause_write_valid & mwrite_en(MCAUSE)) | exception.valid) begin
-            mcause.interrupt <= exception.valid ? 1'b0 : updated_csr[XLEN-1];
-            mcause.code <= exception.valid ? exception.code : updated_csr[ECODE_W-1:0];
+        else if ((mcause_write_valid & mwrite_en(MCAUSE)) | exception.valid | interrupt_taken) begin
+            mcause.interrupt <= interrupt_taken | (mwrite_en(MCAUSE) & updated_csr[XLEN-1]);
+            mcause.code <= interrupt_taken ? interrupt_cause_r : exception.valid ? exception.code : updated_csr[ECODE_W-1:0];
         end
     end
 
@@ -621,7 +663,7 @@ endgenerate
             MSTATUS : selected_csr = CONFIG.INCLUDE_M_MODE ? mstatus : 0;
             MEDELEG : selected_csr = CONFIG.INCLUDE_M_MODE ? medeleg : 0;
             MIDELEG : selected_csr = CONFIG.INCLUDE_M_MODE ? mideleg : 0;
-            MIE : selected_csr = CONFIG.INCLUDE_M_MODE ? mie_reg : 0;
+            MIE : selected_csr = CONFIG.INCLUDE_M_MODE ? mie : 0;
             MTVEC : selected_csr = CONFIG.INCLUDE_M_MODE ? mtvec : 0;
             MCOUNTEREN : selected_csr = 0;
             //Machine trap handling
@@ -646,7 +688,7 @@ endgenerate
             SSTATUS : selected_csr = CONFIG.INCLUDE_S_MODE ? (mstatus & sstatus_mask) : '0;
             SEDELEG : selected_csr = 0; //No user-level interrupts/exception handling
             SIDELEG : selected_csr = 0;
-            SIE : selected_csr = CONFIG.INCLUDE_S_MODE ? (mie_reg & sie_mask) : '0;
+            SIE : selected_csr = CONFIG.INCLUDE_S_MODE ? (mie & sie_mask) : '0;
             STVEC : selected_csr = CONFIG.INCLUDE_S_MODE ? stvec : '0;
             SCOUNTEREN : selected_csr = 0;
             //Supervisor trap handling

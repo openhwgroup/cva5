@@ -281,6 +281,12 @@ package taiga_types;
     } gc_outputs_t;
 
     typedef struct packed {
+        logic software;
+        logic timer;
+        logic external;
+    } interrupt_t;
+    
+    typedef struct packed {
         //Fetch
         logic early_branch_correction;
 

@@ -219,10 +219,11 @@ module taiga_sim
     parameter SCRATCH_MEM_KB = 128;
     parameter MEM_LINES = (SCRATCH_MEM_KB*1024)/4;
 
-    logic interrupt;
-    logic timer_interrupt;
+    interrupt_t s_interrupt;
+    interrupt_t m_interrupt;
 
-    assign interrupt = 0;
+    assign s_interrupt = '{default: 0};
+    assign m_interrupt = '{default: 0};
 
     axi_interface m_axi();
     //axi_interface ddr_axi();
