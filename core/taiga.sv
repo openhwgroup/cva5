@@ -169,6 +169,7 @@ module taiga
     logic [$clog2(NUM_EXCEPTION_SOURCES)-1:0] current_exception_unit;
     gc_outputs_t gc;
     logic sq_empty;
+    logic load_store_idle;
     logic [LOG2_MAX_IDS:0] post_issue_count;
 
     logic [1:0] current_privilege;
@@ -490,6 +491,7 @@ module taiga
         .retire_port_valid(retire_port_valid),
         .exception (exception[LS_EXCEPTION]),
         .sq_empty (sq_empty),
+        .load_store_idle (load_store_idle),
         .wb (unit_wb[UNIT_IDS.LS]),
         .tr_load_conflict_delay (tr_load_conflict_delay)
     );

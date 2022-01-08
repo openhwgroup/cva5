@@ -155,6 +155,7 @@ package taiga_types;
         logic [2:0] fn3;
         logic load;
         logic store;
+        logic fence;
         logic forwarded_store;
         id_t store_forward_id;
         //amo support
@@ -326,6 +327,12 @@ package taiga_types;
         logic rs1_and_rs2_forwarding_needed;
 
     } taiga_trace_events_t;
+
+    typedef struct packed {
+        logic [31:0] pc;
+        logic [31:0] instruction;
+        logic valid;
+    } trace_retire_outputs_t;
 
     typedef struct packed {
         logic [31:0] instruction_pc_dec;

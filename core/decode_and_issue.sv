@@ -109,6 +109,8 @@ module decode_and_issue
     logic [4:0] rd_addr;
 
     logic is_csr;
+    logic is_fence;
+    logic is_ifence;
     logic csr_imm_op;
     logic environment_op;
 
@@ -147,9 +149,11 @@ module decode_and_issue
     assign rs2_addr = decode.instruction[24:20];
     assign rd_addr = decode.instruction[11:7];
 
-    assign is_csr = (opcode_trim == SYSTEM_T) && (fn3 != 0);
-    assign csr_imm_op = (opcode_trim == SYSTEM_T) && fn3[2];
-    assign environment_op = (opcode_trim == SYSTEM_T) && (fn3 == 0);
+    assign is_csr = (opcode_trim == SYSTEM_T) & (fn3 != 0);
+    assign is_fence = (opcode_trim == FENCE_T) & ~fn3[0];
+    assign is_ifence = (opcode_trim == FENCE_T) & fn3[0];
+    assign csr_imm_op = (opcode_trim == SYSTEM_T) & fn3[2];
+    assign environment_op = (opcode_trim == SYSTEM_T) & (fn3 == 0);
 
     ////////////////////////////////////////////////////
     //Register File Support
@@ -161,9 +165,9 @@ module decode_and_issue
     //Unit Determination
     assign unit_needed[UNIT_IDS.BR] = opcode_trim inside {BRANCH_T, JAL_T, JALR_T};
     assign unit_needed[UNIT_IDS.ALU] = (opcode_trim inside {ARITH_T, ARITH_IMM_T, AUIPC_T, LUI_T, JAL_T, JALR_T}) & ~mult_div_op;
-    assign unit_needed[UNIT_IDS.LS] = opcode_trim inside {LOAD_T, STORE_T, AMO_T};
+    assign unit_needed[UNIT_IDS.LS] = opcode_trim inside {LOAD_T, STORE_T, AMO_T} | is_fence;
     assign unit_needed[UNIT_IDS.CSR] = is_csr;
-    assign unit_needed[UNIT_IDS.IEC] = opcode_trim inside {SYSTEM_T, FENCE_T} & ~is_csr;
+    assign unit_needed[UNIT_IDS.IEC] = (opcode_trim inside {SYSTEM_T} & ~is_csr) | is_ifence;
 
     assign mult_div_op = (opcode_trim == ARITH_T) && decode.instruction[25];
     generate if (CONFIG.INCLUDE_MUL)
@@ -368,11 +372,13 @@ module decode_and_issue
     logic [11:0] ls_offset;
     logic is_load_r;
     logic is_store_r;
+    logic is_fence_r;
     always_ff @(posedge clk) begin
         if (issue_stage_ready) begin
             ls_offset <= opcode[5] ? {decode.instruction[31:25], decode.instruction[11:7]} : decode.instruction[31:20];
             is_load_r <= is_load;
             is_store_r <= is_store;
+            is_fence_r <= is_fence;
         end
     end
 
@@ -385,6 +391,7 @@ module decode_and_issue
     assign ls_inputs.offset = ls_offset;
     assign ls_inputs.load = is_load_r;
     assign ls_inputs.store = is_store_r;
+    assign ls_inputs.fence = is_fence_r;
     assign ls_inputs.fn3 = amo_op ? LS_W_fn3 : issue.fn3;
     assign ls_inputs.rs1 = rf.data[RS1];
     assign ls_inputs.rs2 = rf.data[RS2];
@@ -460,12 +467,10 @@ module decode_and_issue
 
     ////////////////////////////////////////////////////
     //Global Control unit inputs
-    logic ifence;
     logic potential_flush;
     logic is_ecall;
     logic is_ebreak;
     logic is_ret;
-    logic is_fence;
     logic is_ifence_r;
 
     logic [7:0] sys_op_match;
@@ -491,15 +496,13 @@ module decode_and_issue
         endcase
     end
 
-    assign ifence = (opcode_trim == FENCE_T) && fn3[0];
     always_ff @(posedge clk) begin
         if (issue_stage_ready) begin
             is_ecall <= environment_op & sys_op_match[ECALL_i];
             is_ebreak <= environment_op & sys_op_match[EBREAK_i];
             is_ret <= environment_op & (sys_op_match[URET_i] | sys_op_match[SRET_i] | sys_op_match[MRET_i]);
-            is_fence <= CONFIG.INCLUDE_M_MODE && (opcode_trim == FENCE_T) && ~fn3[0];
-            is_ifence_r <= (opcode_trim == FENCE_T) && fn3[0];
-            potential_flush <= (environment_op | ifence);
+            is_ifence_r <= is_ifence;
+            potential_flush <= (environment_op | is_ifence);
         end
     end
 
@@ -508,7 +511,6 @@ module decode_and_issue
     assign gc_inputs.is_ret = is_ret;
     assign gc_inputs.pc_p4 = constant_alu;
     assign gc_inputs.instruction = issue.instruction;
-    assign gc_inputs.is_fence = is_fence;
     assign gc_inputs.is_i_fence = CONFIG.INCLUDE_M_MODE & issue_to[UNIT_IDS.IEC] & is_ifence_r;
 
     assign gc_flush_required = CONFIG.INCLUDE_M_MODE && issue_to[UNIT_IDS.IEC] && potential_flush;

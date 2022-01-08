@@ -77,9 +77,10 @@ class TaigaTracer {
 public:
   TaigaTracer(std::ifstream& programFile);
   ~TaigaTracer();
-  bool check_instruction_issued(uint32_t inst);
+  bool check_if_instruction_retired(uint32_t instruction);
   bool has_terminated();
   bool has_stalled();
+  bool store_queue_empty();
   void print_stats();
   void reset_stats();
   void reset();
@@ -105,6 +106,7 @@ private:
   uint64_t event_counters[numEvents];
 
   bool collect_stats = false;
+  bool program_complete = false;
 
   void update_stats();
   void update_UART();

@@ -63,6 +63,7 @@ module load_store_unit
 
         exception_interface.unit exception,
         output logic sq_empty,
+        output logic load_store_idle,
         unit_writeback_interface.unit wb,
 
         output logic tr_load_conflict_delay
@@ -103,7 +104,7 @@ module load_store_unit
 
     logic unaligned_addr;
     logic [NUM_SUB_UNITS-1:0] sub_unit_address_match;
-
+    logic fence_hold;
     logic unit_stall;
 
     typedef struct packed{
@@ -139,7 +140,7 @@ generate if (CONFIG.INCLUDE_M_MODE) begin
         endcase
     end
 
-    assign new_exception = unaligned_addr & issue.new_request;
+    assign new_exception = unaligned_addr & issue.new_request & ~ls_inputs.fence;
     always_ff @(posedge clk) begin
         if (rst)
             exception.valid <= 0;
@@ -196,7 +197,7 @@ endgenerate
     assign lsq.data_id = ls_inputs.store_forward_id;
 
     assign lsq.possible_issue = issue.possible_issue;
-    assign lsq.new_issue = issue.new_request & ~unaligned_addr & (~tlb_on | tlb.done);
+    assign lsq.new_issue = issue.new_request & ~unaligned_addr & (~tlb_on | tlb.done) & ~ls_inputs.fence;
 
     load_store_queue lsq_block (
         .clk (clk),
@@ -233,15 +234,23 @@ endgenerate
 
     ////////////////////////////////////////////////////
     //Primary Control Signals
-    assign sq_empty = lsq.empty;
-
     assign units_ready = &unit_ready;
     assign load_complete = |unit_data_valid;
 
     assign ready_for_issue_from_lsq = units_ready & (~unit_switch_stall);
 
-    assign issue.ready = (~tlb_on | tlb.ready) & lsq.ready;
+    assign issue.ready = (~tlb_on | tlb.ready) & lsq.ready & ~fence_hold;
     assign issue_request = lsq.transaction_ready & ready_for_issue_from_lsq;
+
+    assign sq_empty = lsq.sq_empty;
+    assign load_store_idle = lsq.empty & units_ready;
+
+    always_ff @ (posedge clk) begin
+        if (rst)
+            fence_hold <= 0;
+        else
+            fence_hold <= (fence_hold & ~load_store_idle) | (issue.new_request & ls_inputs.fence);
+    end
 
     ////////////////////////////////////////////////////
     //Load attributes FIFO
@@ -396,7 +405,7 @@ endgenerate
 
     `ifdef ENABLE_SIMULATION_ASSERTIONS
         invalid_ls_address_assertion:
-            assert property (@(posedge clk) disable iff (rst) issue_request |-> |sub_unit_address_match)
+            assert property (@(posedge clk) disable iff (rst) (issue_request & ~ls_inputs.fence) |-> |sub_unit_address_match)
             else $error("invalid L/S address");
     `endif
 

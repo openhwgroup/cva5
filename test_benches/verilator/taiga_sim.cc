@@ -73,10 +73,12 @@ int main(int argc, char **argv) {
     cout << flush;
 
 	// Tick the clock until we are done
+    bool sig_phase_complete = false;
 	while(!(taigaTracer->has_stalled() || taigaTracer->has_terminated())) {
 	    taigaTracer->tick();
         //Compliance Tests Signature Printing Phase
-        if (taigaTracer->check_instruction_issued(COMPLIANCE_SIG_PHASE_NOP)) {
+        sig_phase_complete |= taigaTracer->check_if_instruction_retired(COMPLIANCE_SIG_PHASE_NOP);
+        if (sig_phase_complete && taigaTracer->store_queue_empty()) {
             std::cout << "\n--------------------------------------------------------------\n";
             std::cout << "                   Signature\n";
             std::cout << "--------------------------------------------------------------\n";
