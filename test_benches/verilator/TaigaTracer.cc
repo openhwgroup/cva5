@@ -25,20 +25,26 @@
 
 //#define TRACE_ON
 
-bool TaigaTracer::check_instruction_issued(uint32_t inst) {
-    return (tb->instruction_data_dec == inst && tb->instruction_issued);
+bool TaigaTracer::check_if_instruction_retired(uint32_t instruction) {
+    bool result = false;
+    for (int i =0; i < tb->NUM_RETIRE_PORTS; i++) {
+        result |= (tb->retire_ports_instruction[i] == instruction) && tb->retire_ports_valid[i];
+    }
+    return result;
 }
 
 
 bool TaigaTracer::has_terminated() {
 
-    if (check_instruction_issued(ERROR_TERMINATION_NOP)) {
+    if (check_if_instruction_retired(ERROR_TERMINATION_NOP)) {
         std::cout << "\n\nError!!!!\n\n";
         return true;
-    }//Custom nop for regular termination
-    else if (check_instruction_issued(SUCCESS_TERMINATION_NOP)) {
-        return true;
     }
+    //Custom nop for regular termination
+    program_complete |= check_if_instruction_retired(SUCCESS_TERMINATION_NOP);
+
+    if (program_complete && tb->store_queue_empty)
+        return true;
 
     return false;
 }
@@ -60,6 +66,9 @@ bool TaigaTracer::has_stalled() {
 	return false;
 }
 
+bool TaigaTracer::store_queue_empty() {
+    return tb->store_queue_empty;
+}
 
 void TaigaTracer::reset_stats() {
     for (int i=0; i < numEvents; i++)
@@ -143,14 +152,14 @@ void TaigaTracer::tick() {
         #endif
 
 
-        if (check_instruction_issued(BENCHMARK_START_COLLECTION_NOP)) {
+        if (check_if_instruction_retired(BENCHMARK_START_COLLECTION_NOP)) {
             reset_stats();
             collect_stats = true;
         }
-        else if (check_instruction_issued(BENCHMARK_RESUME_COLLECTION_NOP)) {
+        else if (check_if_instruction_retired(BENCHMARK_RESUME_COLLECTION_NOP)) {
             collect_stats = true;
         }
-        else if (check_instruction_issued(BENCHMARK_END_COLLECTION_NOP)) {
+        else if (check_if_instruction_retired(BENCHMARK_END_COLLECTION_NOP)) {
             collect_stats = false;
         }
 

@@ -137,6 +137,7 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
     assign lsq.transaction_out.data_in = sq_data;
     assign lsq.transaction_out.id = lq_entry.id;
 
+    assign lsq.sq_empty = sq_empty;
     assign lsq.empty = ~lq_output_valid & sq_empty;
 
     ////////////////////////////////////////////////////

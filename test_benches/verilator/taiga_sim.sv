@@ -163,6 +163,13 @@ module taiga_sim
         output logic [7:0] uart_byte,
 
         //Trace Interface
+        output integer NUM_RETIRE_PORTS,
+        output logic [31:0] retire_ports_instruction [RETIRE_PORTS],
+        output logic [31:0] retire_ports_pc [RETIRE_PORTS],
+        output logic retire_ports_valid [RETIRE_PORTS],
+        output logic store_queue_empty,
+        output logic load_store_idle,
+
         output logic instruction_issued,
         output logic taiga_events [0:$bits(taiga_trace_events_t)-1],
         output logic [31:0] instruction_pc_dec,
@@ -460,6 +467,16 @@ module taiga_sim
         assign sim_registers_unamed[31-i] = sim_registers_unamed_groups[translation[i].wb_group][i];
     end
     endgenerate
+
+    assign NUM_RETIRE_PORTS = RETIRE_PORTS;
+    generate for (genvar i = 0; i < RETIRE_PORTS; i++) begin
+        assign retire_ports_pc[i] = cpu.id_block.pc_table[cpu.retire_ids[i]];
+        assign retire_ports_instruction[i] = cpu.id_block.instruction_table[cpu.retire_ids[i]];
+        assign retire_ports_valid[i] = cpu.retire_port_valid[i];
+    end endgenerate
+
+    assign store_queue_empty = cpu.sq_empty;
+    assign load_store_idle = cpu.load_store_idle;
 
     ////////////////////////////////////////////////////
     //Assertion Binding

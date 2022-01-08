@@ -216,10 +216,7 @@ module store_queue
         end
     end
     always_ff @ (posedge clk) begin
-        if (rst)
-            released <= '0;
-        else
-            released <= (released | newly_released) & ~new_request_one_hot;
+        released <= (released | newly_released) & ~new_request_one_hot;
     end
 
     ////////////////////////////////////////////////////
