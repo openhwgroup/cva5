@@ -52,6 +52,7 @@ module instruction_metadata_and_id_management
         input logic decode_advance,
         input logic decode_uses_rd,
         input rs_addr_t decode_rd_addr,
+        input exception_sources_t decode_exception_unit,
         //renamer
         input phys_addr_t decode_phys_rd_addr,
 
@@ -149,8 +150,8 @@ module instruction_metadata_and_id_management
     ////////////////////////////////////////////////////
     //Exception unit table
     always_ff @ (posedge clk) begin
-        if (instruction_issued)
-            exception_unit_table[issue.id] <= issue.exception_unit;
+        if (decode_advance)
+            exception_unit_table[decode_id] <= decode_exception_unit;
     end
 
     ////////////////////////////////////////////////////

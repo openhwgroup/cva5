@@ -35,13 +35,14 @@ module gc_unit
         input logic clk,
         input logic rst,
 
-
         //Decode
         unit_issue_interface.unit issue,
         input gc_inputs_t gc_inputs,
-        input logic gc_flush_required,
+
         //Branch miss predict
         input logic branch_flush,
+
+        //exception_interface.unit pre_issue_exception,
 
         //Exception
         exception_interface.econtrol exception [NUM_EXCEPTION_SOURCES],
@@ -61,6 +62,8 @@ module gc_unit
         input logic interrupt_pending,
         output logic interrupt_taken,
 
+        input logic processing_csr,
+
         //Output controls
         output gc_outputs_t gc,
 
@@ -75,18 +78,19 @@ module gc_unit
     localparam int INIT_CLEAR_DEPTH = CONFIG.INCLUDE_S_MODE ? (TLB_CLEAR_DEPTH > 64 ? TLB_CLEAR_DEPTH : 64) : 64;
 
     ////////////////////////////////////////////////////
-    //Instructions
-    //All instructions are processed only if in IDLE state, meaning there can be no exceptions caused by instructions already further in the pipeline.
-    //FENCE:
-    //    Drain Load/Store FIFO
+    //Overview
+    //All CSR instructions hold the issue stage until they are the oldest instruction and complete.
+    //  As such, their values are known at issue time for any call/ret instruction.
+
     //FENCE.I:
     //    flush and hold fetch until L/S unit empty
     //    Local mem (nothing extra required for coherency)
-    //    Caches, currently not supported.  Need snooping for Icache and draining of data FIFO to L2 and after FIFO drained, poping at least the current number of entries in the invalidation FIFO
+    //    Caches, currently not supported.  Requires L2 monitoring.  Need to know that all previous stores from this processor
+    //       have been sent out as potential invalidations and ack-ed before fetch can resume
     //SFENCE
     //    flush and hold fetch, wait until L/S input FIFO empty, hold fetch until TLB update complete
     //ECALL, EBREAK, SRET, MRET:
-    //    flush fetch, update to CSRs is pipelined
+    //    flush fetch, hold until oldest instruction
 
     //Interrupt
     //wait until issue/execute exceptions are no longer possible, flush fetch, take exception
@@ -106,27 +110,16 @@ module gc_unit
     //LS exceptions (miss-aligned, TLB and MMU) (issue stage)
     //fetch flush, take exception. If execute or later exception occurs first, exception is overridden
 
-    typedef enum {RST_STATE, PRE_CLEAR_STATE, INIT_CLEAR_STATE, IDLE_STATE, HOLD_STATE, TLB_CLEAR_STATE, IQ_DRAIN} gc_state;
+    typedef enum {RST_STATE, PRE_CLEAR_STATE, INIT_CLEAR_STATE, IDLE_STATE, TLB_CLEAR_STATE, ISSUE_DRAIN, ISSUE_DISCARD} gc_state;
     gc_state state;
     gc_state next_state;
 
     logic init_clear_done;
     logic tlb_clear_done;
 
-    logic i_fence_flush;
     exception_code_t ecall_code;
-    logic second_cycle_flush;
-
-    logic system_op_or_exception_complete;
-    logic exception_with_rd_complete;
-
-    logic [1:0] current_privilege;
-
-    gc_inputs_t stage1;
-
+    gc_inputs_t gc_inputs_r;
     logic post_issue_idle;
-    //CSR
-    logic processing_csr;
 
     //GC registered global outputs
     logic gc_init_clear;
@@ -143,11 +136,9 @@ module gc_unit
     //Implementation
     //Input registering
     always_ff @(posedge clk) begin
-        if (issue.possible_issue & ~gc.issue_hold) begin
-            stage1 <= gc_inputs;
-        end
+        if (issue.possible_issue & ~gc.issue_hold)
+            gc_inputs_r <= gc_inputs;
     end
-
 
     ////////////////////////////////////////////////////
     //GC Operation
@@ -155,9 +146,9 @@ module gc_unit
     assign gc.fetch_flush = branch_flush | gc_pc_override;
 
     always_ff @ (posedge clk) begin
-        gc_fetch_hold <=  next_state inside {PRE_CLEAR_STATE, INIT_CLEAR_STATE};
-        gc_issue_hold <= issue.new_request | processing_csr | (next_state inside {PRE_CLEAR_STATE, INIT_CLEAR_STATE, HOLD_STATE, TLB_CLEAR_STATE, IQ_DRAIN});
-        gc_supress_writeback <= next_state inside {PRE_CLEAR_STATE, INIT_CLEAR_STATE, TLB_CLEAR_STATE};
+        gc_fetch_hold <= next_state inside {PRE_CLEAR_STATE, INIT_CLEAR_STATE, ISSUE_DRAIN};
+        gc_issue_hold <= processing_csr | (next_state inside {PRE_CLEAR_STATE, INIT_CLEAR_STATE, TLB_CLEAR_STATE, ISSUE_DRAIN});
+        gc_supress_writeback <= next_state inside {PRE_CLEAR_STATE, INIT_CLEAR_STATE};
         gc_init_clear <= next_state inside {INIT_CLEAR_STATE};
         gc_tlb_flush <= next_state inside {INIT_CLEAR_STATE, TLB_CLEAR_STATE};
     end
@@ -183,16 +174,11 @@ module gc_unit
             PRE_CLEAR_STATE : next_state = INIT_CLEAR_STATE;
             INIT_CLEAR_STATE : if (init_clear_done) next_state = IDLE_STATE;
             IDLE_STATE : begin
-                if (issue.new_request)
-                    next_state = HOLD_STATE;
-                //IF exception and post-issue > 1 OR FLUSHING interrupts
-                //if (ls_exception.valid | potential_branch_exception | system_op_or_exception_complete) begin
-                //    next_state = IQ_DRAIN;
-                //end
+                if (issue.new_request | interrupt_pending | gc.exception_pending)
+                    next_state = ISSUE_DRAIN;
             end
-            HOLD_STATE : if (post_issue_idle) next_state = IDLE_STATE;
             TLB_CLEAR_STATE : if (tlb_clear_done) next_state = IDLE_STATE;
-            IQ_DRAIN : if (post_issue_idle) next_state = IDLE_STATE;
+            ISSUE_DRAIN : if (post_issue_idle) next_state = IDLE_STATE;
             default : next_state = RST_STATE;
         endcase
     end
@@ -209,65 +195,49 @@ module gc_unit
     assign init_clear_done = state_counter[$clog2(INIT_CLEAR_DEPTH)];
     assign tlb_clear_done = state_counter[$clog2(TLB_CLEAR_DEPTH)];
 
-    ////////////////////////////////////////////////////
-    //mret/sret
-    always_ff @ (posedge clk) begin
-        mret = issue.new_request & gc_inputs.is_ret & (gc_inputs.instruction[31:25] == 7'b0011000);
-        sret = issue.new_request & gc_inputs.is_ret & (gc_inputs.instruction[31:25] == 7'b0001000);
-    end
+
     ////////////////////////////////////////////////////
     //Exception handling
 
-    //The type of call instruction is depedent on the current privilege level
-    always_comb begin
-        case (current_privilege)
-            USER_PRIVILEGE : ecall_code = ECALL_U;
-            SUPERVISOR_PRIVILEGE : ecall_code = ECALL_S;
-            MACHINE_PRIVILEGE : ecall_code = ECALL_M;
-            default : ecall_code = ECALL_U;
-        endcase
-    end
-
     //Re-assigning interface inputs to array types so that they can be dynamically indexed
-    logic [NUM_EXCEPTION_SOURCES-1:0] ex_pending;
-    exception_code_t [NUM_EXCEPTION_SOURCES-1:0] ex_code;
-    id_t [NUM_EXCEPTION_SOURCES-1:0] ex_id;
-    logic [NUM_EXCEPTION_SOURCES-1:0][31:0] ex_tval;
-    logic ex_ack;
+    logic [NUM_EXCEPTION_SOURCES-1:0] exception_pending;
+    exception_code_t [NUM_EXCEPTION_SOURCES-1:0] exception_code;
+    id_t [NUM_EXCEPTION_SOURCES-1:0] exception_id;
+    logic [NUM_EXCEPTION_SOURCES-1:0][31:0] exception_tval;
+    logic exception_ack;
     generate
         for (genvar i = 0; i < NUM_EXCEPTION_SOURCES; i++) begin
-            assign ex_pending[i] = exception[i].valid;
-            assign ex_code[i] = exception[i].code;
-            assign ex_id[i] = exception[i].id;
-            assign ex_tval[i] = exception[i].tval;
-            assign exception[i].ack = ex_ack;
+            assign exception_pending[i] = exception[i].valid;
+            assign exception_code[i] = exception[i].code;
+            assign exception_id[i] = exception[i].id;
+            assign exception_tval[i] = exception[i].tval;
+            assign exception[i].ack = exception_ack;
         end
     endgenerate
     
     //Exception valid when the oldest instruction is a valid ID.  This is done with a level of indirection (through the exception unit table)
     //for better scalability, avoiding the need to compare against all exception sources.
     always_comb begin
-        gc.exception_pending = |ex_pending;
-        gc.exception.valid = (retire_ids[0] == ex_id[current_exception_unit]) & ex_pending[current_exception_unit];
+        gc.exception_pending = |exception_pending;
+        gc.exception.valid = (retire_ids[0] == exception_id[current_exception_unit]) & exception_pending[current_exception_unit];
         gc.exception.pc = oldest_pc;
-        gc.exception.code = ex_code[current_exception_unit];
-        gc.exception.tval = ex_tval[current_exception_unit];
+        gc.exception.code = exception_code[current_exception_unit];
+        gc.exception.tval = exception_tval[current_exception_unit];
     end
 
     always_ff @ (posedge clk) begin
-        ex_ack <= gc.exception.valid;
+        exception_ack <= gc.exception.valid;
     end
 
     //PC determination (trap, flush or return)
     //Two cycles: on first cycle the processor front end is flushed,
     //on the second cycle the new PC is fetched
     always_ff @ (posedge clk) begin
-        second_cycle_flush <= gc_flush_required;
-        gc_pc_override <= gc_flush_required | second_cycle_flush | gc.exception.valid | (next_state == INIT_CLEAR_STATE);
+        gc_pc_override <= issue.new_request | gc.exception.valid | (next_state == INIT_CLEAR_STATE);
         gc_pc <=
                         gc.exception.valid ? exception_target_pc :
-                        gc_inputs.is_ret ? epc :
-                        stage1.pc_p4; //ifence
+                        (gc_inputs.is_mret | gc_inputs.is_sret) ? epc :
+                        gc_inputs.pc_p4; //ifence
     end
     //work-around for verilator BLKANDNBLK signal optimizations
     assign gc.pc_override = gc_pc_override;

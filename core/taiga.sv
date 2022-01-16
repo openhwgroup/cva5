@@ -148,6 +148,7 @@ module taiga
     decode_packet_t decode;   
     logic decode_uses_rd;
     rs_addr_t decode_rd_addr;
+    exception_sources_t decode_exception_unit;
     phys_addr_t decode_phys_rd_addr;
     phys_addr_t decode_phys_rs_addr [REGFILE_READ_PORTS];
     logic [$clog2(CONFIG.NUM_WB_GROUPS)-1:0] decode_rs_wb_group [REGFILE_READ_PORTS];
@@ -181,11 +182,12 @@ module taiga
     logic interrupt_taken;
     logic interrupt_pending;
 
+    logic processing_csr;
+
     //Decode Unit and Fetch Unit
     logic illegal_instruction;
     logic instruction_issued;
     logic instruction_issued_with_rd;
-    logic gc_flush_required;
 
     //LS
     wb_packet_t wb_snoop;
@@ -267,6 +269,7 @@ module taiga
         .decode_uses_rd (decode_uses_rd),
         .decode_rd_addr (decode_rd_addr),
         .decode_phys_rd_addr (decode_phys_rd_addr),
+        .decode_exception_unit (decode_exception_unit),
         .issue (issue),
         .instruction_issued (instruction_issued),
         .instruction_issued_with_rd (instruction_issued_with_rd),
@@ -386,6 +389,7 @@ module taiga
         .renamer (decode_rename_interface),
         .decode_uses_rd (decode_uses_rd),
         .decode_rd_addr (decode_rd_addr),
+        .decode_exception_unit (decode_exception_unit),
         .decode_phys_rd_addr (decode_phys_rd_addr),
         .decode_phys_rs_addr (decode_phys_rs_addr),
         .decode_rs_wb_group (decode_rs_wb_group),
@@ -402,8 +406,8 @@ module taiga
         .div_inputs (div_inputs),
         .unit_issue (unit_issue),
         .gc (gc),
-        .gc_flush_required (gc_flush_required),
-        .illegal_instruction (illegal_instruction),
+        .current_privilege (current_privilege),
+        .exception (exception[PRE_ISSUE_EXCEPTION]),
         .tr_operand_stall (tr_operand_stall),
         .tr_unit_stall (tr_unit_stall),
         .tr_no_id_stall (tr_no_id_stall),
@@ -534,6 +538,7 @@ module taiga
         .current_privilege(current_privilege),
         .interrupt_taken(interrupt_taken),
         .interrupt_pending(interrupt_pending),
+        .processing_csr(processing_csr),
         .tlb_on(tlb_on),
         .asid(asid),
         .immu(immu),
@@ -555,7 +560,6 @@ module taiga
         .rst (rst),
         .issue (unit_issue[UNIT_IDS.IEC]),
         .gc_inputs (gc_inputs),
-        .gc_flush_required (gc_flush_required),
         .branch_flush (branch_flush),
         .exception (exception),
         .exception_target_pc (exception_target_pc),
@@ -569,6 +573,7 @@ module taiga
         .retire_ids (retire_ids),
         .interrupt_taken(interrupt_taken),
         .interrupt_pending(interrupt_pending),
+        .processing_csr(processing_csr),
         .sq_empty (sq_empty),
         .post_issue_count (post_issue_count)
     );

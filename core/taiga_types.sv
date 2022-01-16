@@ -56,14 +56,9 @@ package taiga_types;
         id_t id;
     } exception_packet_t;
 
-    typedef enum logic {
-        FETCH_ACCESS_FAULT = 1'b0,
-        FETCH_PAGE_FAULT = 1'b1
-    } fetch_error_codes_t;
-
     typedef struct packed{
         logic ok;
-        fetch_error_codes_t error_code;
+        exception_code_t error_code;
     } fetch_metadata_t;
 
     typedef struct packed{
@@ -185,13 +180,11 @@ package taiga_types;
 
     typedef struct packed{
         logic [31:0] pc_p4;
-        logic [31:0] instruction;
-        logic is_csr;
-        logic is_fence;
-        logic is_i_fence;
-        logic is_ecall;
-        logic is_ebreak;
-        logic is_ret;
+        logic is_ifence;
+        logic is_mret;
+        logic is_sret;
+        logic is_exception;
+        exception_code_t code;
     } gc_inputs_t;
 
     typedef struct packed{

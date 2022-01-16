@@ -260,7 +260,7 @@ module fetch
 
     assign if_pc = pc;
     assign fetch_metadata.ok = valid_fetch_result;
-    assign fetch_metadata.error_code = fetch_attr.mmu_fault ? FETCH_PAGE_FAULT : FETCH_ACCESS_FAULT;
+    assign fetch_metadata.error_code = INST_ACCESS_FAULT;
 
     assign fetch_instruction = unit_data_array[fetch_attr.subunit_id];
     assign fetch_complete = (fetch_attr_fifo.valid & ~valid_fetch_result) | (|unit_data_valid);//allow instruction to propagate to decode if address is invalid
