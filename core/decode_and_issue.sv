@@ -25,6 +25,7 @@ module decode_and_issue
     import taiga_config::*;
     import riscv_types::*;
     import taiga_types::*;
+    import csr_types::*;
 
     # (
         parameter cpu_config_t CONFIG = EXAMPLE_CONFIG,
@@ -40,6 +41,7 @@ module decode_and_issue
         input logic pc_id_available,
         input decode_packet_t decode,
         output logic decode_advance,
+        output exception_sources_t decode_exception_unit,
 
         //Renamer
         renamer_interface.decode renamer,
@@ -68,9 +70,9 @@ module decode_and_issue
         unit_issue_interface.decode unit_issue [NUM_UNITS-1:0],
 
         input gc_outputs_t gc,
-        output logic gc_flush_required,
+        input logic [1:0] current_privilege,
 
-        output logic illegal_instruction,
+        exception_interface.unit exception,
 
         //Trace signals
         output logic tr_operand_stall,
@@ -124,6 +126,7 @@ module decode_and_issue
     logic [NUM_UNITS-1:0] issue_ready;
     logic [NUM_UNITS-1:0] issue_to;
 
+    logic pre_issue_exception_pending;
     logic illegal_instruction_pattern;
 
     logic issue_stage_ready;
@@ -197,16 +200,16 @@ module decode_and_issue
     assign decode_rs_wb_group[RS1] = renamer.rs_wb_group[RS1];
     assign decode_rs_wb_group[RS2] = renamer.rs_wb_group[RS2];
 
-
     //TODO: Consider ways of parameterizing so that any exception generating unit
     //can be automatically added to this expression
-    exception_sources_t decode_exception_unit;
     always_comb begin
         unique case (1'b1)
             unit_needed[UNIT_IDS.LS] : decode_exception_unit = LS_EXCEPTION;
             unit_needed[UNIT_IDS.BR] : decode_exception_unit = BR_EXCEPTION;
-            default : decode_exception_unit = IEC_EXCEPTION;
+            default : decode_exception_unit = PRE_ISSUE_EXCEPTION;
         endcase
+        if (illegal_instruction_pattern)
+            decode_exception_unit = PRE_ISSUE_EXCEPTION;
     end
     ////////////////////////////////////////////////////
     //Issue
@@ -261,7 +264,7 @@ module decode_and_issue
     assign operands_ready = (~rs1_conflict) & (~rs2_conflict);
 
     assign issue_ready = unit_needed_issue_stage & unit_ready;
-    assign issue_valid = issue.stage_valid & operands_ready & ~gc.issue_hold;
+    assign issue_valid = issue.stage_valid & operands_ready & ~gc.issue_hold & ~pre_issue_exception_pending;
 
     assign issue_to = {NUM_UNITS{issue_valid & ~gc.fetch_flush}} & issue_ready;
 
@@ -467,10 +470,10 @@ module decode_and_issue
 
     ////////////////////////////////////////////////////
     //Global Control unit inputs
-    logic potential_flush;
-    logic is_ecall;
-    logic is_ebreak;
-    logic is_ret;
+    logic is_ecall_r;
+    logic is_ebreak_r;
+    logic is_mret_r;
+    logic is_sret_r;
     logic is_ifence_r;
 
     logic [7:0] sys_op_match;
@@ -488,7 +491,6 @@ module decode_and_issue
         case (decode.instruction[31:20]) inside
             ECALL_imm : sys_op_match[ECALL_i] = CONFIG.INCLUDE_M_MODE;
             EBREAK_imm : sys_op_match[EBREAK_i] = CONFIG.INCLUDE_M_MODE;
-            URET_imm : sys_op_match[URET_i] = CONFIG.INCLUDE_U_MODE;
             SRET_imm : sys_op_match[SRET_i] = CONFIG.INCLUDE_S_MODE;
             MRET_imm : sys_op_match[MRET_i] = CONFIG.INCLUDE_M_MODE;
             SFENCE_imm : sys_op_match[SFENCE_i] = CONFIG.INCLUDE_S_MODE;
@@ -498,22 +500,18 @@ module decode_and_issue
 
     always_ff @(posedge clk) begin
         if (issue_stage_ready) begin
-            is_ecall <= environment_op & sys_op_match[ECALL_i];
-            is_ebreak <= environment_op & sys_op_match[EBREAK_i];
-            is_ret <= environment_op & (sys_op_match[URET_i] | sys_op_match[SRET_i] | sys_op_match[MRET_i]);
+            is_ecall_r <= sys_op_match[ECALL_i];
+            is_ebreak_r <= sys_op_match[EBREAK_i];
+            is_mret_r <= sys_op_match[MRET_i];
+            is_sret_r <= sys_op_match[SRET_i];
             is_ifence_r <= is_ifence;
-            potential_flush <= (environment_op | is_ifence);
         end
     end
 
-    assign gc_inputs.is_ecall = is_ecall;
-    assign gc_inputs.is_ebreak = is_ebreak;
-    assign gc_inputs.is_ret = is_ret;
     assign gc_inputs.pc_p4 = constant_alu;
-    assign gc_inputs.instruction = issue.instruction;
-    assign gc_inputs.is_i_fence = CONFIG.INCLUDE_M_MODE & issue_to[UNIT_IDS.IEC] & is_ifence_r;
-
-    assign gc_flush_required = CONFIG.INCLUDE_M_MODE && issue_to[UNIT_IDS.IEC] && potential_flush;
+    assign gc_inputs.is_ifence = is_ifence_r;
+    assign gc_inputs.is_mret = is_mret_r;
+    assign gc_inputs.is_mret = is_sret_r;
 
     ////////////////////////////////////////////////////
     //CSR unit inputs
@@ -580,20 +578,65 @@ module decode_and_issue
     //Illegal Instruction check
     logic illegal_instruction_pattern_r;
     generate if (CONFIG.INCLUDE_M_MODE) begin
-        illegal_instruction_checker # (.CONFIG(CONFIG))
-        illegal_op_check (
-            .instruction(decode.instruction), .illegal_instruction(illegal_instruction_pattern)
-        );
-        always_ff @(posedge clk) begin
-            if (rst)
-                illegal_instruction_pattern_r <= 0;
-            else if (issue_stage_ready)
-                illegal_instruction_pattern_r <= illegal_instruction_pattern;
+    illegal_instruction_checker # (.CONFIG(CONFIG))
+    illegal_op_check (
+        .instruction(decode.instruction), .illegal_instruction(illegal_instruction_pattern)
+    );
+    always_ff @(posedge clk) begin
+        if (rst)
+            illegal_instruction_pattern_r <= 0;
+        else if (issue_stage_ready)
+            illegal_instruction_pattern_r <= illegal_instruction_pattern;
+    end
+
+    ////////////////////////////////////////////////////
+    //ECALL/EBREAK
+    //The type of call instruction is depedent on the current privilege level
+    exception_code_t ecall_code;
+    always_comb begin
+        case (current_privilege)
+            USER_PRIVILEGE : ecall_code = ECALL_U;
+             SUPERVISOR_PRIVILEGE : ecall_code = ECALL_S;
+            MACHINE_PRIVILEGE : ecall_code = ECALL_M;
+            default : ecall_code = ECALL_U;
+        endcase
+    end
+
+    ////////////////////////////////////////////////////
+    //Exception generation (ecall/ebreak/illegal instruction/propagated fetch error)
+    logic new_exception;
+    exception_code_t ecode;
+
+    always_ff @(posedge clk) begin
+        if (rst)
+            pre_issue_exception_pending <= 0;
+        else if (issue_stage_ready)
+            pre_issue_exception_pending <= illegal_instruction_pattern | (opcode_trim inside {SYSTEM_T} & ~is_csr & (sys_op_match[ECALL_i] | sys_op_match[EBREAK_i])) | ~decode.fetch_metadata.ok;
+    end
+
+    assign new_exception = issue.stage_valid & pre_issue_exception_pending & ~(gc.issue_hold | gc.fetch_flush);
+
+    always_ff @(posedge clk) begin
+        if (rst)
+            exception.valid <= 0;
+        else
+            exception.valid <= (exception.valid | new_exception) & ~exception.ack;
+    end
+
+    assign ecode =
+        illegal_instruction_pattern_r ? ILLEGAL_INST :
+        is_ecall_r ? ecall_code :
+        ~issue.fetch_metadata.ok ? issue.fetch_metadata.error_code :
+        BREAK;
+
+    always_ff @(posedge clk) begin
+        if (new_exception) begin
+            exception.code <= ecode;
+            exception.tval <= issue.instruction;
+            exception.id <= issue.id;
         end
+    end
 
-
-        //Illegal instruction if the instruction is invalid, but could otherwise be issued
-        assign illegal_instruction = illegal_instruction_pattern_r & issue.stage_valid & ~gc.issue_hold & ~gc.fetch_flush;
     end endgenerate
     ////////////////////////////////////////////////////
     //End of Implementation
@@ -601,11 +644,6 @@ module decode_and_issue
 
     ////////////////////////////////////////////////////
     //Assertions
-    //TODO: convert into exception and expand support into all fetch stage exceptions
-    //If an invalid fetch address has reached the issue stage and has not been flushed as a branch, processor state is corrupted
-    invalid_fetch_address_assertion:
-        assert property (@(posedge clk) disable iff (rst) (issue.stage_valid & (~issue.fetch_metadata.ok & issue.fetch_metadata.error_code == FETCH_ACCESS_FAULT)) |-> (gc.fetch_flush))
-        else $error("invalid fetch address");
 
     ////////////////////////////////////////////////////
     //Trace Interface

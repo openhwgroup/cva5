@@ -46,6 +46,7 @@ module csr_unit
         //GC
         input logic interrupt_taken,
         output logic interrupt_pending,
+        output logic processing_csr,
 
         //TLB and MMU
         output logic tlb_on,
@@ -102,6 +103,8 @@ module csr_unit
     endfunction
     ////////////////////////////////////////////////////
     //Implementation
+    assign processing_csr = busy | issue.new_request;
+    
     assign issue.ready = ~busy;
 
     always_ff @(posedge clk) begin

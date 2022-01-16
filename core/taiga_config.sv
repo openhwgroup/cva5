@@ -255,7 +255,7 @@ package taiga_config;
     typedef enum bit [1:0] {
         LS_EXCEPTION = 0,
         BR_EXCEPTION = 1,
-        IEC_EXCEPTION = 2
+        PRE_ISSUE_EXCEPTION = 2
     } exception_sources_t;
 
     ////////////////////////////////////////////////////
