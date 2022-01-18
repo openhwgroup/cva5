@@ -63,6 +63,7 @@ module load_store_unit
 
         exception_interface.unit exception,
         output logic sq_empty,
+        output logic no_released_stores_pending,
         output logic load_store_idle,
         unit_writeback_interface.unit wb,
 
@@ -103,6 +104,7 @@ module load_store_unit
     logic [NUM_SUB_UNITS-1:0] current_unit;
 
     logic unaligned_addr;
+    logic load_exception_complete;
     logic [NUM_SUB_UNITS-1:0] sub_unit_address_match;
     logic fence_hold;
     logic unit_stall;
@@ -149,11 +151,18 @@ generate if (CONFIG.INCLUDE_M_MODE) begin
     end
 
     always_ff @(posedge clk) begin
-        if (new_exception) begin
+        if (new_exception & ~exception.valid) begin
             exception.code <= ls_inputs.store ? STORE_AMO_ADDR_MISSALIGNED : LOAD_ADDR_MISSALIGNED;
             exception.tval <= virtual_address;
             exception.id <= issue.id;
         end
+    end
+
+    always_ff @(posedge clk) begin
+        if (rst)
+            load_exception_complete <= 0;
+        else
+            load_exception_complete <= exception.valid & exception.ack & (exception.code == LOAD_ADDR_MISSALIGNED);
     end
 end
 endgenerate
@@ -239,10 +248,11 @@ endgenerate
 
     assign ready_for_issue_from_lsq = units_ready & (~unit_switch_stall);
 
-    assign issue.ready = (~tlb_on | tlb.ready) & lsq.ready & ~fence_hold;
+    assign issue.ready = (~tlb_on | tlb.ready) & lsq.ready & ~fence_hold & ~exception.valid;
     assign issue_request = lsq.transaction_ready & ready_for_issue_from_lsq;
 
     assign sq_empty = lsq.sq_empty;
+    assign no_released_stores_pending = lsq.no_released_stores_pending;
     assign load_store_idle = lsq.empty & units_ready;
 
     always_ff @ (posedge clk) begin
@@ -390,8 +400,8 @@ endgenerate
     ////////////////////////////////////////////////////
     //Output bank
     assign wb.rd = final_load_data;
-    assign wb.done = load_complete;
-    assign wb.id = stage2_attr.id;
+    assign wb.done = load_complete | load_exception_complete;
+    assign wb.id = load_exception_complete ? exception.id : stage2_attr.id;
 
     ////////////////////////////////////////////////////
     //End of Implementation

@@ -69,6 +69,7 @@ module gc_unit
 
         //Ordering support
         input logic sq_empty,
+        input logic no_released_stores_pending,
         input logic [LOG2_MAX_IDS:0] post_issue_count
     );
 
@@ -129,6 +130,7 @@ module gc_unit
     logic gc_fetch_flush;
     logic gc_supress_writeback;
     logic gc_tlb_flush;
+    logic gc_sq_flush;
     logic gc_pc_override;
     logic [31:0] gc_pc;
 
@@ -147,10 +149,11 @@ module gc_unit
 
     always_ff @ (posedge clk) begin
         gc_fetch_hold <= next_state inside {PRE_CLEAR_STATE, INIT_CLEAR_STATE, ISSUE_DRAIN};
-        gc_issue_hold <= processing_csr | (next_state inside {PRE_CLEAR_STATE, INIT_CLEAR_STATE, TLB_CLEAR_STATE, ISSUE_DRAIN});
-        gc_supress_writeback <= next_state inside {PRE_CLEAR_STATE, INIT_CLEAR_STATE};
+        gc_issue_hold <= processing_csr | (next_state inside {PRE_CLEAR_STATE, INIT_CLEAR_STATE, TLB_CLEAR_STATE, ISSUE_DRAIN, ISSUE_DISCARD});
+        gc_supress_writeback <= next_state inside {PRE_CLEAR_STATE, INIT_CLEAR_STATE, ISSUE_DISCARD};
         gc_init_clear <= next_state inside {INIT_CLEAR_STATE};
         gc_tlb_flush <= next_state inside {INIT_CLEAR_STATE, TLB_CLEAR_STATE};
+        gc_sq_flush <= state inside {ISSUE_DISCARD} && next_state inside {IDLE_STATE};
     end
     //work-around for verilator BLKANDNBLK signal optimizations
     assign gc.fetch_hold = gc_fetch_hold;
@@ -158,6 +161,7 @@ module gc_unit
     assign gc.supress_writeback = gc_supress_writeback;
     assign gc.init_clear = gc_init_clear;
     assign gc.tlb_flush = gc_tlb_flush;
+    assign gc.sq_flush = gc_sq_flush;
     ////////////////////////////////////////////////////
     //GC State Machine
     always @(posedge clk) begin
@@ -174,11 +178,17 @@ module gc_unit
             PRE_CLEAR_STATE : next_state = INIT_CLEAR_STATE;
             INIT_CLEAR_STATE : if (init_clear_done) next_state = IDLE_STATE;
             IDLE_STATE : begin
-                if (issue.new_request | interrupt_pending | gc.exception_pending)
+                if (gc.exception.valid)
+                    next_state = ISSUE_DISCARD;
+                else if (issue.new_request | interrupt_pending | gc.exception_pending)
                     next_state = ISSUE_DRAIN;
             end
             TLB_CLEAR_STATE : if (tlb_clear_done) next_state = IDLE_STATE;
-            ISSUE_DRAIN : if (post_issue_idle) next_state = IDLE_STATE;
+            ISSUE_DRAIN : begin
+                if (post_issue_idle) next_state = IDLE_STATE;
+                else if (gc.exception.valid) next_state = ISSUE_DISCARD;
+            end
+            ISSUE_DISCARD : if ((post_issue_count == 0) & no_released_stores_pending) next_state = IDLE_STATE;
             default : next_state = RST_STATE;
         endcase
     end

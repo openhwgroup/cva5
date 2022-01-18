@@ -45,7 +45,11 @@ module renamer
         input retire_packet_t retire
     );
     //////////////////////////////////////////
-    (* ramstyle = "MLAB, no_rw_check" *) phys_addr_t architectural_id_to_phys_table [MAX_IDS];
+    (* ramstyle = "MLAB, no_rw_check" *) phys_addr_t architectural_id_to_old_phys_table [MAX_IDS];
+    (* ramstyle = "MLAB, no_rw_check" *) logic [$clog2(CONFIG.NUM_WB_GROUPS)-1:0] architectural_id_to_old_wb_group_table [MAX_IDS];
+
+    (* ramstyle = "MLAB, no_rw_check" *) phys_addr_t architectural_id_to_current_phys_table [MAX_IDS];
+    (* ramstyle = "MLAB, no_rw_check" *) logic[4:0] architectural_id_to_current_rd_addr_table [MAX_IDS];
 
     logic [5:0] clear_index;
     fifo_interface #(.DATA_WIDTH(6)) free_list ();
@@ -79,7 +83,7 @@ module renamer
     assign free_list.potential_push = (gc.init_clear & ~clear_index[5]) | (retire.valid);
     assign free_list.push = free_list.potential_push;
     //TODO: restore spec if instruction has been discarded due to a speculation failure
-    assign free_list.data_in = gc.init_clear ? {1'b1, clear_index[4:0]} : architectural_id_to_phys_table[retire.phys_id];
+    assign free_list.data_in = gc.init_clear ? {1'b1, clear_index[4:0]} : (gc.supress_writeback ? architectural_id_to_current_phys_table[retire.phys_id] : architectural_id_to_old_phys_table[retire.phys_id]);
     assign free_list.pop = rename_valid;
 
     ////////////////////////////////////////////////////
@@ -100,13 +104,18 @@ module renamer
     logic spec_table_update;
     logic [4:0] spec_table_write_index;
 
-    assign spec_table_update =  rename_valid | rollback | gc.init_clear;
+    assign spec_table_update =  rename_valid | rollback | gc.init_clear | (retire.valid & gc.supress_writeback);
 
     always_comb begin
         if (gc.init_clear) begin
             spec_table_write_index = clear_index[4:0];
             spec_table_next.phys_addr = {1'b0, clear_index[4:0]};
             spec_table_next.wb_group = '0;
+        end
+        else if (gc.supress_writeback) begin
+            spec_table_write_index = architectural_id_to_current_rd_addr_table[retire.phys_id];
+            spec_table_next.phys_addr = architectural_id_to_old_phys_table[retire.phys_id];
+            spec_table_next.wb_group = architectural_id_to_old_wb_group_table[retire.phys_id];
         end
         else if (rollback) begin
             spec_table_write_index = issue.rd_addr;
@@ -145,12 +154,20 @@ module renamer
     end
 
     ////////////////////////////////////////////////////
-    //Arch ID-to-phys Table
+    //Arch ID-to-phys Tables
     always_ff @ (posedge clk) begin
-        if (rename_valid)
-            architectural_id_to_phys_table[decode.id] <= spec_table_old.phys_addr;
+        if (rename_valid) begin
+            architectural_id_to_old_phys_table[decode.id] <= spec_table_old.phys_addr;
+            architectural_id_to_old_wb_group_table[decode.id] <= spec_table_old.wb_group;
+        end
     end
 
+    always_ff @ (posedge clk) begin
+        if (rename_valid) begin
+            architectural_id_to_current_phys_table[decode.id] <= decode.phys_rd_addr;
+            architectural_id_to_current_rd_addr_table[decode.id] <= decode.rd_addr;
+        end
+    end
     ////////////////////////////////////////////////////
     //Renamed Outputs
     spec_table_t [REGFILE_READ_PORTS-1:0] spec_table_decode;
