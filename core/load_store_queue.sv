@@ -53,6 +53,8 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
 
     logic sq_full;
     logic sq_empty;
+    logic no_released_stores_pending;
+
     sq_entry_t sq_entry;
     logic [31:0] sq_data;
     logic store_conflict;
@@ -88,7 +90,7 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
 
     load_queue #(.SQ_DEPTH(SQ_DEPTH)) lq_block (
         .clk (clk),
-        .rst (rst | gc.issue_flush),
+        .rst (rst),
         .lsq (lsq_entry),
         .lq_entry (lq_entry),
         .potential_store_conflicts (potential_store_conflicts),
@@ -96,13 +98,19 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
         .lq_output_valid (lq_output_valid)
     );
 
+    logic sq_retire_port_valid [RETIRE_PORTS];
+    always_comb begin
+        for (int i=0; i < RETIRE_PORTS; i++)
+            sq_retire_port_valid[i] = retire_port_valid[i] & ~gc.supress_writeback;
+    end
 
     store_queue #(.DEPTH(SQ_DEPTH)) sq_block (
         .clk (clk),
-        .rst (rst | gc.issue_flush),
+        .rst (rst | gc.sq_flush),
         .lsq (lsq_entry),
         .sq_empty (sq_empty),
         .sq_full (sq_full),
+        .no_released_stores_pending (no_released_stores_pending),
         .addr_hash (addr_hash),
         .potential_store_conflicts (potential_store_conflicts),
         .load_issued (load_ack),
@@ -112,7 +120,7 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
         .sq_data (sq_data),
         .wb_snoop (wb_snoop),
         .retire_ids (retire_ids),
-        .retire_port_valid (retire_port_valid),
+        .retire_port_valid (sq_retire_port_valid),
         .store_ack (store_ack),
         .sq_output_valid (sq_output_valid)
     );
@@ -138,6 +146,7 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
     assign lsq.transaction_out.id = lq_entry.id;
 
     assign lsq.sq_empty = sq_empty;
+    assign lsq.no_released_stores_pending = no_released_stores_pending;
     assign lsq.empty = ~lq_output_valid & sq_empty;
 
     ////////////////////////////////////////////////////

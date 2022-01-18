@@ -36,6 +36,7 @@ module store_queue
         //Queue status
         output logic sq_empty,
         output logic sq_full,
+        output logic no_released_stores_pending,
 
         //Request interface
         input lsq_entry_t lsq,
@@ -218,6 +219,8 @@ module store_queue
     always_ff @ (posedge clk) begin
         released <= (released | newly_released) & ~new_request_one_hot;
     end
+
+    assign no_released_stores_pending = ~|(valid & released);
 
     ////////////////////////////////////////////////////
     //Store Data

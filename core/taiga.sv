@@ -170,6 +170,7 @@ module taiga
     logic [$clog2(NUM_EXCEPTION_SOURCES)-1:0] current_exception_unit;
     gc_outputs_t gc;
     logic sq_empty;
+    logic no_released_stores_pending;
     logic load_store_idle;
     logic [LOG2_MAX_IDS:0] post_issue_count;
 
@@ -495,6 +496,7 @@ module taiga
         .retire_port_valid(retire_port_valid),
         .exception (exception[LS_EXCEPTION]),
         .sq_empty (sq_empty),
+        .no_released_stores_pending (no_released_stores_pending),
         .load_store_idle (load_store_idle),
         .wb (unit_wb[UNIT_IDS.LS]),
         .tr_load_conflict_delay (tr_load_conflict_delay)
@@ -575,6 +577,7 @@ module taiga
         .interrupt_pending(interrupt_pending),
         .processing_csr(processing_csr),
         .sq_empty (sq_empty),
+        .no_released_stores_pending (no_released_stores_pending),
         .post_issue_count (post_issue_count)
     );
 

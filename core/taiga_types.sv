@@ -267,6 +267,7 @@ package taiga_types;
         logic issue_flush;
         logic fetch_flush;
         logic supress_writeback;
+        logic sq_flush;
         logic tlb_flush;
         logic exception_pending;
         exception_packet_t exception;
