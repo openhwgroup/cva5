@@ -188,7 +188,7 @@ module decode_and_issue
 
     ////////////////////////////////////////////////////
     //Register File Support
-    assign uses_rs1 = opcode_trim inside {JALR_T, BRANCH_T, LOAD_T, STORE_T, ARITH_IMM_T, ARITH_T, AMO_T} | is_csr | is_i2f;
+    assign uses_rs1 = opcode_trim inside {JALR_T, BRANCH_T, LOAD_T, STORE_T, ARITH_IMM_T, ARITH_T, AMO_T, FLD_T, FSD_T} | is_csr | is_i2f;
     assign uses_rs2 = opcode_trim inside {BRANCH_T, ARITH_T, AMO_T};//Stores are exempted due to store forwarding
     assign uses_rd = opcode_trim inside {LUI_T, AUIPC_T, JAL_T, JALR_T, LOAD_T, ARITH_IMM_T, ARITH_T} | is_csr | is_f2i | is_fcmp | is_class; 
     //assign uses_rs1 = !(opcode_trim inside {LUI_T, AUIPC_T, JAL_T, FENCE_T, FMADD_T, FMSUB_T, FNMADD_T, FNMSUB_T} || csr_imm_op || environment_op || (opcode_trim == FOP_T && fn7 != FCVT_DW));
@@ -234,7 +234,6 @@ module decode_and_issue
     //TODO: Consider ways of parameterizing so that any exception generating unit
     //can be automatically added to this expression
     //TODO: Does FPU need to be added here?
-    exception_sources_t decode_exception_unit;
     always_comb begin
         unique case (1'b1)
             unit_needed[UNIT_IDS.LS] : decode_exception_unit = LS_EXCEPTION;
