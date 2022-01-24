@@ -100,10 +100,10 @@ module fp_decode_and_issue
 
     ////////////////////////////////////////////////////
     //Register File Support
-    assign uses_rs1 = !(opcode_trim inside {FLD_T, FSD_T} || is_i2f);
-    assign uses_rs2 = !(opcode_trim inside {FLD_T} || is_f2i || is_i2f || is_class || is_sqrt); //Stores are exempted due to store forwarding
-    assign uses_rs3 = (opcode_trim inside {FMADD_T, FMSUB_T, FNMSUB_T, FNMADD_T});
-    assign uses_rd = decode.wb2_float;// 
+    assign uses_rs1 = opcode_trim inside {FMADD_T, FMSUB_T, FNMSUB_T, FNMADD_T} | (opcode_trim == FOP_T & fn7 inside {FADD, FSUB, FMUL, FDIV, FSQRT, FSIGN_INJECTION, FMIN_MAX, FCMP, FCVT_SD, FCLASS, FCVT_WD});
+    assign uses_rs2 = opcode_trim inside {FLD_T, FMADD_T, FMSUB_T, FNMSUB_T, FNMADD_T} | (opcode_trim == FOP_T & fn7 inside {FADD, FSUB, FMUL, FDIV, FSIGN_INJECTION, FMIN_MAX, FCMP});
+    assign uses_rs3 = opcode_trim inside {FMADD_T, FMSUB_T, FNMSUB_T, FNMADD_T};
+    assign uses_rd = decode.wb2_float;
 
     ////////////////////////////////////////////////////
     //Unit Determination
