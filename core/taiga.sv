@@ -371,6 +371,7 @@ module taiga
         .decode_advance (decode_advance),
         .decode (decode_rename_interface),
         .issue (issue), //packet
+        .instruction_issued_with_rd (instruction_issued_with_rd),
         .retire (retire) //packet
     );
 
