@@ -239,13 +239,15 @@ module gc_unit
         exception_ack <= gc.exception.valid;
     end
 
+    assign interrupt_taken = interrupt_pending & post_issue_idle;
+
     //PC determination (trap, flush or return)
     //Two cycles: on first cycle the processor front end is flushed,
     //on the second cycle the new PC is fetched
     always_ff @ (posedge clk) begin
-        gc_pc_override <= issue.new_request | gc.exception.valid | (next_state == INIT_CLEAR_STATE);
+        gc_pc_override <= issue.new_request | gc.exception.valid | interrupt_taken | (next_state == INIT_CLEAR_STATE);
         gc_pc <=
-                        gc.exception.valid ? exception_target_pc :
+                        (gc.exception.valid | interrupt_taken) ? exception_target_pc :
                         (gc_inputs.is_mret | gc_inputs.is_sret) ? epc :
                         gc_inputs.pc_p4; //ifence
     end
