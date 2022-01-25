@@ -170,7 +170,7 @@ module decode_and_issue
     assign unit_needed[UNIT_IDS.ALU] = (opcode_trim inside {ARITH_T, ARITH_IMM_T, AUIPC_T, LUI_T, JAL_T, JALR_T}) & ~mult_div_op;
     assign unit_needed[UNIT_IDS.LS] = opcode_trim inside {LOAD_T, STORE_T, AMO_T} | is_fence;
     assign unit_needed[UNIT_IDS.CSR] = is_csr;
-    assign unit_needed[UNIT_IDS.IEC] = (opcode_trim inside {SYSTEM_T} & ~is_csr) | is_ifence;
+    assign unit_needed[UNIT_IDS.IEC] = (opcode_trim inside {SYSTEM_T} & ~is_csr & CONFIG.INCLUDE_M_MODE) | is_ifence;
 
     assign mult_div_op = (opcode_trim == ARITH_T) && decode.instruction[25];
     generate if (CONFIG.INCLUDE_MUL)
@@ -200,17 +200,6 @@ module decode_and_issue
     assign decode_rs_wb_group[RS1] = renamer.rs_wb_group[RS1];
     assign decode_rs_wb_group[RS2] = renamer.rs_wb_group[RS2];
 
-    //TODO: Consider ways of parameterizing so that any exception generating unit
-    //can be automatically added to this expression
-    always_comb begin
-        unique case (1'b1)
-            unit_needed[UNIT_IDS.LS] : decode_exception_unit = LS_EXCEPTION;
-            unit_needed[UNIT_IDS.BR] : decode_exception_unit = BR_EXCEPTION;
-            default : decode_exception_unit = PRE_ISSUE_EXCEPTION;
-        endcase
-        if (illegal_instruction_pattern)
-            decode_exception_unit = PRE_ISSUE_EXCEPTION;
-    end
     ////////////////////////////////////////////////////
     //Issue
     logic [REGFILE_READ_PORTS-1:0][$clog2(CONFIG.NUM_WB_GROUPS)-1:0] issue_rs_wb_group;
@@ -586,6 +575,18 @@ module decode_and_issue
             illegal_instruction_pattern_r <= 0;
         else if (issue_stage_ready)
             illegal_instruction_pattern_r <= illegal_instruction_pattern;
+    end
+
+    //TODO: Consider ways of parameterizing so that any exception generating unit
+    //can be automatically added to this expression
+    always_comb begin
+        unique case (1'b1)
+            unit_needed[UNIT_IDS.LS] : decode_exception_unit = LS_EXCEPTION;
+            unit_needed[UNIT_IDS.BR] : decode_exception_unit = BR_EXCEPTION;
+            default : decode_exception_unit = PRE_ISSUE_EXCEPTION;
+        endcase
+        if (illegal_instruction_pattern)
+            decode_exception_unit = PRE_ISSUE_EXCEPTION;
     end
 
     ////////////////////////////////////////////////////

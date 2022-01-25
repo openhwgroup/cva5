@@ -153,15 +153,15 @@ module gc_unit
         gc_supress_writeback <= next_state inside {PRE_CLEAR_STATE, INIT_CLEAR_STATE, ISSUE_DISCARD};
         gc_init_clear <= next_state inside {INIT_CLEAR_STATE};
         gc_tlb_flush <= next_state inside {INIT_CLEAR_STATE, TLB_CLEAR_STATE};
-        gc_sq_flush <= state inside {ISSUE_DISCARD} && next_state inside {IDLE_STATE};
+        gc_sq_flush <= state inside {ISSUE_DISCARD} & next_state inside {IDLE_STATE};
     end
     //work-around for verilator BLKANDNBLK signal optimizations
     assign gc.fetch_hold = gc_fetch_hold;
     assign gc.issue_hold = gc_issue_hold;
-    assign gc.supress_writeback = gc_supress_writeback;
+    assign gc.supress_writeback = CONFIG.INCLUDE_M_MODE & gc_supress_writeback;
     assign gc.init_clear = gc_init_clear;
-    assign gc.tlb_flush = gc_tlb_flush;
-    assign gc.sq_flush = gc_sq_flush;
+    assign gc.tlb_flush = CONFIG.INCLUDE_S_MODE & gc_tlb_flush;
+    assign gc.sq_flush = CONFIG.INCLUDE_M_MODE & gc_sq_flush;
     ////////////////////////////////////////////////////
     //GC State Machine
     always @(posedge clk) begin
@@ -205,9 +205,9 @@ module gc_unit
     assign init_clear_done = state_counter[$clog2(INIT_CLEAR_DEPTH)];
     assign tlb_clear_done = state_counter[$clog2(TLB_CLEAR_DEPTH)];
 
-
     ////////////////////////////////////////////////////
     //Exception handling
+    generate if (CONFIG.INCLUDE_M_MODE) begin
 
     //Re-assigning interface inputs to array types so that they can be dynamically indexed
     logic [NUM_EXCEPTION_SOURCES-1:0] exception_pending;
@@ -215,15 +215,14 @@ module gc_unit
     id_t [NUM_EXCEPTION_SOURCES-1:0] exception_id;
     logic [NUM_EXCEPTION_SOURCES-1:0][31:0] exception_tval;
     logic exception_ack;
-    generate
-        for (genvar i = 0; i < NUM_EXCEPTION_SOURCES; i++) begin
-            assign exception_pending[i] = exception[i].valid;
-            assign exception_code[i] = exception[i].code;
-            assign exception_id[i] = exception[i].id;
-            assign exception_tval[i] = exception[i].tval;
-            assign exception[i].ack = exception_ack;
-        end
-    endgenerate
+    
+    for (genvar i = 0; i < NUM_EXCEPTION_SOURCES; i++) begin
+        assign exception_pending[i] = exception[i].valid;
+        assign exception_code[i] = exception[i].code;
+        assign exception_id[i] = exception[i].id;
+        assign exception_tval[i] = exception[i].tval;
+        assign exception[i].ack = exception_ack;
+    end
     
     //Exception valid when the oldest instruction is a valid ID.  This is done with a level of indirection (through the exception unit table)
     //for better scalability, avoiding the need to compare against all exception sources.
@@ -241,9 +240,13 @@ module gc_unit
 
     assign interrupt_taken = interrupt_pending & post_issue_idle;
 
+    end endgenerate
+
     //PC determination (trap, flush or return)
     //Two cycles: on first cycle the processor front end is flushed,
     //on the second cycle the new PC is fetched
+    generate if (CONFIG.INCLUDE_M_MODE || CONFIG.INCLUDE_IFENCE) begin
+
     always_ff @ (posedge clk) begin
         gc_pc_override <= issue.new_request | gc.exception.valid | interrupt_taken | (next_state == INIT_CLEAR_STATE);
         gc_pc <=
@@ -255,6 +258,7 @@ module gc_unit
     assign gc.pc_override = gc_pc_override;
     assign gc.pc = gc_pc;
 
+    end endgenerate
     ////////////////////////////////////////////////////
     //Decode / Write-back Handshaking
     //CSR reads are passed through the Load-Store unit
