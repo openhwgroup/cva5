@@ -191,9 +191,6 @@ module decode_and_issue
     assign uses_rs1 = opcode_trim inside {JALR_T, BRANCH_T, LOAD_T, STORE_T, ARITH_IMM_T, ARITH_T, AMO_T, FLD_T, FSD_T} | is_csr | is_i2f;
     assign uses_rs2 = opcode_trim inside {BRANCH_T, ARITH_T, AMO_T};//Stores are exempted due to store forwarding
     assign uses_rd = opcode_trim inside {LUI_T, AUIPC_T, JAL_T, JALR_T, LOAD_T, ARITH_IMM_T, ARITH_T} | is_csr | is_f2i | is_fcmp | is_class; 
-    //assign uses_rs1 = !(opcode_trim inside {LUI_T, AUIPC_T, JAL_T, FENCE_T, FMADD_T, FMSUB_T, FNMADD_T, FNMSUB_T} || csr_imm_op || environment_op || (opcode_trim == FOP_T && fn7 != FCVT_DW));
-    //assign uses_rs2 = opcode_trim inside {BRANCH_T, ARITH_T, AMO_T};//Stores are exempted due to store forwarding
-    //assign uses_rd = (!(opcode_trim inside {BRANCH_T, STORE_T, FENCE_T, FSD_T} || environment_op) || is_f2i || is_class || is_fcmp) & ~decode.wb2_float;
 
     ////////////////////////////////////////////////////
     //Unit Determination
@@ -230,10 +227,11 @@ module decode_and_issue
     assign decode_phys_rs_addr[RS2] = renamer.phys_rs_addr[RS2];
     assign decode_rs_wb_group[RS1] = renamer.rs_wb_group[RS1];
     assign decode_rs_wb_group[RS2] = renamer.rs_wb_group[RS2];
-
+    
     //TODO: Consider ways of parameterizing so that any exception generating unit
     //can be automatically added to this expression
     //TODO: Does FPU need to be added here?
+    exception_sources_t decode_exception_unit;
     always_comb begin
         unique case (1'b1)
             unit_needed[UNIT_IDS.LS] : decode_exception_unit = LS_EXCEPTION;
@@ -295,9 +293,9 @@ module decode_and_issue
     assign operands_ready = (~rs1_conflict) & (~rs2_conflict);
 
     assign issue_ready = unit_needed_issue_stage & unit_ready;
+
     //TODO: may need to fix operand_ready logic to avoid waiting for unneeded register conflicts
     assign issue_valid = issue.stage_valid & operands_ready & fp_operands_ready & ~gc.issue_hold & ~pre_issue_exception_pending;
-
     assign issue_to = {TOTAL_NUM_UNITS{issue_valid & ~gc.fetch_flush}} & issue_ready;
 
     assign instruction_issued = issue_valid & ~gc.fetch_flush & |issue_ready;
@@ -423,7 +421,7 @@ module decode_and_issue
     (* ramstyle = "MLAB, no_rw_check" *) id_t rd_to_id_table [32];
     always_ff @ (posedge clk) begin
         if (instruction_issued_with_rd | (fp_instruction_issued_with_rd & ~issue.wb2_float)) //INT instructions OR FP instructions that writes back to INT regfile
-            rd_to_id_table[issue.rd_addr] <= issue.id;
+           rd_to_id_table[issue.rd_addr] <= issue.id;
     end
 
     assign ls_inputs.offset = ls_offset;
@@ -435,6 +433,15 @@ module decode_and_issue
     assign ls_inputs.rs2 = rf.data[RS2];
     assign ls_inputs.forwarded_store = rf.inuse[RS2];
     assign ls_inputs.store_forward_id = issue.is_float ? fp_store_forward_id : rd_to_id_table[issue.rs_addr[RS2]];
+
+    //FPU support
+    assign ls_inputs.is_float = issue.is_float;
+    assign ls_inputs.fp_rs2 = fp_rf.data[RS2];
+    assign ls_inputs.fp_forwarded_store = fp_rf.inuse[RS2];
+
+    ls_input_assertion:
+        assert property (@(posedge clk) disable iff (rst) instruction_issued  & issue_to[UNIT_IDS.LS] &ls_inputs.store|-> !(issue.fp_uses_rd | issue.uses_rd))
+        else $error("store issued with uses_rd");
 
     //FPU support
     assign ls_inputs.is_float = issue.is_float;
@@ -727,6 +734,14 @@ module decode_and_issue
 
     ////////////////////////////////////////////////////
     //Assertions
+
+    instruction_issued_with_rd_assertion:
+        assert property (@(posedge clk) disable iff (rst) instruction_issued |-> ~(instruction_issued_with_rd & fp_instruction_issued_with_rd))
+        else $error("both instruction_issued_with_rd set");
+
+    decode_uses_rd_assertion:
+        assert property (@(posedge clk) disable iff (rst) decode_advance |-> ~(decode_uses_rd & fp_decode_uses_rd))
+        else $error("both decode uses rd are asserted");
 
     instruction_issued_with_rd_assertion:
         assert property (@(posedge clk) disable iff (rst) instruction_issued |-> ~(instruction_issued_with_rd & fp_instruction_issued_with_rd))

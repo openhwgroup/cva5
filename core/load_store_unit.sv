@@ -429,6 +429,14 @@ endgenerate
     assign fp_wb.done = (load_complete | load_exception_complete) & stage2_attr.is_float;
     assign fp_wb.id = load_exception_complete ? exception.id : stage2_attr.id;
 
+    //FPU support
+    logic [ARITH_FLEN-1:0] fp_rd;
+    assign fp_rd = fp_final_load_data[SOFTWARE_FLEN-1-:ARITH_FLEN];
+    assign fp_wb.rd = fp_rd;
+    assign fp_wb.hidden = |fp_rd[ARITH_FLEN-1-:CONFIG.FP.EXPO_WIDTH];
+    assign fp_wb.done = load_complete & stage2_attr.is_float;
+    assign fp_wb.id = stage2_attr.id; 
+
     ////////////////////////////////////////////////////
     //End of Implementation
     ////////////////////////////////////////////////////
