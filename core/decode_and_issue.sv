@@ -154,7 +154,7 @@ module decode_and_issue
 
     assign is_csr = (opcode_trim == SYSTEM_T) & (fn3 != 0);
     assign is_fence = (opcode_trim == FENCE_T) & ~fn3[0];
-    assign is_ifence = (opcode_trim == FENCE_T) & fn3[0];
+    assign is_ifence = CONFIG.INCLUDE_IFENCE & (opcode_trim == FENCE_T) & fn3[0];
     assign csr_imm_op = (opcode_trim == SYSTEM_T) & fn3[2];
     assign environment_op = (opcode_trim == SYSTEM_T) & (fn3 == 0);
 
@@ -315,8 +315,7 @@ module decode_and_issue
 
     //Constant ALU:
     //  provides LUI, AUIPC, JAL, JALR results for ALU
-    //  provides PC+4 for BRANCH unit
-    // TODO: ifence in GC unit, others?
+    //  provides PC+4 for BRANCH unit and ifence in GC unit
     always_ff @(posedge clk) begin
         if (issue_stage_ready) begin
             constant_alu <= ((opcode_trim inside {LUI_T}) ? '0 : decode.pc) + ((opcode_trim inside {LUI_T, AUIPC_T}) ? {decode.instruction[31:12], 12'b0} : 4); 
