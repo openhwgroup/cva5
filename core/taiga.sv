@@ -332,10 +332,7 @@ module taiga
         .decode_uses_rd (decode_uses_rd),
         .decode_rd_addr (decode_rd_addr),
         .decode_phys_rd_addr (decode_phys_rd_addr),
-<<<<<<< HEAD
         .decode_exception_unit (decode_exception_unit),
-=======
->>>>>>> d0aaf65378d022f47410e899d1484664ea843f6e
         .fp_decode_phys_rd_addr (fp_decode_phys_rd_addr),
         .issue (issue),
         .instruction_issued (instruction_issued),

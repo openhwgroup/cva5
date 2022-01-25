@@ -231,7 +231,6 @@ module decode_and_issue
     //TODO: Consider ways of parameterizing so that any exception generating unit
     //can be automatically added to this expression
     //TODO: Does FPU need to be added here?
-    exception_sources_t decode_exception_unit;
     always_comb begin
         unique case (1'b1)
             unit_needed[UNIT_IDS.LS] : decode_exception_unit = LS_EXCEPTION;
@@ -438,10 +437,6 @@ module decode_and_issue
     assign ls_inputs.is_float = issue.is_float;
     assign ls_inputs.fp_rs2 = fp_rf.data[RS2];
     assign ls_inputs.fp_forwarded_store = fp_rf.inuse[RS2];
-
-    ls_input_assertion:
-        assert property (@(posedge clk) disable iff (rst) instruction_issued  & issue_to[UNIT_IDS.LS] &ls_inputs.store|-> !(issue.fp_uses_rd | issue.uses_rd))
-        else $error("store issued with uses_rd");
 
     //FPU support
     assign ls_inputs.is_float = issue.is_float;
@@ -734,14 +729,6 @@ module decode_and_issue
 
     ////////////////////////////////////////////////////
     //Assertions
-
-    instruction_issued_with_rd_assertion:
-        assert property (@(posedge clk) disable iff (rst) instruction_issued |-> ~(instruction_issued_with_rd & fp_instruction_issued_with_rd))
-        else $error("both instruction_issued_with_rd set");
-
-    decode_uses_rd_assertion:
-        assert property (@(posedge clk) disable iff (rst) decode_advance |-> ~(decode_uses_rd & fp_decode_uses_rd))
-        else $error("both decode uses rd are asserted");
 
     instruction_issued_with_rd_assertion:
         assert property (@(posedge clk) disable iff (rst) instruction_issued |-> ~(instruction_issued_with_rd & fp_instruction_issued_with_rd))
