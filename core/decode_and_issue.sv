@@ -408,6 +408,9 @@ module decode_and_issue
     logic is_load_r;
     logic is_store_r;
     logic is_fence_r;
+
+    //FPU support
+    id_t fp_store_forward_id;
     always_ff @(posedge clk) begin
         if (issue_stage_ready) begin
             ls_offset <= opcode[5] ? {decode.instruction[31:25], decode.instruction[11:7]} : decode.instruction[31:20];
@@ -419,7 +422,7 @@ module decode_and_issue
 
     (* ramstyle = "MLAB, no_rw_check" *) id_t rd_to_id_table [32];
     always_ff @ (posedge clk) begin
-        if (instruction_issued_with_rd | fp_instruction_issued_with_rd)
+        if (instruction_issued_with_rd | (fp_instruction_issued_with_rd & ~issue.wb2_float)) //INT instructions OR FP instructions that writes back to INT regfile
             rd_to_id_table[issue.rd_addr] <= issue.id;
     end
 
@@ -431,7 +434,7 @@ module decode_and_issue
     assign ls_inputs.rs1 = rf.data[RS1];
     assign ls_inputs.rs2 = rf.data[RS2];
     assign ls_inputs.forwarded_store = rf.inuse[RS2];
-    assign ls_inputs.store_forward_id = rd_to_id_table[issue.rs_addr[RS2]];
+    assign ls_inputs.store_forward_id = issue.is_float ? fp_store_forward_id : rd_to_id_table[issue.rs_addr[RS2]];
 
     //FPU support
     assign ls_inputs.is_float = issue.is_float;
@@ -645,6 +648,7 @@ module decode_and_issue
             .fp_rf (fp_rf),
             .dyn_rm (dyn_rm),
             .fp_operands_ready (fp_operands_ready),
+            .fp_store_forward_id (fp_store_forward_id),
             .fp_madd_inputs (fp_madd_inputs),
             .fp_cmp_inputs (fp_cmp_inputs),
             .fp_div_sqrt_inputs (fp_div_sqrt_inputs),

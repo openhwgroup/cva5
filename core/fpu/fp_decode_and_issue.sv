@@ -57,6 +57,7 @@ module fp_decode_and_issue
         output logic fp_operands_ready,
         input logic [2:0] dyn_rm,
 
+        output id_t fp_store_forward_id,
         output fp_madd_inputs_t fp_madd_inputs,
         output fp_cmp_inputs_t fp_cmp_inputs,
         output fp_div_sqrt_inputs_t fp_div_sqrt_inputs,
@@ -225,6 +226,14 @@ module fp_decode_and_issue
         .is_zero (is_zero[RS3]),
         .hidden (hidden_bit[RS3])
       );
+
+    //FP store forwarding
+    (* ramstyle = "MLAB, no_rw_check" *) id_t rd_to_id_table [32]; //separate table for fp id tracking to avoid overwriting
+    always_ff @ (posedge clk) begin
+        if (fp_instruction_issued_with_rd & issue.wb2_float)
+            rd_to_id_table[issue.rd_addr] <= issue.id;
+    end
+    assign fp_store_forward_id = rd_to_id_table[issue.rs_addr[RS2]];
 
     //FMADD inputs
     logic is_fma, is_fadd, is_fmul;
