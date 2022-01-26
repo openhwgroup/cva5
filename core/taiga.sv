@@ -60,7 +60,7 @@ module taiga
     //Units with writeback
     localparam int unsigned ALU_UNIT_ID = 32'd0;
     localparam int unsigned LS_UNIT_ID = 32'd1;
-    localparam int unsigned CSR_UNIT_ID = 32'd2;
+    localparam int unsigned CSR_UNIT_ID = LS_UNIT_ID + int'(CONFIG.INCLUDE_CSRS);
     localparam int unsigned MUL_UNIT_ID = CSR_UNIT_ID + int'(CONFIG.INCLUDE_MUL);
     localparam int unsigned DIV_UNIT_ID = MUL_UNIT_ID + int'(CONFIG.INCLUDE_DIV);
     //Non-writeback units
@@ -84,7 +84,7 @@ module taiga
     //Writeback Port Assignment
     //
     localparam int unsigned NUM_WB_UNITS_GROUP_1 = 1;//ALU
-    localparam int unsigned NUM_WB_UNITS_GROUP_2 = 2 + int'(CONFIG.INCLUDE_MUL) + int'(CONFIG.INCLUDE_DIV);//LS + CSR
+    localparam int unsigned NUM_WB_UNITS_GROUP_2 = 1 + int'(CONFIG.INCLUDE_CSRS) + int'(CONFIG.INCLUDE_MUL) + int'(CONFIG.INCLUDE_DIV);//LS
     localparam int unsigned NUM_WB_UNITS = NUM_WB_UNITS_GROUP_1 + NUM_WB_UNITS_GROUP_2;
 
     ////////////////////////////////////////////////////
@@ -531,31 +531,33 @@ module taiga
     end
     endgenerate
 
-    csr_unit # (.CONFIG(CONFIG))
-    csr_unit_block (
-        .clk(clk),
-        .rst(rst),
-        .csr_inputs (csr_inputs),
-        .issue (unit_issue[UNIT_IDS.CSR]), 
-        .wb (unit_wb[UNIT_IDS.CSR]),
-        .current_privilege(current_privilege),
-        .interrupt_taken(interrupt_taken),
-        .interrupt_pending(interrupt_pending),
-        .processing_csr(processing_csr),
-        .tlb_on(tlb_on),
-        .asid(asid),
-        .immu(immu),
-        .dmmu(dmmu),
-        .exception(gc.exception),
-        .exception_target_pc (exception_target_pc),
-        .mret(mret),
-        .sret(sret),
-        .epc(epc),
-        .retire(retire),
-        .retire_ids(retire_ids),
-        .s_interrupt(s_interrupt),
-        .m_interrupt(m_interrupt)
-    );
+    generate if (CONFIG.INCLUDE_CSRS)
+        csr_unit # (.CONFIG(CONFIG))
+        csr_unit_block (
+            .clk(clk),
+            .rst(rst),
+            .csr_inputs (csr_inputs),
+            .issue (unit_issue[UNIT_IDS.CSR]), 
+            .wb (unit_wb[UNIT_IDS.CSR]),
+            .current_privilege(current_privilege),
+            .interrupt_taken(interrupt_taken),
+            .interrupt_pending(interrupt_pending),
+            .processing_csr(processing_csr),
+            .tlb_on(tlb_on),
+            .asid(asid),
+            .immu(immu),
+            .dmmu(dmmu),
+            .exception(gc.exception),
+            .exception_target_pc (exception_target_pc),
+            .mret(mret),
+            .sret(sret),
+            .epc(epc),
+            .retire(retire),
+            .retire_ids(retire_ids),
+            .s_interrupt(s_interrupt),
+            .m_interrupt(m_interrupt)
+        );
+    endgenerate
 
     gc_unit #(.CONFIG(CONFIG))
     gc_unit_block (

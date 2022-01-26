@@ -152,7 +152,7 @@ module decode_and_issue
     assign rs2_addr = decode.instruction[24:20];
     assign rd_addr = decode.instruction[11:7];
 
-    assign is_csr = (opcode_trim == SYSTEM_T) & (fn3 != 0);
+    assign is_csr = CONFIG.INCLUDE_CSRS & (opcode_trim == SYSTEM_T) & (fn3 != 0);
     assign is_fence = (opcode_trim == FENCE_T) & ~fn3[0];
     assign is_ifence = CONFIG.INCLUDE_IFENCE & (opcode_trim == FENCE_T) & fn3[0];
     assign csr_imm_op = (opcode_trim == SYSTEM_T) & fn3[2];
@@ -169,7 +169,9 @@ module decode_and_issue
     assign unit_needed[UNIT_IDS.BR] = opcode_trim inside {BRANCH_T, JAL_T, JALR_T};
     assign unit_needed[UNIT_IDS.ALU] = (opcode_trim inside {ARITH_T, ARITH_IMM_T, AUIPC_T, LUI_T, JAL_T, JALR_T}) & ~mult_div_op;
     assign unit_needed[UNIT_IDS.LS] = opcode_trim inside {LOAD_T, STORE_T, AMO_T} | is_fence;
-    assign unit_needed[UNIT_IDS.CSR] = is_csr;
+    generate if (CONFIG.INCLUDE_CSRS)
+        assign unit_needed[UNIT_IDS.CSR] = is_csr;
+    endgenerate
     assign unit_needed[UNIT_IDS.IEC] = (opcode_trim inside {SYSTEM_T} & ~is_csr & CONFIG.INCLUDE_M_MODE) | is_ifence;
 
     assign mult_div_op = (opcode_trim == ARITH_T) && decode.instruction[25];
@@ -503,12 +505,13 @@ module decode_and_issue
 
     ////////////////////////////////////////////////////
     //CSR unit inputs
-    assign csr_inputs.addr = issue.instruction[31:20];
-    assign csr_inputs.op = issue.fn3[1:0];
-    assign csr_inputs.data = issue.fn3[2] ? {27'b0, issue.rs_addr[RS1]} : rf.data[RS1];
-    assign csr_inputs.reads = ~((issue.fn3[1:0] == CSR_RW) && (issue.rd_addr == 0));
-    assign csr_inputs.writes = ~((issue.fn3[1:0] == CSR_RC) && (issue.rs_addr[RS1] == 0));
-
+    generate if (CONFIG.INCLUDE_CSRS) begin
+        assign csr_inputs.addr = issue.instruction[31:20];
+        assign csr_inputs.op = issue.fn3[1:0];
+        assign csr_inputs.data = issue.fn3[2] ? {27'b0, issue.rs_addr[RS1]} : rf.data[RS1];
+        assign csr_inputs.reads = ~((issue.fn3[1:0] == CSR_RW) && (issue.rd_addr == 0));
+        assign csr_inputs.writes = ~((issue.fn3[1:0] == CSR_RC) && (issue.rs_addr[RS1] == 0));
+    end endgenerate
     ////////////////////////////////////////////////////
     //Mul unit inputs
     generate if (CONFIG.INCLUDE_MUL) begin

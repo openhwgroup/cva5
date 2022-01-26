@@ -227,6 +227,8 @@ generate if (CONFIG.INCLUDE_M_MODE) begin
     mstatus_t mstatus_return;
     mstatus_t mstatus_new;
 
+    logic [ECODE_W-1:0] interrupt_cause_r;
+
     //Interrupt and Exception Delegation
     //Can delegate to supervisor if currently in supervisor or user modes
     always_comb begin
@@ -467,7 +469,6 @@ generate if (CONFIG.INCLUDE_M_MODE) begin
     mip_t mip_cause;
     logic [5:0] mip_priority_vector;
     logic [2:0] mip_cause_sel;
-    logic [ECODE_W-1:0] interrupt_cause_r;
 
     const logic [ECODE_W-1:0] interruput_code_table [8] = '{ 0, 0, 
         M_EXTERNAL_INTERRUPT, M_TIMER_INTERRUPT, M_SOFTWARE_INTERRUPT,

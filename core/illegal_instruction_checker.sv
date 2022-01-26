@@ -197,7 +197,7 @@ module  illegal_instruction_checker
 
     assign illegal_instruction = ~(
         base_legal |
-        csr_legal |
+        (CONFIG.INCLUDE_CSRS & csr_legal) |
         (CONFIG.INCLUDE_MUL & mul_legal) |
         (CONFIG.INCLUDE_DIV & div_legal) |
         (CONFIG.INCLUDE_AMO & amo_legal) |
