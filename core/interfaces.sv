@@ -252,8 +252,8 @@ interface ls_sub_unit_interface #(parameter bit [31:0] BASE_ADDR = 32'h00000000,
     //find the number of bits needed to uniquely identify this memory range.
     //Assumption: address range is aligned to its size
     function automatic int unsigned bit_range ();
-        int unsigned i = 0;
-        for(; i < 32; i++) begin
+        int unsigned i;
+        for(i=0; i < 32; i++) begin
             if (BASE_ADDR[i] == UPPER_BOUND[i])
                 break;
         end
@@ -286,8 +286,8 @@ interface fetch_sub_unit_interface #(parameter bit [31:0] BASE_ADDR = 32'h000000
     //find the number of bits needed to uniquely identify this memory range.
     //Assumption: address range is aligned to its size
     function automatic int unsigned bit_range ();
-        int unsigned i = 0;
-        for(; i < 32; i++) begin
+        int unsigned i;
+        for(i=0; i < 32; i++) begin
             if (BASE_ADDR[i] == UPPER_BOUND[i])
                 break;
         end
