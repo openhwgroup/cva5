@@ -651,10 +651,10 @@ module decode_and_issue
     ////////////////////////////////////////////////////
     //Trace Interface
     generate if (ENABLE_TRACE_INTERFACE) begin
-        assign tr_operand_stall = issue.stage_valid & ~gc.fetch_flush & ~gc.issue_hold & ~operands_ready & |issue_ready;
+        assign tr_operand_stall = issue.stage_valid & ~gc.fetch_flush & ~gc.issue_hold & ~pre_issue_exception_pending & ~operands_ready & |issue_ready;
         assign tr_unit_stall = issue_valid & ~gc.fetch_flush & ~|issue_ready;
         assign tr_no_id_stall = (~issue.stage_valid & ~pc_id_available & ~gc.fetch_flush); //All instructions in execution pipeline
-        assign tr_no_instruction_stall = (~tr_no_id_stall & ~issue.stage_valid) | gc.fetch_flush;
+        assign tr_no_instruction_stall = (pc_id_available & ~issue.stage_valid) | gc.fetch_flush;
         assign tr_other_stall = issue.stage_valid & ~instruction_issued & ~(tr_operand_stall | tr_unit_stall | tr_no_id_stall | tr_no_instruction_stall);
         assign tr_branch_operand_stall = tr_operand_stall & unit_needed_issue_stage[UNIT_IDS.BR];
         assign tr_alu_operand_stall = tr_operand_stall & unit_needed_issue_stage[UNIT_IDS.ALU] & ~unit_needed_issue_stage[UNIT_IDS.BR];
@@ -663,15 +663,13 @@ module decode_and_issue
 
         //Instruction Mix
         always_ff @(posedge clk) begin
-            if (issue_stage_ready) begin
-                tr_alu_op <= instruction_issued && (opcode_trim inside {ARITH_T, ARITH_IMM_T, AUIPC_T, LUI_T} && ~tr_mul_op && ~tr_div_op);
-                tr_branch_or_jump_op <= instruction_issued && (opcode_trim inside {JAL_T, JALR_T, BRANCH_T});
-                tr_load_op <= instruction_issued && (opcode_trim inside {LOAD_T, AMO_T});
-                tr_store_op <= instruction_issued && (opcode_trim inside {STORE_T});
-                tr_mul_op <= instruction_issued && unit_needed_issue_stage[UNIT_IDS.MUL];
-                tr_div_op <= instruction_issued && unit_needed_issue_stage[UNIT_IDS.DIV];
-                tr_misc_op <= instruction_issued & ~(tr_alu_op | tr_branch_or_jump_op | tr_load_op | tr_store_op | tr_mul_op | tr_div_op);
-            end
+            tr_alu_op <= issue_to[UNIT_IDS.ALU];
+            tr_branch_or_jump_op <= issue_to[UNIT_IDS.BR];
+            tr_load_op <= issue_to[UNIT_IDS.LS] & is_load_r;
+            tr_store_op <= issue_to[UNIT_IDS.LS] & is_store_r;
+            tr_mul_op <= issue_to[UNIT_IDS.MUL];
+            tr_div_op <= issue_to[UNIT_IDS.DIV];
+            tr_misc_op <= issue_to[UNIT_IDS.CSR] | issue_to[UNIT_IDS.IEC];
         end
 
         assign tr_instruction_issued_dec = instruction_issued;
