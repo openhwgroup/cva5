@@ -499,7 +499,7 @@ module decode_and_issue
     assign gc_inputs.pc_p4 = constant_alu;
     assign gc_inputs.is_ifence = is_ifence_r;
     assign gc_inputs.is_mret = is_mret_r;
-    assign gc_inputs.is_mret = is_sret_r;
+    assign gc_inputs.is_sret = is_sret_r;
 
     ////////////////////////////////////////////////////
     //CSR unit inputs
