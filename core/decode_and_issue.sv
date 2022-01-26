@@ -182,7 +182,7 @@ module decode_and_issue
 
     assign is_csr = (opcode_trim == SYSTEM_T) & (fn3 != 0);
     assign is_fence = (opcode_trim == FENCE_T) & ~fn3[0];
-    assign is_ifence = (opcode_trim == FENCE_T) & fn3[0];
+    assign is_ifence = CONFIG.INCLUDE_IFENCE & (opcode_trim == FENCE_T) & fn3[0];
     assign csr_imm_op = (opcode_trim == SYSTEM_T) & fn3[2];
     assign environment_op = (opcode_trim == SYSTEM_T) & (fn3 == 0);
 
@@ -198,7 +198,7 @@ module decode_and_issue
     assign unit_needed[UNIT_IDS.ALU] = (opcode_trim inside {ARITH_T, ARITH_IMM_T, AUIPC_T, LUI_T, JAL_T, JALR_T}) & ~mult_div_op;
     assign unit_needed[UNIT_IDS.LS] = opcode_trim inside {LOAD_T, STORE_T, AMO_T, FLD_T, FSD_T};
     assign unit_needed[UNIT_IDS.CSR] = is_csr;
-    assign unit_needed[UNIT_IDS.IEC] = (opcode_trim inside {SYSTEM_T} & ~is_csr) | is_ifence;
+    assign unit_needed[UNIT_IDS.IEC] = (opcode_trim inside {SYSTEM_T} & ~is_csr & CONFIG.INCLUDE_M_MODE) | is_ifence;
 
     assign mult_div_op = (opcode_trim == ARITH_T) && decode.instruction[25];
     generate if (CONFIG.INCLUDE_MUL)
@@ -240,6 +240,7 @@ module decode_and_issue
         if (illegal_instruction_pattern)
             decode_exception_unit = PRE_ISSUE_EXCEPTION;
     end
+
     ////////////////////////////////////////////////////
     //Issue
     logic [REGFILE_READ_PORTS-1:0][$clog2(CONFIG.NUM_WB_GROUPS)-1:0] issue_rs_wb_group;
@@ -344,8 +345,7 @@ module decode_and_issue
 
     //Constant ALU:
     //  provides LUI, AUIPC, JAL, JALR results for ALU
-    //  provides PC+4 for BRANCH unit
-    // TODO: ifence in GC unit, others?
+    //  provides PC+4 for BRANCH unit and ifence in GC unit
     always_ff @(posedge clk) begin
         if (issue_stage_ready) begin
             constant_alu <= ((opcode_trim inside {LUI_T}) ? '0 : decode.pc) + ((opcode_trim inside {LUI_T, AUIPC_T}) ? {decode.instruction[31:12], 12'b0} : 4); 
@@ -557,7 +557,7 @@ module decode_and_issue
     assign gc_inputs.pc_p4 = constant_alu;
     assign gc_inputs.is_ifence = is_ifence_r;
     assign gc_inputs.is_mret = is_mret_r;
-    assign gc_inputs.is_mret = is_sret_r;
+    assign gc_inputs.is_sret = is_sret_r;
 
     ////////////////////////////////////////////////////
     //CSR unit inputs
@@ -586,8 +586,8 @@ module decode_and_issue
 
         always_ff @(posedge clk) begin
             if (issue_to[UNIT_IDS.DIV]) begin
-                prev_div_rs1_addr <= rs1_addr;
-                prev_div_rs2_addr <= rs2_addr;
+                prev_div_rs1_addr <= issue.rs_addr[RS1];
+                prev_div_rs2_addr <= issue.rs_addr[RS2];
             end
         end
 
@@ -599,7 +599,7 @@ module decode_and_issue
         set_clr_reg_with_rst #(.SET_OVER_CLR(0), .WIDTH(1), .RST_VALUE(0)) prev_div_result_valid_m (
             .clk, .rst,
             .set(instruction_issued & unit_needed_issue_stage[UNIT_IDS.DIV]),
-            .clr(instruction_issued & issue.uses_rd & div_rs_overwrite),
+            .clr((instruction_issued & issue.uses_rd & div_rs_overwrite) | gc.supress_writeback),
             .result(prev_div_result_valid)
         );
 
@@ -672,6 +672,18 @@ module decode_and_issue
             illegal_instruction_pattern_r <= 0;
         else if (issue_stage_ready)
             illegal_instruction_pattern_r <= illegal_instruction_pattern;
+    end
+
+    //TODO: Consider ways of parameterizing so that any exception generating unit
+    //can be automatically added to this expression
+    always_comb begin
+        unique case (1'b1)
+            unit_needed[UNIT_IDS.LS] : decode_exception_unit = LS_EXCEPTION;
+            unit_needed[UNIT_IDS.BR] : decode_exception_unit = BR_EXCEPTION;
+            default : decode_exception_unit = PRE_ISSUE_EXCEPTION;
+        endcase
+        if (illegal_instruction_pattern)
+            decode_exception_unit = PRE_ISSUE_EXCEPTION;
     end
 
     ////////////////////////////////////////////////////

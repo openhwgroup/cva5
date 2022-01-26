@@ -117,6 +117,7 @@ package taiga_config;
         bit INCLUDE_U_MODE;
         bit INCLUDE_MUL;
         bit INCLUDE_DIV;
+        bit INCLUDE_IFENCE; //local mem operations only
         bit INCLUDE_AMO; //cache operations only
         //CSR constants
         csr_config_t CSRS;
@@ -166,6 +167,7 @@ package taiga_config;
         INCLUDE_U_MODE : 1,
         INCLUDE_MUL : 1,
         INCLUDE_DIV : 1,
+        INCLUDE_IFENCE : 1,
         INCLUDE_AMO : 0,
         //CSR constants
         CSRS : '{

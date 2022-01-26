@@ -153,6 +153,7 @@ module  illegal_instruction_checker
     logic csr_addr_debug;
     logic mul_legal;
     logic div_legal;
+    logic ifence_legal;
     logic amo_legal;
     logic machine_legal;
     logic supervisor_legal;
@@ -167,7 +168,7 @@ module  illegal_instruction_checker
         ADDI, SLLI, SLTI, SLTIU, XORI, SRLI, SRAI, ORI, ANDI,
         ADD, SUB, SLL, SLT, SLTU, XOR, SRL, SRA, OR, AND,
         LB, LH, LW, LBU, LHU, SB, SH, SW,
-        FENCE, FENCE_I
+        FENCE
     };
 
     assign csr_addr_base = instruction[31:20] inside {
@@ -210,6 +211,8 @@ module  illegal_instruction_checker
         DIV, DIVU, REM, REMU
     };
 
+    assign ifence_legal = instruction inside {FENCE_I};
+
     assign amo_legal = instruction inside {
         AMO_ADD, AMO_XOR, AMO_OR, AMO_AND, AMO_MIN, AMO_MAX, AMO_MINU, AMO_MAXU, AMO_SWAP,
         LR, SC
@@ -233,6 +236,7 @@ module  illegal_instruction_checker
         (CONFIG.INCLUDE_MUL & mul_legal) |
         (CONFIG.INCLUDE_DIV & div_legal) |
         (CONFIG.INCLUDE_AMO & amo_legal) |
+        (CONFIG.INCLUDE_IFENCE & ifence_legal) |
         (CONFIG.INCLUDE_M_MODE & machine_legal) |
         (CONFIG.INCLUDE_S_MODE & supervisor_legal) |
         (CONFIG.FP.INCLUDE_FPU & double_legal)
