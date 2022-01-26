@@ -528,8 +528,8 @@ module decode_and_issue
 
         always_ff @(posedge clk) begin
             if (issue_to[UNIT_IDS.DIV]) begin
-                prev_div_rs1_addr <= rs1_addr;
-                prev_div_rs2_addr <= rs2_addr;
+                prev_div_rs1_addr <= issue.rs_addr[RS1];
+                prev_div_rs2_addr <= issue.rs_addr[RS2];
             end
         end
 
