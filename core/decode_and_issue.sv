@@ -520,28 +520,28 @@ module decode_and_issue
     ////////////////////////////////////////////////////
     //Div unit inputs
     generate if (CONFIG.INCLUDE_DIV) begin
-        logic [4:0] prev_div_rs1_addr;
-        logic [4:0] prev_div_rs2_addr;
+        phys_addr_t [1:0] prev_div_rs_addr;
+        logic [1:0] div_rd_match;
         logic prev_div_result_valid;
         logic div_rs_overwrite;
         logic div_op_reuse;
 
         always_ff @(posedge clk) begin
-            if (issue_to[UNIT_IDS.DIV]) begin
-                prev_div_rs1_addr <= issue.rs_addr[RS1];
-                prev_div_rs2_addr <= issue.rs_addr[RS2];
-            end
+            if (issue_to[UNIT_IDS.DIV])
+                prev_div_rs_addr <= issue.phys_rs_addr[1:0];
         end
 
-        assign div_op_reuse = {prev_div_result_valid, prev_div_rs1_addr, prev_div_rs2_addr} == {1'b1, issue.rs_addr[RS1], issue.rs_addr[RS2]};
+        assign div_op_reuse = {prev_div_result_valid, prev_div_rs_addr} == {1'b1, issue.phys_rs_addr[1:0]};
 
-        //If current div operation overwrites an input register OR any other instruction overwrites the last div operations input registers
-        assign div_rs_overwrite = (issue.rd_addr == (unit_needed_issue_stage[UNIT_IDS.DIV] ? issue.rs_addr[RS1] : prev_div_rs1_addr)) || (issue.rd_addr == (unit_needed_issue_stage[UNIT_IDS.DIV] ? issue.rs_addr[RS2] : prev_div_rs2_addr));
+        //Clear if prev div inputs are overwritten by another instruction
+        assign div_rd_match[RS1] = (issue.phys_rd_addr == prev_div_rs_addr[RS1]);
+        assign div_rd_match[RS2] = (issue.phys_rd_addr == prev_div_rs_addr[RS2]);
+        assign div_rs_overwrite = |div_rd_match;
 
-        set_clr_reg_with_rst #(.SET_OVER_CLR(0), .WIDTH(1), .RST_VALUE(0)) prev_div_result_valid_m (
+        set_clr_reg_with_rst #(.SET_OVER_CLR(1), .WIDTH(1), .RST_VALUE(0)) prev_div_result_valid_m (
             .clk, .rst,
             .set(instruction_issued & unit_needed_issue_stage[UNIT_IDS.DIV]),
-            .clr((instruction_issued & issue.uses_rd & div_rs_overwrite) | gc.supress_writeback),
+            .clr((instruction_issued & issue.uses_rd & div_rs_overwrite) | gc.supress_writeback), //No instructions will be issued while gc.supress_writeback is asserted
             .result(prev_div_result_valid)
         );
 
