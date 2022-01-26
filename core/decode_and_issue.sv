@@ -541,7 +541,7 @@ module decode_and_issue
         set_clr_reg_with_rst #(.SET_OVER_CLR(0), .WIDTH(1), .RST_VALUE(0)) prev_div_result_valid_m (
             .clk, .rst,
             .set(instruction_issued & unit_needed_issue_stage[UNIT_IDS.DIV]),
-            .clr(instruction_issued & issue.uses_rd & div_rs_overwrite),
+            .clr((instruction_issued & issue.uses_rd & div_rs_overwrite) | gc.supress_writeback),
             .result(prev_div_result_valid)
         );
 
