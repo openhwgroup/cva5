@@ -326,15 +326,15 @@ interface renamer_interface #(parameter NUM_WB_GROUPS = 2);
     import taiga_types::*;
 
     rs_addr_t rd_addr;
-    rs_addr_t [REGFILE_READ_PORTS-1:0] rs_addr;
+    rs_addr_t rs_addr [REGFILE_READ_PORTS];
     logic [$clog2(NUM_WB_GROUPS)-1:0] rd_wb_group;
     logic uses_rd;
     id_t id;
 
-    phys_addr_t [REGFILE_READ_PORTS-1:0] phys_rs_addr;
+    phys_addr_t phys_rs_addr [REGFILE_READ_PORTS];
     phys_addr_t phys_rd_addr;
 
-    logic [REGFILE_READ_PORTS-1:0][$clog2(NUM_WB_GROUPS)-1:0] rs_wb_group;
+    logic [$clog2(NUM_WB_GROUPS)-1:0] rs_wb_group [REGFILE_READ_PORTS];
 
     modport renamer (
         input rd_addr, rs_addr, rd_wb_group, uses_rd, id,

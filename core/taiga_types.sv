@@ -75,14 +75,9 @@ package taiga_types;
         logic [2:0] fn3;
         logic [6:0] opcode;
 
-        rs_addr_t [REGFILE_READ_PORTS-1:0] rs_addr;
-        phys_addr_t [REGFILE_READ_PORTS-1:0] phys_rs_addr;
-
         rs_addr_t rd_addr;
         phys_addr_t phys_rd_addr;
 
-        logic uses_rs1;
-        logic uses_rs2;
         logic uses_rd;
         logic is_multicycle;
         id_t id;
