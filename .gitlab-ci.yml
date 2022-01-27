@@ -26,11 +26,11 @@ build-toolchain:
       - mv -f taiga taiga-project/
       - cd taiga-project
       - source settings.sh
-      - git clone https://github.com/gcc-mirror/gcc.git --branch releases/gcc-10 --single-branch tool-chain/gcc
-      - git clone https://gitlab.com/sfu-rcl/taiga-picolibc.git --branch master --single-branch tool-chain/picolibc
+      - git clone https://github.com/gcc-mirror/gcc.git --branch releases/gcc-11 --single-branch tool-chain/gcc
+      - git clone https://gitlab.com/sfu-rcl/taiga-picolibc.git --branch main --single-branch tool-chain/picolibc
       - git clone http://git.veripool.org/git/verilator --branch master --single-branch tool-chain/verilator
-      - git clone https://sourceware.org/git/binutils-gdb.git --branch binutils-2_35-branch --single-branch tool-chain/binutils-gdb
-      - git clone https://sourceware.org/git/newlib-cygwin.git --branch master --single-branch tool-chain/newlib-cygwin
+      - git clone https://github.com/bminor/binutils-gdb.git --branch binutils-2_36-branch --single-branch tool-chain/binutils-gdb
+      - git clone https://github.com/mirror/newlib-cygwin.git --branch master --single-branch tool-chain/newlib-cygwin
       - git clone https://gitlab.com/sfu-rcl/taiga-embench.git --branch taiga-picolibc --single-branch benchmarks/embench
       - git clone https://gitlab.com/sfu-rcl/taiga-riscv-compliance.git --branch taiga-sim --single-branch benchmarks/riscv-compliance
       - git clone https://gitlab.com/sfu-rcl/taiga-dhrystone.git --branch master --single-branch benchmarks/taiga-dhrystone
