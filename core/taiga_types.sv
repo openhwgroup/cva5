@@ -178,8 +178,6 @@ package taiga_types;
         logic is_ifence;
         logic is_mret;
         logic is_sret;
-        logic is_exception;
-        exception_code_t code;
     } gc_inputs_t;
 
     typedef struct packed{
@@ -259,9 +257,9 @@ package taiga_types;
         logic init_clear;
         logic fetch_hold;
         logic issue_hold;
-        logic issue_flush;
         logic fetch_flush;
-        logic supress_writeback;
+        logic writeback_supress;
+        logic retire_hold;
         logic sq_flush;
         logic tlb_flush;
         logic exception_pending;

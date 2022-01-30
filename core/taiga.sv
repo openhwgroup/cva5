@@ -156,6 +156,7 @@ module taiga
         //ID freeing
     retire_packet_t retire;
     id_t retire_ids [RETIRE_PORTS];
+    id_t retire_ids_next [RETIRE_PORTS];
     logic retire_port_valid [RETIRE_PORTS];
         //Writeback
     wb_packet_t wb_packet [CONFIG.NUM_WB_GROUPS];
@@ -278,6 +279,7 @@ module taiga
         .commit_packet (commit_packet),
         .retire (retire),
         .retire_ids (retire_ids),
+        .retire_ids_next (retire_ids_next),
         .retire_port_valid(retire_port_valid),
         .post_issue_count(post_issue_count),
         .oldest_pc (oldest_pc),
@@ -576,6 +578,7 @@ module taiga
         .epc(epc),
         .retire (retire),
         .retire_ids (retire_ids),
+        .retire_ids_next (retire_ids_next),
         .interrupt_taken(interrupt_taken),
         .interrupt_pending(interrupt_pending),
         .processing_csr(processing_csr),

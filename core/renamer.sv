@@ -95,7 +95,7 @@ module renamer
     assign free_list.potential_push = (gc.init_clear & ~clear_index[5]) | (retire.valid);
     assign free_list.push = free_list.potential_push;
 
-    assign free_list.data_in = gc.init_clear ? {1'b1, clear_index[4:0]} : (gc.supress_writeback ? inuse_list_output.spec_phys_addr : inuse_list_output.previous_phys_addr);
+    assign free_list.data_in = gc.init_clear ? {1'b1, clear_index[4:0]} : (gc.writeback_supress ? inuse_list_output.spec_phys_addr : inuse_list_output.previous_phys_addr);
     assign free_list.pop = rename_valid;
 
     ////////////////////////////////////////////////////
@@ -138,12 +138,12 @@ module renamer
     rs_addr_t spec_table_write_index;
     rs_addr_t spec_table_write_index_mux [4];
 
-    assign spec_table_update =  rename_valid | rollback | gc.init_clear | (retire.valid & gc.supress_writeback);
+    assign spec_table_update =  rename_valid | rollback | gc.init_clear | (retire.valid & gc.writeback_supress);
 
     logic [1:0] spec_table_sel;
     
     one_hot_to_integer #(.C_WIDTH(4)) spec_table_sel_one_hot_to_int (
-        .one_hot ({gc.init_clear, gc.supress_writeback, rollback, 1'b0}),
+        .one_hot ({gc.init_clear, rollback, (retire.valid & gc.writeback_supress), 1'b0}),
         .int_out (spec_table_sel)
     );
 
@@ -151,14 +151,14 @@ module renamer
     assign spec_table_write_index_mux[0] = decode.rd_addr;
     assign spec_table_next_mux[0].phys_addr = free_list.data_out;
     assign spec_table_next_mux[0].wb_group = decode.rd_wb_group;
+    //gc.writeback_supress
+    assign spec_table_write_index_mux[1] = inuse_list_output.rd_addr;
+    assign spec_table_next_mux[1].phys_addr = inuse_list_output.previous_phys_addr;
+    assign spec_table_next_mux[1].wb_group = inuse_list_output.previous_wb_group;
     //rollback
-    assign spec_table_write_index_mux[1] = issue.rd_addr;
-    assign spec_table_next_mux[1].phys_addr = spec_table_previous_r.phys_addr;
-    assign spec_table_next_mux[1].wb_group = spec_table_previous_r.wb_group;
-    //gc.supress_writeback
-    assign spec_table_write_index_mux[2] = inuse_list_output.rd_addr;
-    assign spec_table_next_mux[2].phys_addr = inuse_list_output.previous_phys_addr;
-    assign spec_table_next_mux[2].wb_group = inuse_list_output.previous_wb_group;
+    assign spec_table_write_index_mux[2] = issue.rd_addr;
+    assign spec_table_next_mux[2].phys_addr = spec_table_previous_r.phys_addr;
+    assign spec_table_next_mux[2].wb_group = spec_table_previous_r.wb_group;
     //gc.init_clear
     assign spec_table_write_index_mux[3] = clear_index[4:0];
     assign spec_table_next_mux[3].phys_addr = {1'b0, clear_index[4:0]};

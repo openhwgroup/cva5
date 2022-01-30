@@ -143,7 +143,7 @@ module decode_and_issue
     //Can move data into issue stage if:
     // there is no instruction currently in the issue stage, or
     // an instruction could issue (issue_flush, issue_hold and whether the instruction is valid are not needed in this check)
-    assign issue_stage_ready = (~issue.stage_valid) | (issue_valid & |issue_ready);
+    assign issue_stage_ready = ((~issue.stage_valid) | (issue_valid & |issue_ready)) & ~gc.issue_hold;
     assign decode_advance = decode.valid & issue_stage_ready;
 
     //Instruction aliases
@@ -540,7 +540,7 @@ module decode_and_issue
         set_clr_reg_with_rst #(.SET_OVER_CLR(1), .WIDTH(1), .RST_VALUE(0)) prev_div_result_valid_m (
             .clk, .rst,
             .set(instruction_issued & unit_needed_issue_stage[UNIT_IDS.DIV]),
-            .clr((instruction_issued & issue.uses_rd & div_rs_overwrite) | gc.supress_writeback), //No instructions will be issued while gc.supress_writeback is asserted
+            .clr((instruction_issued & issue.uses_rd & div_rs_overwrite) | gc.writeback_supress), //No instructions will be issued while gc.writeback_supress is asserted
             .result(prev_div_result_valid)
         );
 

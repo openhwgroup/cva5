@@ -135,8 +135,7 @@ generate if (CONFIG.INCLUDE_M_MODE) begin
     logic new_exception;
     always_comb begin
         case(ls_inputs.fn3)
-            LS_H_fn3 : unaligned_addr = virtual_address[0];
-            L_HU_fn3 : unaligned_addr = virtual_address[0];
+            LS_H_fn3, L_HU_fn3 : unaligned_addr = virtual_address[0];
             LS_W_fn3 : unaligned_addr = |virtual_address[1:0];
             default : unaligned_addr = 0;
         endcase
@@ -413,11 +412,11 @@ endgenerate
         assert property (@(posedge clk) disable iff (rst) load_complete |-> (load_attributes.valid && unit_data_valid[stage2_attr.subunit_id]))
         else $error("Spurious load complete detected!");
 
-    `ifdef ENABLE_SIMULATION_ASSERTIONS
-        invalid_ls_address_assertion:
-            assert property (@(posedge clk) disable iff (rst) (issue_request & ~ls_inputs.fence) |-> |sub_unit_address_match)
-            else $error("invalid L/S address");
-    `endif
+    // `ifdef ENABLE_SIMULATION_ASSERTIONS
+    //     invalid_ls_address_assertion:
+    //         assert property (@(posedge clk) disable iff (rst) (issue_request & ~ls_inputs.fence) |-> |sub_unit_address_match)
+    //         else $error("invalid L/S address");
+    // `endif
 
     ////////////////////////////////////////////////////
     //Trace Interface
