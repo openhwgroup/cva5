@@ -73,8 +73,8 @@ module writeback
     //Implementation
     //Re-assigning interface inputs to array types so that they can be dynamically indexed
     generate
-        for (i = 0; i < CONFIG.NUM_WB_GROUPS; i++) begin
-            for (j = 0; j < NUM_UNITS[i]; j++) begin
+        for (i = 0; i < CONFIG.NUM_WB_GROUPS; i++) begin : gen_wb_group_unpacking
+            for (j = 0; j < NUM_UNITS[i]; j++) begin : gen_wb_unit_unpacking
                 assign unit_instruction_id[i][j] = unit_wb[CUMULATIVE_NUM_UNITS[i] + j].id;
                 assign unit_done[i][j] = unit_wb[CUMULATIVE_NUM_UNITS[i] + j].done;
                 assign unit_wb[CUMULATIVE_NUM_UNITS[i] + j].ack = unit_ack[i][j];
@@ -85,8 +85,8 @@ module writeback
     //As units are selected for commit ports based on their unit ID,
     //for each additional commit port one unit can be skipped for the commit mux
     generate
-        for (i = 0; i < CONFIG.NUM_WB_GROUPS; i++) begin
-            for (j = 0; j < NUM_UNITS[i]; j++) begin
+        for (i = 0; i < CONFIG.NUM_WB_GROUPS; i++) begin : gen_wb_port_grouping
+            for (j = 0; j < NUM_UNITS[i]; j++) begin : gen_wb_unit_grouping
                 assign unit_rd[i][j] = unit_wb[CUMULATIVE_NUM_UNITS[i] + j].rd;
             end
         end
@@ -97,7 +97,7 @@ module writeback
     //Iterating through all commit ports:
     //   Search for complete units (in fixed unit order)
     //   Assign to a commit port, mask that unit and commit port
-    generate for (i = 0; i < CONFIG.NUM_WB_GROUPS; i++) begin
+    generate for (i = 0; i < CONFIG.NUM_WB_GROUPS; i++) begin : gen_wb_mux
         priority_encoder
             #(.WIDTH(NUM_UNITS[i]))
         unit_done_encoder

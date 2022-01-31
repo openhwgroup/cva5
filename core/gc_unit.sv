@@ -225,7 +225,7 @@ module gc_unit
 
     ////////////////////////////////////////////////////
     //Exception handling
-    generate if (CONFIG.INCLUDE_M_MODE) begin
+    generate if (CONFIG.INCLUDE_M_MODE) begin :gen_gc_m_mode
 
     //Re-assigning interface inputs to array types so that they can be dynamically indexed
     logic [NUM_EXCEPTION_SOURCES-1:0] exception_pending;
@@ -264,7 +264,7 @@ module gc_unit
     //PC determination (trap, flush or return)
     //Two cycles: on first cycle the processor front end is flushed,
     //on the second cycle the new PC is fetched
-    generate if (CONFIG.INCLUDE_M_MODE || CONFIG.INCLUDE_IFENCE) begin
+    generate if (CONFIG.INCLUDE_M_MODE || CONFIG.INCLUDE_IFENCE) begin :gen_gc_pc_override
 
     always_ff @ (posedge clk) begin
         gc_pc_override <= next_state inside {PRE_ISSUE_FLUSH, INIT_CLEAR_STATE};

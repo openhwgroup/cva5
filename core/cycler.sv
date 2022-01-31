@@ -32,18 +32,16 @@ module  cycler
         output logic [C_WIDTH - 1: 0] one_hot
         );
 
-    generate
-        if (C_WIDTH == 1) begin
-            assign one_hot = 1;
+    generate if (C_WIDTH == 1) begin : gen_width_one
+        assign one_hot = 1;
+    end else begin : gen_width_two_plus
+        always_ff @ (posedge clk) begin
+            if (rst)
+                one_hot <= 1;
+            else if (en)
+                one_hot <= {one_hot[C_WIDTH-2:0],one_hot[C_WIDTH-1]};//rotate left
         end
-        else begin
-            always_ff @ (posedge clk) begin
-                if (rst)
-                    one_hot <= 1;
-                else if (en)
-                    one_hot <= {one_hot[C_WIDTH-2:0],one_hot[C_WIDTH-1]};//rotate left
-            end
-        end
+    end
     endgenerate
 
 endmodule

@@ -211,7 +211,7 @@ module fetch
     //In the case of a gc.fetch_flush, a request may already be in progress
     //for any sub unit.  That request can either be completed or aborted.
     //In either case, data_valid must NOT be asserted.
-    generate if (CONFIG.INCLUDE_ILOCAL_MEM) begin
+    generate if (CONFIG.INCLUDE_ILOCAL_MEM) begin : gen_fetch_local_mem
         assign sub_unit_address_match[BRAM_ID] = bram.address_range_check(translated_address);
         assign unit_ready[BRAM_ID] = bram.ready;
         assign unit_data_valid[BRAM_ID] = bram.data_valid;
@@ -229,7 +229,7 @@ module fetch
         );
     end
     endgenerate
-    generate if (CONFIG.INCLUDE_ICACHE) begin
+    generate if (CONFIG.INCLUDE_ICACHE) begin : gen_fetch_icache
         assign sub_unit_address_match[ICACHE_ID] = cache.address_range_check(translated_address);
         assign unit_ready[ICACHE_ID] = cache.ready;
         assign unit_data_valid[ICACHE_ID] = cache.data_valid;
@@ -271,7 +271,7 @@ module fetch
     assign is_branch_or_jump = fetch_instruction[6:2] inside {JAL_T, JALR_T, BRANCH_T};
     assign early_branch_flush = (valid_fetch_result & (|unit_data_valid)) & fetch_attr.is_predicted_branch_or_jump & (~is_branch_or_jump);
     assign early_branch_flush_ras_adjust = (valid_fetch_result & (|unit_data_valid)) & fetch_attr.is_branch & (~is_branch_or_jump);
-    generate if (ENABLE_TRACE_INTERFACE) begin
+    generate if (ENABLE_TRACE_INTERFACE) begin : gen_fetch_trace
         assign tr_early_branch_correction = early_branch_flush;
     end endgenerate
 

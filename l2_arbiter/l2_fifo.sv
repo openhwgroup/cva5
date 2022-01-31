@@ -30,11 +30,11 @@ module l2_fifo  #(parameter DATA_WIDTH = 32, parameter FIFO_DEPTH = 4, parameter
         l2_fifo_interface.structure fifo
         );
 
-    generate if (ASYNC) begin
+    generate if (ASYNC) begin : gen_async
 
         end
         else
-        begin
+        begin : gen_sync
 
             if (FIFO_DEPTH == 1) begin
                 always_ff @ (posedge clk) begin

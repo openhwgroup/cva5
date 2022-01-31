@@ -131,7 +131,7 @@ module load_store_unit
 
     ////////////////////////////////////////////////////
     //Alignment Exception
-generate if (CONFIG.INCLUDE_M_MODE) begin
+generate if (CONFIG.INCLUDE_M_MODE) begin : gen_ls_exceptions
     logic new_exception;
     always_comb begin
         case(ls_inputs.fn3)
@@ -286,7 +286,7 @@ endgenerate
 
     ////////////////////////////////////////////////////
     //Unit Instantiation
-    generate if (CONFIG.INCLUDE_DLOCAL_MEM) begin
+    generate if (CONFIG.INCLUDE_DLOCAL_MEM) begin : gen_ls_local_mem
             assign sub_unit_address_match[BRAM_ID] = bram.address_range_check(shared_inputs.addr);
             assign bram.new_request = sub_unit_address_match[BRAM_ID] & issue_request;
 
@@ -304,7 +304,7 @@ endgenerate
         end
     endgenerate
 
-    generate if (CONFIG.INCLUDE_PERIPHERAL_BUS) begin
+    generate if (CONFIG.INCLUDE_PERIPHERAL_BUS) begin : gen_ls_pbus
             assign sub_unit_address_match[BUS_ID] = bus.address_range_check(shared_inputs.addr);
             assign bus.new_request = sub_unit_address_match[BUS_ID] & issue_request;
 
@@ -344,7 +344,7 @@ endgenerate
         end
     endgenerate
 
-    generate if (CONFIG.INCLUDE_DCACHE) begin
+    generate if (CONFIG.INCLUDE_DCACHE) begin : gen_ls_dcache
             assign sub_unit_address_match[DCACHE_ID] = cache.address_range_check(shared_inputs.addr);
             assign cache.new_request = sub_unit_address_match[DCACHE_ID] & issue_request;
 
@@ -420,7 +420,7 @@ endgenerate
 
     ////////////////////////////////////////////////////
     //Trace Interface
-    generate if (ENABLE_TRACE_INTERFACE) begin
+    generate if (ENABLE_TRACE_INTERFACE) begin : gen_ls_trace
         assign tr_load_conflict_delay = tr_possible_load_conflict_delay & ready_for_issue_from_lsq;
     end
     endgenerate

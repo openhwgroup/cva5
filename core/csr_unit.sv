@@ -217,7 +217,7 @@ module csr_unit
     const mstatus_t sstatus_mask = '{default:0, mxr:1, sum:1, spp:1, spie:1, sie:1};
 
 
-generate if (CONFIG.INCLUDE_M_MODE) begin
+generate if (CONFIG.INCLUDE_M_MODE) begin : gen_csr_m_mode
 
     privilege_t trap_return_privilege_level;
     privilege_t exception_privilege_level;
@@ -554,7 +554,7 @@ endgenerate
     assign asid = satp.asid;
     //******************
 
-generate if (CONFIG.INCLUDE_S_MODE) begin
+generate if (CONFIG.INCLUDE_S_MODE) begin : gen_csr_s_mode
     ////////////////////////////////////////////////////
     //MMU interface
     assign immu.mxr = mstatus.mxr;

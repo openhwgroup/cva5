@@ -38,31 +38,25 @@ module priority_encoder
     if (WIDTH > 12)
         $error("Max priority encoder width exceeded!");
 
-    localparam LOG2_WIDTH = $clog2(WIDTH);
+    //Tool workaround
+    localparam MIN_WIDTH = (WIDTH == 1) ? 2 : WIDTH;
+    localparam LOG2_WIDTH = $clog2(MIN_WIDTH);
+    //Table generation for priority encoder
+    function [2**MIN_WIDTH-1:0][LOG2_WIDTH-1 : 0] table_gen ();
+        for (int i = 0; i < 2**MIN_WIDTH; i++) begin //Loop through all memory addresses
+            table_gen[i] = LOG2_WIDTH'(MIN_WIDTH - 1);//Initialize to lowest priority
+            for (int j = (int'(MIN_WIDTH) - 2); j >= 0; j--) begin//Check each bit in increasing priority
+                if (i[j])//If bit is set update table value with that bit's index
+                    table_gen[i] = LOG2_WIDTH'(j);
+            end
+        end
+    endfunction
+
+    //Initialize Table
+    localparam logic [2**MIN_WIDTH-1:0][LOG2_WIDTH-1 : 0] ENCODER_ROM = table_gen();
+
     ////////////////////////////////////////////////////
     //Implementation
-
-    generate
-        if (WIDTH == 1)
-            assign encoded_result = 0;
-        else begin
-
-            //Table generation for priority encoder
-            function [2**WIDTH-1:0][LOG2_WIDTH-1 : 0] table_gen ();
-                for (int i = 0; i < 2**WIDTH; i++) begin //Loop through all memory addresses
-                    table_gen[i] = LOG2_WIDTH'(WIDTH - 1);//Initialize to lowest priority
-                    for (int j = (int'(WIDTH) - 2); j >= 0; j--) begin//Check each bit in increasing priority
-                        if (i[j])//If bit is set update table value with that bit's index
-                            table_gen[i] = LOG2_WIDTH'(j);
-                    end
-                end
-            endfunction
-
-            //Initialize Table
-            const logic [2**WIDTH-1:0][LOG2_WIDTH-1 : 0] encoder_rom = table_gen();
-
-            assign encoded_result = encoder_rom[priority_vector];
-        end
-    endgenerate
+    assign encoded_result = (WIDTH == 1) ? 0 : ENCODER_ROM[priority_vector];
 
 endmodule

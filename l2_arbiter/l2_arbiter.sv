@@ -86,8 +86,7 @@ module l2_arbiter
      * Input Request FIFOs
      *************************************/
     genvar i;
-    generate
-        for (i=0; i < L2_NUM_PORTS; i++) begin
+    generate for (i=0; i < L2_NUM_PORTS; i++) begin : gen_requests
             //Requester FIFO side
             assign input_fifos[i].push = request[i].request_push;
             assign input_fifos[i].potential_push = request[i].request_push;
@@ -117,8 +116,7 @@ module l2_arbiter
     /*************************************
      * Input Data FIFOs
      *************************************/
-    generate
-        for (i=0; i < L2_NUM_PORTS; i++) begin
+    generate for (i=0; i < L2_NUM_PORTS; i++) begin : gen_input_fifos
             //Requester FIFO side
             assign input_data_fifos[i].push = request[i].wr_data_push;
             assign input_data_fifos[i].potential_push = request[i].wr_data_push;
@@ -206,8 +204,7 @@ module l2_arbiter
         );
 
     //sc response
-    generate
-        for (i=0; i < L2_NUM_PORTS; i++) begin
+    generate for (i=0; i < L2_NUM_PORTS; i++) begin : gen_sc_response
             always_ff @(posedge clk) begin
                 if (rst)  begin
                     request[i].con_result <= 0;
@@ -222,8 +219,7 @@ module l2_arbiter
     endgenerate
 
     //inv response
-    generate
-        for (i=0; i < L2_NUM_PORTS; i++) begin
+    generate for (i=0; i < L2_NUM_PORTS; i++) begin : gen_inv_response
             //Requester FIFO side
             assign inv_response_fifos[i].pop = request[i].inv_ack;
             assign request[i].inv_addr = inv_response_fifos[i].data_out;
@@ -293,8 +289,7 @@ module l2_arbiter
         return_push[mem_return_data.id] = mem_returndata_fifo.valid;
     end
 
-    generate
-        for (i=0; i < L2_NUM_PORTS; i++) begin
+    generate for (i=0; i < L2_NUM_PORTS; i++) begin : gen_return_data
             //Requester FIFO side
             assign returndata_fifos[i].pop = request[i].rd_data_ack;
             assign return_data[i] = returndata_fifos[i].data_out;

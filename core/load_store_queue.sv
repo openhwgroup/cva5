@@ -158,7 +158,7 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
 
     ////////////////////////////////////////////////////
     //Trace Interface
-    generate if (ENABLE_TRACE_INTERFACE) begin
+    generate if (ENABLE_TRACE_INTERFACE) begin : gen_lsq_trace
         assign tr_possible_load_conflict_delay = lq_output_valid & (store_conflict | (sq_full & sq_output_valid));
     end
     endgenerate

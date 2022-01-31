@@ -182,7 +182,7 @@ module instruction_metadata_and_id_management
     end
     //Retire IDs
     //Each retire port lags behind the previous one by one index (eg. [3, 2, 1, 0])
-     generate for (i = 0; i < RETIRE_PORTS; i++) begin
+     generate for (i = 0; i < RETIRE_PORTS; i++) begin :gen_retire_ids
         always_ff @ (posedge clk) begin
             if (rst)
                 retire_ids_next[i] <= LOG2_MAX_IDS'(i);
@@ -264,7 +264,7 @@ module instruction_metadata_and_id_management
     logic [RETIRE_PORTS-1:0] retire_id_uses_rd;
     logic [RETIRE_PORTS-1:0] retire_id_waiting_for_writeback;
 
-     generate for (i = 0; i < RETIRE_PORTS; i++) begin
+     generate for (i = 0; i < RETIRE_PORTS; i++) begin : gen_retire_writeback
         assign retire_id_uses_rd[i] = uses_rd_table[retire_ids_next[i]];
         assign retire_id_waiting_for_writeback[i] = id_waiting_for_writeback[i];
      end endgenerate
@@ -326,11 +326,11 @@ module instruction_metadata_and_id_management
     //Writeback/Commit support
     phys_addr_t commit_phys_addr [CONFIG.NUM_WB_GROUPS];
     assign commit_phys_addr[0] = issue.phys_rd_addr;
-     generate for (i = 1; i < CONFIG.NUM_WB_GROUPS; i++) begin
+     generate for (i = 1; i < CONFIG.NUM_WB_GROUPS; i++) begin : gen_commit_phys_addr
         assign commit_phys_addr[i] = phys_addr_table[wb_packet[i].id];
      end endgenerate
 
-     generate for (i = 0; i < CONFIG.NUM_WB_GROUPS; i++) begin
+     generate for (i = 0; i < CONFIG.NUM_WB_GROUPS; i++) begin : gen_commit_packet
         assign commit_packet[i].id = wb_packet[i].id;
         assign commit_packet[i].phys_addr = commit_phys_addr[i];        
         assign commit_packet[i].valid = wb_packet[i].valid & |commit_phys_addr[i];
@@ -338,7 +338,7 @@ module instruction_metadata_and_id_management
      end endgenerate
 
     //Exception Support
-     generate if (CONFIG.INCLUDE_M_MODE) begin
+     generate if (CONFIG.INCLUDE_M_MODE) begin : gen_id_exception_support
         assign oldest_pc = pc_table[retire_ids_next[0]];
         assign current_exception_unit = exception_unit_table[retire_ids_next[0]];
      end endgenerate

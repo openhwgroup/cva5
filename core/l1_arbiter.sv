@@ -56,7 +56,7 @@ module l1_arbiter
     //Implementation
 
     //Interface to array
-    generate for (genvar i = 0; i < L1_CONNECTIONS; i++) begin
+    generate for (genvar i = 0; i < L1_CONNECTIONS; i++) begin : gen_requests
         assign requests[i] = l1_request[i].request;
         assign l1_request[i].ack = acks[i];
     end endgenerate
@@ -85,7 +85,7 @@ module l1_arbiter
 
     ////////////////////////////////////////////////////
     //Interface mapping
-    generate for (genvar i = 0; i < L1_CONNECTIONS; i++) begin
+    generate for (genvar i = 0; i < L1_CONNECTIONS; i++) begin : gen_l2_requests
         always_comb begin
             l2_requests[i].addr = l1_request[i].addr[31:2];
             l2_requests[i].rnw = l1_request[i].rnw;
@@ -118,7 +118,7 @@ module l1_arbiter
     assign l2.amo_type_or_burst_size = l2_requests[arb_sel].amo_type_or_burst_size;
     assign l2.sub_id = l2_requests[arb_sel].sub_id;
 
-    generate for (genvar i = 0; i < L1_CONNECTIONS; i++) begin
+    generate for (genvar i = 0; i < L1_CONNECTIONS; i++) begin : gen_l1_responses
         assign l1_response[i].data = l2.rd_data;
         assign l1_response[i].data_valid = l2.rd_data_valid && (l2.rd_sub_id == i);
     end endgenerate

@@ -194,7 +194,7 @@ module renamer
     ////////////////////////////////////////////////////
     //Renamed Outputs
     spec_table_t [REGFILE_READ_PORTS-1:0] spec_table_decode;
-    generate for (genvar i = 0; i < REGFILE_READ_PORTS; i++) begin
+    generate for (genvar i = 0; i < REGFILE_READ_PORTS; i++) begin : gen_renamed_addrs
         assign spec_table_decode[i] = spec_table_read_data[i+1];
         assign decode.phys_rs_addr[i] = spec_table_decode[i].phys_addr;
         assign decode.rs_wb_group[i] = spec_table_decode[i].wb_group;

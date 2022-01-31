@@ -237,9 +237,9 @@ module decode_and_issue
 
     ////////////////////////////////////////////////////
     //Unit ready
-    generate for (i=0; i<NUM_UNITS; i++) begin
+    generate for (i=0; i<NUM_UNITS; i++)
         assign unit_ready[i] = unit_issue[i].ready;
-    end endgenerate
+    endgenerate
 
     ////////////////////////////////////////////////////
     //Issue Determination
@@ -343,7 +343,7 @@ module decode_and_issue
     assign store_conditional = (amo_type == AMO_SC_FN5);
     assign load_reserve = (amo_type == AMO_LR_FN5);
 
-    generate if (CONFIG.INCLUDE_AMO) begin
+    generate if (CONFIG.INCLUDE_AMO) begin : gen_decode_ls_amo
             assign ls_inputs.amo.is_lr = load_reserve;
             assign ls_inputs.amo.is_sc = store_conditional;
             assign ls_inputs.amo.is_amo = amo_op & ~(load_reserve | store_conditional);
@@ -500,7 +500,7 @@ module decode_and_issue
 
     ////////////////////////////////////////////////////
     //CSR unit inputs
-    generate if (CONFIG.INCLUDE_CSRS) begin
+    generate if (CONFIG.INCLUDE_CSRS) begin : gen_decode_csr_inputs
         assign csr_inputs.addr = issue.instruction[31:20];
         assign csr_inputs.op = issue.fn3[1:0];
         assign csr_inputs.data = issue.fn3[2] ? {27'b0, issue_rs_addr[RS1]} : rf.data[RS1];
@@ -510,7 +510,7 @@ module decode_and_issue
 
     ////////////////////////////////////////////////////
     //Mul unit inputs
-    generate if (CONFIG.INCLUDE_MUL) begin
+    generate if (CONFIG.INCLUDE_MUL) begin : gen_decode_mul_inputs
         assign mul_inputs.rs1 = rf.data[RS1];
         assign mul_inputs.rs2 = rf.data[RS2];
         assign mul_inputs.op = issue.fn3[1:0];
@@ -518,7 +518,7 @@ module decode_and_issue
 
     ////////////////////////////////////////////////////
     //Div unit inputs
-    generate if (CONFIG.INCLUDE_DIV) begin
+    generate if (CONFIG.INCLUDE_DIV) begin : gen_decode_div_inputs
         phys_addr_t prev_div_rs_addr [2];
         logic [1:0] div_rd_match;
         logic prev_div_result_valid;
@@ -552,7 +552,7 @@ module decode_and_issue
 
     ////////////////////////////////////////////////////
     //Unit EX signals
-    generate for (i = 0; i < NUM_UNITS; i++) begin
+    generate for (i = 0; i < NUM_UNITS; i++) begin : gen_unit_issue_signals
         assign unit_issue[i].possible_issue = issue.stage_valid & unit_needed_issue_stage[i] & unit_issue[i].ready;
         assign unit_issue[i].new_request = issue_to[i];
         assign unit_issue[i].id = issue.id;
@@ -564,7 +564,7 @@ module decode_and_issue
     ////////////////////////////////////////////////////
     //Illegal Instruction check
     logic illegal_instruction_pattern_r;
-    generate if (CONFIG.INCLUDE_M_MODE) begin
+    generate if (CONFIG.INCLUDE_M_MODE) begin : gen_decode_exceptions
     illegal_instruction_checker # (.CONFIG(CONFIG))
     illegal_op_check (
         .instruction(decode.instruction), .illegal_instruction(illegal_instruction_pattern)
@@ -646,7 +646,7 @@ module decode_and_issue
 
     ////////////////////////////////////////////////////
     //Trace Interface
-    generate if (ENABLE_TRACE_INTERFACE) begin
+    generate if (ENABLE_TRACE_INTERFACE) begin : gen_decode_trace
         assign tr_operand_stall = issue.stage_valid & ~gc.fetch_flush & ~gc.issue_hold & ~pre_issue_exception_pending & ~operands_ready & |issue_ready;
         assign tr_unit_stall = issue_valid & ~gc.fetch_flush & ~|issue_ready;
         assign tr_no_id_stall = (~issue.stage_valid & ~pc_id_available & ~gc.fetch_flush); //All instructions in execution pipeline

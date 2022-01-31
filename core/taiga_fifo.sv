@@ -45,7 +45,7 @@ module taiga_fifo
     ////////////////////////////////////////////////////
     //Implementation
     //If depth is one, the FIFO can be implemented with a single register
-    generate if (FIFO_DEPTH == 1) begin
+    generate if (FIFO_DEPTH == 1) begin : gen_width_one
         always_ff @ (posedge clk) begin
             if (rst)
                 fifo.valid <= 0;
@@ -62,7 +62,7 @@ module taiga_fifo
     //If depth is two, the FIFO can be implemented with two registers
     //connected as a shift reg for the same resources as a LUTRAM FIFO
     //but with better timing
-    else if (FIFO_DEPTH == 2) begin
+    else if (FIFO_DEPTH == 2) begin : gen_width_two
         logic [DATA_WIDTH-1:0] shift_reg [FIFO_DEPTH];
         logic [LOG2_FIFO_DEPTH:0] inflight_count;
         ////////////////////////////////////////////////////
@@ -86,7 +86,7 @@ module taiga_fifo
 
         assign fifo.data_out = shift_reg[~inflight_count[0]];
     end
-    else begin
+    else begin : gen_width_3_plus
         //Force FIFO depth to next power of 2
         (* ramstyle = "MLAB, no_rw_check" *) logic [DATA_WIDTH-1:0] lut_ram [(2**LOG2_FIFO_DEPTH)];
         logic [LOG2_FIFO_DEPTH-1:0] write_index;

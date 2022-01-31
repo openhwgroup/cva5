@@ -81,11 +81,11 @@ module lfsr
     logic feedback;
     ////////////////////////////////////////////////////
     //Implementation
-    generate if (WIDTH == 2) begin
+    generate if (WIDTH == 2) begin : gen_width_two
         assign feedback = ~value[WIDTH-1];
     end
-    else begin
-        for (genvar i = 0; i < NUM_TAPS[TAPS_INDEX]; i++) begin
+    else begin : gen_width_three_plus
+        for (genvar i = 0; i < NUM_TAPS[TAPS_INDEX]; i++) begin : gen_taps
             assign feedback_input[i] = value[TAPS[TAPS_INDEX][i + 1] - 1];
         end
         //XNOR of taps and range extension to include all ones

@@ -235,8 +235,7 @@ module taiga
 
     ////////////////////////////////////////////////////
     // Memory Interface
-    generate if (CONFIG.INCLUDE_S_MODE || CONFIG.INCLUDE_ICACHE || CONFIG.INCLUDE_DCACHE)
-
+    generate if (CONFIG.INCLUDE_S_MODE || CONFIG.INCLUDE_ICACHE || CONFIG.INCLUDE_DCACHE) begin : gen_l1_arbiter
         l1_arbiter #(.CONFIG(CONFIG))
         arb(
             .clk (clk),
@@ -247,7 +246,7 @@ module taiga
             .l1_request (l1_request),
             .l1_response (l1_response)
         );
-
+    end
     endgenerate
 
     ////////////////////////////////////////////////////
@@ -333,7 +332,7 @@ module taiga
         .ras (ras)
     );
 
-    generate if (CONFIG.INCLUDE_S_MODE) begin
+    generate if (CONFIG.INCLUDE_S_MODE) begin : gen_itlb_immu
 
         tlb_lut_ram #(.WAYS(CONFIG.ITLB.WAYS), .DEPTH(CONFIG.ITLB.DEPTH))
         i_tlb (       
@@ -505,7 +504,7 @@ module taiga
         .tr_load_conflict_delay (tr_load_conflict_delay)
     );
 
-    generate if (CONFIG.INCLUDE_S_MODE) begin
+    generate if (CONFIG.INCLUDE_S_MODE) begin : gen_dtlb_dmmu
         tlb_lut_ram #(.WAYS(CONFIG.DTLB.WAYS), .DEPTH(CONFIG.DTLB.DEPTH))
         d_tlb (       
             .clk (clk),
@@ -533,7 +532,7 @@ module taiga
     end
     endgenerate
 
-    generate if (CONFIG.INCLUDE_CSRS)
+    generate if (CONFIG.INCLUDE_CSRS) begin : gen_csrs
         csr_unit # (.CONFIG(CONFIG))
         csr_unit_block (
             .clk(clk),
@@ -559,7 +558,7 @@ module taiga
             .s_interrupt(s_interrupt),
             .m_interrupt(m_interrupt)
         );
-    endgenerate
+    end endgenerate
 
     gc_unit #(.CONFIG(CONFIG))
     gc_unit_block (
@@ -587,7 +586,7 @@ module taiga
         .post_issue_count (post_issue_count)
     );
 
-    generate if (CONFIG.INCLUDE_MUL)
+    generate if (CONFIG.INCLUDE_MUL) begin : gen_mul
         mul_unit mul_unit_block (
             .clk (clk),
             .rst (rst),
@@ -595,9 +594,9 @@ module taiga
             .issue (unit_issue[UNIT_IDS.MUL]),
             .wb (unit_wb[UNIT_IDS.MUL])
         );
-    endgenerate
+    end endgenerate
 
-    generate if (CONFIG.INCLUDE_DIV)
+    generate if (CONFIG.INCLUDE_DIV) begin : gen_div
         div_unit div_unit_block (
             .clk (clk),
             .rst (rst),
@@ -605,7 +604,7 @@ module taiga
             .issue (unit_issue[UNIT_IDS.DIV]), 
             .wb (unit_wb[UNIT_IDS.DIV])
         );
-    endgenerate
+    end endgenerate
 
     ////////////////////////////////////////////////////
     //Writeback
@@ -641,7 +640,7 @@ module taiga
 
     ////////////////////////////////////////////////////
     //Trace Interface
-    generate if (ENABLE_TRACE_INTERFACE) begin
+    generate if (ENABLE_TRACE_INTERFACE) begin : gen_taiga_trace
         always_ff @(posedge clk) begin
             tr.events.early_branch_correction <= tr_early_branch_correction;
             tr.events.operand_stall <= tr_operand_stall;
