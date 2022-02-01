@@ -30,7 +30,7 @@ package fpu_types;
     //TODO: FPU only has 1 writeback group, and $clog2(1) = 0
     //Need to force LOG2_FP_COMMIT_PORTS to 1
     localparam LOG2_FP_COMMIT_PORTS = 1; //$clog2(FP_NUM_WB_GROUPS);
-    localparam LOG2_MAX_IDS = $clog2(MAX_IDS);
+    //localparam LOG2_MAX_IDS = $clog2(MAX_IDS);
 
     //typedef logic [LOG2_MAX_IDS-1:0] id_t;
     //Hardcoding fp_rs_wb_group_t width to 1

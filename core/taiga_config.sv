@@ -90,7 +90,7 @@ package taiga_config;
     //FP Options
     parameter INCLUDE_FPU = 1;
     parameter EXPO_WIDTH = 11;
-    parameter FRAC_WIDTH = 52;
+	parameter FRAC_WIDTH = 52;
     parameter FLEN = 1 + EXPO_WIDTH + FRAC_WIDTH;
     parameter INTERFACE_EXPO_WIDTH = 11;
     parameter INTERFACE_FRAC_WIDTH = 52;
@@ -105,8 +105,8 @@ package taiga_config;
       int unsigned INTERFACE_FRAC_WIDTH;
       int unsigned FP_NUM_WB_GROUPS;
     } fpu_config_t;
-    localparam int unsigned ARITH_FLEN = EXAMPLE_CONFIG.FP.EXPO_WIDTH + EXAMPLE_CONFIG.FP.FRAC_WIDTH + 1;
-    localparam int unsigned SOFTWARE_FLEN = EXAMPLE_CONFIG.FP.INTERFACE_EXPO_WIDTH + EXAMPLE_CONFIG.FP.INTERFACE_FRAC_WIDTH + 1;
+    localparam int unsigned ARITH_FLEN = EXPO_WIDTH + FRAC_WIDTH + 1;
+    localparam int unsigned SOFTWARE_FLEN = INTERFACE_EXPO_WIDTH + INTERFACE_FRAC_WIDTH + 1;
 
     ////////////////////////////////////////////////////
     //CPU configs

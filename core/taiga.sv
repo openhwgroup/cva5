@@ -451,6 +451,7 @@ module taiga
         .decode_advance (decode_advance),
         .decode (fp_decode_rename_interface),
         .issue (issue), //packet
+        .fp_instruction_issued_with_rd (fp_instruction_issued_with_rd),
         .retire (retire) //packet
     );
 

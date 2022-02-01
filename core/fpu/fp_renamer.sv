@@ -1,5 +1,5 @@
 /*
- * Copyright © 2020 Eric Matthews,  Lesley Shannon
+ * Copyright © 2020 Yuhui Gao, Eric Matthews, Lesley Shannon
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,12 +17,14 @@
  * Reconfigurable Computing Lab, Simon Fraser University.
  *
  * Author(s):
+ *             Eric Matthews <ematthew@sfu.ca>
  *             Yuhui Gao <yuhuig@sfu.ca>
  */
 
 module fp_renamer
 
     import taiga_config::*;
+    import riscv_types::*;
     import taiga_types::*;
 
     # (
@@ -40,35 +42,51 @@ module fp_renamer
 
         //Issue stage
         input issue_packet_t issue,
+        input logic fp_instruction_issued_with_rd,
 
         //Retire response
         input retire_packet_t retire
     );
     //////////////////////////////////////////
-    (* ramstyle = "MLAB, no_rw_check" *) phys_addr_t architectural_id_to_phys_table [MAX_IDS];
+    typedef struct packed{
+        rs_addr_t rd_addr;
+        phys_addr_t spec_phys_addr;
+        phys_addr_t previous_phys_addr;
+        //logic [$clog2(CONFIG.FP.FP_NUM_WB_GROUPS)-1:0] previous_wb_group;
+        logic [0:0] previous_wb_group;
+    } renamer_metadata_t;
+    renamer_metadata_t inuse_list_input;
+    renamer_metadata_t inuse_list_output;
 
     logic [5:0] clear_index;
-    fifo_interface #(.DATA_WIDTH(6)) free_list ();
+
+    fifo_interface #(.DATA_WIDTH($bits(phys_addr_t))) free_list ();
+    fifo_interface #(.DATA_WIDTH($bits(renamer_metadata_t))) inuse_list ();
+
     logic rename_valid;
     logic rollback;
     ////////////////////////////////////////////////////
     //Implementation
-    assign rename_valid = (~gc.fetch_flush) & decode_advance & decode.uses_rd;  
+    //Assumption: MAX_IDS <= 32 thus, decode/rename stage can never stall due to lacking a free register
+    //Zero register is never renamed
+    //If a renamed destination is flushed in the issue stage, state is rolled back
+    //When an instruction reaches the retire stage it either commits or reverts its renaming depending on whether the instruction retires or is discarded
+    assign rename_valid = (~gc.fetch_flush) & decode_advance & decode.uses_rd;
 
     //Revert physcial address assignment on a flush
     assign rollback = gc.fetch_flush & issue.stage_valid & issue.fp_uses_rd;
 
     //counter for indexing through memories for post-reset clearing/initialization
-    initial clear_index = 0;
-    always_ff @ (posedge clk) begin
-        if (rst)
-            clear_index <= 0;
-        else
-            clear_index <= clear_index + 6'(gc.init_clear);
-    end
+    lfsr #(.WIDTH(6), .NEEDS_RESET(0))
+    lfsr_read_index (
+        .clk (clk), .rst (rst),
+        .en(gc.init_clear),
+        .value(clear_index)
+    );
+
     ////////////////////////////////////////////////////
     //Free list FIFO
-    register_free_list #(.DATA_WIDTH(6), .FIFO_DEPTH(32)) free_list_fifo (
+    register_free_list #(.DATA_WIDTH($bits(phys_addr_t)), .FIFO_DEPTH(32)) free_list_fifo (
         .clk (clk),
         .rst (rst),
         .fifo (free_list),
@@ -78,9 +96,29 @@ module fp_renamer
     //During post reset init, initialize FIFO with free list (registers 32-63)
     assign free_list.potential_push = (gc.init_clear & ~clear_index[5]) | (retire.valid & retire.wb2_float);
     assign free_list.push = free_list.potential_push;
-    //TODO: restore spec if instruction has been discarded due to a speculation failure
-    assign free_list.data_in = gc.init_clear ? {1'b1, clear_index[4:0]} : architectural_id_to_phys_table[retire.phys_id];
+
+    assign free_list.data_in = gc.init_clear ? {1'b1, clear_index[4:0]} : (gc.supress_writeback ? inuse_list_output.spec_phys_addr : inuse_list_output.previous_phys_addr);
     assign free_list.pop = rename_valid;
+
+    ////////////////////////////////////////////////////
+    //Inuse list FIFO
+    taiga_fifo #(.DATA_WIDTH($bits(renamer_metadata_t)), .FIFO_DEPTH(32)) inuse_list_fifo (
+        .clk (clk),
+        .rst (rst),
+        .fifo (inuse_list)
+    );
+
+    assign inuse_list.potential_push = fp_instruction_issued_with_rd;
+    assign inuse_list.push = inuse_list.potential_push;
+
+    assign inuse_list_input.rd_addr = issue.rd_addr;
+    assign inuse_list_input.spec_phys_addr = issue.phys_rd_addr;
+    assign inuse_list_input.previous_phys_addr = spec_table_previous_r.phys_addr;
+    assign inuse_list_input.previous_wb_group = spec_table_previous_r.wb_group;
+    assign inuse_list.data_in = inuse_list_input;
+
+    assign inuse_list_output = inuse_list.data_out;
+    assign inuse_list.pop = retire.valid & retire.wb2_float;
 
     ////////////////////////////////////////////////////
     //Speculative rd-to-phys Table
@@ -91,35 +129,46 @@ module fp_renamer
         //logic [$clog2(CONFIG.FP.FP_NUM_WB_GROUPS)-1:0] wb_group;
         logic [0:0] wb_group;
     } spec_table_t;
-    logic [4:0] spec_table_read_addr [FP_REGFILE_READ_PORTS+1];
+    rs_addr_t spec_table_read_addr [FP_REGFILE_READ_PORTS+1];
     spec_table_t spec_table_read_data [FP_REGFILE_READ_PORTS+1];
 
     spec_table_t spec_table_next;
-    spec_table_t spec_table_old;
-    spec_table_t spec_table_old_r;
+    spec_table_t spec_table_next_mux [4];
+    spec_table_t spec_table_previous;
+    spec_table_t spec_table_previous_r;
 
     logic spec_table_update;
-    logic [4:0] spec_table_write_index;
+    rs_addr_t spec_table_write_index;
+    rs_addr_t spec_table_write_index_mux [4];
 
-    assign spec_table_update =  rename_valid | rollback | gc.init_clear;
+    assign spec_table_update =  rename_valid | rollback | gc.init_clear | (retire.valid & retire.wb2_float & gc.supress_writeback);
 
-    always_comb begin
-        if (gc.init_clear) begin
-            spec_table_write_index = clear_index[4:0];
-            spec_table_next.phys_addr = {1'b0, clear_index[4:0]};
-            spec_table_next.wb_group = '0;
-        end
-        else if (rollback) begin
-            spec_table_write_index = issue.rd_addr;
-            spec_table_next.phys_addr = spec_table_old_r.phys_addr;
-            spec_table_next.wb_group = spec_table_old_r.wb_group;
-        end
-        else begin
-            spec_table_write_index = decode.rd_addr;
-            spec_table_next.phys_addr = free_list.data_out;
-            spec_table_next.wb_group = decode.rd_wb_group;
-        end
-    end
+    logic [1:0] spec_table_sel;
+    
+    one_hot_to_integer #(.C_WIDTH(4)) spec_table_sel_one_hot_to_int (
+        .one_hot ({gc.init_clear, gc.supress_writeback, rollback, 1'b0}),
+        .int_out (spec_table_sel)
+    );
+
+    //Normal operation
+    assign spec_table_write_index_mux[0] = decode.rd_addr;
+    assign spec_table_next_mux[0].phys_addr = free_list.data_out;
+    assign spec_table_next_mux[0].wb_group = decode.rd_wb_group;
+    //rollback
+    assign spec_table_write_index_mux[1] = issue.rd_addr;
+    assign spec_table_next_mux[1].phys_addr = spec_table_previous_r.phys_addr;
+    assign spec_table_next_mux[1].wb_group = spec_table_previous_r.wb_group;
+    //gc.supress_writeback
+    assign spec_table_write_index_mux[2] = inuse_list_output.rd_addr;
+    assign spec_table_next_mux[2].phys_addr = inuse_list_output.previous_phys_addr;
+    assign spec_table_next_mux[2].wb_group = inuse_list_output.previous_wb_group;
+    //gc.init_clear
+    assign spec_table_write_index_mux[3] = clear_index[4:0];
+    assign spec_table_next_mux[3].phys_addr = {1'b0, clear_index[4:0]};
+    assign spec_table_next_mux[3].wb_group = '0;
+
+    assign spec_table_write_index = spec_table_write_index_mux[spec_table_sel];
+    assign spec_table_next = spec_table_next_mux[spec_table_sel];
 
     assign spec_table_read_addr[0] = spec_table_write_index;
     assign spec_table_read_addr[1:FP_REGFILE_READ_PORTS] = '{decode.rs_addr[RS1], decode.rs_addr[RS2], decode.rs_addr[RS3]};
@@ -137,19 +186,12 @@ module fp_renamer
         .new_ram_data(spec_table_next),
         .ram_data_out(spec_table_read_data)
     );
-    assign spec_table_old = spec_table_read_data[0];
+    assign spec_table_previous = spec_table_read_data[0];
 
     always_ff @ (posedge clk) begin
         if (spec_table_update) begin
-            spec_table_old_r <= spec_table_old;
+            spec_table_previous_r <= spec_table_previous;
         end
-    end
-
-    ////////////////////////////////////////////////////
-    //Arch ID-to-phys Table
-    always_ff @ (posedge clk) begin
-        if (rename_valid)
-            architectural_id_to_phys_table[decode.id] <= spec_table_old.phys_addr;
     end
 
     ////////////////////////////////////////////////////
@@ -162,7 +204,6 @@ module fp_renamer
     end endgenerate
 
     assign decode.phys_rd_addr = free_list.data_out;
-    //assign decode.phys_rd_addr = |decode.rd_addr ? free_list.data_out : '0;
     ////////////////////////////////////////////////////
     //End of Implementation
     ////////////////////////////////////////////////////
@@ -172,7 +213,7 @@ module fp_renamer
     //rename_rd_zero_assertion:
         //assert property (@(posedge clk) disable iff (rst) (decode.rd_addr == 0) |-> (decode.phys_rd_addr == 0)) else $error("rd zero renamed");
 
-    //for (genvar i = 0; i < FP_REGFILE_READ_PORTS; i++) begin : rename_rs_zero_assertion
+    //for (genvar i = 0; i < REGFILE_READ_PORTS; i++) begin : rename_rs_zero_assertion
         //assert property (@(posedge clk) disable iff (rst) (decode.rs_addr[i] == 0) |-> (decode.phys_rs_addr[i] == 0)) else $error("rs zero renamed");
     //end
 

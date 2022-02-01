@@ -116,7 +116,7 @@ module renamer
     assign inuse_list.data_in = inuse_list_input;
 
     assign inuse_list_output = inuse_list.data_out;
-    assign inuse_list.pop = retire.valid;
+    assign inuse_list.pop = retire.valid & ~retire.wb2_float;
 
     ////////////////////////////////////////////////////
     //Speculative rd-to-phys Table
@@ -138,7 +138,7 @@ module renamer
     rs_addr_t spec_table_write_index;
     rs_addr_t spec_table_write_index_mux [4];
 
-    assign spec_table_update =  rename_valid | rollback | gc.init_clear | (retire.valid & gc.supress_writeback);
+    assign spec_table_update =  rename_valid | rollback | gc.init_clear | (retire.valid & ~retire.wb2_float & gc.supress_writeback);
 
     logic [1:0] spec_table_sel;
     

@@ -180,7 +180,7 @@ module fp_decode_and_issue
     
     assign fp_rf.single_cycle_or_flush = (issue.stage_valid & issue.fp_uses_rd & gc_fetch_flush);
 
-    assign fp_instruction_issued_with_rd = instruction_issued & issue.wb2_float & issue.fp_uses_rd;
+    assign fp_instruction_issued_with_rd = instruction_issued & issue.wb2_float;
 
     ////////////////////////////////////////////////////
     //DYN Rounding mode support
@@ -189,8 +189,8 @@ module fp_decode_and_issue
 
     ////////////////////////////////////////////////////
     //Special Case Detection
-    localparam VARIABLE_EXPO_WIDTH = CONFIG.FP.EXPO_WIDTH;
-    localparam VARIABLE_FRAC_WIDTH = CONFIG.FP.FRAC_WIDTH;
+    localparam VARIABLE_EXPO_WIDTH = EXPO_WIDTH;
+    localparam VARIABLE_FRAC_WIDTH = FRAC_WIDTH;
     logic is_inf[FP_REGFILE_READ_PORTS];
     logic is_SNaN[FP_REGFILE_READ_PORTS];
     logic is_QNaN[FP_REGFILE_READ_PORTS];

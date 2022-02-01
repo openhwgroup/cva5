@@ -64,8 +64,8 @@ module fp_i2f (
   end else begin
     assign i2f_frac = rs1_int_abs[1][XLEN-1-:FRAC_WIDTH];
     assign i2f_grs = {rs1_int_abs[1][XLEN-1-FRAC_WIDTH-:2], |rs1_int_abs[1][XLEN-1-FRAC_WIDTH-2:0]};
-    assign i2f_clz = clz[1] + 1;
-    assign i2f_fflags = |i2f_grs;
+    assign i2f_clz = $bits(fp_shift_amt_t)'(clz[1]) + 1;
+    assign i2f_fflags = 0; //|i2f_grs; breaking compliance anyways
   end endgenerate
   assign i2f_expo = (FRAC_WIDTH + BIAS) & {{EXPO_WIDTH{~rs1_zero[1]}}};
   assign i2f_rd = {i2f_sign[1], i2f_expo, i2f_frac};
@@ -110,6 +110,13 @@ module fp_i2f (
 
   ///////////////////////////////////////
   //mux outputs
+  logic [2:0] DS_rm_out;
+  generate if (FLEN == 64) 
+    assign DS_rm_out = (rm_r == 3'b010) & ~DS_rd[XLEN-1] ? 3'b001 : ((rm_r == 3'b011) & ~DS_rd[XLEN-1] ? 3'b010 : rm_r);
+  else 
+    assign DS_rm_out = rm_r;
+  endgenerate
+
   always_comb begin
     fp_wb.done = done;
     fp_wb.id = id;
@@ -118,8 +125,8 @@ module fp_i2f (
       fp_wb.rd = DS_rd;//{DS_sign, DS_expo, DS_frac};
       fp_wb.grs = DS_grs;
       fp_wb.fflags = {4'b0, |DS_grs};
-      fp_wb.rm = (rm_r == 3'b010) & ~DS_rd[XLEN-1] ? 3'b001 : ((rm_r == 3'b011) & ~DS_rd[XLEN-1] ? 3'b010 : rm_r);
       fp_wb.hidden = 1;
+      fp_wb.rm = DS_rm_out;
     end else begin
       fp_wb.clz = i2f_clz;
       fp_wb.rd = i2f_rd;

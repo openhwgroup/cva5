@@ -26,10 +26,7 @@ module fp_register_file
     import riscv_types::*;
     import taiga_types::*;
      # (
-        parameter cpu_config_t CONFIG = EXAMPLE_CONFIG,
-        parameter int unsigned EXPO_WIDTH = CONFIG.FP.EXPO_WIDTH, 
-        parameter int unsigned FRAC_WIDTH = CONFIG.FP.FRAC_WIDTH,
-        parameter int unsigned FLEN = 1 + EXPO_WIDTH + FRAC_WIDTH 
+        parameter cpu_config_t CONFIG = EXAMPLE_CONFIG
     )
     (
         input logic clk,
@@ -50,7 +47,7 @@ module fp_register_file
         //Writeback
         input fp_commit_packet_t commit [FP_NUM_WB_GROUPS]
     );
-    typedef logic [INTERFACE_FLEN-1:0] rs_data_set_t [FP_REGFILE_READ_PORTS];
+    typedef logic [FLEN-1:0] rs_data_set_t [FP_REGFILE_READ_PORTS];
     rs_data_set_t rs_data_set [FP_NUM_WB_GROUPS];
 
     logic decode_inuse [FP_REGFILE_READ_PORTS];
