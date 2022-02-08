@@ -1,19 +1,23 @@
-# Documentation and Project Setup
-For up-to-date documentation, as well as an automated build environment setup, refer to [Taiga Project](https://gitlab.com/sfu-rcl/taiga-project)
+# CVA5
+
+CVA5 is a 32-bit RISC-V processor designed for FPGAs supporting the Multiply/Divide and Atomic extensions (RV32IMA).  The processor is written in SystemVerilog and has been designed to be both highly extensible and highly configurable.
 
 
-# Taiga
+The CVA5 is derived from the Taiga Project from Simon Fraser University.
 
-Taiga is a 32-bit RISC-V processor designed for FPGAs supporting the Multiply/Divide and Atomic extensions (RV32IMA).  The processor is written in SystemVerilog and has been designed to be both highly extensible and highly configurable.
 
 The pipeline has been designed to support parallel, variable-latency execution units and to readily support the inclusion of new execution units.
 
-![Taiga Block Diagram](examples/zedboard/taiga_small.png)
+![CVA5 Block Diagram](examples/zedboard/taiga_small.png)
+
+
+## Documentation and Project Setup
+For up-to-date documentation, as well as an automated build environment setup, refer to [Taiga Project](https://gitlab.com/sfu-rcl/taiga-project)
 
 
 ## License
 
-Taiga is licensed under the Apache License, Version 2.0 ( https://www.apache.org/licenses/LICENSE-2.0 )
+CVA5 is licensed under the Solderpas License, Version 2.1 ( http://solderpad.org/licenses/SHL-2.1/ ).  Solderpad is an extension of the Apache License, and many contributions to CVA5 were made under Apache Version 2.0 ( https://www.apache.org/licenses/LICENSE-2.0 )
 
 
 ## Examples
