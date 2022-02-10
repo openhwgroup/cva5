@@ -17,7 +17,7 @@ For up-to-date documentation, as well as an automated build environment setup, r
 
 ## License
 
-CVA5 is licensed under the Solderpas License, Version 2.1 ( http://solderpad.org/licenses/SHL-2.1/ ).  Solderpad is an extension of the Apache License, and many contributions to CVA5 were made under Apache Version 2.0 ( https://www.apache.org/licenses/LICENSE-2.0 )
+CVA5 is licensed under the Solderpad License, Version 2.1 ( http://solderpad.org/licenses/SHL-2.1/ ).  Solderpad is an extension of the Apache License, and many contributions to CVA5 were made under Apache Version 2.0 ( https://www.apache.org/licenses/LICENSE-2.0 )
 
 
 ## Examples
