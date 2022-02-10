@@ -85,7 +85,7 @@ module dtag_banks
     ////////////////////////////////////////////////////
     //Muxing of cache miss or invalidation control logic and tags
     assign miss_or_extern_invalidate = update | extern_inv;
-    assign update_port_addr = update ? getLineAddr(stage2_addr) : getLineAddr(inv_addr);
+    assign update_port_addr = (extern_inv & ~update) ? getLineAddr(inv_addr) : getLineAddr(stage2_addr);
 
     assign new_tagline.valid = update;//If not update then an invalidation is being performed
     assign new_tagline.tag = getTag(stage2_addr);

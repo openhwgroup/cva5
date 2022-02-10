@@ -65,8 +65,8 @@ module l1_arbiter
     assign l2.rd_data_ack = l2.rd_data_valid;
 
     //Always accept store-conditional result
-    assign sc_complete = l2.con_valid;
-    assign sc_success = l2.con_result;
+    assign sc_complete = CONFIG.INCLUDE_AMO & l2.con_valid;
+    assign sc_success = CONFIG.INCLUDE_AMO & l2.con_result;
 
     //Arbiter can pop address FIFO at a different rate than the data FIFO, so check that both have space.
     assign push_ready = ~(l2.request_full | l2.data_full);
