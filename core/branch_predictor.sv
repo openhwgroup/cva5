@@ -95,7 +95,7 @@ module branch_predictor
 
     genvar i;
     generate if (CONFIG.INCLUDE_BRANCH_PREDICTOR)
-    for (i=0; i<CONFIG.BP.WAYS; i++) begin : branch_tag_banks
+    for (i=0; i<CONFIG.BP.WAYS; i++) begin : gen_branch_tag_banks
         branch_predictor_ram #(.C_DATA_WIDTH($bits(branch_table_entry_t)), .C_DEPTH(CONFIG.BP.ENTRIES))
         tag_bank (       
             .clk            (clk),
@@ -110,7 +110,7 @@ module branch_predictor
     endgenerate
 
     generate if (CONFIG.INCLUDE_BRANCH_PREDICTOR)
-    for (i=0; i<CONFIG.BP.WAYS; i++) begin : branch_table_banks
+    for (i=0; i<CONFIG.BP.WAYS; i++) begin : gen_branch_table_banks
         branch_predictor_ram #(.C_DATA_WIDTH(32), .C_DEPTH(CONFIG.BP.ENTRIES))
         addr_table (       
             .clk            (clk),
@@ -126,7 +126,7 @@ module branch_predictor
     endgenerate
 
     generate if (CONFIG.INCLUDE_BRANCH_PREDICTOR)
-    for (i=0; i<CONFIG.BP.WAYS; i++) begin : branch_hit_detection
+    for (i=0; i<CONFIG.BP.WAYS; i++) begin : gen_branch_hit_detection
             assign tag_matches[i] = ({if_entry[i].valid, if_entry[i].tag} == {1'b1, get_tag(bp.if_pc)});
     end
     endgenerate

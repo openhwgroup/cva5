@@ -217,7 +217,7 @@ module csr_unit
     const mstatus_t sstatus_mask = '{default:0, mxr:1, sum:1, spp:1, spie:1, sie:1};
 
 
-generate if (CONFIG.INCLUDE_M_MODE) begin
+generate if (CONFIG.INCLUDE_M_MODE) begin : gen_csr_m_mode
 
     privilege_t trap_return_privilege_level;
     privilege_t exception_privilege_level;
@@ -226,6 +226,8 @@ generate if (CONFIG.INCLUDE_M_MODE) begin
     mstatus_t mstatus_exception;
     mstatus_t mstatus_return;
     mstatus_t mstatus_new;
+
+    logic [ECODE_W-1:0] interrupt_cause_r;
 
     //Interrupt and Exception Delegation
     //Can delegate to supervisor if currently in supervisor or user modes
@@ -320,9 +322,10 @@ generate if (CONFIG.INCLUDE_M_MODE) begin
     ////////////////////////////////////////////////////
     //MTVEC
     //No vectored mode, mode hard-coded to zero
+    initial mtvec[31:2] = CONFIG.CSRS.RESET_MTVEC[31:2];
     always_ff @(posedge clk) begin
         mtvec[1:0] <= '0;
-        if (mwrite_en(MTVEC))
+        if (CONFIG.CSRS.NON_STANDARD_OPTIONS.MTVEC_WRITEABLE & mwrite_en(MTVEC))
             mtvec[XLEN-1:2] <= updated_csr[XLEN-1:2];
     end
     assign exception_target_pc = mtvec;
@@ -351,7 +354,7 @@ generate if (CONFIG.INCLUDE_M_MODE) begin
     always_ff @(posedge clk) begin
         if (rst)
             medeleg <= '0;
-        else if (mwrite_en(MEDELEG))
+        else if (mwrite_en(MEDELEG) & CONFIG.INCLUDE_S_MODE)
             medeleg <= (updated_csr & medeleg_mask);
     end
 
@@ -369,7 +372,7 @@ generate if (CONFIG.INCLUDE_M_MODE) begin
     always_ff @(posedge clk) begin
         if (rst)
             mideleg <= '0;
-        else if (mwrite_en(MIDELEG))
+        else if (mwrite_en(MIDELEG) & CONFIG.INCLUDE_S_MODE)
             mideleg <= (updated_csr & mideleg_mask);
     end
 
@@ -467,7 +470,6 @@ generate if (CONFIG.INCLUDE_M_MODE) begin
     mip_t mip_cause;
     logic [5:0] mip_priority_vector;
     logic [2:0] mip_cause_sel;
-    logic [ECODE_W-1:0] interrupt_cause_r;
 
     const logic [ECODE_W-1:0] interruput_code_table [8] = '{ 0, 0, 
         M_EXTERNAL_INTERRUPT, M_TIMER_INTERRUPT, M_SOFTWARE_INTERRUPT,
@@ -492,7 +494,7 @@ generate if (CONFIG.INCLUDE_M_MODE) begin
             mcause.interrupt <= 0;
             mcause.code <= 0;
         end
-        else if ((mcause_write_valid & mwrite_en(MCAUSE)) | exception.valid | interrupt_taken) begin
+        else if (CONFIG.CSRS.NON_STANDARD_OPTIONS.INCLUDE_MCAUSE & ((mcause_write_valid & mwrite_en(MCAUSE)) | exception.valid | interrupt_taken)) begin
             mcause.interrupt <= interrupt_taken | (mwrite_en(MCAUSE) & updated_csr[XLEN-1]);
             mcause.code <= interrupt_taken ? interrupt_cause_r : exception.valid ? exception.code : updated_csr[ECODE_W-1:0];
         end
@@ -501,14 +503,14 @@ generate if (CONFIG.INCLUDE_M_MODE) begin
     ////////////////////////////////////////////////////
     //MTVAL
     always_ff @(posedge clk) begin
-        if (mwrite_en(MTVAL) | exception.valid)
+        if (CONFIG.CSRS.NON_STANDARD_OPTIONS.INCLUDE_MTVAL & (mwrite_en(MTVAL) | exception.valid))
             mtval <=  exception.valid ? exception.tval : updated_csr;
     end
 
     ////////////////////////////////////////////////////
     //MSCRATCH
     always_ff @(posedge clk) begin
-        if (mwrite_en(MSCRATCH))
+        if (CONFIG.CSRS.NON_STANDARD_OPTIONS.INCLUDE_MSCRATCH & mwrite_en(MSCRATCH))
             mscratch <= updated_csr;
     end
 
@@ -553,7 +555,7 @@ endgenerate
     assign asid = satp.asid;
     //******************
 
-generate if (CONFIG.INCLUDE_S_MODE) begin
+generate if (CONFIG.INCLUDE_S_MODE) begin : gen_csr_s_mode
     ////////////////////////////////////////////////////
     //MMU interface
     assign immu.mxr = mstatus.mxr;
@@ -608,47 +610,47 @@ endgenerate
     //Timers and Counters
     //Register increment for instructions completed
     //Increments suppressed on writes to these registers
-    logic[CONFIG.CSRS.COUNTER_W-1:0] mcycle;
-    logic[CONFIG.CSRS.COUNTER_W-1:0] mtime;
-    logic[CONFIG.CSRS.COUNTER_W-1:0] minst_ret;
+    logic[CONFIG.CSRS.NON_STANDARD_OPTIONS.COUNTER_W-1:0] mcycle;
+    logic[CONFIG.CSRS.NON_STANDARD_OPTIONS.COUNTER_W-1:0] mtime;
+    logic[CONFIG.CSRS.NON_STANDARD_OPTIONS.COUNTER_W-1:0] minst_ret;
 
-    logic[CONFIG.CSRS.COUNTER_W-1:0] mcycle_input_next;
-    logic[CONFIG.CSRS.COUNTER_W-1:0] minst_ret_input_next;
+    logic[CONFIG.CSRS.NON_STANDARD_OPTIONS.COUNTER_W-1:0] mcycle_input_next;
+    logic[CONFIG.CSRS.NON_STANDARD_OPTIONS.COUNTER_W-1:0] minst_ret_input_next;
     logic[LOG2_RETIRE_PORTS:0] minst_ret_inc;
     logic mcycle_inc;
 
     always_comb begin
         mcycle_input_next = mcycle;
-        if (mwrite_en(MCYCLE))
+        if (CONFIG.CSRS.NON_STANDARD_OPTIONS.MCYCLE_WRITEABLE & mwrite_en(MCYCLE))
             mcycle_input_next[31:0] = updated_csr;
-        if (mwrite_en(MCYCLEH))
-            mcycle_input_next[CONFIG.CSRS.COUNTER_W-1:32] = updated_csr[CONFIG.CSRS.COUNTER_W-33:0];
+        if (CONFIG.CSRS.NON_STANDARD_OPTIONS.MCYCLE_WRITEABLE & mwrite_en(MCYCLEH))
+            mcycle_input_next[CONFIG.CSRS.NON_STANDARD_OPTIONS.COUNTER_W-1:32] = updated_csr[CONFIG.CSRS.NON_STANDARD_OPTIONS.COUNTER_W-33:0];
     end
 
-    assign mcycle_inc = ~(mwrite_en(MCYCLE) | mwrite_en(MCYCLEH));
+    assign mcycle_inc = ~(CONFIG.CSRS.NON_STANDARD_OPTIONS.MCYCLE_WRITEABLE & (mwrite_en(MCYCLE) | mwrite_en(MCYCLEH)));
 
     always_ff @(posedge clk) begin
         if (rst) 
             mcycle <= 0;
         else
-            mcycle <= mcycle_input_next + CONFIG.CSRS.COUNTER_W'(mcycle_inc);
+            mcycle <= mcycle_input_next + CONFIG.CSRS.NON_STANDARD_OPTIONS.COUNTER_W'(mcycle_inc);
     end
 
     always_comb begin
         minst_ret_input_next = minst_ret;
-        if (mwrite_en(MINSTRET))
+        if (CONFIG.CSRS.NON_STANDARD_OPTIONS.MINSTR_WRITEABLE & mwrite_en(MINSTRET))
             minst_ret_input_next[31:0] = updated_csr;
-        if (mwrite_en(MINSTRETH))
-            minst_ret_input_next[CONFIG.CSRS.COUNTER_W-1:32] = updated_csr[CONFIG.CSRS.COUNTER_W-33:0];
+        if (CONFIG.CSRS.NON_STANDARD_OPTIONS.MINSTR_WRITEABLE & mwrite_en(MINSTRETH))
+            minst_ret_input_next[CONFIG.CSRS.NON_STANDARD_OPTIONS.COUNTER_W-1:32] = updated_csr[CONFIG.CSRS.NON_STANDARD_OPTIONS.COUNTER_W-33:0];
     end
 
-    assign minst_ret_inc = {(LOG2_RETIRE_PORTS+1){~(mwrite_en(MINSTRET) | mwrite_en(MINSTRETH))}} & retire.count;
+    assign minst_ret_inc = {(LOG2_RETIRE_PORTS+1){~(CONFIG.CSRS.NON_STANDARD_OPTIONS.MINSTR_WRITEABLE & (mwrite_en(MINSTRET) | mwrite_en(MINSTRETH)))}} & retire.count;
 
     always_ff @(posedge clk) begin
         if (rst)
             minst_ret <= 0;
         else
-            minst_ret <= minst_ret_input_next + CONFIG.CSRS.COUNTER_W'(minst_ret_inc);
+            minst_ret <= minst_ret_input_next + CONFIG.CSRS.NON_STANDARD_OPTIONS.COUNTER_W'(minst_ret_inc);
     end
 
 
@@ -681,8 +683,8 @@ endgenerate
             MCYCLE : selected_csr = CONFIG.INCLUDE_M_MODE ? mcycle[XLEN-1:0] : 0;
             MINSTRET : selected_csr = CONFIG.INCLUDE_M_MODE ? minst_ret[XLEN-1:0] : 0;
             [12'hB03 : 12'hB1F] : selected_csr = 0;
-            MCYCLEH : selected_csr = CONFIG.INCLUDE_M_MODE ? 32'(mcycle[CONFIG.CSRS.COUNTER_W-1:XLEN]) : 0;
-            MINSTRETH : selected_csr = CONFIG.INCLUDE_M_MODE ? 32'(minst_ret[CONFIG.CSRS.COUNTER_W-1:XLEN]) : 0;
+            MCYCLEH : selected_csr = CONFIG.INCLUDE_M_MODE ? 32'(mcycle[CONFIG.CSRS.NON_STANDARD_OPTIONS.COUNTER_W-1:XLEN]) : 0;
+            MINSTRETH : selected_csr = CONFIG.INCLUDE_M_MODE ? 32'(minst_ret[CONFIG.CSRS.NON_STANDARD_OPTIONS.COUNTER_W-1:XLEN]) : 0;
             [12'hB83 : 12'hB9F] : selected_csr = 0;
             //Machine Counter Setup
             [12'h320 : 12'h33F] : selected_csr = 0;
@@ -713,9 +715,9 @@ endgenerate
             TIME : selected_csr = mcycle[XLEN-1:0];
             INSTRET : selected_csr = minst_ret[XLEN-1:0];
             [12'hC03 : 12'hC1F] : selected_csr = 0;
-            CYCLEH : selected_csr = 32'(mcycle[CONFIG.CSRS.COUNTER_W-1:XLEN]);
-            TIMEH : selected_csr = 32'(mcycle[CONFIG.CSRS.COUNTER_W-1:XLEN]);
-            INSTRETH : selected_csr = 32'(minst_ret[CONFIG.CSRS.COUNTER_W-1:XLEN]);
+            CYCLEH : selected_csr = 32'(mcycle[CONFIG.CSRS.NON_STANDARD_OPTIONS.COUNTER_W-1:XLEN]);
+            TIMEH : selected_csr = 32'(mcycle[CONFIG.CSRS.NON_STANDARD_OPTIONS.COUNTER_W-1:XLEN]);
+            INSTRETH : selected_csr = 32'(minst_ret[CONFIG.CSRS.NON_STANDARD_OPTIONS.COUNTER_W-1:XLEN]);
             [12'hC83 : 12'hC9F] : selected_csr = 0;
 
             default : selected_csr = 0;

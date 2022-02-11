@@ -33,10 +33,21 @@ package taiga_config;
     ////////////////////////////////////////////////////
     //CSR Options
     typedef struct packed {
+        int unsigned  COUNTER_W; //CSR counter width (33-64 bits): 48-bits --> 32 days @ 100MHz
+        bit MCYCLE_WRITEABLE;
+        bit MINSTR_WRITEABLE;
+        bit MTVEC_WRITEABLE;
+        bit INCLUDE_MSCRATCH;
+        bit INCLUDE_MCAUSE;
+        bit INCLUDE_MTVAL;
+    } csr_non_standard_config_t;
+
+    typedef struct packed {
         bit [31:0] MACHINE_IMPLEMENTATION_ID;
         bit [31:0] CPU_ID;
         bit [31:0] RESET_VEC; //PC value on reset
-        int unsigned  COUNTER_W; //CSR counter width (33-64 bits): 48-bits --> 32 days @ 100MHz
+        bit [31:0] RESET_MTVEC;
+        csr_non_standard_config_t NON_STANDARD_OPTIONS;
     } csr_config_t;
 
     ////////////////////////////////////////////////////
@@ -93,6 +104,8 @@ package taiga_config;
         bit INCLUDE_U_MODE;
         bit INCLUDE_MUL;
         bit INCLUDE_DIV;
+        bit INCLUDE_IFENCE; //local mem operations only
+        bit INCLUDE_CSRS;
         bit INCLUDE_AMO; //cache operations only
         //CSR constants
         csr_config_t CSRS;
@@ -140,13 +153,24 @@ package taiga_config;
         INCLUDE_U_MODE : 1,
         INCLUDE_MUL : 1,
         INCLUDE_DIV : 1,
+        INCLUDE_IFENCE : 1,
+        INCLUDE_CSRS : 1,
         INCLUDE_AMO : 0,
         //CSR constants
         CSRS : '{
             MACHINE_IMPLEMENTATION_ID : 0,
             CPU_ID : 0,
             RESET_VEC : 32'h80000000,
-            COUNTER_W : 33
+            RESET_MTVEC : 32'h80000100,
+            NON_STANDARD_OPTIONS : '{
+                COUNTER_W : 33,
+                MCYCLE_WRITEABLE : 1,
+                MINSTR_WRITEABLE : 1,
+                MTVEC_WRITEABLE : 1,
+                INCLUDE_MSCRATCH : 1,
+                INCLUDE_MCAUSE : 1,
+                INCLUDE_MTVAL : 1
+            }
         },
         //Memory Options
         INCLUDE_ICACHE : 0,

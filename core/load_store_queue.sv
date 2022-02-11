@@ -71,7 +71,7 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
     //Address hash for load-store collision checking
     addr_hash lsq_addr_hash (
         .clk (clk),
-        .rst (rst | gc.issue_flush),
+        .rst (rst | gc.sq_flush),
         .addr (lsq.addr),
         .addr_hash (addr_hash)
     );
@@ -101,7 +101,7 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
     logic sq_retire_port_valid [RETIRE_PORTS];
     always_comb begin
         for (int i=0; i < RETIRE_PORTS; i++)
-            sq_retire_port_valid[i] = retire_port_valid[i] & ~gc.supress_writeback;
+            sq_retire_port_valid[i] = retire_port_valid[i] & ~gc.writeback_supress;
     end
 
     store_queue #(.DEPTH(SQ_DEPTH)) sq_block (
@@ -158,7 +158,7 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
 
     ////////////////////////////////////////////////////
     //Trace Interface
-    generate if (ENABLE_TRACE_INTERFACE) begin
+    generate if (ENABLE_TRACE_INTERFACE) begin : gen_lsq_trace
         assign tr_possible_load_conflict_delay = lq_output_valid & (store_conflict | (sq_full & sq_output_valid));
     end
     endgenerate

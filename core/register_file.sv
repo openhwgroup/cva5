@@ -111,7 +111,7 @@ module register_file
             .clk, .rst,
             .write_addr(commit[i].phys_addr),
             .new_data(commit[i].data),
-            .commit(commit[i].valid & ~gc.supress_writeback),
+            .commit(commit[i].valid & ~gc.writeback_supress),
             .read_addr(decode_phys_rs_addr),
             .data(rs_data_set[i])
         );

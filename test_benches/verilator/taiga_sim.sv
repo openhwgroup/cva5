@@ -454,7 +454,7 @@ module taiga_sim
     } spec_table_t;
     spec_table_t translation [32];
     genvar i, j;
-    generate  for (i = 0; i < 32; i++) begin
+    generate  for (i = 0; i < 32; i++) begin : gen_reg_file_sim
         for (j = 0; j < EXAMPLE_CONFIG.NUM_WB_GROUPS; j++) begin
             if (FPGA_VENDOR == XILINX)
                 assign translation[i] = cpu.renamer_block.spec_table_ram.xilinx_gen.ram[i];

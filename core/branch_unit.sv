@@ -101,7 +101,7 @@ module branch_unit
     assign new_pc = branch_taken ? jump_pc : branch_inputs.pc_p4;
 
     always_ff @(posedge clk) begin
-        if (issue.possible_issue) begin
+        if (issue.new_request) begin
             branch_taken_ex <= branch_taken;
             new_pc_ex <= {new_pc[31:1], new_pc[0]  & ~branch_inputs.jalr};
             id_ex <= issue.id;
@@ -111,10 +111,10 @@ module branch_unit
 
     ////////////////////////////////////////////////////
     //Exception support
-    generate if (CONFIG.INCLUDE_M_MODE) begin
+    generate if (CONFIG.INCLUDE_M_MODE) begin : gen_branch_exception
         logic new_exception;
 
-        assign new_exception = new_pc_ex[1] & branch_taken_ex & branch_issued_r;
+        assign new_exception = new_pc[1] & branch_taken & issue.new_request;
         always_ff @(posedge clk) begin
             if (rst)
                 exception.valid <= 0;
@@ -123,7 +123,7 @@ module branch_unit
         end
 
         always_ff @(posedge clk) begin
-            if (issue.possible_issue)
+            if (issue.new_request)
                 exception.id <= issue.id;
         end
         assign exception.code = INST_ADDR_MISSALIGNED;

@@ -131,12 +131,11 @@ module load_store_unit
 
     ////////////////////////////////////////////////////
     //Alignment Exception
-generate if (CONFIG.INCLUDE_M_MODE) begin
+generate if (CONFIG.INCLUDE_M_MODE) begin : gen_ls_exceptions
     logic new_exception;
     always_comb begin
         case(ls_inputs.fn3)
-            LS_H_fn3 : unaligned_addr = virtual_address[0];
-            L_HU_fn3 : unaligned_addr = virtual_address[0];
+            LS_H_fn3, L_HU_fn3 : unaligned_addr = virtual_address[0];
             LS_W_fn3 : unaligned_addr = |virtual_address[1:0];
             default : unaligned_addr = 0;
         endcase
@@ -287,7 +286,7 @@ endgenerate
 
     ////////////////////////////////////////////////////
     //Unit Instantiation
-    generate if (CONFIG.INCLUDE_DLOCAL_MEM) begin
+    generate if (CONFIG.INCLUDE_DLOCAL_MEM) begin : gen_ls_local_mem
             assign sub_unit_address_match[BRAM_ID] = bram.address_range_check(shared_inputs.addr);
             assign bram.new_request = sub_unit_address_match[BRAM_ID] & issue_request;
 
@@ -305,7 +304,7 @@ endgenerate
         end
     endgenerate
 
-    generate if (CONFIG.INCLUDE_PERIPHERAL_BUS) begin
+    generate if (CONFIG.INCLUDE_PERIPHERAL_BUS) begin : gen_ls_pbus
             assign sub_unit_address_match[BUS_ID] = bus.address_range_check(shared_inputs.addr);
             assign bus.new_request = sub_unit_address_match[BUS_ID] & issue_request;
 
@@ -345,7 +344,7 @@ endgenerate
         end
     endgenerate
 
-    generate if (CONFIG.INCLUDE_DCACHE) begin
+    generate if (CONFIG.INCLUDE_DCACHE) begin : gen_ls_dcache
             assign sub_unit_address_match[DCACHE_ID] = cache.address_range_check(shared_inputs.addr);
             assign cache.new_request = sub_unit_address_match[DCACHE_ID] & issue_request;
 
@@ -413,15 +412,15 @@ endgenerate
         assert property (@(posedge clk) disable iff (rst) load_complete |-> (load_attributes.valid && unit_data_valid[stage2_attr.subunit_id]))
         else $error("Spurious load complete detected!");
 
-    `ifdef ENABLE_SIMULATION_ASSERTIONS
-        invalid_ls_address_assertion:
-            assert property (@(posedge clk) disable iff (rst) (issue_request & ~ls_inputs.fence) |-> |sub_unit_address_match)
-            else $error("invalid L/S address");
-    `endif
+    // `ifdef ENABLE_SIMULATION_ASSERTIONS
+    //     invalid_ls_address_assertion:
+    //         assert property (@(posedge clk) disable iff (rst) (issue_request & ~ls_inputs.fence) |-> |sub_unit_address_match)
+    //         else $error("invalid L/S address");
+    // `endif
 
     ////////////////////////////////////////////////////
     //Trace Interface
-    generate if (ENABLE_TRACE_INTERFACE) begin
+    generate if (ENABLE_TRACE_INTERFACE) begin : gen_ls_trace
         assign tr_load_conflict_delay = tr_possible_load_conflict_delay & ready_for_issue_from_lsq;
     end
     endgenerate

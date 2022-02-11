@@ -42,7 +42,7 @@ module set_clr_reg_with_rst
 
     ////////////////////////////////////////////////////
     //Implementation
-    generate if (SET_OVER_CLR) begin
+    generate if (SET_OVER_CLR) begin : gen_set_over_clear
         always_ff @ (posedge clk) begin
             if (rst)
                 result <= RST_VALUE;
@@ -50,7 +50,7 @@ module set_clr_reg_with_rst
                 result <= set | (result & ~clr);
         end
     end else begin
-        always_ff @ (posedge clk) begin
+        always_ff @ (posedge clk) begin : gen_clear_over_set
             if (rst)
                 result <= RST_VALUE;
             else

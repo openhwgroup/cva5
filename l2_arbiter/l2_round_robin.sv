@@ -33,47 +33,43 @@ module l2_round_robin
     logic [$clog2(L2_NUM_PORTS)-1:0] state;
     logic[$clog2(L2_NUM_PORTS)-1:0] muxes [L2_NUM_PORTS-1:0];
 
-    generate if(L2_NUM_PORTS == 1)
-        begin
-            assign arb.grantee_valid = arb.requests[0];
-            assign arb.grantee_v = arb.requests;
-            assign arb.grantee_i = 0;
+    generate if(L2_NUM_PORTS == 1) begin : gen_width_one
+        assign arb.grantee_valid = arb.requests[0];
+        assign arb.grantee_v = arb.requests;
+        assign arb.grantee_i = 0;
+    end else begin : gen_width_2plus
+        //Lowest priority to current state
+        always_ff @(posedge clk) begin
+            if (rst)
+                state <= 0;
+            else if (arb.strobe)
+                state <= arb.grantee_i;
         end
-        else
-        begin
 
-            //Lowest priority to current state
-            always_ff @(posedge clk) begin
-                if (rst)
-                    state <= 0;
-                else if (arb.strobe)
-                    state <= arb.grantee_i;
-            end
-
-            //ex: state 0, highest priority to L2_NUM_PORTS-1
-            always_comb begin
-                for (int i = 0; i < L2_NUM_PORTS; i++) begin
-                    muxes[i] = $clog2(L2_NUM_PORTS)'(i);
-                    for (int j = 0; j < L2_NUM_PORTS; j++) begin
-                        if (arb.requests[(i+j) % L2_NUM_PORTS])
-                            muxes[i] = $clog2(L2_NUM_PORTS)'((i+j) % L2_NUM_PORTS);
-                    end
+        //ex: state 0, highest priority to L2_NUM_PORTS-1
+        always_comb begin
+            for (int i = 0; i < L2_NUM_PORTS; i++) begin
+                muxes[i] = $clog2(L2_NUM_PORTS)'(i);
+                for (int j = 0; j < L2_NUM_PORTS; j++) begin
+                    if (arb.requests[(i + j) % L2_NUM_PORTS])
+                        muxes[i] = $clog2(L2_NUM_PORTS)'((i + j) % L2_NUM_PORTS);
                 end
             end
+        end
 
-            //Select mux output based on current state
-            assign arb.grantee_i = muxes[state];
+        //Select mux output based on current state
+        assign arb.grantee_i = muxes[state];
 
             //Integer to one-hot
-            always_comb begin
-                arb.grantee_v = '0;
-                arb.grantee_v[arb.grantee_i] = 1;
-            end
-
-            //any valid request
-            assign  arb.grantee_valid = |arb.requests;
-
+        always_comb begin
+            arb.grantee_v = '0;
+            arb.grantee_v[arb.grantee_i] = 1;
         end
+
+        //any valid request
+        assign arb.grantee_valid = |arb.requests;
+
+    end
     endgenerate
 
 endmodule

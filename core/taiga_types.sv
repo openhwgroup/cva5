@@ -75,14 +75,9 @@ package taiga_types;
         logic [2:0] fn3;
         logic [6:0] opcode;
 
-        rs_addr_t [REGFILE_READ_PORTS-1:0] rs_addr;
-        phys_addr_t [REGFILE_READ_PORTS-1:0] phys_rs_addr;
-
         rs_addr_t rd_addr;
         phys_addr_t phys_rd_addr;
 
-        logic uses_rs1;
-        logic uses_rs2;
         logic uses_rd;
         logic is_multicycle;
         id_t id;
@@ -183,8 +178,6 @@ package taiga_types;
         logic is_ifence;
         logic is_mret;
         logic is_sret;
-        logic is_exception;
-        exception_code_t code;
     } gc_inputs_t;
 
     typedef struct packed{
@@ -264,9 +257,9 @@ package taiga_types;
         logic init_clear;
         logic fetch_hold;
         logic issue_hold;
-        logic issue_flush;
         logic fetch_flush;
-        logic supress_writeback;
+        logic writeback_supress;
+        logic retire_hold;
         logic sq_flush;
         logic tlb_flush;
         logic exception_pending;

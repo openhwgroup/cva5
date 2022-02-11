@@ -252,8 +252,8 @@ interface ls_sub_unit_interface #(parameter bit [31:0] BASE_ADDR = 32'h00000000,
     //find the number of bits needed to uniquely identify this memory range.
     //Assumption: address range is aligned to its size
     function automatic int unsigned bit_range ();
-        int unsigned i = 0;
-        for(; i < 32; i++) begin
+        int unsigned i;
+        for(i=0; i < 32; i++) begin
             if (BASE_ADDR[i] == UPPER_BOUND[i])
                 break;
         end
@@ -286,8 +286,8 @@ interface fetch_sub_unit_interface #(parameter bit [31:0] BASE_ADDR = 32'h000000
     //find the number of bits needed to uniquely identify this memory range.
     //Assumption: address range is aligned to its size
     function automatic int unsigned bit_range ();
-        int unsigned i = 0;
-        for(; i < 32; i++) begin
+        int unsigned i;
+        for(i=0; i < 32; i++) begin
             if (BASE_ADDR[i] == UPPER_BOUND[i])
                 break;
         end
@@ -326,15 +326,15 @@ interface renamer_interface #(parameter NUM_WB_GROUPS = 2);
     import taiga_types::*;
 
     rs_addr_t rd_addr;
-    rs_addr_t [REGFILE_READ_PORTS-1:0] rs_addr;
+    rs_addr_t rs_addr [REGFILE_READ_PORTS];
     logic [$clog2(NUM_WB_GROUPS)-1:0] rd_wb_group;
     logic uses_rd;
     id_t id;
 
-    phys_addr_t [REGFILE_READ_PORTS-1:0] phys_rs_addr;
+    phys_addr_t phys_rs_addr [REGFILE_READ_PORTS];
     phys_addr_t phys_rd_addr;
 
-    logic [REGFILE_READ_PORTS-1:0][$clog2(NUM_WB_GROUPS)-1:0] rs_wb_group;
+    logic [$clog2(NUM_WB_GROUPS)-1:0] rs_wb_group [REGFILE_READ_PORTS];
 
     modport renamer (
         input rd_addr, rs_addr, rd_wb_group, uses_rd, id,

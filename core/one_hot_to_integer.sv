@@ -32,9 +32,9 @@ module one_hot_to_integer
     );
     ////////////////////////////////////////////////////
     //Implementation    
-    generate if (C_WIDTH == 1)
+    generate if (C_WIDTH == 1) begin : gen_width_one
         assign int_out = 0;
-    else begin
+    end else begin : gen_width_two_plus
         always_comb begin
             int_out = 0;
             foreach(one_hot[i])

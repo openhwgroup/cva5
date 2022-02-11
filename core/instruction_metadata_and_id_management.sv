@@ -68,6 +68,7 @@ module instruction_metadata_and_id_management
         //Retirer
         output retire_packet_t retire,
         output id_t retire_ids [RETIRE_PORTS],
+        output id_t retire_ids_next [RETIRE_PORTS],
         output logic retire_port_valid [RETIRE_PORTS],
 
         //CSR
@@ -99,7 +100,6 @@ module instruction_metadata_and_id_management
     logic [LOG2_MAX_IDS:0] inflight_count;
 
     retire_packet_t retire_next;
-    id_t retire_ids_next [RETIRE_PORTS];
     logic retire_port_valid_next [RETIRE_PORTS];
 
     genvar i;
@@ -177,12 +177,12 @@ module instruction_metadata_and_id_management
         else begin
             pc_id <= (early_branch_flush ? fetch_id : pc_id) + LOG2_MAX_IDS'(pc_id_assigned);
             fetch_id <= fetch_id + LOG2_MAX_IDS'(fetch_complete);
-            decode_id <= decode_id + LOG2_MAX_IDS'(decode_advance );
+            decode_id <= decode_id + LOG2_MAX_IDS'(decode_advance);
         end
     end
     //Retire IDs
     //Each retire port lags behind the previous one by one index (eg. [3, 2, 1, 0])
-     generate for (i = 0; i < RETIRE_PORTS; i++) begin
+     generate for (i = 0; i < RETIRE_PORTS; i++) begin :gen_retire_ids
         always_ff @ (posedge clk) begin
             if (rst)
                 retire_ids_next[i] <= LOG2_MAX_IDS'(i);
@@ -191,7 +191,8 @@ module instruction_metadata_and_id_management
         end
 
         always_ff @ (posedge clk) begin
-            retire_ids[i] <= retire_ids_next[i];
+            if (~gc.retire_hold)
+                retire_ids[i] <= retire_ids_next[i];
         end
         
     end endgenerate
@@ -232,7 +233,7 @@ module instruction_metadata_and_id_management
 
     ////////////////////////////////////////////////////
     //ID in-use determination
-    logic id_inuse [RETIRE_PORTS];
+    logic id_waiting_for_writeback [RETIRE_PORTS];
     //WB group zero is not included as it completes within a single cycle
     //Non-writeback instructions not included as current instruction set
     //complete in their first cycle of the execute stage, or do not cause an
@@ -243,7 +244,7 @@ module instruction_metadata_and_id_management
         .NUM_READ_PORTS (RETIRE_PORTS),
         .WRITE_INDEX_FOR_RESET (0),
         .READ_INDEX_FOR_RESET (0)
-    ) id_inuse_toggle_mem_set
+    ) id_waiting_for_writeback_toggle_mem_set
     (
         .clk (clk),
         .rst (rst),
@@ -251,7 +252,7 @@ module instruction_metadata_and_id_management
         .toggle ('{(instruction_issued_with_rd & issue.is_multicycle), wb_packet[1].valid}),
         .toggle_addr ('{issue.id, wb_packet[1].id}),
         .read_addr (retire_ids_next),
-        .in_use (id_inuse)
+        .in_use (id_waiting_for_writeback)
     );
 
     ////////////////////////////////////////////////////
@@ -261,46 +262,53 @@ module instruction_metadata_and_id_management
     logic id_ready_to_retire [RETIRE_PORTS];
     logic [LOG2_RETIRE_PORTS-1:0] phys_id_sel;
     logic [RETIRE_PORTS-1:0] retire_id_uses_rd;
-    logic [RETIRE_PORTS-1:0] retire_id_inuse;
+    logic [RETIRE_PORTS-1:0] retire_id_waiting_for_writeback;
 
-
-
-     generate for (i = 0; i < RETIRE_PORTS; i++) begin
+     generate for (i = 0; i < RETIRE_PORTS; i++) begin : gen_retire_writeback
         assign retire_id_uses_rd[i] = uses_rd_table[retire_ids_next[i]];
-        assign retire_id_inuse[i] = id_inuse[i];
+        assign retire_id_waiting_for_writeback[i] = id_waiting_for_writeback[i];
      end endgenerate
 
-    priority_encoder #(.WIDTH(RETIRE_PORTS))
-    phys_id_sel_encoder (
-        .priority_vector (retire_id_uses_rd & ~retire_id_inuse),
-        .encoded_result (phys_id_sel)
-    );
-    assign retire_next.phys_id = retire_ids_next[phys_id_sel];
-
+    //Supports retiring up to RETIRE_PORTS instructions.  The retired block of instructions must be
+    //contiguous and must start with the first retire port.  Additionally, only one register file writing 
+    //instruction is supported per cycle.
+    //If an exception is pending, only retire a single intrustuction per cycle.  As such, the pending
+    //exception will have to become the oldest instruction retire_ids[0] before it can retire.
+    logic retire_with_rd_found;
     always_comb begin
-        contiguous_retire = 1;
-        retire_next.valid = 0;
-        retire_next.count = 0;
-        //Supports retiring up to RETIRE_PORTS instructions.  The retired block of instructions must be
-        //contiguous and must start with the first retire port.  Additionally, only one register file writing 
-        //instruction is supported per cycle.
-        //If an exception is pending, only retire a single intrustuction per cycle.  As such, the pending
-        //exception will have to become the oldest instruction retire_ids[0] before it can retire.
+        contiguous_retire = ~gc.retire_hold;
+        retire_with_rd_found = 0;
         for (int i = 0; i < RETIRE_PORTS; i++) begin
             id_is_post_issue[i] = post_issue_count > ID_COUNTER_W'(i);
 
-            id_ready_to_retire[i] = (id_is_post_issue[i] & contiguous_retire & ~id_inuse[i]);
-            retire_port_valid_next[i] = id_ready_to_retire[i] & ((~retire_id_uses_rd[i]) | (~retire_next.valid));
-
+            id_ready_to_retire[i] = (id_is_post_issue[i] & contiguous_retire & ~id_waiting_for_writeback[i]);
+            retire_port_valid_next[i] = id_ready_to_retire[i] & ~(retire_id_uses_rd[i] & retire_with_rd_found);
+     
+            retire_with_rd_found |= retire_port_valid_next[i] & retire_id_uses_rd[i];
             contiguous_retire &= retire_port_valid_next[i] & ~gc.exception_pending;
+        end
+    end
 
-            retire_next.valid |= retire_port_valid_next[i] & retire_id_uses_rd[i];
+    //retire_next packet
+    priority_encoder #(.WIDTH(RETIRE_PORTS))
+    phys_id_sel_encoder (
+        .priority_vector (retire_id_uses_rd & ~retire_id_waiting_for_writeback),
+        .encoded_result (phys_id_sel)
+    );
+    assign retire_next.phys_id = retire_ids_next[phys_id_sel];
+    assign retire_next.valid = retire_with_rd_found;
+
+    always_comb begin
+        retire_next.count = 0;
+        for (int i = 0; i < RETIRE_PORTS; i++) begin
             retire_next.count += retire_port_valid_next[i];
         end
     end
 
     always_ff @ (posedge clk) begin
-        retire <= retire_next;
+        retire.valid <= retire_next.valid;
+        retire.phys_id <= retire_next.phys_id;
+        retire.count <= gc.writeback_supress ? '0 : retire_next.count;
         retire_port_valid <= retire_port_valid_next;
     end
 
@@ -318,11 +326,11 @@ module instruction_metadata_and_id_management
     //Writeback/Commit support
     phys_addr_t commit_phys_addr [CONFIG.NUM_WB_GROUPS];
     assign commit_phys_addr[0] = issue.phys_rd_addr;
-     generate for (i = 1; i < CONFIG.NUM_WB_GROUPS; i++) begin
+     generate for (i = 1; i < CONFIG.NUM_WB_GROUPS; i++) begin : gen_commit_phys_addr
         assign commit_phys_addr[i] = phys_addr_table[wb_packet[i].id];
      end endgenerate
 
-     generate for (i = 0; i < CONFIG.NUM_WB_GROUPS; i++) begin
+     generate for (i = 0; i < CONFIG.NUM_WB_GROUPS; i++) begin : gen_commit_packet
         assign commit_packet[i].id = wb_packet[i].id;
         assign commit_packet[i].phys_addr = commit_phys_addr[i];        
         assign commit_packet[i].valid = wb_packet[i].valid & |commit_phys_addr[i];
@@ -330,9 +338,9 @@ module instruction_metadata_and_id_management
      end endgenerate
 
     //Exception Support
-     generate if (CONFIG.INCLUDE_M_MODE) begin
-        assign oldest_pc = pc_table[retire_ids[0]];
-        assign current_exception_unit = exception_unit_table[retire_ids[0]];
+     generate if (CONFIG.INCLUDE_M_MODE) begin : gen_id_exception_support
+        assign oldest_pc = pc_table[retire_ids_next[0]];
+        assign current_exception_unit = exception_unit_table[retire_ids_next[0]];
      end endgenerate
 
     ////////////////////////////////////////////////////

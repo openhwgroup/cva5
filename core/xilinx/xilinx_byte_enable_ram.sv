@@ -55,7 +55,7 @@ module xilinx_byte_enable_ram
             $readmemh(preload_file,ram, 0, LINES-1);
     end
 
-    generate
+    generate begin : gen_xilinx_bram
     genvar i;
     for (i=0; i < 4; i++) begin
         always_ff @(posedge clk) begin
@@ -82,6 +82,6 @@ module xilinx_byte_enable_ram
             end
         end
     end
-    endgenerate
+    end endgenerate
 
 endmodule
