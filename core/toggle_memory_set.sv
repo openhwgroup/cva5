@@ -22,8 +22,8 @@
 
 module toggle_memory_set
 
-    import taiga_config::*;
-    import taiga_types::*;
+    import cva5_config::*;
+    import cva5_types::*;
     
     # (
         parameter DEPTH = 64,

@@ -21,7 +21,7 @@
  */
 
 interface branch_predictor_interface;
-    import taiga_types::*;
+    import cva5_types::*;
 
     //Fetch signals
     logic [31:0] if_pc;
@@ -52,7 +52,7 @@ interface branch_predictor_interface;
 endinterface
 
 interface unit_issue_interface;
-    import taiga_types::*;
+    import cva5_types::*;
 
     logic possible_issue;
     logic new_request;
@@ -67,7 +67,7 @@ endinterface
 
 interface unit_writeback_interface;
     import riscv_types::*;
-    import taiga_types::*;
+    import cva5_types::*;
 
         logic ack;
 
@@ -102,7 +102,7 @@ endinterface
 
 interface exception_interface;
     import riscv_types::*;
-    import taiga_types::*;
+    import cva5_types::*;
 
     logic valid;
     logic ack;
@@ -117,7 +117,7 @@ endinterface
 
 interface csr_exception_interface;
     import riscv_types::*;
-    import taiga_types::*;
+    import cva5_types::*;
 
     logic valid;
     exception_code_t code;
@@ -193,7 +193,7 @@ endinterface
 
 interface load_store_queue_interface;
     import riscv_types::*;
-    import taiga_types::*;
+    import cva5_types::*;
 
     logic [31:0] addr;
     logic load;
@@ -223,7 +223,7 @@ endinterface
 
 interface writeback_store_interface;
     import riscv_types::*;
-    import taiga_types::*;
+    import cva5_types::*;
 
         id_t id_needed;
         logic possibly_waiting;
@@ -321,9 +321,9 @@ interface unsigned_division_interface #(parameter DATA_WIDTH = 32);
 endinterface
 
 interface renamer_interface #(parameter NUM_WB_GROUPS = 2);
-    import taiga_config::*;
+    import cva5_config::*;
     import riscv_types::*;
-    import taiga_types::*;
+    import cva5_types::*;
 
     rs_addr_t rd_addr;
     rs_addr_t rs_addr [REGFILE_READ_PORTS];
@@ -347,9 +347,9 @@ interface renamer_interface #(parameter NUM_WB_GROUPS = 2);
 endinterface
 
 interface register_file_issue_interface #(parameter NUM_WB_GROUPS = 2);
-    import taiga_config::*;
+    import cva5_config::*;
     import riscv_types::*;
-    import taiga_types::*;
+    import cva5_types::*;
 
     //read interface
     phys_addr_t phys_rs_addr [REGFILE_READ_PORTS];

@@ -22,8 +22,8 @@
 
 module branch_predictor_ram
 
-    import taiga_config::*;
-    import taiga_types::*;
+    import cva5_config::*;
+    import cva5_types::*;
 
     #(
         parameter C_DATA_WIDTH = 20,

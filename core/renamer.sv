@@ -22,9 +22,9 @@
 
 module renamer
 
-    import taiga_config::*;
+    import cva5_config::*;
     import riscv_types::*;
-    import taiga_types::*;
+    import cva5_types::*;
 
     # (
         parameter cpu_config_t CONFIG = EXAMPLE_CONFIG
@@ -100,7 +100,7 @@ module renamer
 
     ////////////////////////////////////////////////////
     //Inuse list FIFO
-    taiga_fifo #(.DATA_WIDTH($bits(renamer_metadata_t)), .FIFO_DEPTH(32)) inuse_list_fifo (
+    cva5_fifo #(.DATA_WIDTH($bits(renamer_metadata_t)), .FIFO_DEPTH(32)) inuse_list_fifo (
         .clk (clk),
         .rst (rst),
         .fifo (inuse_list)

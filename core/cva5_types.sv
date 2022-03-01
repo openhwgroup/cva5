@@ -20,8 +20,8 @@
  *             Eric Matthews <ematthew@sfu.ca>
  */
 
-package taiga_types;
-    import taiga_config::*;
+package cva5_types;
+    import cva5_config::*;
     import riscv_types::*;
     import csr_types::*;
 
@@ -313,7 +313,7 @@ package taiga_types;
         logic rs2_forwarding_needed;
         logic rs1_and_rs2_forwarding_needed;
 
-    } taiga_trace_events_t;
+    } cva5_trace_events_t;
 
     typedef struct packed {
         logic [31:0] pc;
@@ -324,7 +324,7 @@ package taiga_types;
     typedef struct packed {
         logic [31:0] instruction_pc_dec;
         logic [31:0] instruction_data_dec;
-        taiga_trace_events_t events;
+        cva5_trace_events_t events;
     } trace_outputs_t;
 
 endpackage

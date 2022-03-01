@@ -22,9 +22,9 @@
  
 module ras
 
-    import taiga_config::*;
+    import cva5_config::*;
     import riscv_types::*;
-    import taiga_types::*;
+    import cva5_types::*;
 
     # (
         parameter cpu_config_t CONFIG = EXAMPLE_CONFIG
@@ -52,7 +52,7 @@ module ras
     
     //On a speculative branch, save the current stack pointer
     //Restored if branch is misspredicted (gc_fetch_flush)
-    taiga_fifo #(.DATA_WIDTH(RAS_DEPTH_W), .FIFO_DEPTH(MAX_IDS))
+    cva5_fifo #(.DATA_WIDTH(RAS_DEPTH_W), .FIFO_DEPTH(MAX_IDS))
         read_index_fifo (.clk, .rst(rst | gc.fetch_flush | early_branch_flush_ras_adjust), .fifo(ri_fifo));
 
     assign ri_fifo.data_in = read_index;

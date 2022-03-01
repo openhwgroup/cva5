@@ -20,12 +20,12 @@
  *             Eric Matthews <ematthew@sfu.ca>
  */
 
-module taiga_sim 
+module cva5_sim 
 
-    import taiga_config::*;
+    import cva5_config::*;
     import l2_config_and_types::*;
     import riscv_types::*;
-    import taiga_types::*;
+    import cva5_types::*;
 
     # (
         parameter MEMORY_FILE = "/home/ematthew/Research/RISCV/software/riscv-tools/riscv-tests/benchmarks/dhrystone.riscv.hw_init" //change this to appropriate location "/home/ematthew/Downloads/dhrystone.riscv.sim_init"
@@ -171,7 +171,7 @@ module taiga_sim
         output logic load_store_idle,
 
         output logic instruction_issued,
-        output logic taiga_events [0:$bits(taiga_trace_events_t)-1],
+        output logic cva5_events [0:$bits(cva5_trace_events_t)-1],
         output logic [31:0] instruction_pc_dec,
         output logic [31:0] instruction_data_dec
     );
@@ -294,7 +294,7 @@ module taiga_sim
     assign data_bram_data_in = data_bram.data_in;
     assign data_bram.data_out = data_bram_data_out;
 
-    taiga #(.CONFIG(EXAMPLE_CONFIG)) cpu(.*, .l2(l2[0]));
+    cva5 #(.CONFIG(EXAMPLE_CONFIG)) cpu(.*, .l2(l2[0]));
 
     //read channel
     logic[3:0] read_counter;
@@ -434,11 +434,11 @@ module taiga_sim
     assign instruction_pc_dec = tr.instruction_pc_dec;
     assign instruction_data_dec = tr.instruction_data_dec;
     assign instruction_issued = tr.events.instruction_issued_dec;
-    logic [$bits(taiga_trace_events_t)-1:0] taiga_events_packed;
-    assign taiga_events_packed = tr.events;
+    logic [$bits(cva5_trace_events_t)-1:0] cva5_events_packed;
+    assign cva5_events_packed = tr.events;
     always_comb begin
-        foreach(taiga_events_packed[i])
-            taiga_events[$bits(taiga_trace_events_t)-1-i] = taiga_events_packed[i];
+        foreach(cva5_events_packed[i])
+            cva5_events[$bits(cva5_trace_events_t)-1-i] = cva5_events_packed[i];
     end
 
     ////////////////////////////////////////////////////

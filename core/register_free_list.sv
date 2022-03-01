@@ -27,9 +27,9 @@
  */
 module register_free_list
 
-    import taiga_config::*;
+    import cva5_config::*;
     import riscv_types::*;
-    import taiga_types::*;
+    import cva5_types::*;
     
     #(
         parameter DATA_WIDTH = 70, 

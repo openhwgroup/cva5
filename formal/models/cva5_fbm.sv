@@ -19,17 +19,17 @@
 // Author(s):
 //             Stuart Hoad <shoad@sfu.ca>
 //
-// Taiga Formal Behavioural Model
+// CVA5 Formal Behavioural Model
 
 //****************************************************************************
 //****************************************************************************
 
 
-import taiga_config::*;
+import cva5_config::*;
 import riscv_types::*;
-import taiga_types::*;
+import cva5_types::*;
 
-module taiga_fbm (
+module cva5_fbm (
         input logic clk,
         input logic rst,
 
@@ -53,7 +53,7 @@ module taiga_fbm (
 //****************************************************************************
 
     // AXI constraints.
-    // Taiga does not deal with bad AXI responses, so need to constrain to avoid them
+    // CVA5 does not deal with bad AXI responses, so need to constrain to avoid them
     // REVISIT add AXI protocol properties
     axi4_basic_props
     u_ppb_axi (

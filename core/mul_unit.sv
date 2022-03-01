@@ -22,9 +22,9 @@
 
 module mul_unit
 
-    import taiga_config::*;
+    import cva5_config::*;
     import riscv_types::*;
-    import taiga_types::*;
+    import cva5_types::*;
 
     (
         input logic clk,

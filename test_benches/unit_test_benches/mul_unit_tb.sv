@@ -23,8 +23,8 @@
 
 `timescale 1ns / 1ps
 
-import taiga_config::*;
-import taiga_types::*;
+import cva5_config::*;
+import cva5_types::*;
 
 typedef struct packed{
     mul_inputs_t    module_input;

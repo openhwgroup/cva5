@@ -4,13 +4,13 @@
 #include <assert.h>
 #include "verilated.h"
 #include "verilated_vcd_c.h"
-#include "Vtaiga_sim.h"
+#include "Vcva5_sim.h"
 #include "axi_ddr_sim.h"
 #include "ddr_page.h"
 
 using namespace	 std;
 
-axi_ddr_sim::axi_ddr_sim(Vtaiga_sim * tb){
+axi_ddr_sim::axi_ddr_sim(Vcva5_sim * tb){
     this->tb = tb;
 }
 
@@ -26,7 +26,7 @@ void axi_ddr_sim::init_signals(){
 }
 
 
-axi_ddr_sim::axi_ddr_sim(string filepath, uint32_t starting_memory_location, int number_of_bytes, Vtaiga_sim * tb){
+axi_ddr_sim::axi_ddr_sim(string filepath, uint32_t starting_memory_location, int number_of_bytes, Vcva5_sim * tb){
     ifstream input_memory_file;
     input_memory_file.open(filepath);
     string line;
@@ -55,7 +55,7 @@ axi_ddr_sim::axi_ddr_sim(string filepath, uint32_t starting_memory_location, int
 
 
 
-axi_ddr_sim::axi_ddr_sim(ifstream & input_memory_file, Vtaiga_sim * tb){
+axi_ddr_sim::axi_ddr_sim(ifstream & input_memory_file, Vcva5_sim * tb){
     string line;
 
     uint32_t max_pages = DDR_SIZE/PAGE_SIZE;

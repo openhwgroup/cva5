@@ -24,8 +24,8 @@
 
 module byte_en_BRAM
 
-    import taiga_config::*;
-    import taiga_types::*;
+    import cva5_config::*;
+    import cva5_types::*;
     import riscv_types::*;
 
 	#(

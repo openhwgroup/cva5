@@ -31,7 +31,7 @@ module debug_module (
     //assign DMC.zero2 = 0;
 
     //read-only reg
-    //same for all Taiga cores
+    //same for all cva5 cores
 
     hart_info_t hart_info;
     assign hart_info.zero1 = 0;

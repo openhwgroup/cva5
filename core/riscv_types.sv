@@ -21,7 +21,7 @@
  */
 
 package riscv_types;
-    import taiga_config::*;
+    import cva5_config::*;
 
     localparam XLEN = 32;
     localparam PAGE_ADDR_W = 12;

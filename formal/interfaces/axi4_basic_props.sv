@@ -20,8 +20,8 @@
  //             Stuart Hoad <shoad@sfu.ca>
  //
 
-import taiga_config::*;
-import taiga_types::*;
+import cva5_config::*;
+import cva5_types::*;
 
 module axi4_basic_props(
     input logic clk,

@@ -20,8 +20,8 @@
  *             Eric Matthews <ematthew@sfu.ca>
  */
 
-import taiga_config::*;
-import taiga_types::*;
+import cva5_config::*;
+import cva5_types::*;
 import l2_config_and_types::*;
 
 
@@ -121,7 +121,7 @@ module axi_l2_test # (
 
         //Trace Interface
         output logic instruction_issued,
-        output logic taiga_events [0:$bits(taiga_trace_events_t)-1],
+        output logic cva5_events [0:$bits(cva5_trace_events_t)-1],
         output logic [31:0] instruction_pc_dec,
         output logic [31:0] instruction_data_dec
     );
@@ -301,11 +301,11 @@ module axi_l2_test # (
     assign instruction_pc_dec = tr.instruction_pc_dec;
     assign instruction_data_dec = tr.instruction_data_dec;
     assign instruction_issued = tr.events.instruction_issued_dec;
-    logic [$bits(taiga_trace_events_t)-1:0] taiga_events_packed;
-    assign taiga_events_packed = tr.events;
+    logic [$bits(cva5_trace_events_t)-1:0] cva5_events_packed;
+    assign cva5_events_packed = tr.events;
     always_comb begin
-        foreach(taiga_events_packed[i])
-            taiga_events[$bits(taiga_trace_events_t)-1-i] = taiga_events_packed[i];
+        foreach(cva5_events_packed[i])
+            cva5_events[$bits(cva5_trace_events_t)-1-i] = cva5_events_packed[i];
     end
 
 endmodule

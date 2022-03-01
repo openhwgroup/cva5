@@ -21,7 +21,7 @@
  */
 
 interface axi_interface;
-    import taiga_config::*;
+    import cva5_config::*;
 
     logic arready;
     logic arvalid;

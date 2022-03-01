@@ -20,11 +20,11 @@
  *             Eric Matthews <ematthew@sfu.ca>
  */
 
-import taiga_config::*;
-import taiga_types::*;
+import cva5_config::*;
+import cva5_types::*;
 import l2_config_and_types::*;
 
-module taiga_wrapper (
+module cva5_wrapper (
         input logic sys_clk,
         input logic ext_reset,
 
@@ -230,7 +230,7 @@ module taiga_wrapper (
     local_memory_interface instruction_bram();
     local_memory_interface data_bram();
 
-    taiga cpu(.*, .l2(l2[0]));
+    cva5 cpu(.*, .l2(l2[0]));
 
     //design_2 infra(.*);
 

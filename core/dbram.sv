@@ -22,8 +22,8 @@
 
 module dbram
 
-    import taiga_config::*;
-    import taiga_types::*;
+    import cva5_config::*;
+    import cva5_types::*;
 
     (
         input logic clk,

@@ -22,9 +22,9 @@
 
 module load_store_unit
 
-    import taiga_config::*;
+    import cva5_config::*;
     import riscv_types::*;
-    import taiga_types::*;
+    import cva5_types::*;
 
     # (
         parameter cpu_config_t CONFIG = EXAMPLE_CONFIG
@@ -268,7 +268,7 @@ endgenerate
         .one_hot (sub_unit_address_match), 
         .int_out (load_attributes_in.subunit_id)
     );
-    taiga_fifo #(.DATA_WIDTH($bits(load_attributes_t)), .FIFO_DEPTH(ATTRIBUTES_DEPTH)) attributes_fifo (
+    cva5_fifo #(.DATA_WIDTH($bits(load_attributes_t)), .FIFO_DEPTH(ATTRIBUTES_DEPTH)) attributes_fifo (
         .clk        (clk),
         .rst        (rst), 
         .fifo       (load_attributes)

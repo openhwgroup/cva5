@@ -20,7 +20,7 @@
  *             Eric Matthews <ematthew@sfu.ca>
  */
 
-package taiga_config;
+package cva5_config;
 
     ////////////////////////////////////////////////////
     //Vendor Selection

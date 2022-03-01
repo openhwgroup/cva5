@@ -8,7 +8,7 @@ The CVA5 is derived from the Taiga Project from Simon Fraser University.
 
 The pipeline has been designed to support parallel, variable-latency execution units and to readily support the inclusion of new execution units.
 
-![CVA5 Block Diagram](examples/zedboard/taiga_small.png)
+![CVA5 Block Diagram](examples/zedboard/cva5_small.png)
 
 
 ## Documentation and Project Setup

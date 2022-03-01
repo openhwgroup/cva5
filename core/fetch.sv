@@ -22,9 +22,9 @@
 
 module fetch
 
-    import taiga_config::*;
+    import cva5_config::*;
     import riscv_types::*;
-    import taiga_types::*;
+    import cva5_types::*;
 
     # (
         parameter cpu_config_t CONFIG = EXAMPLE_CONFIG
@@ -197,7 +197,7 @@ module fetch
 
     assign fetch_attr_fifo.data_in = fetch_attr_next;
 
-    taiga_fifo #(.DATA_WIDTH($bits(fetch_attributes_t)), .FIFO_DEPTH(NEXT_ID_DEPTH))
+    cva5_fifo #(.DATA_WIDTH($bits(fetch_attributes_t)), .FIFO_DEPTH(NEXT_ID_DEPTH))
     attributes_fifo (
         .clk        (clk), 
         .rst        (flush_or_rst), 

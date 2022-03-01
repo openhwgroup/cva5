@@ -22,12 +22,12 @@
 
 
 
-module taiga
+module cva5
 
-    import taiga_config::*;
+    import cva5_config::*;
     import l2_config_and_types::*;
     import riscv_types::*;
-    import taiga_types::*;
+    import cva5_types::*;
 
     #(
         parameter cpu_config_t CONFIG = EXAMPLE_CONFIG
@@ -640,7 +640,7 @@ module taiga
 
     ////////////////////////////////////////////////////
     //Trace Interface
-    generate if (ENABLE_TRACE_INTERFACE) begin : gen_taiga_trace
+    generate if (ENABLE_TRACE_INTERFACE) begin : gen_cva5_trace
         always_ff @(posedge clk) begin
             tr.events.early_branch_correction <= tr_early_branch_correction;
             tr.events.operand_stall <= tr_operand_stall;

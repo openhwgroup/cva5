@@ -20,8 +20,8 @@
  *             Eric Matthews <ematthew@sfu.ca>
  */
 
-import taiga_config::*;
-import taiga_types::*;
+import cva5_config::*;
+import cva5_types::*;
 
 module reg_inuse (
         input logic clk,

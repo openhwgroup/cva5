@@ -25,11 +25,11 @@
  *  Intended for small FIFO depths.
  *  For continuous operation when full, enqueing side must inspect pop signal
  */
-module taiga_fifo
+module cva5_fifo
 
-    import taiga_config::*;
+    import cva5_config::*;
     import riscv_types::*;
-    import taiga_types::*;
+    import cva5_types::*;
     
     #(
         parameter DATA_WIDTH = 70, 
