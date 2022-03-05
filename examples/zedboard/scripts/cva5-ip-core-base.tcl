@@ -14,23 +14,7 @@
 #   original project, however they will not be launched automatically. To regenerate the
 #   run results please launch the synthesis/implementation runs as needed.
 #
-#*****************************************************************************************
-# NOTE: In order to use this script for source control purposes, please make sure that the
-#       following files are added to the source control system:-
-#
-# 1. This project restoration tcl script (cva5-ip-core-base.tcl) that was generated.
-#
-# 2. The following source(s) files that were local or imported into the original project.
-#    (Please see the '$orig_proj_dir' and '$origin_dir' variable setting below at the start of the script)
-#
-#    "/home/zaguila/Documents/Research/cva5-example-systems/zedboard-no-cache/cva5-ip-core-base/cva5-ip-core-base.srcs/sources_1/bd/design_1/hdl/design_1_wrapper.v"
-#    "/home/zaguila/Documents/Research/cva5-example-systems/zedboard-no-cache/cva5-ip-core-base/cva5-ip-core-base.srcs/constrs_1/imports/Research/zedboard_master_XDC_RevC_D_v3.xdc"
-#
-# 3. The following remote source files that were added to the original project:-
-#
-#    <none>
-#
-#*****************************************************************************************
+
 
 # Set the reference directory for source file relative paths (by default the value is script directory path)
 set origin_dir [ file dirname [ file normalize [ info script ] ] ]
@@ -482,7 +466,7 @@ set_property EXCLUDE_DEBUG_LOGIC "0" [get_files design_1.bd ]
 set_property GENERATE_SYNTH_CHECKPOINT "1" [get_files design_1.bd ] 
 set_property IS_ENABLED "1" [get_files design_1.bd ] 
 set_property IS_GLOBAL_INCLUDE "0" [get_files design_1.bd ] 
-set_property IS_LOCKED "0" [get_files design_1.bd ] 
+# set_property IS_LOCKED "0" [get_files design_1.bd ] 
 set_property LIBRARY "xil_defaultlib" [get_files design_1.bd ] 
 set_property PATH_MODE "RelativeFirst" [get_files design_1.bd ] 
 set_property PFM_NAME "" [get_files design_1.bd ] 

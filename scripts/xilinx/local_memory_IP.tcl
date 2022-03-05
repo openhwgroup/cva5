@@ -96,7 +96,7 @@ set proj_dir [get_property directory [current_project]]
 
 # Set project properties
 set obj [current_project]
-set_property -name "board_part" -value "em.avnet.com:zed:part0:1.4" -objects $obj
+set_property -name "board_part" -value "digilentinc.com:zedboard:part0:1.0" -objects $obj
 set_property -name "default_lib" -value "xil_defaultlib" -objects $obj
 set_property -name "ip_cache_permissions" -value "read write" -objects $obj
 set_property -name "ip_output_repo" -value "$proj_dir/${_xil_proj_name_}.cache/ip" -objects $obj
@@ -116,6 +116,7 @@ import_files -norecurse $origin_dir/../../core/xilinx/xilinx_byte_enable_ram.sv 
 import_files -norecurse $origin_dir/../../core/cva5_config.sv -force
 import_files -norecurse $origin_dir/../../core/cva5_types.sv -force
 import_files -norecurse $origin_dir/../../core/riscv_types.sv -force
+import_files -norecurse $origin_dir/../../core/csr_types.sv -force
 
 # Set IP repository paths
 #set obj [get_filesets sources_1]

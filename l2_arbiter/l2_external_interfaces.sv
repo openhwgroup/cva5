@@ -64,12 +64,14 @@ interface l2_requester_interface;
             input wr_data, wr_data_push, output data_full,
             output rd_data, rd_sub_id, rd_data_valid, input rd_data_ack);
 
+`ifdef __CVA5_FORMAL__
     modport formal (input addr, be, rnw, is_amo, amo_type_or_burst_size, sub_id,
                           request_push, output request_full,
                           inv_addr, inv_valid, input  inv_ack,
                           con_result, con_valid,
                           wr_data, wr_data_push, output data_full,
                           rd_data, rd_sub_id, rd_data_valid, input rd_data_ack);
+`endif
 
 endinterface
 
@@ -108,10 +110,12 @@ interface l2_memory_interface;
             input wr_data, wr_data_valid, output wr_data_read,
             output rd_data, rd_id, rd_data_valid);
 
+`ifdef __CVA5_FORMAL__
     modport formal (input addr, be, rnw, is_amo, amo_type_or_burst_size, id,
                          request_valid, abort, output request_pop,
                          wr_data, wr_data_valid, output wr_data_read,
                          rd_data, rd_id, rd_data_valid);
+`endif
 
 endinterface
 
