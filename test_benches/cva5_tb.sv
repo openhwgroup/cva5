@@ -25,13 +25,13 @@
 `define  MEMORY_FILE  "/home/ematthew/Research/RISCV/software/riscv-tools/riscv-tests/benchmarks/dhrystone.riscv.sim_init"
 `define  UART_LOG  "/home/ematthew/uart.log"
 
-module taiga_tb 
+module cva5_tb 
 
     import tb_tools::*;
-    import taiga_config::*;
+    import cva5_config::*;
     import l2_config_and_types::*;
     import riscv_types::*;
-    import taiga_types::*;
+    import cva5_types::*;
 
   ( );
 
@@ -216,7 +216,7 @@ module taiga_tb
       end
     end
 
-    taiga uut (.*, .l2(l2[0]));
+    cva5 uut (.*, .l2(l2[0]));
 
     design_2 infra(.*);
 

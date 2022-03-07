@@ -22,9 +22,9 @@
 
 module div_unit
 
-    import taiga_config::*;
+    import cva5_config::*;
     import riscv_types::*;
-    import taiga_types::*;
+    import cva5_types::*;
 
     (
         input logic clk,
@@ -121,7 +121,7 @@ module div_unit
     //Input FIFO
     //Currently just a register (DEPTH=1).  As one div instruction can be in-progress
     //and one in this input "fifo," we can support two in-flight div ops.
-    taiga_fifo #(.DATA_WIDTH($bits(div_fifo_inputs_t)), .FIFO_DEPTH(1))
+    cva5_fifo #(.DATA_WIDTH($bits(div_fifo_inputs_t)), .FIFO_DEPTH(1))
     div_input_fifo (
         .clk    (clk),
         .rst    (rst),

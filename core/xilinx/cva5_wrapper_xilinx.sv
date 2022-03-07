@@ -22,10 +22,10 @@
 
 
 
-module taiga_wrapper_xilinx
+module cva5_wrapper_xilinx
 
-	import taiga_config::*;
-	import taiga_types::*;
+	import cva5_config::*;
+	import cva5_types::*;
 	import l2_config_and_types::*;
 
 	(
@@ -128,7 +128,7 @@ module taiga_wrapper_xilinx
 	assign m_axi_bresp = m_axi.bresp;
 	//assign m_axi_bid = m_axi.bid;
 
-    taiga cpu(.*);
+    cva5 cpu(.*);
 
 endmodule
 

@@ -22,9 +22,9 @@
 
 module axi_to_arb
 
-    import taiga_config::*;
+    import cva5_config::*;
     import riscv_types::*;
-    import taiga_types::*;
+    import cva5_types::*;
     import l2_config_and_types::*;
 
     (

@@ -24,7 +24,7 @@ module l2_arbiter
 
     import l2_config_and_types::*;
     import riscv_types::*;
-    import taiga_types::*;
+    import cva5_types::*;
 
     (
         input logic clk,
@@ -105,7 +105,7 @@ module l2_arbiter
             assign request[i].request_full =  input_fifos[i].full;
 
             //FIFO instantiation
-            taiga_fifo #(.DATA_WIDTH($bits(l2_request_t)), .FIFO_DEPTH(L2_INPUT_FIFO_DEPTHS))  input_fifo (.*, .fifo(input_fifos[i]));
+            cva5_fifo #(.DATA_WIDTH($bits(l2_request_t)), .FIFO_DEPTH(L2_INPUT_FIFO_DEPTHS))  input_fifo (.*, .fifo(input_fifos[i]));
 
             //Arbiter FIFO side
             assign requests[i] = input_fifos[i].data_out;
@@ -126,7 +126,7 @@ module l2_arbiter
             assign request[i].data_full = input_data_fifos[i].full;
 
             //FIFO instantiation
-            taiga_fifo #(.DATA_WIDTH(32), .FIFO_DEPTH(L2_INPUT_FIFO_DEPTHS)) input_data_fifo (.*, .fifo(input_data_fifos[i]));
+            cva5_fifo #(.DATA_WIDTH(32), .FIFO_DEPTH(L2_INPUT_FIFO_DEPTHS)) input_data_fifo (.*, .fifo(input_data_fifos[i]));
 
             //Arbiter FIFO side
             assign input_data_fifos[i].pop = (data_attributes.valid && (current_attr.id == i) && ~mem_data_fifo.full);
@@ -169,7 +169,7 @@ module l2_arbiter
 	assign mem.amo_type_or_burst_size = mem_addr_fifo_data_out.amo_type_or_burst_size;
     assign mem.id = mem_addr_fifo_data_out.id;
 
-    taiga_fifo #(.DATA_WIDTH($bits(l2_mem_request_t)), .FIFO_DEPTH(L2_MEM_ADDR_FIFO_DEPTH))  input_fifo (.*, .fifo(mem_addr_fifo));
+    cva5_fifo #(.DATA_WIDTH($bits(l2_mem_request_t)), .FIFO_DEPTH(L2_MEM_ADDR_FIFO_DEPTH))  input_fifo (.*, .fifo(mem_addr_fifo));
 
 
     /*************************************
@@ -226,7 +226,7 @@ module l2_arbiter
             assign request[i].inv_valid = inv_response_fifos[i].valid;
 
             //FIFO instantiation
-            taiga_fifo #(.DATA_WIDTH(30), .FIFO_DEPTH(L2_INVALIDATION_FIFO_DEPTHS)) inv_response_fifo (.*, .fifo(inv_response_fifos[i]));
+            cva5_fifo #(.DATA_WIDTH(30), .FIFO_DEPTH(L2_INVALIDATION_FIFO_DEPTHS)) inv_response_fifo (.*, .fifo(inv_response_fifos[i]));
             //Arbiter side
             assign inv_response_fifos[i].push = reserv_valid & reserv_store  & ~reserv_id_v[i];
             assign inv_response_fifos[i].potential_push = reserv_valid & reserv_store  & ~reserv_id_v[i];
@@ -245,7 +245,7 @@ module l2_arbiter
     assign data_attributes.push = reserv_valid & ~reserv_request.rnw & ~mem.abort;
     assign data_attributes.potential_push = reserv_valid & ~reserv_request.rnw & ~mem.abort;
 
-    taiga_fifo #(.DATA_WIDTH($bits(l2_data_attributes_t)), .FIFO_DEPTH(L2_DATA_ATTRIBUTES_FIFO_DEPTH))  data_attributes_fifo (.*, .fifo(data_attributes));
+    cva5_fifo #(.DATA_WIDTH($bits(l2_data_attributes_t)), .FIFO_DEPTH(L2_DATA_ATTRIBUTES_FIFO_DEPTH))  data_attributes_fifo (.*, .fifo(data_attributes));
 
     assign data_attributes.pop = write_done;
     assign current_attr = data_attributes.data_out;
@@ -261,7 +261,7 @@ module l2_arbiter
 
     assign write_done = data_attributes.valid & ~mem_data_fifo.full & (burst_count == current_attr.burst_size);
 
-    taiga_fifo #(.DATA_WIDTH($bits(32)), .FIFO_DEPTH(L2_MEM_ADDR_FIFO_DEPTH))  mem_data (.*, .fifo(mem_data_fifo));
+    cva5_fifo #(.DATA_WIDTH($bits(32)), .FIFO_DEPTH(L2_MEM_ADDR_FIFO_DEPTH))  mem_data (.*, .fifo(mem_data_fifo));
 
     assign mem_data_fifo.push = data_attributes.valid & ~mem_data_fifo.full & ~current_attr.abort;
     assign mem_data_fifo.potential_push = data_attributes.valid & ~mem_data_fifo.full & ~current_attr.abort;
@@ -276,7 +276,7 @@ module l2_arbiter
     /*************************************
      * Read response
      *************************************/
-    taiga_fifo # (.DATA_WIDTH(32 + L2_ID_W), .FIFO_DEPTH(L2_MEM_ADDR_FIFO_DEPTH))  mem_returndata (.*, .fifo(mem_returndata_fifo));
+    cva5_fifo # (.DATA_WIDTH(32 + L2_ID_W), .FIFO_DEPTH(L2_MEM_ADDR_FIFO_DEPTH))  mem_returndata (.*, .fifo(mem_returndata_fifo));
     assign mem_returndata_fifo.push = mem.rd_data_valid;
     assign mem_returndata_fifo.potential_push = mem.rd_data_valid;
 
@@ -298,7 +298,7 @@ module l2_arbiter
             assign request[i].rd_data_valid = returndata_fifos[i].valid;
 
             //FIFO instantiation
-            taiga_fifo #(.DATA_WIDTH(32 + L2_SUB_ID_W), .FIFO_DEPTH(L2_READ_RETURN_FIFO_DEPTHS)) returndata_fifo (.*, .fifo(returndata_fifos[i]));
+            cva5_fifo #(.DATA_WIDTH(32 + L2_SUB_ID_W), .FIFO_DEPTH(L2_READ_RETURN_FIFO_DEPTHS)) returndata_fifo (.*, .fifo(returndata_fifos[i]));
             //Arbiter side
             assign returndata_fifos[i].push = return_push[i];
             assign returndata_fifos[i].potential_push = return_push[i];

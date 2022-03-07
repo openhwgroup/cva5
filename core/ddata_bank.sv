@@ -22,8 +22,8 @@
 
 module ddata_bank 
 
-    import taiga_config::*;
-    import taiga_types::*;
+    import cva5_config::*;
+    import cva5_types::*;
 
     #(
         parameter LINES = 2048

@@ -20,14 +20,14 @@
  *             Eric Matthews <ematthew@sfu.ca>
  */
 
-#ifndef TaigaTracer_H
-#define TaigaTracer_H
+#ifndef CVA5Tracer_H
+#define CVA5Tracer_H
 #include <stdlib.h>
 #include <iostream>
 #include <iterator>
 #include "verilated.h"
 #include "verilated_vcd_c.h"
-#include "Vtaiga_sim.h"
+#include "Vcva5_sim.h"
 #include "SimMem.h"
 #include "AXI_DDR_simulation/axi_ddr_sim.h"
 //#define TRACE_ON
@@ -72,11 +72,11 @@ static const char * const eventNames[] = {
 };
 static const int numEvents = arraySize(eventNames);
 
-//Testbench with Taiga trace outputs on toplevel
-class TaigaTracer {
+//Testbench with CVA5 trace outputs on toplevel
+class CVA5Tracer {
 public:
-  TaigaTracer(std::ifstream& programFile);
-  ~TaigaTracer();
+  CVA5Tracer(std::ifstream& programFile);
+  ~CVA5Tracer();
   bool check_if_instruction_retired(uint32_t instruction);
   bool has_terminated();
   bool has_stalled();
@@ -91,7 +91,7 @@ public:
   uint64_t get_cycle_count();
 
   //DDR Simulation
-  Vtaiga_sim *tb;
+  Vcva5_sim *tb;
 private:
   axi_ddr_sim * axi_ddr;
   SimMem *mem;

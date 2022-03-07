@@ -22,9 +22,9 @@
 
 module barrel_shifter
 
-    import taiga_config::*;
+    import cva5_config::*;
     import riscv_types::*;
-    import taiga_types::*;
+    import cva5_types::*;
     
     (
         input logic[31:0] shifter_input,

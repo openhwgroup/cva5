@@ -22,9 +22,9 @@
 
 module register_bank
 
-    import taiga_config::*;
+    import cva5_config::*;
     import riscv_types::*;
-    import taiga_types::*;
+    import cva5_types::*;
     
     #(
         parameter NUM_READ_PORTS = 2

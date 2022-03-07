@@ -22,9 +22,9 @@
 
 module amo_alu
 
-    import taiga_config::*;
+    import cva5_config::*;
     import riscv_types::*;
-    import taiga_types::*;
+    import cva5_types::*;
 
     (
         input amo_alu_inputs_t amo_alu_inputs,

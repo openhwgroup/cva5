@@ -32,7 +32,7 @@
 #include <random>
 #include "verilated.h"
 #include "verilated_vcd_c.h"
-#include "Vtaiga_sim.h"
+#include "Vcva5_sim.h"
 #include "axi_interface.h"
 #include "ddr_page.h"
 
@@ -55,11 +55,11 @@ struct addr_calculation_parameters{
 	//Init instructions-----------------
  	axi_ddr_sim();
 	//Initialize DDR
- 	axi_ddr_sim(Vtaiga_sim * tb);
+ 	axi_ddr_sim(Vcva5_sim * tb);
 
 	//Initialize DDR from file
- 	axi_ddr_sim(string filepath, uint32_t starting_memory_location, int number_of_bytes, Vtaiga_sim * tb);
- 	axi_ddr_sim(ifstream & input_memory_file, Vtaiga_sim * tb);
+ 	axi_ddr_sim(string filepath, uint32_t starting_memory_location, int number_of_bytes, Vcva5_sim * tb);
+ 	axi_ddr_sim(ifstream & input_memory_file, Vcva5_sim * tb);
  	void step();
  	int get_data(uint32_t data_address);
 
@@ -83,7 +83,7 @@ struct addr_calculation_parameters{
 		uniform_int_distribution<int> write_distribution;
 		//Pointers to Data
 		map<uint32_t,ddr_page> ddr_pages;
-		Vtaiga_sim *tb;
+		Vcva5_sim *tb;
  		void parse_output_signals();
 
  		void parse_input_signals();

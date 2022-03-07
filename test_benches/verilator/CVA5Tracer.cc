@@ -21,11 +21,11 @@
  */
 
 #include <iostream>
-#include "TaigaTracer.h"
+#include "CVA5Tracer.h"
 
 //#define TRACE_ON
 
-bool TaigaTracer::check_if_instruction_retired(uint32_t instruction) {
+bool CVA5Tracer::check_if_instruction_retired(uint32_t instruction) {
     bool result = false;
     for (int i =0; i < tb->NUM_RETIRE_PORTS; i++) {
         result |= (tb->retire_ports_instruction[i] == instruction) && tb->retire_ports_valid[i];
@@ -34,7 +34,7 @@ bool TaigaTracer::check_if_instruction_retired(uint32_t instruction) {
 }
 
 
-bool TaigaTracer::has_terminated() {
+bool CVA5Tracer::has_terminated() {
 
     if (check_if_instruction_retired(ERROR_TERMINATION_NOP)) {
         std::cout << "\n\nError!!!!\n\n";
@@ -50,7 +50,7 @@ bool TaigaTracer::has_terminated() {
 }
 
 
-bool TaigaTracer::has_stalled() {
+bool CVA5Tracer::has_stalled() {
     if (!tb->instruction_issued) {
         if (stall_count > stall_limit) {
             stall_count = 0;
@@ -66,26 +66,26 @@ bool TaigaTracer::has_stalled() {
 	return false;
 }
 
-bool TaigaTracer::store_queue_empty() {
+bool CVA5Tracer::store_queue_empty() {
     return tb->store_queue_empty;
 }
 
-void TaigaTracer::reset_stats() {
+void CVA5Tracer::reset_stats() {
     for (int i=0; i < numEvents; i++)
          event_counters[i] = 0;
 }
 
 
-void TaigaTracer::update_stats() {
+void CVA5Tracer::update_stats() {
     if (collect_stats) {
         for (int i=0; i < numEvents; i++)
-            event_counters[i] += tb->taiga_events[i];
+            event_counters[i] += tb->cva5_events[i];
     }
 }
 
 
-void TaigaTracer::print_stats() {
-	std::cout << "   Taiga trace stats\n";
+void CVA5Tracer::print_stats() {
+	std::cout << "   CVA5 trace stats\n";
 	std::cout << "--------------------------------------------------------------\n";
     for (int i=0; i < numEvents; i++)
        std::cout << "    " << eventNames[i] << ":" << event_counters[i] << std::endl;
@@ -95,7 +95,7 @@ void TaigaTracer::print_stats() {
 
 
 
-void TaigaTracer::reset() {
+void CVA5Tracer::reset() {
     tb->clk = 0;
     tb->rst = 1;
     for (int i=0; i <reset_length; i++){
@@ -109,12 +109,12 @@ void TaigaTracer::reset() {
 
 }
 
-void TaigaTracer::set_log_file(std::ofstream* logFile) {
+void CVA5Tracer::set_log_file(std::ofstream* logFile) {
     this->logFile = logFile;
 }
 
 
-void TaigaTracer::update_UART() {
+void CVA5Tracer::update_UART() {
 	if (tb->write_uart) {
 		std::cout <<  tb->uart_byte << std::flush;
 		*logFile << tb->uart_byte;
@@ -122,7 +122,7 @@ void TaigaTracer::update_UART() {
 }
 
 
-void TaigaTracer::update_memory() {
+void CVA5Tracer::update_memory() {
     tb->instruction_bram_data_out = instruction_r;
     if (tb->instruction_bram_en)
         instruction_r = mem->read(tb->instruction_bram_addr);
@@ -135,7 +135,7 @@ void TaigaTracer::update_memory() {
 }
 
 
-void TaigaTracer::tick() {
+void CVA5Tracer::tick() {
         cycle_count++;
 
 		tb->clk = 1;
@@ -173,7 +173,7 @@ void TaigaTracer::tick() {
 }
 
 
-void TaigaTracer::start_tracer(const char *trace_file) {
+void CVA5Tracer::start_tracer(const char *trace_file) {
 	#ifdef TRACE_ON
 		verilatorWaveformTracer = new VerilatedVcdC;
 		tb->trace(verilatorWaveformTracer, 99);
@@ -183,18 +183,18 @@ void TaigaTracer::start_tracer(const char *trace_file) {
 
 
 
-uint64_t TaigaTracer::get_cycle_count() {
+uint64_t CVA5Tracer::get_cycle_count() {
     return cycle_count;
 }
 
 
-TaigaTracer::TaigaTracer(std::ifstream& programFile) {
+CVA5Tracer::CVA5Tracer(std::ifstream& programFile) {
 	#ifdef TRACE_ON
 		Verilated::traceEverOn(true);
 	#endif
 
 
-    tb = new Vtaiga_sim;
+    tb = new Vcva5_sim;
 
    #ifdef DDR_LOAD_FILE
         axi_ddr = new axi_ddr_sim(DDR_INIT_FILE,DDR_FILE_STARTING_LOCATION,DDR_FILE_NUM_BYTES);
@@ -211,7 +211,7 @@ TaigaTracer::TaigaTracer(std::ifstream& programFile) {
 }
 
 
-TaigaTracer::~TaigaTracer() {
+CVA5Tracer::~CVA5Tracer() {
 	#ifdef TRACE_ON
 		verilatorWaveformTracer->flush();
 		verilatorWaveformTracer->close();

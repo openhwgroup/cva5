@@ -22,7 +22,7 @@
 
 //No error checking for incorrect ordering of axi control signals from Master side of interface
 import tb_tools::*;
-import taiga_config::*;
+import cva5_config::*;
 
 module axi_mem_sim
         #(parameter string file_name = "")

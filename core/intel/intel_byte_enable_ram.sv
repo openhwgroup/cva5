@@ -24,9 +24,9 @@
 
 module intel_byte_enable_ram 
 
-    import taiga_config::*;
+    import cva5_config::*;
     import riscv_types::*;
-    import taiga_types::*;
+    import cva5_types::*;
 
     #(
         parameter LINES = 8192,

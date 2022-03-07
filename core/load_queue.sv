@@ -22,9 +22,9 @@
 
 module load_queue
 
-    import taiga_config::*;
+    import cva5_config::*;
     import riscv_types::*;
-    import taiga_types::*;
+    import cva5_types::*;
 
     # (
         parameter SQ_DEPTH = 4
@@ -46,7 +46,7 @@ module load_queue
     ////////////////////////////////////////////////////
     //Implementation
 
-    taiga_fifo #(.DATA_WIDTH(LQ_WIDTH), .FIFO_DEPTH(MAX_IDS)) load_queue_fifo (
+    cva5_fifo #(.DATA_WIDTH(LQ_WIDTH), .FIFO_DEPTH(MAX_IDS)) load_queue_fifo (
         .clk(clk),
         .rst(rst),
         .fifo(load_fifo)

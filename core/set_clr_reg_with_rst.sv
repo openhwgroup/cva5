@@ -27,8 +27,8 @@
   */
 module set_clr_reg_with_rst
 
-    import taiga_config::*;
-    import taiga_types::*;
+    import cva5_config::*;
+    import cva5_types::*;
 
     #(parameter SET_OVER_CLR = 0, parameter WIDTH = 16, parameter logic[WIDTH-1:0] RST_VALUE = '0)
     (

@@ -19,25 +19,25 @@
 # Author(s):
 #             Stuart Hoad <shoad@sfu.ca>
 
-# Jasper FPV script for Taiga
+# Jasper FPV script for CVA5
 
 clear -all
 set_engine_mode {Hp Ht L B I N Tri}
 
-set SCRIPTS_PATH ../../Taiga-dev/formal/scripts
-set JG_TAIGA_RTL_PATH ../../Taiga-dev
+set SCRIPTS_PATH ../../cva5/formal/scripts
+set JG_TAIGA_RTL_PATH ../../cva5
 
-analyze -sv -f ${SCRIPTS_PATH}/taiga_rtl.vfile 
-analyze -sv ${JG_TAIGA_RTL_PATH}/formal/models/taiga_fbm.sv
+analyze -sv -f ${SCRIPTS_PATH}/cva5_rtl.vfile 
+analyze -sv ${JG_TAIGA_RTL_PATH}/formal/models/cva5_fbm.sv
 analyze -sv ${JG_TAIGA_RTL_PATH}/formal/interfaces/axi4_basic_props.sv
-analyze -sv ${JG_TAIGA_RTL_PATH}/formal/models/taiga_formal_wrapper.sv
-elaborate -top taiga_formal_wrapper \
+analyze -sv ${JG_TAIGA_RTL_PATH}/formal/models/cva5_formal_wrapper.sv
+elaborate -top cva5_formal_wrapper \
 -bbox_a 17000 -bbox_mul 67 \
 -bbox_m sixinput_pop_count
 
 reset rst
 clock clk
 
-assume -from_assert <embedded>::taiga_formal_wrapper.u_taiga_fbm.u_ppb_axi.env_*
+assume -from_assert <embedded>::cva5_formal_wrapper.u_cva5_fbm.u_ppb_axi.env_*
 #assume -env {u_ppb_axi.axi_if.arvalid == 1'b0}
 #assume -env {u_ppb_axi.axi_if.awvalid == 1'b0}

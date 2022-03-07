@@ -22,7 +22,7 @@
 
 module  illegal_instruction_checker
 
-    import taiga_config::*;
+    import cva5_config::*;
     import riscv_types::*;
 
     # (

@@ -22,7 +22,7 @@
 
 module lutram_1w_mr
 
-    import taiga_config::*;
+    import cva5_config::*;
 
     #(
         parameter WIDTH = 32,

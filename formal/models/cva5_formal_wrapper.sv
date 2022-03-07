@@ -20,10 +20,10 @@
 //             Stuart Hoad <shoad@sfu.ca>
 //
 
-import taiga_config::*;
-import taiga_types::*;
+import cva5_config::*;
+import cva5_types::*;
 
-module taiga_formal_wrapper (
+module cva5_formal_wrapper (
 
         input logic clk,
         input logic rst
@@ -43,9 +43,9 @@ module taiga_formal_wrapper (
         logic 			        timer_interrupt;
         logic 			        ext_interrupt;
 
-// Instance of Taiga core
-        taiga 
-        u_taiga_core (
+// Instance of CVA5 core
+        cva5 
+        u_cva5_core (
         .clk 		        (clk),
         .rst 		        (rst),
         .instruction_bram   (instruction_bram.master),
@@ -59,9 +59,9 @@ module taiga_formal_wrapper (
         .interrupt	        (ext_interrupt)
 	);
 
-// Instance of Taiga FBM
-        taiga_fbm 
-        u_taiga_fbm (
+// Instance of CVA5 FBM
+        cva5_fbm 
+        u_cva5_fbm (
         .clk 		        (clk),
         .rst 		        (rst),
         .instruction_bram   (instruction_bram.formal),

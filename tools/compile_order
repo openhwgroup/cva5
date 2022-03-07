@@ -1,7 +1,7 @@
-core/taiga_config.sv
+core/cva5_config.sv
 core/riscv_types.sv
 core/csr_types.sv  
-core/taiga_types.sv  
+core/cva5_types.sv  
 l2_arbiter/l2_config_and_types.sv 
 l2_arbiter/l2_interfaces.sv
 l2_arbiter/l2_external_interfaces.sv
@@ -33,7 +33,7 @@ core/axi_to_arb.sv
 
 core/one_hot_occupancy.sv 
 core/binary_occupancy.sv 
-core/taiga_fifo.sv  
+core/cva5_fifo.sv  
 core/shift_counter.sv
 core/priority_encoder.sv
 
@@ -108,5 +108,5 @@ core/toggle_memory.sv
 core/toggle_memory_set.sv
 core/instruction_metadata_and_id_management.sv
 
-core/taiga.sv
+core/cva5.sv
 

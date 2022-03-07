@@ -3,14 +3,14 @@
 #include <fstream>
 #include "verilated.h"
 #include "verilated_vcd_c.h"
-#include "Vtaiga_sim.h"
-#include "TaigaTracer.h"
+#include "Vcva5_sim.h"
+#include "CVA5Tracer.h"
 
-TaigaTracer *taigaTracer;
+CVA5Tracer *cva5Tracer;
 
 //For time index on assertions
  double sc_time_stamp () {
-            return taigaTracer->get_cycle_count();
+            return cva5Tracer->get_cycle_count();
 }
 
 //#define TRACE_ON
@@ -61,12 +61,12 @@ int main(int argc, char **argv) {
     }
 
 	// Create an instance of our module under test
-    taigaTracer = new TaigaTracer(programFile);
-    taigaTracer->set_log_file(&logFile);
+    cva5Tracer = new CVA5Tracer(programFile);
+    cva5Tracer->set_log_file(&logFile);
     #ifdef TRACE_ON
-        taigaTracer->start_tracer(argv[4]);
+        cva5Tracer->start_tracer(argv[4]);
 	#endif
-	taigaTracer->reset();
+	cva5Tracer->reset();
 	cout << "--------------------------------------------------------------\n";
 	cout << "   Starting Simulation, logging to " << argv[1] << "\n";
 	cout << "--------------------------------------------------------------\n";
@@ -74,27 +74,27 @@ int main(int argc, char **argv) {
 
 	// Tick the clock until we are done
     bool sig_phase_complete = false;
-	while(!(taigaTracer->has_stalled() || taigaTracer->has_terminated())) {
-	    taigaTracer->tick();
+	while(!(cva5Tracer->has_stalled() || cva5Tracer->has_terminated())) {
+	    cva5Tracer->tick();
         //Compliance Tests Signature Printing Phase
-        sig_phase_complete |= taigaTracer->check_if_instruction_retired(COMPLIANCE_SIG_PHASE_NOP);
-        if (sig_phase_complete && taigaTracer->store_queue_empty()) {
+        sig_phase_complete |= cva5Tracer->check_if_instruction_retired(COMPLIANCE_SIG_PHASE_NOP);
+        if (sig_phase_complete && cva5Tracer->store_queue_empty()) {
             std::cout << "\n--------------------------------------------------------------\n";
             std::cout << "                   Signature\n";
             std::cout << "--------------------------------------------------------------\n";
-            taigaTracer->set_log_file(&sigFile);
+            cva5Tracer->set_log_file(&sigFile);
         }
 	}
 
 	cout << "--------------------------------------------------------------\n";
-	cout << "   Simulation Completed  " << taigaTracer->get_cycle_count() << " cycles.\n";
-    taigaTracer->print_stats();
+	cout << "   Simulation Completed  " << cva5Tracer->get_cycle_count() << " cycles.\n";
+    cva5Tracer->print_stats();
 
 	logFile.close();
 	sigFile.close();
     programFile.close();
 
-	delete taigaTracer;
+	delete cva5Tracer;
 
 	exit(EXIT_SUCCESS);
 }
