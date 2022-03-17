@@ -192,25 +192,6 @@ package fpu_types;
 
     typedef struct packed{
         logic [FLEN-1:0]    rs1;
-        logic               rs2_sign;
-        logic [2:0]         rm;
-    } fp_sign_inject_inputs_t;
-
-    typedef struct packed{
-        logic [FLEN-1:0]    rs1;
-        logic [FLEN-1:0]    rs2;
-        logic               rs1_hidden_bit;
-        logic               rs2_hidden_bit;
-        logic [2:0]         rm;        //only need lower 2 bits
-        logic [6:0]         fn7;        //min max or cmp select
-        logic               is_sign_inj;
-        logic               is_class;
-        logic [3:0]         rs1_special_case;
-        logic [3:0]         rs2_special_case;
-    } fp_cmp_inputs_t;
-
-    typedef struct packed{
-        logic [FLEN-1:0]    rs1;
         logic [FLEN-1:0]    rs2;        //not needed for sqrt
         logic               rs1_hidden_bit;
         logic               rs2_hidden_bit;        
@@ -236,17 +217,6 @@ package fpu_types;
     } fp_sqrt_inputs_t;
 
     typedef struct packed{
-        logic [FLEN-1:0]    rs1;
-        logic [3:0]         rs1_special_case;
-    } fp_class_inputs_t;
-
-    typedef struct packed{
-        logic [FLEN-1:0]    rs1;
-        logic [FLEN-1:0]    rs2;
-        logic [2:0]         rm;
-    } fp_minmax_inputs_t;
-
-    typedef struct packed{
         logic [FLEN-1:0]    f2i_rs1;          //will be padded if input is integer
         logic               f2i_rs1_hidden;
         logic [3:0]         f2i_rs1_special_case;
@@ -258,6 +228,81 @@ package fpu_types;
         logic               is_f2f;             //single <-> double
         logic               is_d2s;
     } fp_cvt_mv_inputs_t;
+
+    typedef struct packed{
+        logic [XLEN-1:0]    i2f_rs1;
+        logic [2:0]         rm;
+        logic               is_signed;
+    } fp_i2f_inputs_t;
+
+    typedef struct packed{
+        logic [FLEN-1:0]    rs1;
+        logic [FLEN-1:0]    rs2;
+        logic               rs1_hidden_bit;
+        logic               rs2_hidden_bit;
+        logic [3:0]         rs1_special_case;
+        logic [3:0]         rs2_special_case;
+        logic [2:0]         rm;
+    } fp_minmax_inputs_t;
+
+    typedef struct packed{
+        logic [FLEN-1:0]    rs1;
+        logic               rs1_hidden_bit;
+        logic               rs2_sign;
+        logic [2:0]         rm;
+    } fp_sign_inject_inputs_t;
+
+    typedef struct packed{
+        logic [2:0]         instruction; //{i2f, minmax, sign_inj}
+        logic [FLEN-1:0]    rs1;
+        logic [XLEN-1:0]    int_rs1;
+        logic [FLEN-1:0]    rs2;
+        logic               rs1_hidden_bit;
+        logic               rs2_hidden_bit;
+        logic [3:0]         rs1_special_case;
+        logic [3:0]         rs2_special_case;
+        logic [2:0]         rm;
+        logic               is_signed;
+    } fp_wb2fp_misc_inputs_t;
+
+    typedef struct packed{
+        logic [FLEN-1:0]    f2i_rs1;          //will be padded if input is integer
+        logic               f2i_rs1_hidden;
+        logic [3:0]         f2i_rs1_special_case;
+        logic [2:0]         rm;
+        logic               is_signed;
+    } fp_f2i_inputs_t;
+
+    typedef struct packed{
+        logic [FLEN-1:0]    rs1;
+        logic [FLEN-1:0]    rs2;
+        logic               rs1_hidden_bit;
+        logic               rs2_hidden_bit;
+        logic [2:0]         rm;        //only need lower 2 bits
+        logic [6:0]         fn7;        //min max or cmp select
+        logic               is_sign_inj;
+        logic               is_class;
+        logic [3:0]         rs1_special_case;
+        logic [3:0]         rs2_special_case;
+    } fp_cmp_inputs_t;
+
+    typedef struct packed{
+        logic [FLEN-1:0]    rs1;
+        logic               rs1_hidden_bit;
+        logic [3:0]         rs1_special_case;
+    } fp_class_inputs_t;
+
+    typedef struct packed{
+        logic [2:0]         instruction; //{f2i, cmp, class}
+        logic [FLEN-1:0]    rs1;
+        logic [FLEN-1:0]    rs2;
+        logic               rs1_hidden_bit;
+        logic               rs2_hidden_bit;
+        logic [3:0]         rs1_special_case;
+        logic [3:0]         rs2_special_case;
+        logic [2:0]         rm;
+        logic               is_signed;
+    } fp_wb2int_misc_inputs_t;
 
     //intermediate outputs from FMUL for FMADD instructions
     typedef struct packed {

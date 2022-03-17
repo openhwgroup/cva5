@@ -42,7 +42,11 @@ module fp_special_case_detection_sandboxed #(parameter SANDBOX_FRAC_W=52, parame
   assign sign_sandboxed = sign_in;
   assign expo_sandboxed = expo_in[SANDBOX_EXPO_W-1:0];
   assign frac_sandboxed = frac_in[FRAC_WIDTH-1-:SANDBOX_FRAC_W];
-  assign hidden = |expo_sandboxed;
+  generate if (ENABLE_SUBNORMAL)
+    assign hidden = |expo_sandboxed;
+  else
+    assign hidden = 1;
+  endgenerate 
 
   //process
   logic expo_all_1s = &expo_sandboxed;

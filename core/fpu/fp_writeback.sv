@@ -248,6 +248,8 @@ module fp_writeback
     assign expo = round_packet_r.data[FLEN-2-:EXPO_WIDTH];
     assign frac = round_packet_r.data[FRAC_WIDTH-1:0];
     assign fflags = round_packet_r.fflags;
+    // frac_overflow can be calculated in parallel with roundup
+    //  frac_overflow = |{frac, roundup} 
     assign {frac_overflow, frac_round_intermediate} = {|expo, frac} + (FRAC_WIDTH+2)'(roundup);
     assign frac_out = frac_round_intermediate[FRAC_WIDTH-1:0] >> frac_overflow;
     assign {overflowExp, expo_out} = expo + EXPO_WIDTH'(frac_overflow); 

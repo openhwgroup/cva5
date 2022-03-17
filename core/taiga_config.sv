@@ -96,6 +96,7 @@ package taiga_config;
     parameter INTERFACE_FRAC_WIDTH = 52;
     parameter INTERFACE_FLEN = 1 + INTERFACE_EXPO_WIDTH + INTERFACE_FRAC_WIDTH;
     parameter FP_NUM_WB_GROUPS = 1;
+    parameter ENABLE_SUBNORMAL = 0;
 
     typedef struct packed {
       bit INCLUDE_FPU;
@@ -269,15 +270,15 @@ package taiga_config;
     typedef struct packed {
         int unsigned FMADD;
         int unsigned FDIV_SQRT;
-        int unsigned FMINMAX_CMP;
-        int unsigned FCVT;
+        int unsigned MISC_WB2FP;
+        int unsigned MISC_WB2INT;
     } fp_unit_id_param_t;
 
     localparam fp_unit_id_param_t FP_EXAMPLE_UNIT_IDS = '{
         FMADD       : 0,
         FDIV_SQRT   : 1,
-        FMINMAX_CMP : 2,
-        FCVT        : 3
+        MISC_WB2FP  : 2,
+        MISC_WB2INT : 3
     };
 
     ////////////////////////////////////////////////////
@@ -287,13 +288,11 @@ package taiga_config;
         int unsigned FMADD;
         int unsigned FMUL;
         int unsigned FDIV_SQRT;
-        int unsigned FMINMAX;
-        int unsigned FCVT_I2F;
+        int unsigned MISC_WB2FP;
     } fp_wb_id_param_t;
 
     typedef struct packed {
-        int unsigned FCVT_F2I;
-        int unsigned FCMP;
+        int unsigned MISC_WB2INT;
     } fp_wb_int_id_param_t;
 
     ////////////////////////////////////////////////////

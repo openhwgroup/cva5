@@ -28,6 +28,7 @@ module taiga
     import l2_config_and_types::*;
     import riscv_types::*;
     import taiga_types::*;
+    import fpu_types::*;
 
     #(
         parameter cpu_config_t CONFIG = EXAMPLE_CONFIG
@@ -71,19 +72,18 @@ module taiga
     //FP units
     localparam int unsigned FMADD_UNIT_ID = 32'd0;//IEC_UNIT_ID + 1;
     localparam int unsigned FDIV_SQRT_UNIT_ID = FMADD_UNIT_ID + 1;
-    localparam int unsigned FMINMAX_CMP_UNIT_ID = FDIV_SQRT_UNIT_ID + 1;
-    localparam int unsigned FCVT_UNIT_ID = FMINMAX_CMP_UNIT_ID + 1;
+    localparam int unsigned MISC_WB2FP_UNIT_ID = FDIV_SQRT_UNIT_ID + 1;
+    localparam int unsigned MISC_WB2INT_UNIT_ID = MISC_WB2FP_UNIT_ID + 1;
     //FP Writeback units
     localparam int unsigned FLS_WB_ID = 32'd0;
     localparam int unsigned FMADD_WB_ID = FLS_WB_ID + 1;
     localparam int unsigned FMUL_WB_ID = FMADD_WB_ID + 1;
     localparam int unsigned FDIV_SQRT_WB_ID = FMUL_WB_ID + 1;
-    localparam int unsigned FMINMAX_WB_ID = FDIV_SQRT_WB_ID + 1;
-    localparam int unsigned FCVT_I2F_WB_ID = FMINMAX_WB_ID + 1;
+    localparam int unsigned MISC_WB2FP_WB_ID = FDIV_SQRT_WB_ID + 1;
 
     //Total number of units
     localparam int unsigned NUM_UNITS = IEC_UNIT_ID + 1; 
-    localparam int unsigned FP_NUM_UNITS = FCVT_UNIT_ID + 1; 
+    localparam int unsigned FP_NUM_UNITS = MISC_WB2INT_UNIT_ID + 1; 
     localparam int unsigned TOTAL_NUM_UNITS = NUM_UNITS + FP_NUM_UNITS;
 
     localparam unit_id_param_t UNIT_IDS = '{
@@ -99,31 +99,29 @@ module taiga
     localparam fp_unit_id_param_t FP_UNIT_IDS = '{
         FMADD       : FMADD_UNIT_ID,
         FDIV_SQRT   : FDIV_SQRT_UNIT_ID,
-        FMINMAX_CMP : FMINMAX_CMP_UNIT_ID,
-        FCVT        : FCVT_UNIT_ID
+        MISC_WB2FP  : MISC_WB2FP_UNIT_ID,
+        MISC_WB2INT : MISC_WB2INT_UNIT_ID
     };
 
     ////////////////////////////////////////////////////
     //Writeback Port Assignment
     localparam int unsigned NUM_WB_UNITS_GROUP_1 = 1;//ALU
-    localparam int unsigned NUM_WB_UNITS_GROUP_2 = 2 + int'(CONFIG.INCLUDE_MUL) + int'(CONFIG.INCLUDE_DIV) + int'(INCLUDE_FPU)*2;//LS + CSR + (F2I + FCMP)
+    localparam int unsigned NUM_WB_UNITS_GROUP_2 = 2 + int'(CONFIG.INCLUDE_MUL) + int'(CONFIG.INCLUDE_DIV) + int'(INCLUDE_FPU)*1;//LS + CSR + (F2I + FCMP + FCLASS)
     localparam int unsigned NUM_WB_UNITS = NUM_WB_UNITS_GROUP_1 + NUM_WB_UNITS_GROUP_2; //F2I + CMP
-    localparam int unsigned FP_WB_INT_NUM_UNITS = 2;
+    localparam int unsigned FP_WB_INT_NUM_UNITS = 1;
 
     //FP Writeback ports
     localparam fp_wb_id_param_t FP_WB_IDS = '{
-        FLS       : FLS_WB_ID,
-        FMADD     : FMADD_WB_ID,
-        FMUL      : FMUL_WB_ID,
-        FDIV_SQRT : FDIV_SQRT_WB_ID,
-        FMINMAX   : FMINMAX_WB_ID,
-        FCVT_I2F  : FCVT_I2F_WB_ID
+        FLS        : FLS_WB_ID,
+        FMADD      : FMADD_WB_ID,
+        FMUL       : FMUL_WB_ID,
+        FDIV_SQRT  : FDIV_SQRT_WB_ID,
+        MISC_WB2FP : MISC_WB2FP_WB_ID
     };
-    localparam int unsigned FP_NUM_WB_UNITS = FCVT_I2F_WB_ID + 1;
+    localparam int unsigned FP_NUM_WB_UNITS = MISC_WB2FP_WB_ID + 1;
 
     localparam fp_wb_int_id_param_t FP_WB_INT_IDS = '{
-        FCVT_F2I : 0,
-        FCMP     : 1
+        MISC_WB2INT     : 0
     };
 
     ////////////////////////////////////////////////////
@@ -154,8 +152,10 @@ module taiga
     gc_inputs_t gc_inputs;
     csr_inputs_t csr_inputs;
     fp_madd_inputs_t fp_madd_inputs;
-    fp_cmp_inputs_t fp_cmp_inputs;
     fp_div_sqrt_inputs_t fp_div_sqrt_inputs;
+    fp_wb2fp_misc_inputs_t fp_wb2fp_misc_inputs;
+    fp_wb2int_misc_inputs_t fp_wb2int_misc_inputs;
+    fp_cmp_inputs_t fp_cmp_inputs;
     fp_cvt_mv_inputs_t fp_cvt_mv_inputs;
 
     unit_issue_interface unit_issue [NUM_UNITS+FP_NUM_UNITS-1:0]();
@@ -500,8 +500,10 @@ module taiga
         .div_inputs (div_inputs),
         .fp_madd_inputs (fp_madd_inputs),
         .fp_div_sqrt_inputs (fp_div_sqrt_inputs),
-        .fp_cvt_mv_inputs (fp_cvt_mv_inputs),
-        .fp_cmp_inputs (fp_cmp_inputs),
+        .fp_wb2fp_misc_inputs (fp_wb2fp_misc_inputs),
+        .fp_wb2int_misc_inputs (fp_wb2int_misc_inputs),
+        //.fp_cvt_mv_inputs (fp_cvt_mv_inputs),
+        //.fp_cmp_inputs (fp_cmp_inputs),
         .unit_issue (unit_issue),
         .gc (gc),
         .current_privilege (current_privilege),
@@ -728,12 +730,14 @@ module taiga
             .clk (clk),
             .rst (rst),
             .fp_madd_inputs (fp_madd_inputs),
-            .fp_cmp_inputs (fp_cmp_inputs),
             .fp_div_sqrt_inputs (fp_div_sqrt_inputs),
-            .fp_cvt_mv_inputs (fp_cvt_mv_inputs),
-            .fp_unit_issue (unit_issue[NUM_UNITS+FP_UNIT_IDS.FCVT:NUM_UNITS+FP_UNIT_IDS.FMADD]),
+            .fp_wb2fp_misc_inputs (fp_wb2fp_misc_inputs),
+            .fp_wb2int_misc_inputs (fp_wb2int_misc_inputs),
+            //.fp_cmp_inputs (fp_cmp_inputs),
+            //.fp_cvt_mv_inputs (fp_cvt_mv_inputs),
+            .fp_unit_issue (unit_issue[NUM_UNITS+FP_UNIT_IDS.MISC_WB2INT:NUM_UNITS+FP_UNIT_IDS.FMADD]),
             .fp_unit_wb (fp_unit_wb), //FLS is not assigned in fpu_top;included for coding simplicity
-            .unit_wb (unit_wb[NUM_WB_UNITS-2+FP_WB_INT_IDS.FCVT_F2I:NUM_WB_UNITS-2+FP_WB_INT_IDS.FCMP])
+            .unit_wb (unit_wb[NUM_WB_UNITS-1+FP_WB_INT_IDS.MISC_WB2INT:NUM_WB_UNITS-1+FP_WB_INT_IDS.MISC_WB2INT])
         );
 
         fflag_mux fflag_mux_inst (

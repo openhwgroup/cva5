@@ -59,9 +59,9 @@ module fp_decode_and_issue
 
         output id_t fp_store_forward_id,
         output fp_madd_inputs_t fp_madd_inputs,
-        output fp_cmp_inputs_t fp_cmp_inputs,
         output fp_div_sqrt_inputs_t fp_div_sqrt_inputs,
-        output fp_cvt_mv_inputs_t fp_cvt_mv_inputs,
+        output fp_wb2fp_misc_inputs_t fp_wb2fp_misc_inputs,
+        output fp_wb2int_misc_inputs_t fp_wb2int_misc_inputs,
         input logic gc_fetch_flush
     );
 
@@ -79,6 +79,9 @@ module fp_decode_and_issue
     logic [4:0] opcode_trim;
 
     logic is_sqrt;
+    logic is_sign_inj, is_sign_inj_r;
+    logic is_minmax, is_minmax_r;
+    logic is_class_r, is_f2i_r, is_fcmp_r, is_i2f_r;
 
     logic uses_rs1;
     logic uses_rs2;
@@ -98,6 +101,8 @@ module fp_decode_and_issue
     assign is_class = opcode_trim == FOP_T & fn7 == FCLASS;
     assign is_sqrt = opcode_trim == FOP_T & fn7 == FSQRT;
     assign is_fcmp = opcode_trim == FOP_T & fn7 == FCMP;
+    assign is_minmax = opcode_trim == FOP_T & fn7 == FMIN_MAX;
+    assign is_sign_inj = opcode_trim == FOP_T & fn7 == FSIGN_INJECTION;
 
     ////////////////////////////////////////////////////
     //Register File Support
@@ -110,8 +115,10 @@ module fp_decode_and_issue
     //Unit Determination
     assign unit_needed[FP_UNIT_IDS.FMADD] = opcode[6-:3] == 3'b100 | (opcode_trim == FOP_T & fn7 inside{FMUL, FADD, FSUB});
     assign unit_needed[FP_UNIT_IDS.FDIV_SQRT] = opcode_trim inside {FOP_T} & fn7[3:0] == 4'b1101;
-    assign unit_needed[FP_UNIT_IDS.FMINMAX_CMP] = opcode_trim inside {FOP_T} & fn7 inside {FMIN_MAX, FCMP, FSIGN_INJECTION, FCLASS};
-    assign unit_needed[FP_UNIT_IDS.FCVT] = opcode_trim inside {FOP_T} & fn7 inside {FCVT_SD, FCVT_DS, FCVT_DW, FCVT_WD};
+    assign unit_needed[FP_UNIT_IDS.MISC_WB2FP] = is_i2f | is_minmax | is_sign_inj;
+    assign unit_needed[FP_UNIT_IDS.MISC_WB2INT] = is_f2i | is_fcmp | is_class;
+    //assign unit_needed[FP_UNIT_IDS.FMINMAX_CMP] = opcode_trim inside {FOP_T} & fn7 inside {FMIN_MAX, FCMP, FSIGN_INJECTION, FCLASS};
+    //assign unit_needed[FP_UNIT_IDS.FCVT] = opcode_trim inside {FOP_T} & fn7 inside {FCVT_SD, FCVT_DS, FCVT_DW, FCVT_WD};
 
     ////////////////////////////////////////////////////
     //Renamer Support
@@ -158,6 +165,13 @@ module fp_decode_and_issue
             issue.is_float <= decode.is_float;
             issue.wb2_float <= decode.wb2_float;
             issue.accumulating_csrs <= decode.accumulating_csrs;
+
+            is_f2i_r <= is_f2i;
+            is_i2f_r <= is_i2f;
+            is_class_r <= is_class;
+            is_sign_inj_r <= is_sign_inj;
+            is_minmax_r <= is_minmax;
+            is_fcmp_r <= is_fcmp;
         end
     end
 
@@ -253,37 +267,7 @@ module fp_decode_and_issue
     assign fp_madd_inputs.rs1_special_case = {is_inf[RS1], is_SNaN[RS1], is_QNaN[RS1], is_zero[RS1]}; 
     assign fp_madd_inputs.rs2_special_case = {is_inf[RS2], is_SNaN[RS2], is_QNaN[RS2], is_zero[RS2]};
     assign fp_madd_inputs.rs3_special_case = {is_inf[RS3], is_SNaN[RS3], is_QNaN[RS3], is_zero[RS3]};
-
-    ////////////////////////////////////////////////////
-    //cmp/minmax
-    assign fp_cmp_inputs.rs1 = fp_rf.data[RS1];
-    assign fp_cmp_inputs.rs2 = fp_rf.data[RS2];
-    assign fp_cmp_inputs.rs1_hidden_bit = hidden_bit[RS1];
-    assign fp_cmp_inputs.rs2_hidden_bit = hidden_bit[RS2];
-    assign fp_cmp_inputs.rm = rm;  
-    assign fp_cmp_inputs.fn7 = issue.fn7;      
-    assign fp_cmp_inputs.is_sign_inj = issue.fn7 == FSIGN_INJECTION;
-    assign fp_cmp_inputs.is_class = issue.fn7 == FCLASS;
-    assign fp_cmp_inputs.rs1_special_case = {is_inf[RS1], is_SNaN[RS1], is_QNaN[RS1], is_zero[RS1]};
-    assign fp_cmp_inputs.rs2_special_case = {is_inf[RS2], is_SNaN[RS2], is_QNaN[RS2], is_zero[RS2]};
-
-    ////////////////////////////////////////////////////
-    //transfer  
-    assign fp_cvt_mv_inputs.f2i_rs1 = fp_rf.data[RS1];
-    assign fp_cvt_mv_inputs.f2i_rs1_hidden = hidden_bit[RS1];
-    assign fp_cvt_mv_inputs.f2i_rs1_special_case = {is_inf[RS1], is_SNaN[RS1], is_QNaN[RS1], is_zero[RS1]};
-    assign fp_cvt_mv_inputs.i2f_rs1 = int_rs1_data;
-    assign fp_cvt_mv_inputs.rm = rm;
-    //FMV.X.W/FMV.W.X
-    //Only for rv32f
-    assign fp_cvt_mv_inputs.is_mv = &issue.fn7[6:4]; // moves IEEE format in/out of f registers (only moing bit patterns)
-    //FCVT.D.W(U)/FCVT.W(U).D
-    assign fp_cvt_mv_inputs.is_float = ~issue.fn7[3]; //issue.fn7 inside {FCVT_WD, FMV_WX};
-    assign fp_cvt_mv_inputs.is_signed = ~issue.rs_addr[RS2][0]; //rs2_addr determines if conversion is signed
-    //FCVT.S.D/FCVT.D.S
-    assign fp_cvt_mv_inputs.is_f2f = ~issue.fn7[6]; //issue.fn7 inside {FCVT_SD, FCVT_DS}; 
-    assign fp_cvt_mv_inputs.is_d2s = issue.rs_addr[RS2][0];
-
+      
     ////////////////////////////////////////////////////
     //div_sqrt
     assign fp_div_sqrt_inputs.rs1 = fp_rf.data[RS1];
@@ -295,5 +279,31 @@ module fp_decode_and_issue
     assign fp_div_sqrt_inputs.id = issue.id;//fp_unit_issue[FP_DIV_SQRT_WB_ID].instruction_id;
     assign fp_div_sqrt_inputs.rs1_special_case = {is_inf[RS1], is_SNaN[RS1], is_QNaN[RS1], is_zero[RS1]}; 
     assign fp_div_sqrt_inputs.rs2_special_case = {is_inf[RS2], is_SNaN[RS2], is_QNaN[RS2], is_zero[RS2]};
+
+
+    ////////////////////////////////////////////////////
+    //MISC_WB2FP 
+    assign fp_wb2fp_misc_inputs.instruction = {is_i2f_r, is_minmax_r, is_sign_inj_r};
+    assign fp_wb2fp_misc_inputs.rs1 = fp_rf.data[RS1];
+    assign fp_wb2fp_misc_inputs.rs2 = fp_rf.data[RS2];
+    assign fp_wb2fp_misc_inputs.int_rs1 = int_rs1_data;
+    assign fp_wb2fp_misc_inputs.rs1_hidden_bit = hidden_bit[RS1];
+    assign fp_wb2fp_misc_inputs.rs2_hidden_bit = hidden_bit[RS2];
+    assign fp_wb2fp_misc_inputs.rs1_special_case = {is_inf[RS1], is_SNaN[RS1], is_QNaN[RS1], is_zero[RS1]};
+    assign fp_wb2fp_misc_inputs.rs2_special_case = {is_inf[RS2], is_SNaN[RS2], is_QNaN[RS2], is_zero[RS2]};
+    assign fp_wb2fp_misc_inputs.rm = rm;  
+    assign fp_wb2fp_misc_inputs.is_signed = ~issue.rs_addr[RS2][0]; //rs2_addr determines if conversion is signed
+
+    ////////////////////////////////////////////////////
+    //MISC_WB2INT 
+    assign fp_wb2int_misc_inputs.instruction = {is_f2i_r, is_fcmp_r, is_class_r};
+    assign fp_wb2int_misc_inputs.rs1 = fp_rf.data[RS1];
+    assign fp_wb2int_misc_inputs.rs2 = fp_rf.data[RS2];
+    assign fp_wb2int_misc_inputs.rs1_hidden_bit = hidden_bit[RS1];
+    assign fp_wb2int_misc_inputs.rs2_hidden_bit = hidden_bit[RS2];
+    assign fp_wb2int_misc_inputs.rs1_special_case = {is_inf[RS1], is_SNaN[RS1], is_QNaN[RS1], is_zero[RS1]};
+    assign fp_wb2int_misc_inputs.rs2_special_case = {is_inf[RS2], is_SNaN[RS2], is_QNaN[RS2], is_zero[RS2]};
+    assign fp_wb2int_misc_inputs.rm = rm;  
+    assign fp_wb2int_misc_inputs.is_signed = ~issue.rs_addr[RS2][0]; //rs2_addr determines if conversion is signed
 
 endmodule

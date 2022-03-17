@@ -105,10 +105,13 @@ core/fpu/fp_mul_madd_fused.sv
 core/fpu/fp_madd_fused.sv
 core/fpu/sticky_generator.sv
 core/fpu/fp_add_madd_fused.sv
+core/fpu/fp_wb2fp_misc.sv
+core/fpu/fp_wb2int_misc.sv
+core/fpu/fp_class.sv
 core/fpu/fp_cmp.sv
-core/fpu/fp_cvt_top.sv
 core/fpu/fp_f2i.sv
 core/fpu/fp_i2f.sv
+core/fpu/fp_minmax.sv
 core/fpu/fp_DS.sv
 core/fpu/fp_normalize.sv
 core/fpu/fp_rounding_simplified.sv

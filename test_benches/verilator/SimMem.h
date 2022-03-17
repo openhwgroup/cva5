@@ -48,6 +48,9 @@ public:
   void debug (uint32_t addr, uint64_t datain, uint64_t dataout, uint32_t be, uint32_t we);
   void printMem(std::string logfile);
   void printMemLoca(uint32_t addr);
+  int mem_modified(uint32_t addr);
+  uint64_t get_mem(uint32_t addr);
+  uint64_t mem_concat;
 private:
   uint32_t mem_size;
   uint32_t *memory1;

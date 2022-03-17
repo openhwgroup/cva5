@@ -30,20 +30,22 @@ module fpu_top #(
       parameter fp_unit_id_param_t FP_UNIT_IDS,     //issue interface IDs
       parameter FP_NUM_WB_UNITS,                    //fp wb interfaces
       parameter fp_wb_id_param_t FP_WB_IDS,         //fp wb interface IDs
-      parameter FP_WB_INT_NUM_UNITS = 2,            //int wb interfaces
+      parameter FP_WB_INT_NUM_UNITS = 1,            //int wb interfaces
       parameter fp_wb_int_id_param_t FP_WB_INT_IDS  //int wb interface IDs
     ) 
     (
       input logic clk,
       input logic rst,
       input fp_madd_inputs_t fp_madd_inputs,
-      input fp_cmp_inputs_t fp_cmp_inputs,
       input fp_div_sqrt_inputs_t fp_div_sqrt_inputs,
-      input fp_cvt_mv_inputs_t fp_cvt_mv_inputs,
-      unit_issue_interface fp_unit_issue [FP_NUM_UNITS-1:0], 
-      unit_writeback_interface unit_wb [FP_WB_INT_NUM_UNITS],
-      fp_unit_writeback_interface fp_unit_wb [FP_NUM_WB_UNITS]
+      input fp_wb2fp_misc_inputs_t fp_wb2fp_misc_inputs,
+      input fp_wb2int_misc_inputs_t fp_wb2int_misc_inputs,
+      unit_issue_interface.unit fp_unit_issue [FP_NUM_UNITS-1:0], 
+      unit_writeback_interface.unit unit_wb [FP_WB_INT_NUM_UNITS],
+      fp_unit_writeback_interface.unit fp_unit_wb [FP_NUM_WB_UNITS]
     );
+
+  logic flt_minmax;
 
   fp_madd_fused_top fp_madd_inst (
     .clk (clk),
@@ -54,24 +56,6 @@ module fpu_top #(
     .fp_mul_wb (fp_unit_wb[FP_WB_IDS.FMUL])
   );
 
-  fp_cmp fp_cmp_inst (
-    .clk (clk),
-    .rst (rst), 
-    .fp_cmp_inputs (fp_cmp_inputs),
-    .issue (fp_unit_issue[FP_UNIT_IDS.FMINMAX_CMP]), 
-    .cmp_wb (unit_wb[FP_WB_INT_IDS.FCMP]), 
-    .minmax_wb (fp_unit_wb[FP_WB_IDS.FMINMAX])
-  );
-
-  fp_cvt_top fp_cvt_mv_inst (
-    .clk (clk),
-    .rst (rst), 
-    .fp_cvt_mv_inputs (fp_cvt_mv_inputs),
-    .issue(fp_unit_issue[FP_UNIT_IDS.FCVT]), 
-    .f2i_wb(unit_wb[FP_WB_INT_IDS.FCVT_F2I]), 
-    .i2f_wb(fp_unit_wb[FP_WB_IDS.FCVT_I2F])
-  );
-
   fp_div_sqrt_wrapper div_sqrt_inst (
     .clk (clk),
     .rst (rst),
@@ -79,6 +63,23 @@ module fpu_top #(
     .issue(fp_unit_issue[FP_UNIT_IDS.FDIV_SQRT]), 
     .wb(fp_unit_wb[FP_WB_IDS.FDIV_SQRT]) 
   );
+
+  fp_wb2fp_misc wb2fp_misc_inst(
+    .clk (clk),
+    .issue (fp_unit_issue[FP_UNIT_IDS.MISC_WB2FP]),
+    .fp_wb2fp_misc_inputs (fp_wb2fp_misc_inputs),
+    .flt_minmax (flt_minmax),
+    .wb (fp_unit_wb[FP_WB_IDS.MISC_WB2FP])
+  );
+
+  fp_wb2int_misc wb2int_misc_inst(
+    .clk (clk),
+    .issue (fp_unit_issue[FP_UNIT_IDS.MISC_WB2INT]),
+    .fp_wb2int_misc_inputs (fp_wb2int_misc_inputs),
+    .flt_minmax (flt_minmax),
+    .wb (unit_wb[FP_WB_INT_IDS.MISC_WB2INT])
+  );
+
 endmodule
 
 

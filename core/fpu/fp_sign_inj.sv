@@ -1,59 +1,75 @@
+/*
+ * Copyright © 2017-2020 Yuhui Gao,  Lesley Shannon
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ * Initial code developed under the supervision of Dr. Lesley Shannon,
+ * Reconfigurable Computing Lab, Simon Fraser University.
+ *
+ * Author(s):
+ *             Yuhui Gao <yuhiug@sfu.ca>
+ *             */
+
 import taiga_config::*;
 import riscv_types::*;
 import taiga_types::*;
+import fpu_types::*;
 
 module fp_sign_inj (
   input logic clk,
-  input logic rst,
+  input logic advance,
+  unit_issue_interface.unit issue,
   input fp_sign_inject_inputs_t fp_sign_inject_inputs,
-  fp_unit_issue_interface.unit issue,
-  fp_unit_writeback_interface fp_wb
-  // output [4:0] fflags
+  fp_unit_writeback_interface.unit wb
 );
-  
-  logic [FLEN-1:0]          rs1;
-  logic                     rs2_sign;
-  logic [2:0]               rm;
-  logic                     done;
-  id_t                      id;
 
-  always_ff @ (posedge clk) begin 
+  fp_sign_inject_inputs_t fp_sign_inject_inputs_r;
+  logic [FLEN-1:0]        rs1;
+  logic                   rs1_hidden_bit;
+  logic                   rs2_sign;
+  logic [2:0]             fn3;        
+  logic [FLEN-1:0]        sign_inj_result;
+  logic                   done;
+  id_t                    id;
+
+  ////////////////////////////////////////////////////
+  //Implementation
+  //Input Processing
+  always_ff @ (posedge clk) begin
     if (advance) begin
-      rs1 <= fp_sign_inject_inputs.rs1;
-      rs2_sign <= fp_sign_inject_inputs.rs2_sign;
-      rm <= fp_sign_inject_inputs.rm;
       done <= issue.new_request;
       id <= issue.id;
-    end else begin
-      rs1 <= rs1;
-      rs2_sign <= rs2_sign;
-      rm <= rm;
-      done <= done;
-      id <= id;
+      fp_sign_inject_inputs_r <= fp_sign_inject_inputs;
     end
   end
 
-  logic done_r;
-  always_ff @ (posedge clk) begin
-    if (fp_wb.ack)
-      done_r <= 0;
-    else if (done)
-      done_r <= 1;
-  end
+  assign rs1 = fp_sign_inject_inputs_r.rs1;
+  assign rs1_hidden_bit = fp_sign_inject_inputs_r.rs1_hidden_bit;
+  assign rs2_sign = fp_sign_inject_inputs_r.rs2_sign;
+  assign fn3 = fp_sign_inject_inputs_r.rm;
 
   always_comb begin 
-    case(rm)
-      default: fp_wb.rd = {rs2_sign, rs1[FLEN-2:0]};
-      3'b001: fp_wb.rd = {~rs2_sign, rs1[FLEN-2:0]};
-      3'b010: fp_wb.rd = {rs2_sign ^ rs1[FLEN-1], rs1[FLEN-2:0]};
-    endcase // rm
+    case(fn3)
+      default: sign_inj_result = {rs2_sign, rs1[FLEN-2:0]};
+      3'b001:  sign_inj_result = {~rs2_sign, rs1[FLEN-2:0]};
+      3'b010:  sign_inj_result = {rs2_sign ^ rs1[FLEN-1], rs1[FLEN-2:0]};
+    endcase 
   end
 
-  logic advance;
-  assign advance = fp_wb.ack | ~fp_wb.done;
-  assign fp_wb.done = done;
-  assign fp_wb.id = id;
-  assign fp_wb.fflags = '0;
-  assign issue.ready = advance;
-
+  ////////////////////////////////////////////////////
+  //Output
+  assign wb.rd = sign_inj_result;
+  assign wb.hidden = rs1_hidden_bit;
+  assign wb.done = done;
+  assign wb.id = id;
 endmodule

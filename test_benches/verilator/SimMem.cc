@@ -5,10 +5,14 @@
 #include "SimMem.h"
 #include <iomanip>
 
+
 SimMem::SimMem(std::ifstream& program, uint32_t mem_size) : mem_size(mem_size) {
+    //static uint32_t SimMem::memory1;
+    //static uint32_t SimMem::memory2;
     memory1 = new uint32_t[mem_size*256]();//mem_size in KB
     memory2 = new uint32_t[mem_size*256]();//mem_size in KB
     address_mask = (mem_size*256) - 1; //mask to prevent any out-of-bounds array access.  Assumes power-of-two memory size
+    std::cout << std::hex << address_mask << std::dec << std::endl;
 
     std::string line;
     for (int i =0; (i < mem_size*256) && (std::getline(program, line)); i++) {
@@ -17,15 +21,24 @@ SimMem::SimMem(std::ifstream& program, uint32_t mem_size) : mem_size(mem_size) {
         memory2[i] = std::stoul(line, 0, 16);
     }
     mem_counter = 0;
+
+    mem_concat = memory1[8066];
+    mem_concat = mem_concat << 32 | memory2[8066];
+
 }
 
 uint32_t SimMem::read_instruction(uint32_t addr) {
     uint32_t we = addr & 0x1; //extract word select bit
     uint32_t new_addr = addr >> 1;
-    if (we) 
+
+    if (we) {
+        //std::cout << std::hex << "addr: 0x" << addr << "\tnew_addr: 0x" << new_addr << "\tinst@" << (new_addr&address_mask) << ": 0x" << memory2[new_addr & address_mask] << " \n";
         return memory2[new_addr & address_mask];
-    else 
+    }
+    else {
+        //std::cout << std::hex << "addr: 0x" << addr << "\tnew_addr: 0x" << new_addr << "\tinst@" << (new_addr&address_mask) << ": 0x" << memory1[new_addr & address_mask] << " \n";
         return memory1[new_addr & address_mask];
+    }
 }
 
 uint64_t SimMem::read(uint32_t addr) {
@@ -64,6 +77,9 @@ void SimMem::write(uint32_t addr, uint64_t data, uint32_t be, uint32_t we) {
         memory1[addr & address_mask] = (old_word1 & ~write_mask) | (data1 & write_mask);
         memory2[addr & address_mask] = (old_word2 & ~write_mask) | (data2 & write_mask);
     }
+    //if ((addr & address_mask) == 8066){
+        //std::cout << "instruction mem modified - addr: 0x" << addr << "\tdata: " << data << std::endl;
+    //}
 }
 
 void SimMem::printMem(std::string logfile) {
@@ -82,6 +98,20 @@ void SimMem::printMemLoca(uint32_t addr){
     std::cout << std::hex << "0x" << std::setw(8) << std::setfill('0') << addr << 
         " " << std::setw(8) << std::setfill('0') << memory1[addr & address_mask] << " " <<
                std::setw(8) << std::setfill('0') << memory2[addr & address_mask] << std::endl;
+}
+
+int SimMem::mem_modified(uint32_t addr) { //the addr is the actual addr in the memory arrays (lower 3 bits discarded and masked)
+    if (memory1[addr]!=0xfc010113 | memory2[addr]!=0x1a00793){
+        std::cout << "instruction memory modified: 0x";
+        return 1;
+    }
+    return 0;
+}
+
+uint64_t SimMem::get_mem(uint32_t addr) {//the addr is the actual addr in the memory arrays (lower 3 bits discarded and masked)
+    uint64_t mem_concat = memory1[addr];
+    mem_concat = mem_concat << 32 | memory2[addr];
+    return mem_concat;
 }
 
 SimMem::~SimMem() {

@@ -175,6 +175,7 @@ module taiga_sim
         output logic instruction_issued,
         output logic taiga_events [0:$bits(taiga_trace_events_t)-1],
         output logic [31:0] instruction_pc_dec,
+        input logic [63:0] debug_instructions,
         output logic [31:0] instruction_data_dec
     );
 

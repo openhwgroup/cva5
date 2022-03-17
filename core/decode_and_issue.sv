@@ -82,9 +82,12 @@ module decode_and_issue
         output mul_inputs_t mul_inputs,
         output div_inputs_t div_inputs,
         output fp_madd_inputs_t fp_madd_inputs,
-        output fp_cmp_inputs_t fp_cmp_inputs,
         output fp_div_sqrt_inputs_t fp_div_sqrt_inputs,
-        output fp_cvt_mv_inputs_t fp_cvt_mv_inputs,
+        output fp_wb2fp_misc_inputs_t fp_wb2fp_misc_inputs,
+        output fp_wb2int_misc_inputs_t fp_wb2int_misc_inputs,
+
+        //output fp_cmp_inputs_t fp_cmp_inputs,
+        //output fp_cvt_mv_inputs_t fp_cvt_mv_inputs,
 
         unit_issue_interface.decode unit_issue [TOTAL_NUM_UNITS-1:0],
 
@@ -438,11 +441,6 @@ module decode_and_issue
     assign ls_inputs.fp_rs2 = fp_rf.data[RS2];
     assign ls_inputs.fp_forwarded_store = fp_rf.inuse[RS2];
 
-    //FPU support
-    assign ls_inputs.is_float = issue.is_float;
-    assign ls_inputs.fp_rs2 = fp_rf.data[RS2];
-    assign ls_inputs.fp_forwarded_store = fp_rf.inuse[RS2];
-
     ls_input_assertion:
         assert property (@(posedge clk) disable iff (rst) instruction_issued  & issue_to[UNIT_IDS.LS] &ls_inputs.store|-> !(issue.fp_uses_rd | issue.uses_rd))
         else $error("store issued with uses_rd");
@@ -652,9 +650,9 @@ module decode_and_issue
             .fp_operands_ready (fp_operands_ready),
             .fp_store_forward_id (fp_store_forward_id),
             .fp_madd_inputs (fp_madd_inputs),
-            .fp_cmp_inputs (fp_cmp_inputs),
             .fp_div_sqrt_inputs (fp_div_sqrt_inputs),
-            .fp_cvt_mv_inputs (fp_cvt_mv_inputs),
+            .fp_wb2fp_misc_inputs (fp_wb2fp_misc_inputs),
+            .fp_wb2int_misc_inputs (fp_wb2int_misc_inputs),
             .gc_fetch_flush (gc.fetch_flush)
         );
     end endgenerate
