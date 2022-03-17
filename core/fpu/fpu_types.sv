@@ -109,6 +109,7 @@ package fpu_types;
         id_t id;
         logic valid;
         logic [FLEN-1:0] data;
+        logic hidden;
         logic [FLEN-1:0] result_if_overflow;
         logic roundup;
         logic [4:0] fflags;
