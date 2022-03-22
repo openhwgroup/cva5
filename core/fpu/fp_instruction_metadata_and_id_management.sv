@@ -39,6 +39,8 @@ module fp_instruction_metadata_and_id_management
         output decode_wb2_float,
         output decode_is_float,
         output decode_accu_fcsr,
+        output decode_wb2_int,
+        output decode_need_int,
 
         input issue_packet_t issue,
         input logic instruction_issued,
@@ -59,6 +61,8 @@ module fp_instruction_metadata_and_id_management
     (* ramstyle = "MLAB, no_rw_check" *) logic [0:0] is_float_table [MAX_IDS];
     (* ramstyle = "MLAB, no_rw_check" *) logic [0:0] wb2_float_table [MAX_IDS];
     (* ramstyle = "MLAB, no_rw_check" *) logic [0:0] accu_fcsr_table [MAX_IDS];
+    (* ramstyle = "MLAB, no_rw_check" *) logic [0:0] wb2_int_table [MAX_IDS];
+    (* ramstyle = "MLAB, no_rw_check" *) logic [0:0] need_int_data_table [MAX_IDS];
 
     //////////////////////////////////////////
     //Implementation
@@ -89,12 +93,16 @@ module fp_instruction_metadata_and_id_management
             accu_fcsr_table[fetch_id] <= fetch_accu_fcsr;
             wb2_float_table[fetch_id] <= fetch_wb2_float;
             is_float_table[fetch_id] <= fetch_is_float;
+            wb2_int_table[fetch_id] <= fetch_wb2_int;
+            need_int_data_table[fetch_id] <= fetch_need_int_data;
         end
     end
 
     assign decode_accu_fcsr = accu_fcsr_table[decode_id];
     assign decode_wb2_float = wb2_float_table[decode_id];
     assign decode_is_float  = is_float_table[decode_id];
+    assign decode_wb2_int = wb2_int_table[decode_id];
+    assign decode_need_int = need_int_data_table[decode_id];
 
     //////////////////////////////////////////
     //FCSR support

@@ -191,9 +191,9 @@ module decode_and_issue
 
     ////////////////////////////////////////////////////
     //Register File Support
-    assign uses_rs1 = opcode_trim inside {JALR_T, BRANCH_T, LOAD_T, STORE_T, ARITH_IMM_T, ARITH_T, AMO_T, FLD_T, FSD_T} | is_csr | is_i2f;
+    assign uses_rs1 = opcode_trim inside {JALR_T, BRANCH_T, LOAD_T, STORE_T, ARITH_IMM_T, ARITH_T, AMO_T, FLD_T, FSD_T} | decode.need_int_data;// | is_csr | is_i2f;
     assign uses_rs2 = opcode_trim inside {BRANCH_T, ARITH_T, AMO_T};//Stores are exempted due to store forwarding
-    assign uses_rd = opcode_trim inside {LUI_T, AUIPC_T, JAL_T, JALR_T, LOAD_T, ARITH_IMM_T, ARITH_T} | is_csr | is_f2i | is_fcmp | is_class; 
+    assign uses_rd = opcode_trim inside {LUI_T, AUIPC_T, JAL_T, JALR_T, LOAD_T, ARITH_IMM_T, ARITH_T} | is_csr | decode.wb2_int; //| is_f2i | is_fcmp | is_class; 
 
     ////////////////////////////////////////////////////
     //Unit Determination

@@ -72,6 +72,8 @@ package taiga_types;
         logic is_float;
         logic wb2_float;
         logic accumulating_csrs;
+        logic need_int_data;
+        logic wb2_int;
     } decode_packet_t;
 
     typedef struct packed{

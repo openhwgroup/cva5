@@ -108,7 +108,7 @@ module instruction_metadata_and_id_management
     id_t retire_ids_next [RETIRE_PORTS];
     logic retire_port_valid_next [RETIRE_PORTS];
 
-    logic decode_wb2_float, decode_is_float, decode_accu_fcsr;
+    logic decode_wb2_float, decode_is_float, decode_accu_fcsr, decode_wb2_int, decode_need_int;
     genvar i;
     ////////////////////////////////////////////////////
     //Implementation
@@ -176,6 +176,8 @@ module instruction_metadata_and_id_management
             .decode_wb2_float               (decode_wb2_float),
             .decode_is_float                (decode_is_float),
             .decode_accu_fcsr               (decode_accu_fcsr),
+            .decode_wb2_int                 (decode_wb2_int),
+            .decode_need_int                (decode_need_int),
             .instruction_issued             (instruction_issued),
             .issue                          (issue),
             .retire_ids_next                (retire_ids_next),
@@ -358,6 +360,8 @@ module instruction_metadata_and_id_management
     assign decode.is_float = decode_is_float;
     assign decode.wb2_float = decode_wb2_float;
     assign decode.accumulating_csrs = decode_accu_fcsr;
+    assign decode.wb2_int = decode_wb2_int;
+    assign decode.need_int_data = decode_need_int;
 
     //Writeback/Commit support
     phys_addr_t commit_phys_addr [CONFIG.NUM_WB_GROUPS];
