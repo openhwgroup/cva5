@@ -110,8 +110,10 @@ module load_store_unit
     logic unit_stall;
 
     typedef struct packed{
-        logic [2:0] fn3;
+        logic is_halfword;
+        logic is_signed;
         logic [1:0] byte_addr;
+        logic [1:0] final_mux_sel;
         id_t id;
         logic [NUM_SUB_UNITS_W-1:0] subunit_id;
     } load_attributes_t;
@@ -273,8 +275,16 @@ endgenerate
         .rst        (rst), 
         .fifo       (load_attributes)
     );
-    assign load_attributes_in.fn3 = shared_inputs.fn3;
+    assign load_attributes_in.is_halfword = shared_inputs.fn3[0];
+    assign load_attributes_in.is_signed = ~|shared_inputs.fn3[2:1];
     assign load_attributes_in.byte_addr = shared_inputs.addr[1:0];
+    always_comb begin
+        case(shared_inputs.fn3)
+            LS_B_fn3, L_BU_fn3 : load_attributes_in.final_mux_sel = 0;
+            LS_H_fn3, L_HU_fn3 : load_attributes_in.final_mux_sel = 1;
+            default : load_attributes_in.final_mux_sel = 2; //LS_W_fn3
+        endcase
+    end
     assign load_attributes_in.id = shared_inputs.id;
 
     assign load_attributes.data_in = load_attributes_in;
@@ -371,28 +381,27 @@ endgenerate
 
     ////////////////////////////////////////////////////
     //Output Muxing
+    logic sign_bit_data [4];
+    logic [1:0] sign_bit_sel;
+    logic sign_bit;
+    
     assign unit_muxed_load_data = unit_data_array[stage2_attr.subunit_id];
 
     //Byte/halfword select: assumes aligned operations
-    always_comb begin
-        aligned_load_data[31:16] = unit_muxed_load_data[31:16];
-        aligned_load_data[15:0] = stage2_attr.byte_addr[1] ? unit_muxed_load_data[31:16] : unit_muxed_load_data[15:0];
-        //select halfword first then byte
-        aligned_load_data[7:0] = stage2_attr.byte_addr[0] ? aligned_load_data[15:8] : aligned_load_data[7:0];
-    end
+    assign aligned_load_data[31:16] = unit_muxed_load_data[31:16];
+    assign aligned_load_data[15:8] = stage2_attr.byte_addr[1] ? unit_muxed_load_data[31:24] : unit_muxed_load_data[15:8];
+    assign aligned_load_data[7:0] = unit_muxed_load_data[stage2_attr.byte_addr*8 +: 8];
+
+    assign sign_bit_data = '{unit_muxed_load_data[7], unit_muxed_load_data[15], unit_muxed_load_data[23], unit_muxed_load_data[31]};
+    assign sign_bit_sel = stage2_attr.byte_addr | {1'b0, stage2_attr.is_halfword};
+    assign sign_bit = stage2_attr.is_signed & sign_bit_data[sign_bit_sel];
 
     //Sign extending
     always_comb begin
-        case(stage2_attr.fn3)
-            LS_B_fn3 : final_load_data = 32'(signed'(aligned_load_data[7:0]));
-            LS_H_fn3 : final_load_data = 32'(signed'(aligned_load_data[15:0]));
-            LS_W_fn3 : final_load_data = aligned_load_data;
-                //unused 011
-            L_BU_fn3 : final_load_data = 32'(unsigned'(aligned_load_data[7:0]));
-            L_HU_fn3 : final_load_data = 32'(unsigned'(aligned_load_data[15:0]));
-                //unused 110
-                //unused 111
-            default : final_load_data = aligned_load_data;
+        case(stage2_attr.final_mux_sel)
+            0 : final_load_data = {{24{sign_bit}}, aligned_load_data[7:0]};
+            1 : final_load_data = {{16{sign_bit}}, aligned_load_data[15:0]};
+            default : final_load_data = aligned_load_data; //LS_W_fn3
         endcase
     end
 
