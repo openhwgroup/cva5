@@ -795,9 +795,9 @@
       <obj_property name="ElementShortName">request_valid</obj_property>
       <obj_property name="ObjectShortName">request_valid</obj_property>
    </wvobject>
-   <wvobject type="logic" fp_name="/cva5_tb/l2_arb/mem/abort">
-      <obj_property name="ElementShortName">abort</obj_property>
-      <obj_property name="ObjectShortName">abort</obj_property>
+   <wvobject type="logic" fp_name="/cva5_tb/l2_arb/mem/abort_request">
+      <obj_property name="ElementShortName">abort_request</obj_property>
+      <obj_property name="ObjectShortName">abort_request</obj_property>
    </wvobject>
    <wvobject type="array" fp_name="/cva5_tb/l2_arb/mem/wr_data">
       <obj_property name="ElementShortName">wr_data[31:0]</obj_property>

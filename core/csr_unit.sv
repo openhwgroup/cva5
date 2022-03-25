@@ -491,11 +491,11 @@ generate if (CONFIG.INCLUDE_M_MODE) begin : gen_csr_m_mode
     always_ff @(posedge clk) begin
         mcause.zeroes <= '0;
         if (rst) begin
-            mcause.interrupt <= 0;
+            mcause.is_interrupt <= 0;
             mcause.code <= 0;
         end
         else if (CONFIG.CSRS.NON_STANDARD_OPTIONS.INCLUDE_MCAUSE & ((mcause_write_valid & mwrite_en(MCAUSE)) | exception.valid | interrupt_taken)) begin
-            mcause.interrupt <= interrupt_taken | (mwrite_en(MCAUSE) & updated_csr[XLEN-1]);
+            mcause.is_interrupt <= interrupt_taken | (mwrite_en(MCAUSE) & updated_csr[XLEN-1]);
             mcause.code <= interrupt_taken ? interrupt_cause_r : exception.valid ? exception.code : updated_csr[ECODE_W-1:0];
         end
     end

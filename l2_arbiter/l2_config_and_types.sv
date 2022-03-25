@@ -68,7 +68,7 @@ package l2_config_and_types;
     typedef struct packed{
         logic [$clog2(L2_NUM_PORTS)-1:0] id;
         logic [4:0] burst_size;
-        logic abort;
+        logic abort_request;
     } l2_data_attributes_t;
 
 

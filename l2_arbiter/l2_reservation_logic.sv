@@ -37,7 +37,7 @@ module l2_reservation_logic
         input logic sc,
         input logic store, //includes read-modify-write AMOs
 
-        output logic abort
+        output logic abort_request
 
     );
 
@@ -72,7 +72,7 @@ module l2_reservation_logic
             reservation_address[id] <= addr;
     end
 
-    assign abort = sc && (~reservation[id] || (reservation[id] && ~address_match[id]));
+    assign abort_request = sc && (~reservation[id] || (reservation[id] && ~address_match[id]));
 
 
 endmodule

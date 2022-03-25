@@ -90,7 +90,7 @@ interface l2_memory_interface;
     logic request_pop;
     logic request_valid;
 
-    logic abort;
+    logic abort_request;
 
     logic [31:0] wr_data;
     logic wr_data_valid;
@@ -101,18 +101,18 @@ interface l2_memory_interface;
     logic rd_data_valid;
 
     modport master (output addr, be, rnw, is_amo, amo_type_or_burst_size, id,
-            output request_valid, abort, input request_pop,
+            output request_valid, abort_request, input request_pop,
             output wr_data, wr_data_valid, input wr_data_read,
             input rd_data, rd_id, rd_data_valid);
 
     modport slave (input addr, be, rnw, is_amo, amo_type_or_burst_size, id,
-            input request_valid, abort, output request_pop,
+            input request_valid, abort_request, output request_pop,
             input wr_data, wr_data_valid, output wr_data_read,
             output rd_data, rd_id, rd_data_valid);
 
 `ifdef __CVA5_FORMAL__
     modport formal (input addr, be, rnw, is_amo, amo_type_or_burst_size, id,
-                         request_valid, abort, output request_pop,
+                         request_valid, abort_request, output request_pop,
                          wr_data, wr_data_valid, output wr_data_read,
                          rd_data, rd_id, rd_data_valid);
 `endif
