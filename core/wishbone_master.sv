@@ -31,21 +31,17 @@ module wishbone_master
         input logic rst,
 
         wishbone_interface.master m_wishbone,
-        output logic[31:0] data_out,
-
-        input data_access_shared_inputs_t ls_inputs,
-        ls_sub_unit_interface.sub_unit ls
-
+        memory_sub_unit_interface.responder ls
     );
     //implementation
     ////////////////////////////////////////////////////
 
     always_ff @ (posedge clk) begin
         if (ls.new_request) begin
-            m_wishbone.addr <= ls_inputs.addr;
-            m_wishbone.we <= ls_inputs.store;
-            m_wishbone.sel <= ls_inputs.be;
-            m_wishbone.writedata <= ls_inputs.data_in;
+            m_wishbone.addr <= ls.addr;
+            m_wishbone.we <= ls.we;
+            m_wishbone.sel <= ls.be;
+            m_wishbone.writedata <= ls.data_in;
         end
     end
 
@@ -67,9 +63,9 @@ module wishbone_master
 
     always_ff @ (posedge clk) begin
         if (m_wishbone.ack)
-            data_out <= m_wishbone.readdata;
+            ls.data_out <= m_wishbone.readdata;
         else
-            data_out <= 0;
+            ls.data_out <= 0;
     end
 
     always_ff @ (posedge clk) begin

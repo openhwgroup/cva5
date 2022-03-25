@@ -271,38 +271,46 @@ interface ls_sub_unit_interface #(parameter bit [31:0] BASE_ADDR = 32'h00000000,
 
 endinterface
 
+interface addr_utils_interface #(parameter bit [31:0] BASE_ADDR = 32'h00000000, parameter bit [31:0] UPPER_BOUND = 32'hFFFFFFFF);
+        //Based on the lower and upper address ranges,
+        //find the number of bits needed to uniquely identify this memory range.
+        //Assumption: address range is aligned to its size
+        function automatic int unsigned bit_range ();
+            int unsigned i;
+            for(i=0; i < 32; i++) begin
+                if (BASE_ADDR[i] == UPPER_BOUND[i])
+                    break;
+            end
+            return (32 - i);
+        endfunction
 
-interface fetch_sub_unit_interface #(parameter bit [31:0] BASE_ADDR = 32'h00000000, parameter bit [31:0] UPPER_BOUND = 32'hFFFFFFFF);
-    logic [31:0] stage1_addr;
-    logic [31:0] stage2_addr;
+        localparam int unsigned BIT_RANGE = bit_range();
+
+        function address_range_check (input logic[31:0] addr);
+            return (addr[31:32-BIT_RANGE] == BASE_ADDR[31:32-BIT_RANGE]);
+        endfunction
+endinterface
+
+interface memory_sub_unit_interface;
+    logic new_request;
+    logic [31:0] addr;
+    logic re;
+    logic we;
+    logic [3:0] be;
+    logic [31:0] data_in;
 
     logic [31:0] data_out;
     logic data_valid;
     logic ready;
-    logic new_request;
-    logic flush;
 
-    //Based on the lower and upper address ranges,
-    //find the number of bits needed to uniquely identify this memory range.
-    //Assumption: address range is aligned to its size
-    function automatic int unsigned bit_range ();
-        int unsigned i;
-        for(i=0; i < 32; i++) begin
-            if (BASE_ADDR[i] == UPPER_BOUND[i])
-                break;
-        end
-        return (32 - i);
-    endfunction
-
-    localparam int unsigned BIT_RANGE = bit_range();
-
-    function address_range_check (input logic[31:0] addr);
-        return (addr[31:32-BIT_RANGE] == BASE_ADDR[31:32-BIT_RANGE]);
-    endfunction
-
-    modport sub_unit (input stage1_addr, stage2_addr,  new_request, flush, output data_out, data_valid, ready);
-    modport fetch (output stage1_addr, stage2_addr,  new_request, flush, input data_out, data_valid, ready);
-
+    modport responder (
+        input addr, re, we, be, data_in, new_request,
+        output data_out, data_valid, ready
+    );
+    modport controller (
+        input data_out, data_valid, ready,
+        output addr, re, we, be, data_in, new_request
+    );
 endinterface
 
 //start and done are cycle cycle pulses

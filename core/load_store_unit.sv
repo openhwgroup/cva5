@@ -73,17 +73,25 @@ module load_store_unit
     localparam NUM_SUB_UNITS = int'(CONFIG.INCLUDE_DLOCAL_MEM) + int'(CONFIG.INCLUDE_PERIPHERAL_BUS) + int'(CONFIG.INCLUDE_DCACHE);
     localparam NUM_SUB_UNITS_W = (NUM_SUB_UNITS == 1) ? 1 : $clog2(NUM_SUB_UNITS);
 
-    localparam BRAM_ID = 0;
+    localparam LOCAL_MEM_ID = 0;
     localparam BUS_ID = int'(CONFIG.INCLUDE_DLOCAL_MEM);
     localparam DCACHE_ID = int'(CONFIG.INCLUDE_DLOCAL_MEM) + int'(CONFIG.INCLUDE_PERIPHERAL_BUS);
 
     //Should be equal to pipeline depth of longest load/store subunit 
     localparam ATTRIBUTES_DEPTH = CONFIG.INCLUDE_DCACHE ? 2 : 1;
 
+    //Subunit signals
+    addr_utils_interface #(CONFIG.DLOCAL_MEM_ADDR.L, CONFIG.DLOCAL_MEM_ADDR.H) dlocal_mem_addr_utils ();
+    addr_utils_interface #(CONFIG.PERIPHERAL_BUS_ADDR.L, CONFIG.PERIPHERAL_BUS_ADDR.H) dpbus_addr_utils ();
+    addr_utils_interface #(CONFIG.DCACHE_ADDR.L, CONFIG.DCACHE_ADDR.H) dcache_addr_utils ();
+    memory_sub_unit_interface sub_unit[NUM_SUB_UNITS-1:0]();
+
     data_access_shared_inputs_t shared_inputs;
-    ls_sub_unit_interface #(.BASE_ADDR(CONFIG.DLOCAL_MEM_ADDR.L), .UPPER_BOUND(CONFIG.DLOCAL_MEM_ADDR.H)) bram();
-    ls_sub_unit_interface #(.BASE_ADDR(CONFIG.PERIPHERAL_BUS_ADDR.L), .UPPER_BOUND(CONFIG.PERIPHERAL_BUS_ADDR.H)) bus();
-    ls_sub_unit_interface #(.BASE_ADDR(CONFIG.DCACHE_ADDR.L), .UPPER_BOUND(CONFIG.DCACHE_ADDR.H)) cache();
+    logic [31:0] unit_data_array [NUM_SUB_UNITS-1:0];
+    logic [NUM_SUB_UNITS-1:0] unit_ready;
+    logic [NUM_SUB_UNITS-1:0] unit_data_valid;
+    logic [NUM_SUB_UNITS-1:0] last_unit;
+    logic [NUM_SUB_UNITS-1:0] current_unit;
 
     logic units_ready;
     logic unit_switch_stall;
@@ -97,11 +105,6 @@ module load_store_unit
     logic [31:0] aligned_load_data;
     logic [31:0] final_load_data;
 
-    logic [31:0] unit_data_array [NUM_SUB_UNITS-1:0];
-    logic [NUM_SUB_UNITS-1:0] unit_ready;
-    logic [NUM_SUB_UNITS-1:0] unit_data_valid;
-    logic [NUM_SUB_UNITS-1:0] last_unit;
-    logic [NUM_SUB_UNITS-1:0] current_unit;
 
     logic unaligned_addr;
     logic load_exception_complete;
@@ -227,7 +230,7 @@ endgenerate
     //Unit tracking
     assign current_unit = sub_unit_address_match;
 
-    initial last_unit = BRAM_ID;
+    initial last_unit = LOCAL_MEM_ID;
     always_ff @ (posedge clk) begin
         if (load_attributes.push)
             last_unit <= sub_unit_address_match;
@@ -296,85 +299,73 @@ endgenerate
 
     ////////////////////////////////////////////////////
     //Unit Instantiation
+    generate for (genvar i=0; i < NUM_SUB_UNITS; i++) begin : gen_load_store_sources
+        assign sub_unit[i].new_request = issue_request & sub_unit_address_match[i];
+        assign sub_unit[i].addr = shared_inputs.addr;
+        assign sub_unit[i].re = shared_inputs.load;
+        assign sub_unit[i].we = shared_inputs.store;
+        assign sub_unit[i].be = shared_inputs.be;
+        assign sub_unit[i].data_in = shared_inputs.data_in;
+
+        assign unit_ready[i] = sub_unit[i].ready;
+        assign unit_data_valid[i] = sub_unit[i].data_valid;
+        assign unit_data_array[i] = sub_unit[i].data_out;
+    end
+    endgenerate
+
     generate if (CONFIG.INCLUDE_DLOCAL_MEM) begin : gen_ls_local_mem
-            assign sub_unit_address_match[BRAM_ID] = bram.address_range_check(shared_inputs.addr);
-            assign bram.new_request = sub_unit_address_match[BRAM_ID] & issue_request;
-
-            assign unit_ready[BRAM_ID] = bram.ready;
-            assign unit_data_valid[BRAM_ID] = bram.data_valid;
-
-            dbram d_bram (
-                .clk        (clk),
-                .rst        (rst),  
-                .ls_inputs  (shared_inputs), 
-                .ls         (bram), 
-                .data_out   (unit_data_array[BRAM_ID]),
-                .data_bram  (data_bram)
-            );
+        assign sub_unit_address_match[LOCAL_MEM_ID] = dlocal_mem_addr_utils.address_range_check(shared_inputs.addr);
+        local_mem_sub_unit d_local_mem (
+            .clk (clk), 
+            .rst (rst),
+            .unit (sub_unit[LOCAL_MEM_ID]),
+            .local_mem (data_bram)
+        );
         end
     endgenerate
 
     generate if (CONFIG.INCLUDE_PERIPHERAL_BUS) begin : gen_ls_pbus
-            assign sub_unit_address_match[BUS_ID] = bus.address_range_check(shared_inputs.addr);
-            assign bus.new_request = sub_unit_address_match[BUS_ID] & issue_request;
-
-            assign unit_ready[BUS_ID] = bus.ready;
-            assign unit_data_valid[BUS_ID] = bus.data_valid;
-
+            assign sub_unit_address_match[BUS_ID] = dpbus_addr_utils.address_range_check(shared_inputs.addr);
             if(CONFIG.PERIPHERAL_BUS_TYPE == AXI_BUS)
                 axi_master axi_bus (
-                    .clk            (clk),
-                    .rst            (rst),
-                    .m_axi          (m_axi),
-                    .size           ({1'b0,shared_inputs.fn3[1:0]}),
-                    .data_out       (unit_data_array[BUS_ID]),
-                    .ls_inputs      (shared_inputs),
-                    .ls             (bus)
+                    .clk (clk),
+                    .rst (rst),
+                    .m_axi (m_axi),
+                    .size ({1'b0,shared_inputs.fn3[1:0]}),
+                    .ls (sub_unit[BUS_ID])
                 ); //Lower two bits of fn3 match AXI specification for request size (byte/halfword/word)
-
             else if (CONFIG.PERIPHERAL_BUS_TYPE == WISHBONE_BUS)
                 wishbone_master wishbone_bus (
-                    .clk            (clk),
-                    .rst            (rst),
-                    .m_wishbone     (m_wishbone),
-                    .data_out       (unit_data_array[BUS_ID]),
-                    .ls_inputs      (shared_inputs), 
-                    .ls             (bus) 
+                    .clk (clk),
+                    .rst (rst),
+                    .m_wishbone (m_wishbone),
+                    .ls (sub_unit[BUS_ID])
                 );
             else if (CONFIG.PERIPHERAL_BUS_TYPE == AVALON_BUS)  begin
                 avalon_master avalon_bus (
-                    .clk            (clk),
-                    .rst            (rst),
-                    .ls_inputs      (shared_inputs), 
-                    .m_avalon       (m_avalon), 
-                    .ls             (bus), 
-                    .data_out       (unit_data_array[BUS_ID])
+                    .clk (clk),
+                    .rst (rst),
+                    .m_avalon (m_avalon), 
+                    .ls (sub_unit[BUS_ID])
                 );
             end
         end
     endgenerate
 
     generate if (CONFIG.INCLUDE_DCACHE) begin : gen_ls_dcache
-            assign sub_unit_address_match[DCACHE_ID] = cache.address_range_check(shared_inputs.addr);
-            assign cache.new_request = sub_unit_address_match[DCACHE_ID] & issue_request;
-
-            assign unit_ready[DCACHE_ID] = cache.ready;
-            assign unit_data_valid[DCACHE_ID] = cache.data_valid;
-
+            assign sub_unit_address_match[DCACHE_ID] = dcache_addr_utils.address_range_check(shared_inputs.addr);
             dcache # (.CONFIG(CONFIG))
             data_cache (
-                .clk                    (clk),
-                .rst                    (rst),
-                .dcache_on              (dcache_on),
-                .l1_request             (l1_request),
-                .l1_response            (l1_response),
-                .sc_complete            (sc_complete),
-                .sc_success             (sc_success),
-                .clear_reservation      (clear_reservation),
-                .ls_inputs              (shared_inputs),
-                .data_out               (unit_data_array[DCACHE_ID]),
-                .amo                    (ls_inputs.amo),
-                .ls                     (cache)
+                .clk (clk),
+                .rst (rst),
+                .dcache_on (dcache_on),
+                .l1_request (l1_request),
+                .l1_response (l1_response),
+                .sc_complete (sc_complete),
+                .sc_success (sc_success),
+                .clear_reservation (clear_reservation),
+                .amo (ls_inputs.amo),
+                .ls (sub_unit[DCACHE_ID])
             );
         end
     endgenerate

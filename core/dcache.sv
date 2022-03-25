@@ -39,12 +39,8 @@ module dcache
         input logic sc_complete,
         input logic sc_success,
         input logic clear_reservation,
-
-        input data_access_shared_inputs_t ls_inputs,
-        output logic[31:0] data_out,
-
         input amo_details_t amo,
-        ls_sub_unit_interface.sub_unit ls
+        memory_sub_unit_interface.responder ls
     );
 
     localparam DCACHE_SIZE_IN_WORDS = CONFIG.DCACHE.LINES*CONFIG.DCACHE.LINE_W*CONFIG.DCACHE.WAYS;
@@ -76,7 +72,6 @@ module dcache
     logic stage2_load;
     logic stage2_store;
     logic [3:0] stage2_be;
-    logic [2:0] stage2_fn3;
     logic [31:0] stage2_data;
 
     amo_details_t stage2_amo;
@@ -115,12 +110,11 @@ module dcache
     //2nd Cycle Control Signals
     always_ff @ (posedge clk) begin
         if (ls.new_request) begin
-            stage2_addr <= ls_inputs.addr;
-            stage2_be <= ls_inputs.be;
-            stage2_load <= ls_inputs.load;
-            stage2_store <= ls_inputs.store;
-            stage2_fn3 <= ls_inputs.fn3;
-            stage2_data <= ls_inputs.data_in;
+            stage2_addr <= ls.addr;
+            stage2_be <= ls.be;
+            stage2_load <= ls.re;
+            stage2_store <= ls.we;
+            stage2_data <= ls.data_in;
             stage2_amo <= amo;
         end
     end
@@ -130,7 +124,7 @@ module dcache
     //LR and AMO ops are forced misses (if there is a tag hit they will reuse the same way)
     //Signal is valid for a single cycle, RAM enables are used to hold outputs in case of pipeline stalls
     always_ff @ (posedge clk) begin
-        read_hit_allowed <= ls.new_request & ls_inputs.load & dcache_on & ~(amo.is_lr | amo.is_amo);
+        read_hit_allowed <= ls.new_request & ls.re & dcache_on & ~(amo.is_lr | amo.is_amo);
         read_hit_data_valid <= read_hit_allowed;
         second_cycle <= ls.new_request;
         tag_update <= second_cycle & dcache_on & stage2_load & ~tag_hit;//Cache enabled, read miss
@@ -214,7 +208,7 @@ module dcache
     dcache_tag_banks (
         .clk (clk),
         .rst (rst),
-        .stage1_addr (ls_inputs.addr),
+        .stage1_addr (ls.addr),
         .stage2_addr (stage2_addr),
         .inv_addr ({l1_response.inv_addr, 2'b00}),
         .update_way (tag_update_way),
@@ -287,7 +281,7 @@ module dcache
             miss_data <= {31'b0, sc_success};
     end
 
-    assign data_out = read_hit_data_valid ? dbank_data_out : miss_data;
+    assign ls.data_out = read_hit_data_valid ? dbank_data_out : miss_data;
 
     ////////////////////////////////////////////////////
     //Pipeline Advancement

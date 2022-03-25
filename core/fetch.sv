@@ -68,14 +68,15 @@ module fetch
     localparam NUM_SUB_UNITS = int'(CONFIG.INCLUDE_ILOCAL_MEM) + int'(CONFIG.INCLUDE_ICACHE);
     localparam NUM_SUB_UNITS_W = (NUM_SUB_UNITS == 1) ? 1 : $clog2(NUM_SUB_UNITS);
 
-    localparam BRAM_ID = 0;
+    localparam LOCAL_MEM_ID = 0;
     localparam ICACHE_ID = int'(CONFIG.INCLUDE_ILOCAL_MEM);
 
     localparam NEXT_ID_DEPTH = CONFIG.INCLUDE_ICACHE ? 2 : 1;
 
     //Subunit signals
-    fetch_sub_unit_interface #(.BASE_ADDR(CONFIG.ILOCAL_MEM_ADDR.L), .UPPER_BOUND(CONFIG.ILOCAL_MEM_ADDR.H)) bram();
-    fetch_sub_unit_interface #(.BASE_ADDR(CONFIG.ICACHE_ADDR.L), .UPPER_BOUND(CONFIG.ICACHE_ADDR.H)) cache();
+    addr_utils_interface #(CONFIG.ILOCAL_MEM_ADDR.L, CONFIG.ILOCAL_MEM_ADDR.H) ilocal_mem_addr_utils ();
+    addr_utils_interface #(CONFIG.ICACHE_ADDR.L, CONFIG.ICACHE_ADDR.H) icache_addr_utils ();
+    memory_sub_unit_interface sub_unit[NUM_SUB_UNITS-1:0]();
 
     logic [NUM_SUB_UNITS-1:0] sub_unit_address_match;
     logic [NUM_SUB_UNITS-1:0] unit_ready;
@@ -109,9 +110,6 @@ module fetch
     logic exception_pending;
 
     logic [31:0] translated_address;
-
-    //Cache related
-    logic [31:0] stage2_phys_address;
 
     genvar i;
     ////////////////////////////////////////////////////
@@ -168,11 +166,6 @@ module fetch
     assign tlb.new_request = tlb.ready & (CONFIG.INCLUDE_S_MODE & tlb_on);
     assign translated_address = (CONFIG.INCLUDE_S_MODE & tlb_on) ? tlb.physical_address : pc;
 
-    always_ff @(posedge clk) begin
-        if (new_mem_request)
-            stage2_phys_address <= translated_address;
-    end
-
     //////////////////////////////////////////////
     //Issue Control Signals
     assign flush_or_rst = (rst | gc.fetch_flush | early_branch_flush);
@@ -211,41 +204,42 @@ module fetch
     //In the case of a gc.fetch_flush, a request may already be in progress
     //for any sub unit.  That request can either be completed or aborted.
     //In either case, data_valid must NOT be asserted.
-    generate if (CONFIG.INCLUDE_ILOCAL_MEM) begin : gen_fetch_local_mem
-        assign sub_unit_address_match[BRAM_ID] = bram.address_range_check(translated_address);
-        assign unit_ready[BRAM_ID] = bram.ready;
-        assign unit_data_valid[BRAM_ID] = bram.data_valid;
-        assign bram.new_request = new_mem_request & sub_unit_address_match[BRAM_ID];
-        assign bram.stage1_addr = translated_address;
-        assign bram.stage2_addr = stage2_phys_address;
-        assign bram.flush = gc.fetch_flush;
-        assign unit_data_array[BRAM_ID] = bram.data_out;
+    generate for (i=0; i < NUM_SUB_UNITS; i++) begin : gen_fetch_sources
+        assign sub_unit[i].new_request = new_mem_request & sub_unit_address_match[i] & ~gc.fetch_flush;
+        assign sub_unit[i].addr = translated_address;
+        assign sub_unit[i].re = 1;
+        assign sub_unit[i].we = 0;
+        assign sub_unit[i].be = '0;
+        assign sub_unit[i].data_in = '0;
 
-        ibram i_bram (
+        assign unit_ready[i] = sub_unit[i].ready;
+        assign unit_data_valid[i] = sub_unit[i].data_valid;
+        assign unit_data_array[i] = sub_unit[i].data_out;
+    end
+    endgenerate
+
+    generate if (CONFIG.INCLUDE_ILOCAL_MEM) begin : gen_fetch_local_mem
+        assign sub_unit_address_match[LOCAL_MEM_ID] = ilocal_mem_addr_utils.address_range_check(translated_address);
+        local_mem_sub_unit i_local_mem (
             .clk (clk), 
             .rst (rst),
-            .fetch_sub (bram),
-            .instruction_bram (instruction_bram)
+            .unit (sub_unit[LOCAL_MEM_ID]),
+            .local_mem (instruction_bram)
         );
     end
     endgenerate
+
     generate if (CONFIG.INCLUDE_ICACHE) begin : gen_fetch_icache
-        assign sub_unit_address_match[ICACHE_ID] = cache.address_range_check(translated_address);
-        assign unit_ready[ICACHE_ID] = cache.ready;
-        assign unit_data_valid[ICACHE_ID] = cache.data_valid;
-        assign cache.new_request = new_mem_request & sub_unit_address_match[ICACHE_ID];
-        assign cache.stage1_addr = translated_address;
-        assign cache.stage2_addr = stage2_phys_address;
-        assign cache.flush = gc.fetch_flush;
-        assign unit_data_array[ICACHE_ID] = cache.data_out;
+        assign sub_unit_address_match[ICACHE_ID] = icache_addr_utils.address_range_check(translated_address);
         icache #(.CONFIG(CONFIG))
         i_cache (
             .clk (clk), 
             .rst (rst),
+            .gc (gc),
             .icache_on (icache_on),
             .l1_request (l1_request),
             .l1_response (l1_response),
-            .fetch_sub (cache)
+            .fetch_sub (sub_unit[ICACHE_ID])
         );
     end
     endgenerate

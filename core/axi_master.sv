@@ -32,10 +32,7 @@ module axi_master
 
         axi_interface.master m_axi,
         input logic [2:0] size,
-        output logic[31:0] data_out,
-
-        input data_access_shared_inputs_t ls_inputs,
-        ls_sub_unit_interface.sub_unit ls
+        memory_sub_unit_interface.responder ls
 
     );
     logic ready;
@@ -48,12 +45,12 @@ module axi_master
 
     always_ff @ (posedge clk) begin
         if (ls.new_request) begin
-            m_axi.araddr <= ls_inputs.addr;
+            m_axi.araddr <= ls.addr;
             m_axi.arsize <= size;
             m_axi.awsize <= size;
-            m_axi.awaddr <= ls_inputs.addr;
-            m_axi.wdata <= ls_inputs.data_in;
-            m_axi.wstrb  <= ls_inputs.be;
+            m_axi.awaddr <= ls.addr;
+            m_axi.wdata <= ls.data_in;
+            m_axi.wstrb  <= ls.be;
         end
     end
 
@@ -80,27 +77,27 @@ module axi_master
     //read channel
     set_clr_reg_with_rst #(.SET_OVER_CLR(1), .WIDTH(1), .RST_VALUE(0)) arvalid_m (
       .clk, .rst,
-      .set(ls.new_request & ls_inputs.load),
+      .set(ls.new_request & ls.re),
       .clr(m_axi.arready),
       .result(m_axi.arvalid)
     );
 
     always_ff @ (posedge clk) begin
         if (m_axi.rvalid)
-            data_out <= m_axi.rdata;
+            ls.data_out <= m_axi.rdata;
     end
 
     //write channel
     set_clr_reg_with_rst #(.SET_OVER_CLR(1), .WIDTH(1), .RST_VALUE(0)) awvalid_m (
       .clk, .rst,
-      .set(ls.new_request & ls_inputs.store),
+      .set(ls.new_request & ls.we),
       .clr(m_axi.awready),
       .result(m_axi.awvalid)
     );
 
     set_clr_reg_with_rst #(.SET_OVER_CLR(1), .WIDTH(1), .RST_VALUE(0)) wvalid_m (
       .clk, .rst,
-      .set(ls.new_request & ls_inputs.store),
+      .set(ls.new_request & ls.we),
       .clr(m_axi.wready),
       .result(m_axi.wvalid)
     );

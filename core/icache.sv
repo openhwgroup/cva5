@@ -33,11 +33,12 @@ module icache
     (
         input logic clk,
         input logic rst,
+        input gc_outputs_t gc,
         input logic icache_on,
         l1_arbiter_request_interface.master l1_request,
         l1_arbiter_return_interface.master l1_response,
 
-        fetch_sub_unit_interface.sub_unit fetch_sub
+        memory_sub_unit_interface.responder fetch_sub
     );
 
     localparam derived_cache_config_t SCONFIG = get_derived_cache_params(CONFIG, CONFIG.ICACHE, CONFIG.ICACHE_ADDR);
@@ -61,6 +62,7 @@ module icache
 
     logic miss_data_valid;
     logic second_cycle;
+    logic [31:0] second_cycle_addr;
 
     logic idle;
     logic memory_complete;
@@ -86,7 +88,12 @@ module icache
         if (rst)
             second_cycle <= 0;
         else
-            second_cycle <= fetch_sub.new_request & ~fetch_sub.flush;
+            second_cycle <= fetch_sub.new_request & ~gc.fetch_flush;
+    end
+
+    always_ff @(posedge clk) begin
+        if (fetch_sub.new_request)
+            second_cycle_addr <= fetch_sub.addr;
     end
 
     //As request can be aborted on any cycle, only update tags if memory request is in progress
@@ -114,7 +121,7 @@ module icache
     logic initiate_l1_request;
     logic request_r;
 
-    assign l1_request.addr = fetch_sub.stage2_addr;
+    assign l1_request.addr = second_cycle_addr;
     assign l1_request.data = 0;
     assign l1_request.rnw = 1;
     assign l1_request.be = 0;
@@ -124,12 +131,12 @@ module icache
 
     assign initiate_l1_request = second_cycle & (~tag_hit | ~icache_on);
     always_ff @ (posedge clk) begin
-        if (rst | fetch_sub.flush)
+        if (rst | gc.fetch_flush)
             request_r <= 0;
         else
             request_r <= (initiate_l1_request | request_r) & ~l1_request.ack;
     end
-    assign l1_request.request = request_r & ~fetch_sub.flush;
+    assign l1_request.request = request_r & ~gc.fetch_flush;
 
     ////////////////////////////////////////////////////
     //Miss state tracking
@@ -144,7 +151,7 @@ module icache
         if (rst)
             miss_aborted_by_flush <= 0;
         else
-            miss_aborted_by_flush <= (~line_complete) & ((miss_in_progress & fetch_sub.flush) | miss_aborted_by_flush);
+            miss_aborted_by_flush <= (~line_complete) & ((miss_in_progress & gc.fetch_flush) | miss_aborted_by_flush);
     end
 
     ////////////////////////////////////////////////////
@@ -152,9 +159,9 @@ module icache
     itag_banks #(.CONFIG(CONFIG), .SCONFIG(SCONFIG))
     icache_tag_banks (
             .clk(clk),
-            .rst(rst | fetch_sub.flush), //clears the read_hit_allowed flag
-            .stage1_addr(fetch_sub.stage1_addr),
-            .stage2_addr(fetch_sub.stage2_addr),
+            .rst(rst | gc.fetch_flush), //clears the read_hit_allowed flag
+            .stage1_addr(fetch_sub.addr),
+            .stage2_addr(second_cycle_addr),
             .update_way(tag_update_way),
             .update(tag_update),
             .stage1_adv(fetch_sub.new_request & icache_on),
@@ -168,8 +175,8 @@ module icache
     generate for (i=0; i < CONFIG.ICACHE.WAYS; i++) begin : idata_bank_gen
         byte_en_BRAM #(CONFIG.ICACHE.LINES*CONFIG.ICACHE.LINE_W) idata_bank (
             .clk(clk),
-            .addr_a(fetch_sub.stage1_addr[2 +: SCONFIG.LINE_ADDR_W+SCONFIG.SUB_LINE_ADDR_W]),
-            .addr_b({fetch_sub.stage2_addr[(2+SCONFIG.SUB_LINE_ADDR_W) +: SCONFIG.LINE_ADDR_W], word_count}),
+            .addr_a(fetch_sub.addr[2 +: SCONFIG.LINE_ADDR_W+SCONFIG.SUB_LINE_ADDR_W]),
+            .addr_b({second_cycle_addr[(2+SCONFIG.SUB_LINE_ADDR_W) +: SCONFIG.LINE_ADDR_W], word_count}),
             .en_a(fetch_sub.new_request),
             .en_b(tag_update_way[i] & l1_response.data_valid),
             .be_a('0),
@@ -190,7 +197,7 @@ module icache
             word_count <= word_count + 1;
     end
 
-    assign is_target_word = (fetch_sub.stage2_addr[2 +: SCONFIG.SUB_LINE_ADDR_W] == word_count);
+    assign is_target_word = (second_cycle_addr[2 +: SCONFIG.SUB_LINE_ADDR_W] == word_count);
 
     always_ff @ (posedge clk) begin
         if (l1_response.data_valid & is_target_word)
@@ -200,7 +207,7 @@ module icache
     end
 
     always_ff @ (posedge clk) begin
-        if (rst | fetch_sub.flush)
+        if (rst | gc.fetch_flush)
             miss_data_valid <= 0;
         else
             miss_data_valid <= (miss_in_progress & ~miss_aborted_by_flush) & l1_response.data_valid & is_target_word;
@@ -230,9 +237,9 @@ module icache
     always_ff @ (posedge clk) begin
         if (rst)
             idle <= 1;
-        else if (fetch_sub.new_request & ~fetch_sub.flush)
+        else if (fetch_sub.new_request & ~gc.fetch_flush)
             idle <= 0;
-        else if (memory_complete | tag_hit | (second_cycle & fetch_sub.flush) | (~miss_in_progress & fetch_sub.flush)) //read miss OR write through complete
+        else if (memory_complete | tag_hit | (second_cycle & gc.fetch_flush) | (~miss_in_progress & gc.fetch_flush)) //read miss OR write through complete
             idle <= 1;
     end
 
