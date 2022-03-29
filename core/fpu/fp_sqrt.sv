@@ -18,12 +18,14 @@ module fp_sqrt (
     logic [FLEN-1:0] radicand;
     sqrt_attributes_t attr;
     logic hidden_bit;
+    logic [3:0] special_case;
   } sqrt_fifo_inputs_t;
   parameter ITERATION = FRAC_WIDTH+1+3;
   parameter REMAINDER_BITS = FRAC_WIDTH+1-ITERATION;
 
   ////////////////////////////////////////////////////
   //Special Case and Exception Handling
+  logic [3:0] special_case;
   logic is_inf, is_SNaN, is_zero, is_QNaN, is_denormal;
   logic invalid_operation;
   logic output_QNaN;
@@ -34,14 +36,15 @@ module fp_sqrt (
   logic [FLEN-1:0] early_terminate_result;
   logic [2:0] rm;
 
-  fp_special_case_detection_mp #(.FRAC_W(FRAC_WIDTH), .EXPO_W(EXPO_WIDTH)) 
-    special_case (
-      .input1(rs1),//fp_div_sqrt_inputs.rs1),
-      .is_inf(is_inf),
-      .is_SNaN(is_SNaN),
-      .is_QNaN(is_QNaN),
-      .is_zero(is_zero)
-    );
+  //fp_special_case_detection_mp #(.FRAC_W(FRAC_WIDTH), .EXPO_W(EXPO_WIDTH)) 
+    //special_case (
+      //.input1(rs1),//fp_div_sqrt_inputs.rs1),
+      //.is_inf(is_inf),
+      //.is_SNaN(is_SNaN),
+      //.is_QNaN(is_QNaN),
+      //.is_zero(is_zero)
+    //);
+  assign {is_inf, is_SNaN, is_QNaN, is_zero} = sqrt_op.special_case;
   assign is_denormal = ~hidden_bit;// ~|rs1_expo;
   assign invalid_operation = rs1_sign & ~is_zero;
   assign output_inf = is_inf & ~rs1_sign;
@@ -66,6 +69,7 @@ module fp_sqrt (
   assign fifo_inputs.radicand = fp_div_sqrt_inputs.rs1;
   assign fifo_inputs.attr.id = issue.id;
   assign fifo_inputs.hidden_bit = fp_div_sqrt_inputs.rs1_hidden_bit;
+  assign fifo_inputs.special_case = fp_div_sqrt_inputs.rs1_special_case;
 
   fifo_interface #(.DATA_WIDTH($bits(sqrt_fifo_inputs_t))) input_fifo();
   taiga_fifo #(.DATA_WIDTH($bits(sqrt_fifo_inputs_t)), .FIFO_DEPTH(1)) 

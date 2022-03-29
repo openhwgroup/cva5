@@ -59,7 +59,7 @@ module fp_add_madd_fused (
   logic [EXPO_WIDTH-1:0]         result_expo_norm [2:0];
   logic [FRAC_WIDTH:0]           result_frac_norm [2:0];
 
-  logic [EXPO_WIDTH:0]           expo_diff[1:0], expo_diff_negate;
+  logic [EXPO_WIDTH:0]           expo_diff[1:0];
   logic [EXPO_WIDTH:0]           align_shift_amt;
   logic [FRAC_WIDTH+1:0]         rs2_frac_aligned[1:0];  
   grs_t                          grs_in;
@@ -119,14 +119,12 @@ module fp_add_madd_fused (
   assign output_QNaN[0] = rs1_NaN || rs2_NaN || invalid_operation[0];
   assign output_inf[0] = (rs1_inf || rs2_inf) && !output_QNaN[0];
   assign expo_diff[0] = expo_diff_in;//temp_rs1_expo[0] - temp_rs2_expo[0];
-  assign expo_diff_negate = temp_rs2_expo[0] - temp_rs1_expo[0];
   assign zero_result_sign[0] = rm[0] == 3'b010 ? 1 : 0;
   assign subtract[0] = temp_rs1_sign[0] ^ temp_rs2_sign[0];
 
   //normal case
   //extract fields
   always_comb begin 
-    //if(~expo_diff[0][EXPO_WIDTH]) begin //move input with larger expo to rs1
     if(~swap) begin //move input with larger expo to rs1
       rs1_sign[0] = temp_rs1_sign[0];
       rs1_expo[0] = temp_rs1_expo[0];
@@ -200,7 +198,8 @@ module fp_add_madd_fused (
 
   //LUT adder
   assign adder_in1 = {1'b0, rs1_frac[1], rs1_grs[1]};
-  assign adder_in2 = {1'b0, rs2_frac_aligned[1] & {(FRAC_WIDTH+2){~expo_diff_larger_than_frac_width[1]}}, {rs2_grs[1][2:1], rs2_grs[1][0] | rs2_grs_sticky_bit[1]}};
+  //assign adder_in2 = {1'b0, rs2_frac_aligned[1] & {(FRAC_WIDTH+2){~expo_diff_larger_than_frac_width[1]}}, {rs2_grs[1][2:1], rs2_grs[1][0] | rs2_grs_sticky_bit[1]}};
+  assign adder_in2 = {1'b0, rs2_frac_aligned[1], {rs2_grs[1][2:1], rs2_grs[1][0] | rs2_grs_sticky_bit[1]}};
   assign adder_in1_1s = adder_in1;
   assign adder_in2_1s = adder_in2 ^ {(FRAC_WIDTH+GRS_WIDTH+3){subtract[1]}};
   assign in1 = {adder_in1_1s, subtract[1]};
@@ -210,8 +209,9 @@ module fp_add_madd_fused (
   //subtract && adder_carry_out = 1 if subtract and in1 > in2
                               //= 0 if subtract and in1 < in2
   assign output_zero = ~|expo_diff[1] & ~|result_frac_intermediate;
-  assign result_sign[0] = output_zero & (subtract[1]) ? zero_result_sign[1] : (~adder_carry_out & subtract[1]) ^ rs1_sign[1]; 
-  //assign result_sign[0] = (~adder_carry_out & subtract[1]) ^ rs1_sign[1]; 
+  assign result_sign[0] = output_zero & (subtract[1]) ? 
+                          zero_result_sign[1] : 
+                          (~adder_carry_out & subtract[1]) ^ rs1_sign[1]; 
   assign result_expo[0] = output_zero ? '0 : rs1_expo[1];
   
   //calculate clz and write-back
