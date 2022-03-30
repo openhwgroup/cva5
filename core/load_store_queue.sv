@@ -98,12 +98,6 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
         .lq_output_valid (lq_output_valid)
     );
 
-    logic sq_retire_port_valid [RETIRE_PORTS];
-    always_comb begin
-        for (int i=0; i < RETIRE_PORTS; i++)
-            sq_retire_port_valid[i] = retire_port_valid[i] & ~gc.writeback_supress;
-    end
-
     store_queue #(.DEPTH(SQ_DEPTH)) sq_block (
         .clk (clk),
         .rst (rst | gc.sq_flush),
@@ -120,7 +114,7 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
         .sq_data (sq_data),
         .wb_snoop (wb_snoop),
         .retire_ids (retire_ids),
-        .retire_port_valid (sq_retire_port_valid),
+        .retire_port_valid (retire_port_valid),
         .store_ack (store_ack),
         .sq_output_valid (sq_output_valid)
     );

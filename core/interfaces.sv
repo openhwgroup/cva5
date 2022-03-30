@@ -56,13 +56,12 @@ interface unit_issue_interface;
 
     logic possible_issue;
     logic new_request;
-    logic new_request_r;
     id_t id;
 
     logic ready;
 
-    modport decode (input ready, output possible_issue, new_request, new_request_r, id);
-    modport unit (output ready, input possible_issue, new_request, new_request_r, id);
+    modport decode (input ready, output possible_issue, new_request, id);
+    modport unit (output ready, input possible_issue, new_request, id);
 endinterface
 
 interface unit_writeback_interface;

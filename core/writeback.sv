@@ -108,14 +108,9 @@ module writeback
         assign wb_packet[i].valid = |unit_done[i];
         assign wb_packet [i].id = unit_instruction_id[i][unit_sel[i]];
         assign wb_packet[i].data = unit_rd[i][unit_sel[i]];
-    end endgenerate
 
-    always_comb begin
-        for (int i = 0; i < CONFIG.NUM_WB_GROUPS; i++) begin
-            unit_ack[i] = '0;
-            unit_ack[i][unit_sel[i]] = wb_packet[i].valid;
-        end
-    end
+        assign unit_ack[i] = NUM_WB_UNITS'(wb_packet[i].valid) << unit_sel[i];
+    end endgenerate
 
     ////////////////////////////////////////////////////
     //Store Forwarding Support

@@ -260,15 +260,16 @@ module fetch
     assign fetch_complete = (fetch_attr_fifo.valid & ~valid_fetch_result) | (|unit_data_valid);//allow instruction to propagate to decode if address is invalid
 
     ////////////////////////////////////////////////////
-    //Branch Predictor correction
-    logic is_branch_or_jump;
-    assign is_branch_or_jump = fetch_instruction[6:2] inside {JAL_T, JALR_T, BRANCH_T};
-    assign early_branch_flush = (valid_fetch_result & (|unit_data_valid)) & fetch_attr.is_predicted_branch_or_jump & (~is_branch_or_jump);
-    assign early_branch_flush_ras_adjust = (valid_fetch_result & (|unit_data_valid)) & fetch_attr.is_branch & (~is_branch_or_jump);
-    generate if (ENABLE_TRACE_INTERFACE) begin : gen_fetch_trace
-        assign tr_early_branch_correction = early_branch_flush;
+    //Branch Predictor corruption check
+    //Needed if instruction memory is changed after any branches have been executed
+    generate if (CONFIG.INCLUDE_IFENCE | CONFIG.INCLUDE_S_MODE) begin : gen_branch_corruption_check
+        logic is_branch_or_jump;
+        assign is_branch_or_jump = fetch_instruction[6:2] inside {JAL_T, JALR_T, BRANCH_T};
+        assign early_branch_flush = (valid_fetch_result & (|unit_data_valid)) & fetch_attr.is_predicted_branch_or_jump & (~is_branch_or_jump);
+        assign early_branch_flush_ras_adjust = (valid_fetch_result & (|unit_data_valid)) & fetch_attr.is_branch & (~is_branch_or_jump);
+        if (ENABLE_TRACE_INTERFACE)
+            assign tr_early_branch_correction = early_branch_flush;
     end endgenerate
-
     ////////////////////////////////////////////////////
     //End of Implementation
     ////////////////////////////////////////////////////

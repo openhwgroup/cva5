@@ -93,9 +93,6 @@ module store_queue
     logic [LOG2_DEPTH-1:0] sq_index_next;
     logic [LOG2_DEPTH-1:0] sq_oldest;
 
-    logic [DEPTH-1:0] sq_index_one_hot;
-    logic [DEPTH-1:0] sq_oldest_one_hot;
-
     logic [DEPTH-1:0] new_request_one_hot;
     logic [DEPTH-1:0] issued_one_hot;
 
@@ -123,16 +120,9 @@ module store_queue
         else
             sq_oldest <= sq_oldest + LOG2_DEPTH'(store_ack);
     end
-    always_comb begin
-        sq_index_one_hot = 0;
-        sq_index_one_hot[sq_index] = 1;
 
-        sq_oldest_one_hot = 0;
-        sq_oldest_one_hot[sq_oldest] = 1;
-
-        new_request_one_hot = sq_index_one_hot & {DEPTH{new_sq_request}};
-        issued_one_hot = sq_oldest_one_hot & {DEPTH{store_ack}};
-    end
+    assign new_request_one_hot = DEPTH'(new_sq_request) << sq_index;
+    assign issued_one_hot = DEPTH'(store_ack) << sq_oldest;
 
     assign valid_next = (valid | new_request_one_hot) & ~issued_one_hot;
     always_ff @ (posedge clk) begin
