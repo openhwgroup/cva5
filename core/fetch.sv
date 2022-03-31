@@ -57,6 +57,7 @@ module fetch
 
         tlb_interface.requester tlb,
         local_memory_interface.master instruction_bram,
+        wishbone_interface.master iwishbone,
         input logic icache_on,
         l1_arbiter_request_interface.master l1_request,
         l1_arbiter_return_interface.master l1_response,
@@ -65,17 +66,21 @@ module fetch
         output logic tr_early_branch_correction
     );
 
-    localparam NUM_SUB_UNITS = int'(CONFIG.INCLUDE_ILOCAL_MEM) + int'(CONFIG.INCLUDE_ICACHE);
+    localparam NUM_SUB_UNITS = int'(CONFIG.INCLUDE_ILOCAL_MEM) + int'(CONFIG.INCLUDE_ICACHE) + int'(CONFIG.INCLUDE_IBUS);
     localparam NUM_SUB_UNITS_W = (NUM_SUB_UNITS == 1) ? 1 : $clog2(NUM_SUB_UNITS);
 
     localparam LOCAL_MEM_ID = 0;
     localparam ICACHE_ID = int'(CONFIG.INCLUDE_ILOCAL_MEM);
+    localparam BUS_ID = ICACHE_ID + int'(CONFIG.INCLUDE_ICACHE);
 
     localparam NEXT_ID_DEPTH = CONFIG.INCLUDE_ICACHE ? 2 : 1;
-
+    
     //Subunit signals
     addr_utils_interface #(CONFIG.ILOCAL_MEM_ADDR.L, CONFIG.ILOCAL_MEM_ADDR.H) ilocal_mem_addr_utils ();
     addr_utils_interface #(CONFIG.ICACHE_ADDR.L, CONFIG.ICACHE_ADDR.H) icache_addr_utils ();
+    addr_utils_interface #(CONFIG.IBUS_ADDR.L, CONFIG.IBUS_ADDR.H) ibus_addr_utils ();
+    localparam USE_ADDR_CHECK = CONFIG.INCLUDE_M_MODE && (NUM_SUB_UNITS > 1);
+
     memory_sub_unit_interface sub_unit[NUM_SUB_UNITS-1:0]();
 
     logic [NUM_SUB_UNITS-1:0] sub_unit_address_match;
@@ -219,7 +224,7 @@ module fetch
     endgenerate
 
     generate if (CONFIG.INCLUDE_ILOCAL_MEM) begin : gen_fetch_local_mem
-        assign sub_unit_address_match[LOCAL_MEM_ID] = ilocal_mem_addr_utils.address_range_check(translated_address);
+        assign sub_unit_address_match[LOCAL_MEM_ID] = USE_ADDR_CHECK ? ilocal_mem_addr_utils.address_range_check(translated_address) : 1;
         local_mem_sub_unit i_local_mem (
             .clk (clk), 
             .rst (rst),
@@ -229,8 +234,19 @@ module fetch
     end
     endgenerate
 
+    generate if (CONFIG.INCLUDE_IBUS) begin : gen_fetch_ibus
+        assign sub_unit_address_match[BUS_ID] = USE_ADDR_CHECK ? ibus_addr_utils.address_range_check(translated_address) : 1;
+        wishbone_master iwishbone_bus (
+            .clk (clk),
+            .rst (rst),
+            .m_wishbone (iwishbone),
+            .ls (sub_unit[BUS_ID])
+        );
+    end
+    endgenerate
+
     generate if (CONFIG.INCLUDE_ICACHE) begin : gen_fetch_icache
-        assign sub_unit_address_match[ICACHE_ID] = icache_addr_utils.address_range_check(translated_address);
+        assign sub_unit_address_match[ICACHE_ID] = USE_ADDR_CHECK ? icache_addr_utils.address_range_check(translated_address) : 1;
         icache #(.CONFIG(CONFIG))
         i_cache (
             .clk (clk), 
@@ -250,7 +266,7 @@ module fetch
     ////////////////////////////////////////////////////
     //Instruction metada updates
     logic valid_fetch_result;
-    assign valid_fetch_result = fetch_attr_fifo.valid & fetch_attr.address_valid & (~fetch_attr.mmu_fault);
+    assign valid_fetch_result = CONFIG.INCLUDE_M_MODE ? fetch_attr_fifo.valid & fetch_attr.address_valid & (~fetch_attr.mmu_fault) : 1;
 
     assign if_pc = pc;
     assign fetch_metadata.ok = valid_fetch_result;

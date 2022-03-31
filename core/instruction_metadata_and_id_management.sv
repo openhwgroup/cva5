@@ -322,7 +322,7 @@ module instruction_metadata_and_id_management
     assign decode.valid = fetched_count_neg[LOG2_MAX_IDS];
     assign decode.pc = pc_table[decode_id];
     assign decode.instruction = instruction_table[decode_id];
-    assign decode.fetch_metadata = fetch_metadata_table[decode_id];
+    assign decode.fetch_metadata = CONFIG.INCLUDE_M_MODE ? fetch_metadata_table[decode_id] : '{ok : 1, error_code : INST_ACCESS_FAULT};
 
     //Writeback/Commit support
     phys_addr_t commit_phys_addr [CONFIG.NUM_WB_GROUPS];

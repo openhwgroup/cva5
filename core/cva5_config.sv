@@ -124,6 +124,9 @@ package cva5_config;
         memory_config_t ILOCAL_MEM_ADDR;
         bit INCLUDE_DLOCAL_MEM;
         memory_config_t DLOCAL_MEM_ADDR;
+        //Instruction bus
+        bit INCLUDE_IBUS;
+        memory_config_t IBUS_ADDR;
         //Peripheral bus
         bit INCLUDE_PERIPHERAL_BUS;
         memory_config_t PERIPHERAL_BUS_ADDR;
@@ -212,6 +215,11 @@ package cva5_config;
         DLOCAL_MEM_ADDR : '{
             L : 32'h80000000,
             H : 32'h8FFFFFFF
+        },
+        INCLUDE_IBUS : 0,
+        IBUS_ADDR : '{
+            L : 32'h60000000, 
+            H : 32'h6FFFFFFF
         },
         INCLUDE_PERIPHERAL_BUS : 1,
         PERIPHERAL_BUS_ADDR : '{

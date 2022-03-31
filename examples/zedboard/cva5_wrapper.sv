@@ -67,6 +67,7 @@ module cva5_wrapper (
     axi_interface m_axi();
     avalon_interface m_avalon();
     wishbone_interface m_wishbone();
+    wishbone_interface iwishbone();
     l2_requester_interface l2[L2_NUM_PORTS-1:0]();
     l2_memory_interface mem();
 

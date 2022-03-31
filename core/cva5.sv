@@ -43,6 +43,7 @@ module cva5
         axi_interface.master m_axi,
         avalon_interface.master m_avalon,
         wishbone_interface.master m_wishbone,
+        wishbone_interface.master iwishbone,
 
         output trace_outputs_t tr,
 
@@ -305,6 +306,7 @@ module cva5
         .if_pc (if_pc),
         .fetch_instruction (fetch_instruction),                                
         .instruction_bram (instruction_bram), 
+        .iwishbone (iwishbone),
         .icache_on ('1),
         .tlb (itlb), 
         .tlb_on (tlb_on),

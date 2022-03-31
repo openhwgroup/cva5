@@ -236,6 +236,7 @@ module cva5_sim
     //axi_interface ddr_axi();
     avalon_interface m_avalon();
     wishbone_interface m_wishbone();
+    wishbone_interface iwishbone();
 
     trace_outputs_t tr;
 
