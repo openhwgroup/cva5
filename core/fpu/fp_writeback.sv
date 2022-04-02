@@ -62,6 +62,9 @@ module fp_writeback
     logic [NUM_WB_UNITS-1:0] unit_carry [FP_NUM_WB_GROUPS];
     logic [NUM_WB_UNITS-1:0] unit_safe [FP_NUM_WB_GROUPS];
     logic [NUM_WB_UNITS-1:0] unit_hidden [FP_NUM_WB_GROUPS];
+    logic [NUM_WB_UNITS-1:0] unit_expo_overflow [FP_NUM_WB_GROUPS];
+    logic [NUM_WB_UNITS-1:0] unit_right_shift [FP_NUM_WB_GROUPS];
+    logic [NUM_WB_UNITS-1:0] unit_subnormal [FP_NUM_WB_GROUPS];
 
     typedef logic [2:0] unit_rm_t;
     unit_rm_t [NUM_WB_UNITS-1:0] unit_rm [FP_NUM_WB_GROUPS];
@@ -72,6 +75,9 @@ module fp_writeback
     fp_shift_amt_t [NUM_WB_UNITS-1:0] unit_clz [FP_NUM_WB_GROUPS];
 
     grs_t [NUM_WB_UNITS-1:0] unit_grs [FP_NUM_WB_GROUPS];
+
+    typedef logic [EXPO_WIDTH-1:0] unit_right_shift_amt_t;
+    unit_right_shift_amt_t [NUM_WB_UNITS-1:0] unit_right_shift_amt [FP_NUM_WB_GROUPS];
 
     //Per-ID muxes for commit buffer
     logic [$clog2(NUM_WB_UNITS)-1:0] unit_sel [FP_NUM_WB_GROUPS];
@@ -110,6 +116,9 @@ module fp_writeback
                 assign unit_safe[i][j] = unit_wb[CUMULATIVE_NUM_UNITS[i] + j].safe;
                 assign unit_hidden[i][j] = unit_wb[CUMULATIVE_NUM_UNITS[i] + j].hidden;
                 assign unit_clz[i][j] = unit_wb[CUMULATIVE_NUM_UNITS[i] + j].clz;
+                assign unit_subnormal[i][j] = unit_wb[CUMULATIVE_NUM_UNITS[i] + j].subnormal;
+                assign unit_right_shift[i][j] = unit_wb[CUMULATIVE_NUM_UNITS[i] + j].right_shift;
+                assign unit_right_shift_amt[i][j] = unit_wb[CUMULATIVE_NUM_UNITS[i] + j].right_shift_amt;
                 assign unit_wb[CUMULATIVE_NUM_UNITS[i] + j].ack = unit_ack[i][j];
             end
         end
@@ -121,6 +130,7 @@ module fp_writeback
         for (i = 0; i < FP_NUM_WB_GROUPS; i++) begin
             for (j = 0; j < NUM_UNITS[i]; j++) begin
                 assign unit_rd[i][j] = unit_wb[CUMULATIVE_NUM_UNITS[i] + j].rd;
+                assign unit_expo_overflow[i][j] = unit_wb[CUMULATIVE_NUM_UNITS[i] + j].expo_overflow;
                 assign unit_fflags[i][j] = unit_wb[CUMULATIVE_NUM_UNITS[i] + j].fflags;
             end
         end
@@ -150,6 +160,7 @@ module fp_writeback
             normalize_packet.valid = |unit_done[i];
             normalize_packet.id = unit_instruction_id[i][unit_sel[i]];
             normalize_packet.data = unit_rd[i][unit_sel[i]];
+            normalize_packet.expo_overflow = unit_expo_overflow[i][unit_sel[i]];
             normalize_packet.fflags =  unit_fflags[i][unit_sel[i]];
             normalize_packet.rm =  unit_rm[i][unit_sel[i]];
             normalize_packet.carry = unit_carry[i][unit_sel[i]];
@@ -157,6 +168,9 @@ module fp_writeback
             normalize_packet.hidden = unit_hidden[i][unit_sel[i]];
             normalize_packet.grs = unit_grs[i][unit_sel[i]];
             normalize_packet.clz = unit_clz[i][unit_sel[i]];
+            normalize_packet.subnormal = unit_subnormal[i][unit_sel[i]];
+            normalize_packet.right_shift = unit_right_shift[i][unit_sel[i]];
+            normalize_packet.right_shift_amt = unit_right_shift_amt[i][unit_sel[i]];
             //Unit Ack
             unit_ack[i] = '0;
             unit_ack[i][unit_sel[i]] = normalize_packet.valid;
@@ -167,7 +181,11 @@ module fp_writeback
     //Shared normalzation
     logic result_sign, result_sign_norm;
     logic [EXPO_WIDTH-1:0] result_expo, result_expo_norm;
+    logic expo_overflow, expo_overflow_norm;
     logic [FRAC_WIDTH-1:0] result_frac, result_frac_norm;
+    logic subnormal;
+    logic right_shift;
+    logic [EXPO_WIDTH-1:0] right_shift_amt;
     fp_shift_amt_t clz;
     logic carry;
     logic safe;
@@ -183,6 +201,7 @@ module fp_writeback
     
     //unpack
     assign result_sign = normalize_packet_r.data[FLEN-1];
+    assign expo_overflow = normalize_packet_r.expo_overflow;
     assign result_expo = normalize_packet_r.data[FLEN-2-:EXPO_WIDTH];
     assign result_frac = normalize_packet_r.data[FRAC_WIDTH-1:0];
     assign clz = normalize_packet_r.clz;
@@ -190,19 +209,27 @@ module fp_writeback
     assign safe = normalize_packet_r.safe;
     assign hidden = normalize_packet_r.hidden;
     assign grs = normalize_packet_r.grs;
+    assign subnormal = normalize_packet_r.subnormal;
+    assign right_shift = normalize_packet_r.right_shift;
+    assign right_shift_amt = normalize_packet_r.right_shift_amt;
 
     //normalization
     fp_normalize normalize_inst(
       .sign(result_sign),
       .expo(result_expo),
+      .expo_overflow(expo_overflow),
       .frac(result_frac),
       .left_shift_amt(clz),
+      .subnormal(subnormal),
+      .right_shift(right_shift),
+      .right_shift_amt(right_shift_amt),
       .hidden_bit(hidden),
       .frac_safe_bit(safe),
       .frac_carry_bit(carry),
       .grs_in(grs),
       .sign_norm(result_sign_norm),
       .expo_norm(result_expo_norm),
+      .expo_overflow_norm(expo_overflow_norm),
       .frac_norm(result_frac_norm),
       .hidden_bit_norm(hidden_norm),
       .grs_norm(grs_norm),
@@ -222,6 +249,7 @@ module fp_writeback
     //prep for rounding 
     assign round_packet.valid = normalize_packet_r.valid;
     assign round_packet.data = {result_sign_norm, result_expo_norm, result_frac_norm};
+    assign round_packet.expo_overflow = expo_overflow_norm;
     assign round_packet.hidden = normalize_packet_r.hidden;
     assign round_packet.id = normalize_packet_r.id;
     assign round_packet.valid = normalize_packet_r.valid;
@@ -231,9 +259,10 @@ module fp_writeback
     ////////////////////////////////////////////////////
     //Shared rounding 
     logic [FRAC_WIDTH:0]         frac_round_intermediate;
-    logic                        frac_overflow, frac_overflow_placeholder, expo_overflow;
+    logic                        frac_overflow, frac_overflow_placeholder;
     logic                        sign_out;
     logic [EXPO_WIDTH-1:0]       expo, expo_out;
+    logic                        expo_overflow_round;
     logic [FRAC_WIDTH-1:0]       frac, frac_out;
     logic                        hidden_round;
     logic [4:0]                  fflags, fflags_out;
@@ -252,13 +281,14 @@ module fp_writeback
     assign roundup = round_packet_r.roundup;
     assign sign_out = round_packet_r.data[FLEN-1];
     assign expo = round_packet_r.data[FLEN-2-:EXPO_WIDTH];
+    assign expo_overflow_round = round_packet_r.expo_overflow;
     assign frac = round_packet_r.data[FRAC_WIDTH-1:0];
     assign hidden_round = round_packet_r.hidden;
     assign fflags = round_packet_r.fflags;
     // frac_overflow can be calculated in parallel with roundup
     assign {frac_overflow_debug, frac_round_intermediate} = {hidden_round, frac} + (FRAC_WIDTH+2)'(roundup);
     assign frac_out = frac_round_intermediate[FRAC_WIDTH-1:0] >> frac_overflow;
-    assign {overflowExp, expo_out} = expo + EXPO_WIDTH'(frac_overflow); 
+    assign {overflowExp, expo_out} = {expo_overflow_round, expo} + EXPO_WIDTH'(frac_overflow); 
     assign underflowExp = ~(hidden_round) & |frac_out;
     assign fflags_out = fflags[4] ? fflags : fflags | {2'b0, overflowExp, underflowExp, overflowExp}; //inexact is asserted when overflow 
 

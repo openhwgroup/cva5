@@ -95,6 +95,7 @@ interface fp_unit_writeback_interface;
         id_t id;
         logic done;
         logic [FLEN-1:0] rd;
+        logic expo_overflow;
         logic [4:0] fflags;
         logic [2:0] rm;
         // shared with normalization
@@ -103,14 +104,17 @@ interface fp_unit_writeback_interface;
         logic hidden;
         logic [2:0] grs;
         fp_shift_amt_t clz;
+        logic right_shift;
+        logic [EXPO_WIDTH-1:0] right_shift_amt;
+        logic subnormal;
 
         modport unit (
             input ack,
-            output id, done, rd, fflags, rm, carry, hidden, grs, clz, safe
+            output id, done, rd, expo_overflow, fflags, rm, carry, hidden, grs, clz, safe, subnormal, right_shift, right_shift_amt
         );
         modport wb (
             output ack,
-            input id, done, rd, fflags, rm, carry, hidden, grs, clz, safe
+            input id, done, rd, expo_overflow, fflags, rm, carry, hidden, grs, clz, safe, subnormal, right_shift, right_shift_amt
         );
 endinterface
 

@@ -96,7 +96,7 @@ package taiga_config;
     parameter INTERFACE_FRAC_WIDTH = 52;
     parameter INTERFACE_FLEN = 1 + INTERFACE_EXPO_WIDTH + INTERFACE_FRAC_WIDTH;
     parameter FP_NUM_WB_GROUPS = 1;
-    parameter ENABLE_SUBNORMAL = 0;
+    parameter ENABLE_SUBNORMAL = 1;
 
     typedef struct packed {
       bit INCLUDE_FPU;

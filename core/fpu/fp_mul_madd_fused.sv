@@ -29,7 +29,7 @@ module fp_mul_madd_fused (
 
   logic                          rs2_hidden_bit;
   logic                          rs2_sign [2:0];
-  logic [EXPO_WIDTH-1:0]         rs2_expo [2:0];
+  logic [EXPO_WIDTH-1:0]         rs2_expo [2:0], pre_normalize_shift_amt[3:0];
   logic [FRAC_WIDTH:0]           rs2_frac [2:0];
 
   logic                          rs1_zero;
@@ -43,35 +43,20 @@ module fp_mul_madd_fused (
 
   logic                          result_sign [1:0];
   logic [EXPO_WIDTH:0]           result_expo [1:0];
+  logic                          possible_subnormal[1:0];
   logic [EXPO_WIDTH:0]           result_expo_intermediate;
+  logic                          right_shift[1:0];
+  logic [EXPO_WIDTH:0]           right_shift_amt;
   logic [FRAC_WIDTH+1:0]         result_frac [1:0];
   logic [2*FRAC_WIDTH+2-1:0]     result_frac_intermediate, result_frac_upper[1:0], result_frac_upper_shifted, result_frac_lower[1:0];
-
-  logic                          result_sign_norm [2:0];
-  logic [EXPO_WIDTH-1:0]         result_expo_norm [2:0];
-  logic [FRAC_WIDTH+1:0]         result_frac_norm [2:0];
-
   logic [FRAC_WIDTH-1:0]         residual_bits;
-  //grs_t                          residual_bits;
-  grs_t                          grs [1:0];
-  grs_t                          grs_norm;
-  grs_t                          grs_round;
+  logic [EXPO_WIDTH-1:0] clz, clz_with_prepended_0s, left_shift_amt;
 
-  logic [FLEN-1:0]               result;
-  logic [FLEN-1:0]               result_if_overflow[1:0];
-  logic                          sign_round_out;
-  logic [EXPO_WIDTH-1:0]         expo_round_out;
-  logic [FRAC_WIDTH:0]           frac_round_out;
-  logic                          safe_bit_round;
-  logic [FRAC_WIDTH+1:0]         frac_round_intermediate;
-  logic                          underflowFlg, overflowFlg, inexactFlg;
-  logic                          underflowExp, overflowExp, inexactExp;
-  logic                          roundup[1:0]; 
+  grs_t                          grs [1:0];
   logic                          output_QNaN [4:0];
   logic                          invalid_operation [4:0];
   logic                          output_inf[4:0];
   logic                          output_zero [4:0];
-  logic                          overflow_before_rounding [2:0];
   logic                          done [3:0];
   id_t                           id [3:0];
   fp_unit_writeback_t            fma_mul_wb;
@@ -80,9 +65,22 @@ module fp_mul_madd_fused (
   logic [3:0]                    rs3_special_case [3:0];
   logic [EXPO_WIDTH:0]           expo_diff;
   logic [EXPO_WIDTH:0]           expo_diff_negate;
- 
-  assign rs1 = fp_madd_inputs.rs1;
-  assign rs2 = fp_madd_inputs.rs2;
+
+  ////////////////////////////////////////////////////
+  //Implementation
+
+  //Sort rs1 and rs2 in descending order
+  swap swap_inst(
+    .rs1 (fp_madd_inputs.rs1),
+    .rs1_hidden_bit (fp_madd_inputs.rs1_hidden_bit),
+    .rs2_hidden_bit (fp_madd_inputs.rs2_hidden_bit),
+    .rs2 (fp_madd_inputs.rs2),
+    .swapped_rs1 (rs1),
+    .swapped_rs2 (rs2),
+    .swapped_rs1_hidden_bit (rs1_hidden_bit),
+    .swapped_rs2_hidden_bit (rs2_hidden_bit)
+  );
+
   assign rs3[0] = fp_madd_inputs.rs3;
   assign rs3_hidden_bit[0] = fp_madd_inputs.rs3_hidden_bit;
   assign rs3_special_case[0] = fp_madd_inputs.rs3_special_case;
@@ -90,15 +88,19 @@ module fp_mul_madd_fused (
   assign opcode[0] = fp_madd_inputs.op;
   assign instruction[0] = fp_madd_inputs.instruction;
   
-  //unpacking
+  //Unpacking rs1 and pre-normalization rs2 if it's denormal
   assign rs1_sign[0] = rs1[FLEN-1];
-  assign rs1_expo[0] = rs1[FLEN-2:FRAC_WIDTH];
-  assign rs1_hidden_bit = fp_madd_inputs.rs1_hidden_bit;
+  assign rs1_expo[0] = rs1[FLEN-2-:EXPO_WIDTH];
   assign rs1_frac[0] = {rs1_hidden_bit, rs1[FRAC_WIDTH-1:0]};
+
+  pre_normalize pre_normalize_inst(
+    .rs2(rs2), 
+    .rs2_hidden_bit(rs2_hidden_bit), 
+    .left_shift_amt (pre_normalize_shift_amt[0]),
+    .frac_normalized(rs2_frac[0])
+  ); 
   assign rs2_sign[0] = rs2[FLEN-1];
-  assign rs2_expo[0] = rs2[FLEN-2:FRAC_WIDTH];
-  assign rs2_hidden_bit = fp_madd_inputs.rs2_hidden_bit;
-  assign rs2_frac[0] = {rs2_hidden_bit, rs2[FRAC_WIDTH-1:0]}; 
+  assign rs2_expo[0] = rs2[FLEN-2-:EXPO_WIDTH] + EXPO_WIDTH'(rs2_subnormal);
 
   //special cases 
   assign rs1_subnormal = ~rs1_hidden_bit;
@@ -113,8 +115,13 @@ module fp_mul_madd_fused (
                               | (rs1 == SNAN) | (rs2 == SNAN); 
   assign output_QNaN[0] = invalid_operation[0] | rs1_NaN | rs2_NaN;
   assign output_inf[0] = ((rs1_inf & ~rs2_zero) | (~rs1_zero & rs2_inf)) & ~output_QNaN[0];
-  assign output_zero[0] = (rs1_zero | rs2_zero) & ~output_QNaN[0];
+  generate if (ENABLE_SUBNORMAL)
+    assign output_zero[0] = (rs1_zero | rs2_zero | (rs1_subnormal & rs2_subnormal)) & ~output_QNaN[0];
+  else 
+    assign output_zero[0] = (rs1_zero | rs2_zero) & ~output_QNaN[0];
+  endgenerate
 
+  ////////////////////////////////////////////////////
   //multiplication
   //TODO: use DSP's pattern detect for zero result detection
   (* use_dsp = "no" *) unsigned_multiplier #(.WIDTH(FRAC_WIDTH+1)) mantissa_mul (
@@ -127,16 +134,23 @@ module fp_mul_madd_fused (
     .out(result_frac_intermediate)
   );
 
+  generate if (ENABLE_SUBNORMAL) begin
+    assign result_expo_intermediate = rs1_expo[2] + rs2_expo[2] - pre_normalize_shift_amt[2];
+    assign possible_subnormal[0] = result_expo_intermediate[EXPO_WIDTH-1:0] < BIAS;
+  end else begin
+    assign result_expo_intermediate = rs1_expo[2] + rs2_expo[2];
+  end endgenerate
+
   always_comb begin 
     result_sign[0] = rs1_sign[2] ^ rs2_sign[2];
-    result_expo_intermediate = rs1_expo[2] + rs2_expo[2];
-    result_expo[0] = result_expo_intermediate > (EXPO_WIDTH+1)'(BIAS) ? result_expo_intermediate - BIAS : '0; //MSB is used to detect overflow
+    result_expo[0] = result_expo_intermediate - BIAS;                                   
     result_frac[0] = result_frac_intermediate[2*FRAC_WIDTH+2-1-:(2+FRAC_WIDTH)]; // {safe_bit, hidden_bit, fraction}
     residual_bits = result_frac_intermediate[0+:FRAC_WIDTH]; // bottom bits preserved for rounding
     grs[0] = {residual_bits[FRAC_WIDTH-1-:2], |residual_bits[FRAC_WIDTH-3:0]};
   end
 
-  logic [EXPO_WIDTH-1:0] clz, clz_with_prepended_0s, left_shift_amt;
+  ////////////////////////////////////////////////////
+  //Output
   generate if (FRAC_WIDTH+2 <= 32) begin
     clz frac_clz (
       .clz_input (32'(result_frac[1])),
@@ -150,6 +164,7 @@ module fp_mul_madd_fused (
     );
     assign left_shift_amt = clz_with_prepended_0s - (64 - (FRAC_WIDTH + 1));
   end endgenerate
+  assign right_shift_amt = (EXPO_WIDTH+1)'(1)-result_expo[1];
 
   logic [FLEN-1:0] special_case_results[1:0];
   logic output_special_case[1:0];
@@ -190,8 +205,14 @@ module fp_mul_madd_fused (
   assign fp_wb.grs = grs[1];
   assign fp_wb.rm = rm[3];
   assign fp_wb.clz = left_shift_amt;
+  assign fp_wb.expo_overflow = result_expo[1][EXPO_WIDTH]&~output_special_case[0];
   assign fp_wb.rd = output_special_case[0] ? special_case_results[0] : 
                                              {result_sign[1], result_expo[1][EXPO_WIDTH-1:0], result_frac[1][FRAC_WIDTH-1:0]};
+  generate if (ENABLE_SUBNORMAL) begin
+    assign fp_wb.subnormal = result_expo[1][EXPO_WIDTH] & possible_subnormal[1];
+    assign fp_wb.right_shift = result_expo[1][EXPO_WIDTH] | result_frac[1][FRAC_WIDTH+1];
+    assign fp_wb.right_shift_amt = (result_expo[1][EXPO_WIDTH] & possible_subnormal[1]) ? right_shift_amt[EXPO_WIDTH-1:0] : (EXPO_WIDTH)'(result_frac[1][FRAC_WIDTH+1]);
+  end endgenerate
 
   //FMADD outputs 
   //assign fma_mul_wb.rd = {result_sign_norm[0], result_expo_norm[0], result_frac_norm[0][0+:FRAC_WIDTH]};
@@ -214,8 +235,16 @@ module fp_mul_madd_fused (
   assign fma_mul_outputs.rs1_special_case = {output_inf[2], 1'b0, output_QNaN[2], output_zero[2]};
   logic [EXPO_WIDTH-1:0] rs3_expo;
   assign rs3_expo = rs3[2][FLEN-2-:EXPO_WIDTH];
-  assign expo_diff = result_expo[0] - rs3_expo;
-  assign expo_diff_negate = rs3_expo - result_expo[0];
+  generate if (ENABLE_SUBNORMAL) begin
+    // subnormal expo is implicitly 1 
+    assign expo_diff = (result_expo[0] + {{(EXPO_WIDTH){1'b0}}, result_frac[0][FRAC_WIDTH+0]}) 
+                     - (rs3_expo + {{(EXPO_WIDTH){1'b0}}, rs3_hidden_bit[2]});
+    assign expo_diff_negate = (rs3_expo + {{(EXPO_WIDTH){1'b0}}, rs3_hidden_bit[2]}) 
+                            - (result_expo[0] + {{(EXPO_WIDTH){1'b0}}, result_frac[0][FRAC_WIDTH+0]});
+  end else begin
+    assign expo_diff = (result_expo[0]) - (rs3_expo);
+    assign expo_diff_negate = (rs3_expo) - (result_expo[0]);
+  end endgenerate
   assign fma_mul_outputs.expo_diff = expo_diff[EXPO_WIDTH] ? expo_diff_negate : expo_diff;
   assign fma_mul_outputs.swap = expo_diff[EXPO_WIDTH];
 
@@ -232,6 +261,7 @@ module fp_mul_madd_fused (
 
       rs2_sign[1] <= rs2_sign[0];
       rs2_expo[1] <= rs2_expo[0];
+      pre_normalize_shift_amt[1] <= pre_normalize_shift_amt[0];
       rs2_frac[1] <= rs2_frac[0];
 
       rs3[1] <= rs3[0];
@@ -256,6 +286,7 @@ module fp_mul_madd_fused (
 
       rs2_sign[2] <= rs2_sign[1];
       rs2_expo[2] <= rs2_expo[1];
+      pre_normalize_shift_amt[2] <= pre_normalize_shift_amt[1];
       rs2_frac[2] <= rs2_frac[1];
 
       grs[1] <= grs[0];
@@ -284,9 +315,11 @@ module fp_mul_madd_fused (
       instruction[3] <= instruction[2];
       rs3[3] <= rs3[2];
       rs3_hidden_bit[3] <= rs3_hidden_bit[2];
-      overflow_before_rounding[1] <= overflow_before_rounding[0];
       result_sign[1] <= result_sign[0];
       result_expo[1] <= result_expo[0];
+      possible_subnormal[1] <= possible_subnormal[0];
+      pre_normalize_shift_amt[3] <= pre_normalize_shift_amt[2];
+      right_shift[1] <= right_shift[0];
       result_frac[1] <= result_frac[0];
     end
     //round1
@@ -298,10 +331,6 @@ module fp_mul_madd_fused (
       output_QNaN[4] <= output_QNaN[3];
       output_inf[4] <= output_inf[3];
       output_zero[4] <= output_zero[3];
-      result_sign_norm[1] <= result_sign_norm[0];
-      result_expo_norm[1] <= result_expo_norm[0];
-      result_frac_norm[1] <= result_frac_norm[0];
-      grs_round <= grs_norm;
     end
   end
 endmodule

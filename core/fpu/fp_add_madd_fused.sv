@@ -97,8 +97,14 @@ module fp_add_madd_fused (
   assign temp_rs2 = fp_add_inputs.rs2;
   assign temp_rs1_sign[0] = temp_rs1[FLEN-1];
   assign temp_rs2_sign[0] = add ? temp_rs2[FLEN-1] : ~temp_rs2[FLEN-1]; //replace mux with xor
-  assign temp_rs1_expo[0] = temp_rs1[FLEN-2-:EXPO_WIDTH];
-  assign temp_rs2_expo[0] = temp_rs2[FLEN-2-:EXPO_WIDTH];
+  generate if (ENABLE_SUBNORMAL) begin
+    // subnormal's true biased exponent is 1
+    assign temp_rs1_expo[0] = temp_rs1[FLEN-2-:EXPO_WIDTH];// + {{(EXPO_WIDTH-1){1'b0}}, ~temp_rs1_hidden[0]};
+    assign temp_rs2_expo[0] = temp_rs2[FLEN-2-:EXPO_WIDTH];// + {{(EXPO_WIDTH-1){1'b0}}, ~temp_rs2_hidden[0]};
+  end else begin
+    assign temp_rs1_expo[0] = temp_rs1[FLEN-2-:EXPO_WIDTH];
+    assign temp_rs2_expo[0] = temp_rs2[FLEN-2-:EXPO_WIDTH];
+  end endgenerate
   assign temp_rs1_frac[0] = temp_rs1[0+:FRAC_WIDTH];
   assign temp_rs2_frac[0] = temp_rs2[0+:FRAC_WIDTH];
   assign temp_rs1_safe = fp_add_inputs.rs1_safe_bit;
@@ -171,21 +177,6 @@ module fp_add_madd_fused (
     .shift_amount (shft_amt),
     .sticky_bit (rs2_frac_sticky_bit)
   );
-
-  //perform addition
-  //always_comb begin 
-    //if(~expo_diff[1][EXPO_WIDTH]) begin //move input with larger expo to rs1
-      //rs1_sign[1] = temp_rs1_sign[1];
-      //rs1_expo[1] = temp_rs1_expo[1];
-      //rs1_frac[1] = {temp_rs1_hidden[1], temp_rs1_frac[1]};
-      //rs1_grs[1] = fp_add_grs_r;
-    //end else begin 
-      //rs1_sign[1] = temp_rs2_sign[1];
-      //rs1_expo[1] = temp_rs2_expo[1];
-      //rs1_frac[1] = {temp_rs2_hidden[1], temp_rs2_frac[1]};
-      //rs1_grs[1] = 'b0;
-   //end
-  //end
 
   logic [FRAC_WIDTH+GRS_WIDTH+2:0] adder_in1, adder_in2, adder_in1_1s, adder_in2_1s;
   logic [FRAC_WIDTH+GRS_WIDTH+3:0] in1, in2;
@@ -265,6 +256,11 @@ module fp_add_madd_fused (
   assign fp_wb.clz = left_shift_amt;
   assign fp_wb.rd = output_special_case[0] ? special_case_results[0] : 
                                              {result_sign[1], result_expo[1], result_frac[1][FRAC_WIDTH-1:0]};
+  assign fp_wb.right_shift = fp_wb.carry | fp_wb.safe;
+  assign fp_wb.right_shift_amt = EXPO_WIDTH'({fp_wb.carry, ~fp_wb.carry & fp_wb.safe});
+  generate if (ENABLE_SUBNORMAL) begin
+    assign fp_wb.subnormal = ~|result_expo[1];
+  end endgenerate
 
   //pipeline 
   always_ff @ (posedge clk) begin 
@@ -362,56 +358,4 @@ module fp_add_madd_fused (
     end
   end
 
-  //assertions
-  //rs1_larger_exponent: assert property(@(posedge clk) disable iff(rst)
-  //rs1_expo[0] >= rs2_expo[0]);
-
-  //alignment: assert property (@(posedge clk) disable iff(rst)
-    //rs1_frac_aligned == rs1_frac[0] && rs2_frac_aligned == (rs2_frac[0] >> (rs1_expo[0] - rs2_expo[0])));
-
-  //result_expo_compare: assert property (@(posedge clk) disable iff(rst)
-    //result_expo[0] == rs1_expo[1]);
-
-  //logic [FRAC_WIDTH+1:0] result_frac_assert_same_sign, result_frac_assert_diff_sign_rs1_larger, result_frac_assert_diff_sign_rs2_larger;
-  //logic result_sign_assert;
-  //logic [FRAC_WIDTH:0] rs1_frac_aligned_r, rs2_frac_aligned_r;
-  //logic rs1_NaN, rs2_NaN;
-  //assign rs1_NaN = (rs1_expo[0] == '1) && (rs1_frac[0][FRAC_WIDTH-1:0] != '0);
-  //assign rs2_NaN = (rs2_expo[0] == '1) && (rs2_frac[0][FRAC_WIDTH-1:0] != '0);
-
-  //always_ff @ (posedge clk) begin
-    //if (advance) begin
-      //rs1_frac_aligned_r <= rs1_frac_aligned;
-      //rs2_frac_aligned_r <= rs2_frac_aligned;
-    //end
-  //end
-
-  //assign result_frac_assert_same_sign = rs1_frac_aligned_r + rs2_frac_aligned_r;
-  //assign result_frac_assert_diff_sign_rs1_larger = rs1_frac_aligned_r - rs2_frac_aligned_r;
-  //assign result_frac_assert_diff_sign_rs2_larger = rs2_frac_aligned_r - rs1_frac_aligned_r;
-  //always_comb begin
-    //if (rs1_sign[1] == rs2_sign[1]) 
-    //result_sign_assert = rs1_sign[1];
-    //else begin
-    //if (rs1_frac_aligned_r >= rs2_frac_aligned_r)
-      //result_sign_assert = rs1_sign[1];
-    //else 
-       //result_sign_assert = rs2_sign[1];
-    //end
-  //end
-
-  //sanity_check: assert property (@(posedge clk) disable iff(rst)
-    //(rs1_frac_aligned_r == $past(rs1_frac_aligned,1) && rs2_frac_aligned_r == $past(rs2_frac_aligned,1)));
-
-  //result_frac_same_sign: assert property (@(posedge clk) disable iff(rst)
-    //(!rs1_NaN && !rs2_NaN && fn7 == FADD && rs1_sign[0] == rs2_sign[0]) |-> ##1 result_frac[0] == result_frac_assert_same_sign);
-
-  //result_frac_diff_sign_rs1_larger: assert property (@(posedge clk) disable iff(rst)
-    //(!rs1_NaN && !rs2_NaN && fn7 == FADD && rs1_sign[0] != rs2_sign[0] && rs1_frac_aligned >= rs2_frac_aligned) |-> ##1 result_frac[0] == result_frac_assert_diff_sign_rs1_larger);
-
-  //result_frac_diff_sign_rs2_larger: assert property (@(posedge clk) disable iff(rst)
-    //(!rs1_NaN && !rs2_NaN && fn7 == FADD && rs1_sign[0] != rs2_sign[0] && rs1_frac_aligned < rs2_frac_aligned) |-> ##1 result_frac[0] == result_frac_assert_diff_sign_rs2_larger);
-
-  //resul_sign_compare: assert property (@(posedge clk) disable iff(rst)
-    //rs1_NaN && !rs2_NaN |-> ##1result_sign[0] == result_sign_assert);
 endmodule

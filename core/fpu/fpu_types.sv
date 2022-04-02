@@ -95,6 +95,7 @@ package fpu_types;
         id_t id;
         logic valid;
         logic [FLEN-1:0] data;
+        logic expo_overflow;
         logic [4:0] fflags;
         logic [2:0] rm;
         //shared with normalization
@@ -103,12 +104,16 @@ package fpu_types;
         logic hidden;
         logic [2:0] grs;
         fp_shift_amt_t clz;
+        logic subnormal;
+        logic right_shift;
+        logic[EXPO_WIDTH-1:0] right_shift_amt;
     } fp_normalize_packet_t; 
 
     typedef struct packed{
         id_t id;
         logic valid;
         logic [FLEN-1:0] data;
+        logic expo_overflow;
         logic hidden;
         logic [FLEN-1:0] result_if_overflow;
         logic roundup;

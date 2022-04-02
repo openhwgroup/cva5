@@ -125,9 +125,17 @@ module fp_madd_fused_top (
   assign add_inputs_fifo_data_in.fn7 = fp_madd_inputs.fn7;
   assign add_inputs.fp_add_inputs = add_inputs_fifo_data_in;
   assign add_inputs.id = issue.id;
-  //pre calculate expo diff for FMADD
-  assign expo_diff = fp_madd_inputs.rs1[FLEN-2-:EXPO_WIDTH] - fp_madd_inputs.rs2[FLEN-2-:EXPO_WIDTH];
-  assign expo_diff_negate = fp_madd_inputs.rs2[FLEN-2-:EXPO_WIDTH] - fp_madd_inputs.rs1[FLEN-2-:EXPO_WIDTH];
+  //pre calculate expo diff for FADD
+  generate if (ENABLE_SUBNORMAL) begin
+    // subnormal expo is implicitly set to 1
+    assign expo_diff = (fp_madd_inputs.rs1[FLEN-2-:EXPO_WIDTH] + {{(EXPO_WIDTH-1){1'b0}}, ~fp_madd_inputs.rs1_hidden_bit})-
+                       (fp_madd_inputs.rs2[FLEN-2-:EXPO_WIDTH] + {{(EXPO_WIDTH-1){1'b0}}, ~fp_madd_inputs.rs2_hidden_bit});
+    assign expo_diff_negate = (fp_madd_inputs.rs2[FLEN-2-:EXPO_WIDTH] + {{(EXPO_WIDTH-1){1'b0}}, ~fp_madd_inputs.rs2_hidden_bit}) -
+                              (fp_madd_inputs.rs1[FLEN-2-:EXPO_WIDTH] + {{(EXPO_WIDTH-1){1'b0}}, ~fp_madd_inputs.rs1_hidden_bit});
+  end else begin
+    assign expo_diff = (fp_madd_inputs.rs1[FLEN-2-:EXPO_WIDTH]) - (fp_madd_inputs.rs2[FLEN-2-:EXPO_WIDTH]);
+    assign expo_diff_negate = (fp_madd_inputs.rs2[FLEN-2-:EXPO_WIDTH]) - (fp_madd_inputs.rs1[FLEN-2-:EXPO_WIDTH]);
+  end endgenerate
   assign add_inputs.expo_diff = expo_diff[EXPO_WIDTH] ? expo_diff_negate : expo_diff;
   assign add_inputs.swap = expo_diff[EXPO_WIDTH];
 
@@ -138,7 +146,7 @@ module fp_madd_fused_top (
   //assign fp_add_inputs_fifo.supress_push = 0;
   assign fp_add_inputs_fifo.pop = ~fma_mul_instruction[2] & fp_add_inputs_fifo.valid & add_issue.ready;
   assign add_inputs_from_fifo = fp_add_inputs_fifo.data_out;
-  taiga_fifo #(.DATA_WIDTH($bits(add_input_struct_t)), .FIFO_DEPTH(1)) add_input_fifo (.fifo(fp_add_inputs_fifo), .*); 
+  taiga_fifo #(.DATA_WIDTH($bits(add_input_struct_t)), .FIFO_DEPTH(2)) add_input_fifo (.fifo(fp_add_inputs_fifo), .*); 
 
   ////////////////////////////////////////////////////////
   //Adder input select

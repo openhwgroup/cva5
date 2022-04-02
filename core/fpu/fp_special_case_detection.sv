@@ -42,11 +42,11 @@ module fp_special_case_detection_sandboxed #(parameter SANDBOX_FRAC_W=52, parame
   assign sign_sandboxed = sign_in;
   assign expo_sandboxed = expo_in[SANDBOX_EXPO_W-1:0];
   assign frac_sandboxed = frac_in[FRAC_WIDTH-1-:SANDBOX_FRAC_W];
-  generate if (ENABLE_SUBNORMAL)
+  generate if (ENABLE_SUBNORMAL) 
     assign hidden = |expo_sandboxed;
   else
     assign hidden = 1;
-  endgenerate 
+  endgenerate
 
   //process
   logic expo_all_1s = &expo_sandboxed;
@@ -55,7 +55,12 @@ module fp_special_case_detection_sandboxed #(parameter SANDBOX_FRAC_W=52, parame
   assign is_inf = expo_all_1s & ~(|frac_sandboxed);
   assign is_SNaN = expo_all_1s & ~frac_sandboxed[SANDBOX_FRAC_W-1] & frac_sandboxed[SANDBOX_FRAC_W-2] & frac_lower_all_0s;
   assign is_QNaN = expo_all_1s & ~frac_sandboxed[SANDBOX_FRAC_W-1] & frac_sandboxed[SANDBOX_FRAC_W-2] & frac_lower_all_0s;
-  assign is_zero = ~(|expo_sandboxed) & ~frac_sandboxed[SANDBOX_FRAC_W-1] & ~frac_sandboxed[SANDBOX_FRAC_W-2] & frac_lower_all_0s;
+  generate if (ENABLE_SUBNORMAL)
+    assign is_zero = ~(|expo_sandboxed) & ~frac_sandboxed[SANDBOX_FRAC_W-1] & ~frac_sandboxed[SANDBOX_FRAC_W-2] & frac_lower_all_0s;
+  else 
+    //flush to zero
+    assign is_zero = ~|expo_sandboxed;
+  endgenerate
 
 endmodule 
 
