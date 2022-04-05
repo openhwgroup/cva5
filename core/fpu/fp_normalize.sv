@@ -61,7 +61,7 @@ module fp_normalize (
       assign subnormal_expo = {expo_overflow, expo} & {(EXPO_WIDTH+1){~subnormal}};
       assign subnormal_right_shift_amt = (EXPO_WIDTH+1)'(right_shift_amt) & {(EXPO_WIDTH+1){~subnormal}};
       assign expo_norm_right_shift = subnormal_expo + subnormal_right_shift_amt;
-      assign {frac_carry_bit_norm_right_shift, frac_safe_bit_norm_right_shift, hidden_bit_norm_right_shift, frac_norm_right_shift, grs_norm_right_shift} = {frac_carry_bit, frac_safe_bit, hidden_bit, frac, grs} >> subnormal_right_shift_amt;
+      assign {frac_carry_bit_norm_right_shift, frac_safe_bit_norm_right_shift, hidden_bit_norm_right_shift, frac_norm_right_shift, grs_norm_right_shift} = {frac_carry_bit, frac_safe_bit, hidden_bit, frac, grs} >> right_shift_amt;
     end else begin
       assign normal_expo = {expo_overflow, expo};
       assign normal_right_shift_amt = right_shift_amt[1:0];

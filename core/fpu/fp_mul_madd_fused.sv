@@ -44,7 +44,7 @@ module fp_mul_madd_fused (
   logic                          result_sign [1:0];
   logic [EXPO_WIDTH:0]           result_expo [1:0];
   logic                          possible_subnormal[1:0];
-  logic [EXPO_WIDTH:0]           result_expo_intermediate;
+  logic [EXPO_WIDTH+1:0]         result_expo_intermediate;
   logic                          right_shift[1:0];
   logic [EXPO_WIDTH:0]           right_shift_amt;
   logic [FRAC_WIDTH+1:0]         result_frac [1:0];
@@ -135,15 +135,16 @@ module fp_mul_madd_fused (
   );
 
   generate if (ENABLE_SUBNORMAL) begin
-    assign result_expo_intermediate = rs1_expo[2] + rs2_expo[2] - pre_normalize_shift_amt[2];
-    assign possible_subnormal[0] = result_expo_intermediate[EXPO_WIDTH-1:0] < BIAS;
+    assign result_expo_intermediate =  ({1'b0, rs1_expo[2]} + {1'b0, rs2_expo[2]}) - {2'b0, pre_normalize_shift_amt[2]} - (EXPO_WIDTH+2)'(BIAS);
+    assign possible_subnormal[0] = result_expo_intermediate[EXPO_WIDTH+1];
+    assign result_expo[0] = result_expo_intermediate[EXPO_WIDTH:0];                                   
   end else begin
-    assign result_expo_intermediate = rs1_expo[2] + rs2_expo[2];
+    assign result_expo_intermediate = ({1'b0, rs1_expo[2]} + {1'b0, rs2_expo[2]}) - (EXPO_WIDTH+2)'(BIAS);
+    assign result_expo[0] = result_expo_intermediate[EXPO_WIDTH+1] ? 0 : result_expo_intermediate[EXPO_WIDTH:0];
   end endgenerate
 
   always_comb begin 
     result_sign[0] = rs1_sign[2] ^ rs2_sign[2];
-    result_expo[0] = result_expo_intermediate - BIAS;                                   
     result_frac[0] = result_frac_intermediate[2*FRAC_WIDTH+2-1-:(2+FRAC_WIDTH)]; // {safe_bit, hidden_bit, fraction}
     residual_bits = result_frac_intermediate[0+:FRAC_WIDTH]; // bottom bits preserved for rounding
     grs[0] = {residual_bits[FRAC_WIDTH-1-:2], |residual_bits[FRAC_WIDTH-3:0]};
@@ -209,9 +210,9 @@ module fp_mul_madd_fused (
   assign fp_wb.rd = output_special_case[0] ? special_case_results[0] : 
                                              {result_sign[1], result_expo[1][EXPO_WIDTH-1:0], result_frac[1][FRAC_WIDTH-1:0]};
   generate if (ENABLE_SUBNORMAL) begin
-    assign fp_wb.subnormal = result_expo[1][EXPO_WIDTH] & possible_subnormal[1];
-    assign fp_wb.right_shift = result_expo[1][EXPO_WIDTH] | result_frac[1][FRAC_WIDTH+1];
-    assign fp_wb.right_shift_amt = (result_expo[1][EXPO_WIDTH] & possible_subnormal[1]) ? right_shift_amt[EXPO_WIDTH-1:0] : (EXPO_WIDTH)'(result_frac[1][FRAC_WIDTH+1]);
+    assign fp_wb.subnormal = (result_expo[1][EXPO_WIDTH] & possible_subnormal[1]) | ~|result_expo[1][EXPO_WIDTH-1:0];
+    assign fp_wb.right_shift = (result_expo[1][EXPO_WIDTH] | result_frac[1][FRAC_WIDTH+1]) | ~|result_expo[1][EXPO_WIDTH-1:0];
+    assign fp_wb.right_shift_amt = (result_expo[1][EXPO_WIDTH] & possible_subnormal[1]) | ~|result_expo[1][EXPO_WIDTH-1:0] ? right_shift_amt[EXPO_WIDTH-1:0] : (EXPO_WIDTH)'(result_frac[1][FRAC_WIDTH+1]);
   end endgenerate
 
   //FMADD outputs 
