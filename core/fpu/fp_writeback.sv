@@ -250,7 +250,7 @@ module fp_writeback
     assign round_packet.valid = normalize_packet_r.valid;
     assign round_packet.data = {result_sign_norm, result_expo_norm, result_frac_norm};
     assign round_packet.expo_overflow = expo_overflow_norm;
-    assign round_packet.hidden = normalize_packet_r.hidden;
+    assign round_packet.hidden = hidden_norm;
     assign round_packet.id = normalize_packet_r.id;
     assign round_packet.valid = normalize_packet_r.valid;
     assign round_packet.result_if_overflow = result_if_overflow;
