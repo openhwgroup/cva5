@@ -63,8 +63,8 @@ module fp_mul_madd_fused (
   logic [FLEN-1:0]               rs3 [3:0];
   logic                          rs3_hidden_bit[3:0];
   logic [3:0]                    rs3_special_case [3:0];
-  logic [EXPO_WIDTH:0]           expo_diff;
-  logic [EXPO_WIDTH:0]           expo_diff_negate;
+  logic [EXPO_WIDTH+1:0]           expo_diff;
+  logic [EXPO_WIDTH+1:0]           expo_diff_negate;
 
   ////////////////////////////////////////////////////
   //Implementation
@@ -137,7 +137,7 @@ module fp_mul_madd_fused (
   generate if (ENABLE_SUBNORMAL) begin
     assign result_expo_intermediate =  ({1'b0, rs1_expo[2]} + {1'b0, rs2_expo[2]}) - {2'b0, pre_normalize_shift_amt[2]} - (EXPO_WIDTH+2)'(BIAS);
     assign possible_subnormal[0] = result_expo_intermediate[EXPO_WIDTH+1];
-    assign result_expo[0] = result_expo_intermediate[EXPO_WIDTH:0];                                   
+    assign result_expo[0] = result_expo_intermediate[EXPO_WIDTH+1] ? 0 : result_expo_intermediate[EXPO_WIDTH:0];
   end else begin
     assign result_expo_intermediate = ({1'b0, rs1_expo[2]} + {1'b0, rs2_expo[2]}) - (EXPO_WIDTH+2)'(BIAS);
     assign result_expo[0] = result_expo_intermediate[EXPO_WIDTH+1] ? 0 : result_expo_intermediate[EXPO_WIDTH:0];
@@ -217,12 +217,12 @@ module fp_mul_madd_fused (
 
   //FMADD outputs 
   //assign fma_mul_wb.rd = {result_sign_norm[0], result_expo_norm[0], result_frac_norm[0][0+:FRAC_WIDTH]};
-  assign fma_mul_outputs.is_fma = done[1] & instruction[2][2];
-  assign fma_mul_wb.rd = {result_sign[0], result_expo[0][EXPO_WIDTH-1:0], result_frac[0][FRAC_WIDTH-1-:FRAC_WIDTH]};
-  assign fma_mul_outputs.mul_wb_rd_hidden = result_frac[0][FRAC_WIDTH+0];
-  assign fma_mul_outputs.mul_wb_rd_safe = result_frac[0][FRAC_WIDTH+1];
   assign fma_mul_wb.done = done[1];
   assign fma_mul_wb.id = id[1];
+  assign fma_mul_wb.rd = {result_sign[0], result_expo[0][EXPO_WIDTH-1:0], result_frac[0][FRAC_WIDTH-1-:FRAC_WIDTH]};
+  assign fma_mul_outputs.is_fma = done[1] & instruction[2][2];
+  assign fma_mul_outputs.mul_wb_rd_hidden = result_frac[0][FRAC_WIDTH+0];
+  assign fma_mul_outputs.mul_wb_rd_safe = result_frac[0][FRAC_WIDTH+1];
   assign fma_mul_outputs.mul_wb = fma_mul_wb;
   assign fma_mul_outputs.mul_grs = grs[0];
   assign fma_mul_outputs.mul_op = opcode[2][3];
@@ -235,19 +235,21 @@ module fp_mul_madd_fused (
   assign fma_mul_outputs.invalid_operation = invalid_operation[2];
   assign fma_mul_outputs.rs1_special_case = {output_inf[2], 1'b0, output_QNaN[2], output_zero[2]};
   logic [EXPO_WIDTH-1:0] rs3_expo;
+  logic [EXPO_WIDTH:0] result_expo_abs;
   assign rs3_expo = rs3[2][FLEN-2-:EXPO_WIDTH];
   generate if (ENABLE_SUBNORMAL) begin
     // subnormal expo is implicitly 1 
-    assign expo_diff = (result_expo[0] + {{(EXPO_WIDTH){1'b0}}, result_frac[0][FRAC_WIDTH+0]}) 
-                     - (rs3_expo + {{(EXPO_WIDTH){1'b0}}, rs3_hidden_bit[2]});
-    assign expo_diff_negate = (rs3_expo + {{(EXPO_WIDTH){1'b0}}, rs3_hidden_bit[2]}) 
-                            - (result_expo[0] + {{(EXPO_WIDTH){1'b0}}, result_frac[0][FRAC_WIDTH+0]});
+    assign result_expo_abs = result_expo_intermediate[EXPO_WIDTH+1] ? -result_expo_intermediate[EXPO_WIDTH:0] : result_expo_intermediate[EXPO_WIDTH:0];
+    assign expo_diff = result_expo_intermediate - ((EXPO_WIDTH+2)'(rs3_expo) + (EXPO_WIDTH+2)'({~rs3_hidden_bit[2]}));
+    assign expo_diff_negate = ((EXPO_WIDTH+2)'(rs3_expo) + (EXPO_WIDTH+2)'({~rs3_hidden_bit[2]})) - result_expo_intermediate;
+    assign fma_mul_outputs.expo_diff = expo_diff[EXPO_WIDTH+1] ? expo_diff_negate[EXPO_WIDTH:0] : expo_diff[EXPO_WIDTH:0];
+    assign fma_mul_outputs.swap = expo_diff[EXPO_WIDTH+1];
   end else begin
     assign expo_diff = (result_expo[0]) - (rs3_expo);
     assign expo_diff_negate = (rs3_expo) - (result_expo[0]);
+    assign fma_mul_outputs.swap = expo_diff[EXPO_WIDTH];
+    assign fma_mul_outputs.expo_diff = expo_diff[EXPO_WIDTH] ? expo_diff_negate : expo_diff;
   end endgenerate
-  assign fma_mul_outputs.expo_diff = expo_diff[EXPO_WIDTH] ? expo_diff_negate : expo_diff;
-  assign fma_mul_outputs.swap = expo_diff[EXPO_WIDTH];
 
   always_ff @ (posedge clk) begin 
     // mul1
