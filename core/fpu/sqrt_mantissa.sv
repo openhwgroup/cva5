@@ -68,29 +68,29 @@ module sqrt_mantissa #(ITERATION = 50) (
   ////////////////////////////////////////////////////
   //Subtraction
   logic [sqrt.DATA_WIDTH-1:0] rad, next_rad;
-  logic [sqrt.DATA_WIDTH-1:0] current_dividend, next_dividend;
-  logic [sqrt.DATA_WIDTH-1:0] divisor, subtraction;
+  logic [sqrt.DATA_WIDTH-1:0] current_subtractend, next_subtractend;
+  logic [sqrt.DATA_WIDTH-1:0] subtractor, subtraction;
 
-  assign divisor = (sqrt.DATA_WIDTH)'({sqrt.quotient[sqrt.DATA_WIDTH-3:0], 2'b01});
-  assign subtraction = current_dividend - divisor;
+  assign subtractor = (sqrt.DATA_WIDTH)'({sqrt.quotient[sqrt.DATA_WIDTH-3:0], 2'b01});
+  assign subtraction = current_subtractend - subtractor;
 
   ////////////////////////////////////////////////////
-  //Next Working Dividend Determination
+  //Next Working subtractend Determination
   logic overflow;
   assign overflow = subtraction[sqrt.DATA_WIDTH-1];
   always_comb begin
     if (overflow) 
-      next_dividend = {current_dividend[sqrt.DATA_WIDTH-3:0], rad[sqrt.DATA_WIDTH-1-:2]};
+      next_subtractend = {current_subtractend[sqrt.DATA_WIDTH-3:0], rad[sqrt.DATA_WIDTH-1-:2]};
     else
-      next_dividend = {subtraction[sqrt.DATA_WIDTH-3:0], rad[sqrt.DATA_WIDTH-1-:2]};
+      next_subtractend = {subtraction[sqrt.DATA_WIDTH-3:0], rad[sqrt.DATA_WIDTH-1-:2]};
   end
 
   always_ff @ (posedge clk) begin
     if (sqrt.start) 
-      //first working dividend if the upper 2 bits of the radicand
-      current_dividend <= sqrt.DATA_WIDTH'(normalized_radicand[sqrt.DATA_WIDTH-1-:2]);
+      //first working subtractend if the upper 2 bits of the radicand
+      current_subtractend <= sqrt.DATA_WIDTH'(normalized_radicand[sqrt.DATA_WIDTH-1-:2]);
     else if(~terminate & running)
-      current_dividend <= next_dividend;
+      current_subtractend <= next_subtractend;
   end
 
   ////////////////////////////////////////////////////
@@ -100,7 +100,7 @@ module sqrt_mantissa #(ITERATION = 50) (
 
   always_ff @ (posedge clk) begin
     if (sqrt.start) 
-      //the upper two bits are pushed to the working dividend register
+      //the upper two bits are pushed to the working subtractend register
       rad <= {normalized_radicand[sqrt.DATA_WIDTH-3:0], 2'b00};
     else if(~terminate & running) 
       rad <= next_rad;
@@ -120,7 +120,7 @@ module sqrt_mantissa #(ITERATION = 50) (
       sqrt.remainder <= '0;
     end else if (~terminate & running) begin
       sqrt.quotient <= sqrt.DATA_WIDTH'(new_Q); 
-      sqrt.remainder <= next_dividend;
+      sqrt.remainder <= next_subtractend;
     end
   end 
 

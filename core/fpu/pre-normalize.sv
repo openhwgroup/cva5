@@ -21,6 +21,7 @@ module pre_normalize(
   assign frac = {rs2_hidden_bit, rs2[FRAC_WIDTH-1:0]};
 
   //CLZ on subnormal input, and left shift to normalize
+  //Assuming clz instances are optimized away when ENABLE_SUBNORMAL == 0
   generate if (FRAC_WIDTH+1 <= 32) begin
       clz frac_clz (
         .clz_input (32'(frac)),
@@ -34,11 +35,11 @@ module pre_normalize(
       );
       assign left_shift_amt = clz_with_prepended_0s - (64 - (FRAC_WIDTH + 1));
   end endgenerate
-  
-  //Output
-  generate if (ENABLE_SUBNORMAL) begin
+
+  generate if (ENABLE_SUBNORMAL) 
     assign frac_normalized = frac << left_shift_amt;
-  end else begin
+  else
     assign frac_normalized = frac;
-  end endgenerate
+  endgenerate
+  
 endmodule
