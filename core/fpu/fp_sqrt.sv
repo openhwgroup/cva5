@@ -36,15 +36,8 @@ module fp_sqrt (
   logic [FLEN-1:0] early_terminate_result;
   logic [2:0] rm;
 
-  //fp_special_case_detection_mp #(.FRAC_W(FRAC_WIDTH), .EXPO_W(EXPO_WIDTH)) 
-    //special_case (
-      //.input1(rs1),//fp_div_sqrt_inputs.rs1),
-      //.is_inf(is_inf),
-      //.is_SNaN(is_SNaN),
-      //.is_QNaN(is_QNaN),
-      //.is_zero(is_zero)
-    //);
   assign {is_inf, is_SNaN, is_QNaN, is_zero} = sqrt_op.special_case;
+  assign hidden_bit = sqrt_op.hidden_bit;
   assign is_denormal = ~hidden_bit;// ~|rs1_expo;
   assign invalid_operation = rs1_sign & ~is_zero;
   assign output_inf = is_inf & ~rs1_sign;
@@ -106,7 +99,10 @@ module fp_sqrt (
   ////////////////////////////////////////////////////
   //sqrt mantissa core
   logic [FLEN-1:0] rs1;
+  logic rs1_sign;
   logic [FRAC_WIDTH:0] rs1_frac;
+  logic [EXPO_WIDTH-1:0] rs1_expo;
+  logic odd_exponent;
   logic [FRAC_WIDTH+3:0] sqrt_mantissa_input_odd_expo, sqrt_mantissa_input_even_expo, frac_sqrt;
   logic [FRAC_WIDTH:0] result_frac[1:0];
   logic [2:0] grs[1:0];
@@ -115,6 +111,9 @@ module fp_sqrt (
   unsigned_sqrt_interface #(.DATA_WIDTH(FRAC_WIDTH+4)) sqrt(); //DATA_WIDTH has to be power of 2
 
   assign rs1 = sqrt_op.radicand;
+  assign rs1_sign = rs1[FLEN-1];
+  assign rs1_expo = rs1[FLEN-2-:EXPO_WIDTH];
+  assign odd_exponent = ~rs1_expo[0];
   assign rs1_frac = {sqrt_op.hidden_bit, rs1[0+:FRAC_WIDTH]};
   assign sqrt_mantissa_input_odd_expo = {4'b00, rs1_frac[FRAC_WIDTH:1]};
   assign sqrt_mantissa_input_even_expo = {3'b0, rs1_frac};
@@ -130,20 +129,12 @@ module fp_sqrt (
   
   assign frac_sqrt = sqrt.quotient;
   assign {result_frac[0], grs[0]} = frac_sqrt;//sqrt.quotient;
-  fp_round_simplified rounding (
-    .sign (rs1_sign),
-    .rm (rm),
-    .grs (grs[0]),
-    .lsb (result_frac[0][0]),
-    .roundup (roundup),
-    .result_if_overflow (result_if_overflow)
-  );
 
   ////////////////////////////////////////////////////
   //Sign and Exponent handling
-  logic rs1_sign;
-  logic odd_exponent;
-  logic [EXPO_WIDTH-1:0] rs1_expo;
+  logic rs1_sign_r;
+  logic odd_exponent_r;
+  logic [EXPO_WIDTH-1:0] rs1_expo_r;
   logic                  hidden_bit;
   logic [EXPO_WIDTH-1:0] unbiased_expo;
   logic [EXPO_WIDTH-1:0] unbiased_expo_abs;
@@ -151,11 +142,15 @@ module fp_sqrt (
   logic [EXPO_WIDTH-1:0] unbiased_result_expo_abs;
   logic [EXPO_WIDTH-1:0] result_expo;
 
-  assign rs1_sign = rs1[FLEN-1];
-  assign hidden_bit = sqrt_op.hidden_bit;
-  assign rs1_expo = rs1[FLEN-2-:EXPO_WIDTH];
-  assign unbiased_expo = rs1_expo - BIAS;
-  assign odd_exponent = unbiased_expo[0];
+  always_ff @ (posedge clk) begin
+    if (sqrt.start) begin
+      rs1_sign_r <= rs1[FLEN-1];
+      rs1_expo_r <= rs1[FLEN-2-:EXPO_WIDTH];
+    end
+  end
+
+  assign odd_exponent_r = ~rs1_expo_r[0];//unbiased_expo[0];
+  assign unbiased_expo = rs1_expo_r - EXPO_WIDTH'(odd_exponent_r) - BIAS;
   assign unbiased_expo_abs = unbiased_expo[EXPO_WIDTH-1] ? -unbiased_expo : unbiased_expo;
   assign unbiased_result_expo_abs = unbiased_expo_abs >> 1;
   assign unbiased_result_expo = unbiased_expo[EXPO_WIDTH-1] ? -unbiased_result_expo_abs : unbiased_result_expo_abs;
@@ -171,12 +166,6 @@ module fp_sqrt (
   assign wb.safe = 0;
   assign wb.hidden = result_frac[0][FRAC_WIDTH];
   assign wb.rd = early_terminate ? early_terminate_result : {rs1_sign, result_expo, result_frac[0][0+:FRAC_WIDTH]};
-  //always_comb begin
-    //if (early_terminate)
-      //wb.rd = early_terminate_result;
-    //else
-      //wb.rd = {rs1_sign, result_expo, result_frac[0][0+:FRAC_WIDTH]};
-  //end
 
   ////////////////////////////////////////////////////
   //Output
