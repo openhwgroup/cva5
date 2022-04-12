@@ -28,7 +28,6 @@ module fp_normalize (
 	
   	//clz includes the frac safe bit
 	logic [EXPO_WIDTH-1:0] clz, clz_with_prepended_0s;
-  	int i;
 	logic frac_safe_bit_norm; 
     logic frac_carry_bit_norm;
 	grs_t grs;
@@ -71,10 +70,27 @@ module fp_normalize (
 
     //Left Shift
     //Neededby: FSUB; FSQRT if subnormal is enabled
+    //Left shift is done by first reversing the bit order and sign-shited(>>>)
+    //This is needed to preserve the sticky bit
+    logic signed [FRAC_WIDTH+3+3-1:0] left, reversed_left, reversed_left_shifted, left_shifted;
+    assign left = {frac_carry_bit, frac_safe_bit, hidden_bit, frac, grs};
+    genvar i;
+    generate 
+      for (i = 0; i < (FRAC_WIDTH+3+3); i++) begin
+        assign reversed_left[i] = left[FRAC_WIDTH+3+3-1-i];
+      end
+    endgenerate
+    assign reversed_left_shifted = reversed_left >>> left_shift_amt_adjusted;
+    generate 
+      for (i = 0; i < (FRAC_WIDTH+3+3); i++) begin
+        assign left_shifted[i] = reversed_left_shifted[FRAC_WIDTH+3+3-1-i];
+      end
+    endgenerate
+
     always_comb begin
       {expo_less_than_left_shift_amt, expo_norm_left_shift_intermediate} = expo - (EXPO_WIDTH)'(left_shift_amt);
       left_shift_amt_adjusted = expo_less_than_left_shift_amt ? expo : left_shift_amt;
-      {frac_carry_bit_norm_left_shift, frac_safe_bit_norm_left_shift, hidden_bit_norm_left_shift, frac_norm_left_shift, grs_norm_left_shift} = {frac_carry_bit, frac_safe_bit, hidden_bit, frac, grs} << left_shift_amt_adjusted;
+      {frac_carry_bit_norm_left_shift, frac_safe_bit_norm_left_shift, hidden_bit_norm_left_shift, frac_norm_left_shift, grs_norm_left_shift} = left_shifted;
     end
     generate if (ENABLE_SUBNORMAL) 
       //FADD of two subnormals may result in promotion of subnormal to normal
