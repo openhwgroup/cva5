@@ -255,6 +255,7 @@ module fp_writeback
     assign round_packet.valid = normalize_packet_r.valid;
     assign round_packet.result_if_overflow = result_if_overflow;
     assign round_packet.fflags = {normalize_packet_r.fflags[4:1], normalize_packet_r.fflags[0] | |grs_norm};
+    assign round_packet.overflow_before_rounding = overflow_before_rounding;
 
     ////////////////////////////////////////////////////
     //Shared rounding 
@@ -267,7 +268,7 @@ module fp_writeback
     logic                        hidden_round;
     logic [4:0]                  fflags, fflags_out;
     logic                        wb_valid;
-    logic                        overflowExp, underflowExp;
+    logic                        overflowExp, overflowExp_intermediate, underflowExp;
 
     always_ff @ (posedge clk) begin
       round_packet_r <= round_packet;
@@ -288,7 +289,8 @@ module fp_writeback
     // frac_overflow can be calculated in parallel with roundup
     assign {frac_overflow_debug, frac_round_intermediate} = {hidden_round, frac} + (FRAC_WIDTH+2)'(roundup);
     assign frac_out = frac_round_intermediate[FRAC_WIDTH-1:0] >> frac_overflow;
-    assign {overflowExp, expo_out} = {expo_overflow_round, expo} + EXPO_WIDTH'(frac_overflow); 
+    assign {overflowExp_intermediate, expo_out} = {expo_overflow_round, expo} + EXPO_WIDTH'(frac_overflow); 
+    assign overflowExp = overflowExp_intermediate | round_packet_r.overflow_before_rounding;
     assign underflowExp = ~(hidden_round) & |frac_out;
     assign fflags_out = fflags[4] ? fflags : fflags | {2'b0, overflowExp, underflowExp, overflowExp}; //inexact is asserted when overflow 
 

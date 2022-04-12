@@ -45,6 +45,7 @@ module fp_mul_madd_fused (
   logic [EXPO_WIDTH:0]           result_expo [1:0];
   logic                          possible_subnormal[1:0];
   logic [EXPO_WIDTH+1:0]         result_expo_intermediate;
+  logic [EXPO_WIDTH+1:0]         result_expo_intermediate_neg;
   logic                          right_shift[1:0];
   logic [EXPO_WIDTH:0]           right_shift_amt;
   logic [FRAC_WIDTH+1:0]         result_frac [1:0];
@@ -135,12 +136,19 @@ module fp_mul_madd_fused (
   );
 
   generate if (ENABLE_SUBNORMAL) begin
+    // negative intermediate expo -> subnormal result;
+    // to normalize a subnormal result, the exponent is set to abs(intermediate expo), and the frac is right shifted for the same amount. Normalization handles driving the expo_norm to 0
     assign result_expo_intermediate =  ({1'b0, rs1_expo[2]} + {1'b0, rs2_expo[2]}) - {2'b0, pre_normalize_shift_amt[2]} - (EXPO_WIDTH+2)'(BIAS);
     assign possible_subnormal[0] = result_expo_intermediate[EXPO_WIDTH+1];
-    assign result_expo[0] = result_expo_intermediate[EXPO_WIDTH+1] ? 0 : result_expo_intermediate[EXPO_WIDTH:0];
+    assign result_expo_intermediate_neg = - result_expo_intermediate;
+    assign right_shift[0] = result_expo_intermediate[EXPO_WIDTH+1];
+    assign result_expo[0] = result_expo_intermediate[EXPO_WIDTH+1] ? result_expo_intermediate_neg[EXPO_WIDTH:0] : result_expo_intermediate[EXPO_WIDTH:0];
   end else begin
+    // TODO: assert possible_subnormal to drive expo_norm 0 in normalization
+    // the fraction does not need to be driven to 0 as special_case_detection only looks at exponent field
     assign result_expo_intermediate = ({1'b0, rs1_expo[2]} + {1'b0, rs2_expo[2]}) - (EXPO_WIDTH+2)'(BIAS);
-    assign result_expo[0] = result_expo_intermediate[EXPO_WIDTH+1] ? 0 : result_expo_intermediate[EXPO_WIDTH:0];
+    assign possible_subnormal[0] = result_expo_intermediate[EXPO_WIDTH+1];
+    assign result_expo[0] = result_expo_intermediate[EXPO_WIDTH:0];
   end endgenerate
 
   always_comb begin 
@@ -165,7 +173,6 @@ module fp_mul_madd_fused (
     );
     assign left_shift_amt = clz_with_prepended_0s - (64 - (FRAC_WIDTH + 1));
   end endgenerate
-  assign right_shift_amt = (EXPO_WIDTH+1)'(1)-result_expo[1];
 
   logic [FLEN-1:0] special_case_results[1:0];
   logic output_special_case[1:0];
@@ -209,10 +216,15 @@ module fp_mul_madd_fused (
   assign fp_wb.expo_overflow = result_expo[1][EXPO_WIDTH]&~output_special_case[0];
   assign fp_wb.rd = output_special_case[0] ? special_case_results[0] : 
                                              {result_sign[1], result_expo[1][EXPO_WIDTH-1:0], result_frac[1][FRAC_WIDTH-1:0]};
+  assign fp_wb.subnormal = possible_subnormal[1];
   generate if (ENABLE_SUBNORMAL) begin
-    assign fp_wb.subnormal = (result_expo[1][EXPO_WIDTH] & possible_subnormal[1]) | ~|result_expo[1][EXPO_WIDTH-1:0];
-    assign fp_wb.right_shift = (result_expo[1][EXPO_WIDTH] | result_frac[1][FRAC_WIDTH+1]) | ~|result_expo[1][EXPO_WIDTH-1:0];
-    assign fp_wb.right_shift_amt = (result_expo[1][EXPO_WIDTH] & possible_subnormal[1]) | ~|result_expo[1][EXPO_WIDTH-1:0] ? right_shift_amt[EXPO_WIDTH-1:0] : (EXPO_WIDTH)'(result_frac[1][FRAC_WIDTH+1]);
+    assign fp_wb.right_shift = right_shift[1] | result_frac[1][FRAC_WIDTH+1];
+    // if the result is denormal, right shift frac by 1 extra position
+    assign fp_wb.right_shift_amt = possible_subnormal[1] ? result_expo[1][EXPO_WIDTH-1:0] + EXPO_WIDTH'(possible_subnormal[1]) : (EXPO_WIDTH)'(result_frac[1][FRAC_WIDTH+1]);;
+  end else begin
+    // always righ shift by 1
+    assign fp_wb.right_shift = result_frac[1][FRAC_WIDTH+1];
+    assign fp_wb.right_shift_amt = (EXPO_WIDTH)'(result_frac[1][FRAC_WIDTH+1]);;
   end endgenerate
 
   //FMADD outputs 

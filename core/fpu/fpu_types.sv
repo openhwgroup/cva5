@@ -107,6 +107,7 @@ package fpu_types;
         logic subnormal;
         logic right_shift;
         logic[EXPO_WIDTH-1:0] right_shift_amt;
+        logic overflow_before_rounding;
     } fp_normalize_packet_t; 
 
     typedef struct packed{
@@ -115,9 +116,10 @@ package fpu_types;
         logic [FLEN-1:0] data;
         logic expo_overflow;
         logic hidden;
-        logic [FLEN-1:0] result_if_overflow;
         logic roundup;
         logic [4:0] fflags;
+        logic overflow_before_rounding;
+        logic [FLEN-1:0] result_if_overflow;
         //logic [2:0] rm;
     } fp_round_packet_t; 
 

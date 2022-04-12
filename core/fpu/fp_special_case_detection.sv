@@ -54,7 +54,8 @@ module fp_special_case_detection_sandboxed #(parameter SANDBOX_FRAC_W=52, parame
 
   assign is_inf = expo_all_1s & ~(|frac_sandboxed);
   assign is_SNaN = expo_all_1s & ~frac_sandboxed[SANDBOX_FRAC_W-1] & frac_sandboxed[SANDBOX_FRAC_W-2] & frac_lower_all_0s;
-  assign is_QNaN = expo_all_1s & ~frac_sandboxed[SANDBOX_FRAC_W-1] & frac_sandboxed[SANDBOX_FRAC_W-2] & frac_lower_all_0s;
+  //assign is_QNaN = expo_all_1s & ~frac_sandboxed[SANDBOX_FRAC_W-1] & frac_sandboxed[SANDBOX_FRAC_W-2] & frac_lower_all_0s;
+  assign is_QNaN = expo_all_1s & ~frac_lower_all_0s;
   generate if (ENABLE_SUBNORMAL)
     assign is_zero = ~(|expo_sandboxed) & ~frac_sandboxed[SANDBOX_FRAC_W-1] & ~frac_sandboxed[SANDBOX_FRAC_W-2] & frac_lower_all_0s;
   else 

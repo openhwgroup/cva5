@@ -55,7 +55,7 @@ module fp_normalize (
     assign grs = grs_in;//rm == 1? '0 : grs_in;
 
     //Righ Shift
-    //Needed by: FADD, FDIV(larger/smaller), FMUL
+    //Needed by: FADD, FDIV, FMUL
     //The right shift amt is calculated by each unit; subnormal needs to support larger right shifter due to the multiplication's pre-normalization; normal's right shift amt cannot exceed 2
     generate if (ENABLE_SUBNORMAL) begin
       assign subnormal_expo = {expo_overflow, expo} & {(EXPO_WIDTH+1){~subnormal}};
@@ -70,7 +70,7 @@ module fp_normalize (
     end endgenerate
 
     //Left Shift
-    //Neededby: FSUB and FDIV(smaller/larger); FSQRT if subnormal is enabled
+    //Neededby: FSUB; FSQRT if subnormal is enabled
     always_comb begin
       {expo_less_than_left_shift_amt, expo_norm_left_shift_intermediate} = expo - (EXPO_WIDTH)'(left_shift_amt);
       left_shift_amt_adjusted = expo_less_than_left_shift_amt ? expo : left_shift_amt;
@@ -93,5 +93,6 @@ module fp_normalize (
           {expo_overflow_norm, expo_norm} = expo_norm_left_shift;
           {frac_carry_bit_norm, frac_safe_bit_norm, hidden_bit_norm, frac_norm, grs_norm} = {frac_carry_bit_norm_left_shift, frac_safe_bit_norm_left_shift, hidden_bit_norm_left_shift, frac_norm_left_shift, grs_norm_left_shift};
         end
+      overflow_before_rounding = expo_overflow_norm | (&expo_norm);
       end
 endmodule : fp_normalize
