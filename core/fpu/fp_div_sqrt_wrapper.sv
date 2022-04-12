@@ -38,17 +38,38 @@ module fp_div_sqrt_wrapper(
   assign sqrt_issue.new_request = issue.new_request & fp_div_sqrt_inputs.fn7[5];
   assign div_issue.possible_issue = issue.possible_issue;
   assign sqrt_issue.possible_issue = issue.possible_issue;
-  assign wb.rd = div_wb.done ? div_wb.rd : sqrt_wb.rd;
-  assign wb.id = div_wb.done ? div_wb.id : sqrt_wb.id;
-  assign wb.done = div_wb.done | sqrt_wb.done;
-  assign wb.fflags = div_wb.done ? div_wb.fflags : sqrt_wb.fflags;
-  assign wb.hidden = div_wb.done ? div_wb.hidden : sqrt_wb.hidden;
-  assign wb.grs = div_wb.done ? div_wb.grs : sqrt_wb.grs;
-  assign wb.clz = div_wb.done ? div_wb.clz : sqrt_wb.clz;
-  assign wb.rm = div_wb.done ? div_wb.rm : sqrt_wb.rm;
-  assign div_wb.ack = wb.ack;
-  assign sqrt_wb.ack = wb.ack;
- 
+
+  always_comb begin
+    if (div_wb.done) begin
+      wb.rd = div_wb.rd;
+      wb.id = div_wb.id;
+      wb.done = div_wb.done;
+      wb.fflags = div_wb.fflags;
+      wb.hidden = div_wb.hidden;
+      wb.grs = div_wb.grs;
+      wb.clz = div_wb.clz;
+      wb.rm = div_wb.rm;
+      wb.expo_overflow = div_wb.expo_overflow;
+      wb.subnormal = div_wb.subnormal;
+      wb.right_shift = div_wb.right_shift;
+      wb.right_shift_amt = div_wb.right_shift_amt;
+      div_wb.ack = wb.ack;
+    end else begin
+      wb.rd = sqrt_wb.rd;
+      wb.id = sqrt_wb.id;
+      wb.done = sqrt_wb.done;
+      wb.fflags = sqrt_wb.fflags;
+      wb.hidden = sqrt_wb.hidden;
+      wb.grs = sqrt_wb.grs;
+      wb.clz = sqrt_wb.clz;
+      wb.rm = sqrt_wb.rm;
+      wb.expo_overflow = sqrt_wb.expo_overflow;
+      wb.subnormal = sqrt_wb.subnormal;
+      wb.right_shift = sqrt_wb.right_shift;
+      wb.right_shift_amt = sqrt_wb.right_shift_amt;
+      sqrt_wb.ack = wb.ack;
+    end
+  end
 endmodule
 
 

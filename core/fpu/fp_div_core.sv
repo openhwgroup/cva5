@@ -20,6 +20,7 @@ module fp_div_core (
   logic                   rs1_hidden_bit, rs2_hidden_bit;
   logic                   rs1_sign, rs2_sign;
   logic [EXPO_WIDTH-1:0]  rs1_expo, rs2_expo;
+  logic [EXPO_WIDTH-1:0]  rs1_left_shift_amt, rs2_left_shift_amt;
   logic                   rs1_normal, rs2_normal;
   logic [FRAC_WIDTH:0]    rs1_frac, rs2_frac;
   logic [2:0]             rm;
@@ -27,20 +28,15 @@ module fp_div_core (
   logic                   rs2_is_inf, rs2_is_SNaN, rs2_is_QNaN, rs2_is_zero;
   logic                   early_terminate, invalid_operation, output_QNaN, output_zero, output_inf, div_by_zero;
   logic                   result_sign[1:0];
-  logic [EXPO_WIDTH:0]    result_expo;
-  logic [EXPO_WIDTH-1:0]  result_expo_intermediate [1:0];
   logic                   result_hidden; //the integer part
+  logic [EXPO_WIDTH+1:0] result_expo_intermediate[1:0], result_expo_intermediate_neg; //{sign, overflow, expo}
+  logic right_shift;
+  logic [EXPO_WIDTH-1:0] right_shift_amt;
+  logic [EXPO_WIDTH:0] result_expo;
   logic [FRAC_WIDTH-1:0]  result_frac;
   logic [2:0]             grs;
-  logic [2:0]             rounding_grs[1:0];
-  logic [FLEN+1:0]        result_norm[1:0];
-  logic                   roundup;
-  logic [FLEN-1:0]        result_if_overflow;
-  logic                   result_sign_out;
-  logic [EXPO_WIDTH-1:0]  result_expo_out;
-  logic [FRAC_WIDTH-1:0]  result_frac_out;
-  logic [FRAC_WIDTH+1:0]  result_frac_round;
-  logic                   inexact, underflow, overflow;
+  logic [FLEN-1:0] special_case_results[1:0];
+  logic output_special_case[1:0];
 
   //Input pre-processing
   always_ff@(posedge clk) begin
@@ -62,46 +58,58 @@ module fp_div_core (
     end
   end
 
+  //pre-normalize
+  pre_normalize rs1_pre_normalize (.rs2(rs1), .rs2_hidden_bit(rs1_hidden_bit), .left_shift_amt(rs1_left_shift_amt), .frac_normalized(rs1_frac));
+  pre_normalize rs2_pre_normalize (.rs2(rs2), .rs2_hidden_bit(rs2_hidden_bit), .left_shift_amt(rs2_left_shift_amt), .frac_normalized(rs2_frac));
+
   //unpack
-  //assign rm          = fp_div_sqrt_inputs.rm;
   assign rs1_sign    = rs1[FLEN-1];
   assign rs2_sign    = rs2[FLEN-1];
-  assign rs1_expo    = rs1[FLEN-2-:EXPO_WIDTH];
-  assign rs2_expo    = rs2[FLEN-2-:EXPO_WIDTH];
+  assign rs1_expo    = rs1[FLEN-2-:EXPO_WIDTH] + EXPO_WIDTH'({~rs1_hidden_bit});
+  assign rs2_expo    = rs2[FLEN-2-:EXPO_WIDTH] + EXPO_WIDTH'({~rs2_hidden_bit});
   assign rs1_normal  = rs1_hidden_bit;//|rs1_expo;
   assign rs2_normal  = rs2_hidden_bit;//|rs2_expo;
-  assign rs1_frac    = {rs1_normal, rs1[0+:FRAC_WIDTH]};
-  assign rs2_frac    = {rs2_normal, rs2[0+:FRAC_WIDTH]};
 
+  //special case handling
   assign invalid_operation = (rs1_is_zero & rs2_is_zero) | (rs1_is_inf & rs2_is_inf) | rs1_is_SNaN | rs2_is_SNaN;
-  assign div_by_zero       = ~rs1_is_zero & ~rs1_is_inf & (rs2_is_zero);// | ~rs2_normal);
+  assign div_by_zero       = ~rs1_is_zero & ~rs1_is_inf & (rs2_is_zero);
   assign output_QNaN       = invalid_operation | rs1_is_QNaN | rs2_is_QNaN;
-  assign output_inf        = ~output_QNaN & (div_by_zero | rs1_is_inf);// | overflow);
-  assign output_zero       = ~output_QNaN & (rs1_is_zero | ~rs1_normal | rs2_is_inf);// | underflow);
+  assign output_inf        = ~output_QNaN & (div_by_zero | rs1_is_inf);
+  generate if (ENABLE_SUBNORMAL) begin
+    assign output_zero = ~output_QNaN & (rs1_is_zero | rs2_is_inf);
+  end else begin
+    assign output_zero = ~output_QNaN & (rs1_is_zero | ~rs1_normal | rs2_is_inf);
+  end endgenerate
   assign early_terminate   = output_QNaN | output_inf | output_zero;
   assign result_sign[0]    = rs1_sign ^ rs2_sign;
-  assign result_expo_intermediate[0] = rs1_expo - rs2_expo;
+
+  always_comb begin
+    if(output_inf) begin
+      special_case_results[0] = {result_sign[0], {(EXPO_WIDTH){1'b1}}, {(FRAC_WIDTH){1'b0}}}; 
+    end else if (output_QNaN) begin 
+      special_case_results[0] = CANONICAL_NAN;
+    end else begin //if (output_zero) begin
+      special_case_results[0] = {result_sign[0], (FLEN-1)'(0)};
+    end
+  end
 
   //mantissa division  
   assign div.dividend  = {rs1_frac, {(FRAC_WIDTH+2){1'b0}}};
   assign div.divisor   = {{(FRAC_WIDTH+2){1'b0}}, rs2_frac};
   assign div.start     = start_algorithm_r & ~early_terminate;     //start div if no special cases
   assign div.divisor_is_zero = rs2_is_zero;
-  assign result_expo_intermediate[0] = rs1_expo - rs2_expo;
   //fp_div_quick_clz #(FRAC_WIDTH+2) div_mantissa (.*);  
   fp_div_radix2 #(.DIV_WIDTH(2*FRAC_WIDTH+3)) div_mantissa (.*);  
+  assign {result_hidden, result_frac, grs[2:1]} = div.quotient[0+:FRAC_WIDTH+3];
+  assign grs[0] = |div.remainder;
 
-  assign result_expo   = result_expo_intermediate[1] + BIAS;// rs1_expo - rs2_expo + BIAS;
-  assign result_hidden = div.quotient[FRAC_WIDTH+2];
-  assign result_frac   = div.quotient[2+:FRAC_WIDTH];
-  assign grs           = {div.quotient[1:0], |div.remainder[0+:FRAC_WIDTH+2]};
-
-  grs_t                          grs_norm; 
-  grs_t                          grs_round;
-  logic                          result_sign_norm [1:0];
-  logic                          overflow_before_rounding;
-  logic [EXPO_WIDTH-1:0]         result_expo_norm [1:0];
-  logic [FRAC_WIDTH:0]           result_frac_norm [1:0];
+  //exponent handling
+  assign result_expo_intermediate[0] = ((EXPO_WIDTH+1)'(rs1_expo) - (EXPO_WIDTH+1)'(rs1_left_shift_amt)) - 
+                                       ((EXPO_WIDTH+1)'(rs2_expo) - (EXPO_WIDTH+1)'(rs2_left_shift_amt)) + BIAS;
+  assign result_expo_intermediate_neg = -result_expo_intermediate[1];
+  assign right_shift = result_expo_intermediate[1][EXPO_WIDTH+1] | (~|result_expo_intermediate[1][EXPO_WIDTH:0]);
+  assign right_shift_amt = result_expo[EXPO_WIDTH-1:0] + EXPO_WIDTH'(right_shift);
+  assign result_expo = right_shift ? result_expo_intermediate_neg[EXPO_WIDTH:0] : result_expo_intermediate[1][EXPO_WIDTH:0];
 
   // calculate CLZ 
   logic [EXPO_WIDTH-1:0] clz, clz_with_prepended_0s, left_shift_amt;
@@ -119,25 +127,6 @@ module fp_div_core (
     assign left_shift_amt = clz_with_prepended_0s - (64 - (FRAC_WIDTH + 1));
   end endgenerate
 
-  logic [FLEN-1:0] special_case_results[1:0];
-  logic output_special_case[1:0];
-  always_comb begin
-    if(output_inf) begin
-      special_case_results[0] = {result_sign[0], {(EXPO_WIDTH){1'b1}}, {(FRAC_WIDTH){1'b0}}}; 
-      output_special_case[0] = 1;
-    end else if (output_QNaN) begin 
-      special_case_results[0] = CANONICAL_NAN;
-      output_special_case[0] = 1;
-    end else if (output_zero) begin
-      special_case_results[0] = {result_sign[0], (FLEN-1)'(0)};
-      output_special_case[0] = 1;
-    end else begin
-      //outputzero
-      special_case_results[0] = {result_sign[0], (FLEN-1)'(0)};
-      output_special_case[0] = 0;
-    end
-  end
-
   logic advance;
   assign advance = ~fp_wb.done | fp_wb.ack;
   assign fp_wb.done = done[0];
@@ -146,25 +135,27 @@ module fp_div_core (
   assign fp_wb.rm = rm;
   assign fp_wb.rd = output_special_case[0] ? special_case_results[0] : 
                                              {result_sign[0], result_expo[EXPO_WIDTH-1:0], result_frac[FRAC_WIDTH-1:0]};
-  assign fp_wb.clz = left_shift_amt;
+  assign fp_wb.clz = output_special_case[0] ? 0 : left_shift_amt;
   assign fp_wb.hidden = result_hidden;
   assign fp_wb.safe = 1'b0;
   assign fp_wb.carry = 1'b0;
   assign fp_wb.grs = grs & {$bits(grs_t){~output_special_case[0]}};
+
+  assign fp_wb.expo_overflow = result_expo[EXPO_WIDTH] & ~output_special_case[0];
+  assign fp_wb.subnormal = right_shift & ~output_special_case[0];
+  assign fp_wb.right_shift = right_shift & ~output_special_case[0];
+  assign fp_wb.right_shift_amt = right_shift_amt;
 
   //Registers
   always_ff @ (posedge clk) begin 
     if (advance) begin 
       done[0] <= (early_terminate & start_algorithm_r) | div.done;
       //pipeline
-      grs_round <= grs_norm;
       result_sign[1] <= result_sign[0];
-      result_norm[1] <= result_norm[0];
       result_expo_intermediate[1] <= result_expo_intermediate[0];
       start_algorithm_r <= start_algorithm;
-      result_sign_norm[1] <= result_sign_norm[0];
-      result_expo_norm[1] <= result_expo_norm[0];
-      result_frac_norm[1] <= result_frac_norm[0];    
+      output_special_case[0] <= early_terminate;
+      special_case_results[1] <= special_case_results[0];
     end
   end
 endmodule : fp_div_core

@@ -16,7 +16,6 @@ module fp_div(
   fp_div_sqrt_inputs_t          div_op_attr;
   fp_div_sqrt_inputs_t          in_progress_attr;
   logic                         done;
-  fp_unit_writeback_t           fp_wb;
   logic [4:0]                   fflags;
 
   //input buffer
@@ -29,7 +28,7 @@ module fp_div(
 
   assign input_fifo.data_in = fp_div_sqrt_inputs;
   assign input_fifo.push = issue.new_request;
-  assign input_fifo.potential_push = issue.possible_issue;
+  assign input_fifo.potential_push = issue.new_request;
   assign input_fifo.pop = input_fifo.valid & (~running); //fp_wb.done;
   assign issue.ready = ~input_fifo.full | input_fifo.pop;
   assign div_op_attr = input_fifo.data_out;
