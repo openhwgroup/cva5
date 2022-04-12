@@ -86,7 +86,9 @@ module fp_add_madd_fused (
   logic                          rs1_zero, rs2_zero;
   logic                          done [3:0];
   id_t                           id [3:0];
-  //logic [CLZ_WIDTH-1:0]          clz; 
+  logic [EXPO_WIDTH-1:0] clz, clz_with_prepended_0s, left_shift_amt;
+  logic [FLEN-1:0] special_case_results[1:0];
+  logic output_special_case[1:0];
 
   ///////////////////////////////////
   //Implementation
@@ -206,33 +208,30 @@ module fp_add_madd_fused (
   assign result_expo[0] = output_zero ? '0 : rs1_expo[1];
   
   //calculate clz and write-back
-  logic [EXPO_WIDTH-1:0] clz, clz_with_prepended_0s, left_shift_amt;
   generate if (FRAC_WIDTH+2 <= 32) begin
+    localparam left_shift_amt_bias = (32 - (FRAC_WIDTH + 1));
     clz frac_clz (
       .clz_input (32'(result_frac[1])),
       .clz (clz_with_prepended_0s[4:0])
     );
-    assign left_shift_amt = clz_with_prepended_0s - (32 - (FRAC_WIDTH + 1));
+    assign left_shift_amt = (clz_with_prepended_0s & {EXPO_WIDTH{~output_special_case[1]}}) - (left_shift_amt_bias & {EXPO_WIDTH{~output_special_case[1]}});
   end else begin
+    localparam left_shift_amt_bias = (64 - (FRAC_WIDTH + 1));
     clz_tree frac_clz (
       .clz_input (64'(result_frac[1])),
       .clz (clz_with_prepended_0s[5:0])
     );
-    assign left_shift_amt = clz_with_prepended_0s - (64 - (FRAC_WIDTH + 1));
+    assign left_shift_amt = (clz_with_prepended_0s & {EXPO_WIDTH{~output_special_case[1]}}) - (left_shift_amt_bias & {EXPO_WIDTH{~output_special_case[1]}});
   end endgenerate
 
-  logic [FLEN-1:0] special_case_results[1:0];
-  logic output_special_case[1:0];
+  assign output_special_case[0] = output_inf[1] | output_QNaN[1];
   always_comb begin
     if(output_inf[2]) begin
       special_case_results[0] = {result_sign[1], {(EXPO_WIDTH){1'b1}}, {(FRAC_WIDTH){1'b0}}}; 
-      output_special_case[0] = 1;
     end else if (output_QNaN[2]) begin 
       special_case_results[0] = CANONICAL_NAN;
-      output_special_case[0] = 1;
     end else begin
       special_case_results[0] = '0;
-      output_special_case[0] = 0;
     end
   end
  
@@ -252,14 +251,16 @@ module fp_add_madd_fused (
   assign fp_wb.carry = result_frac[1][FRAC_WIDTH+2];
   assign fp_wb.safe = result_frac[1][FRAC_WIDTH+1];
   assign fp_wb.hidden = result_frac[1][FRAC_WIDTH];
-  assign fp_wb.grs = grs;
+  assign fp_wb.grs = output_special_case[1] ? 0 : grs;
   assign fp_wb.clz = left_shift_amt;
-  assign fp_wb.rd = output_special_case[0] ? special_case_results[0] : 
+  assign fp_wb.rd = output_special_case[1] ? special_case_results[0] : 
                                              {result_sign[1], result_expo[1], result_frac[1][FRAC_WIDTH-1:0]};
-  assign fp_wb.right_shift = fp_wb.carry | fp_wb.safe;
   assign fp_wb.right_shift_amt = EXPO_WIDTH'({fp_wb.carry, ~fp_wb.carry & fp_wb.safe});
   generate if (ENABLE_SUBNORMAL) begin
     assign fp_wb.subnormal = ~|result_expo[1];
+    assign fp_wb.right_shift = fp_wb.carry | fp_wb.safe;
+  end else begin
+    assign fp_wb.right_shift = fp_wb.carry | fp_wb.safe;
   end endgenerate
 
   //pipeline 
@@ -322,8 +323,9 @@ module fp_add_madd_fused (
       output_QNaN[2] <= output_QNaN[1];
       output_inf[2] <= output_inf[1];
       inexact[2] <= inexact[1];
+      output_special_case[1] <= output_special_case[0];
     end
-
+      
     //norm -> round1
     if (advance_stage[2]) begin
       done[2] <= done[1];
@@ -353,7 +355,6 @@ module fp_add_madd_fused (
       output_QNaN[4] <= output_QNaN[3];
       roundup[1] <= roundup[0];
       special_case_results[1] <= special_case_results[0];
-      output_special_case[1] <= output_special_case[0];
       overflow_before_rounding[1] <= overflow_before_rounding[0];
     end
   end

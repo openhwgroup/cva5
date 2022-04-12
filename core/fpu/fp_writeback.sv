@@ -269,12 +269,12 @@ module fp_writeback
     logic [4:0]                  fflags, fflags_out;
     logic                        wb_valid;
     logic                        overflowExp, overflowExp_intermediate, underflowExp;
+    logic frac_overflow_debug;
 
     always_ff @ (posedge clk) begin
       round_packet_r <= round_packet;
     end
 
-    logic frac_overflow_debug;
     assign frac_overflow = &{hidden_round, frac, roundup};
     assert property (@(posedge clk) (frac_overflow|frac_overflow_debug) -> (frac_overflow_debug == frac_overflow));
 

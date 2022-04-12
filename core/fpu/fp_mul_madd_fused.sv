@@ -52,6 +52,8 @@ module fp_mul_madd_fused (
   logic [2*FRAC_WIDTH+2-1:0]     result_frac_intermediate, result_frac_upper[1:0], result_frac_upper_shifted, result_frac_lower[1:0];
   logic [FRAC_WIDTH-1:0]         residual_bits;
   logic [EXPO_WIDTH-1:0] clz, clz_with_prepended_0s, left_shift_amt;
+  logic [FLEN-1:0] special_case_results[1:0];
+  logic output_special_case[1:0];
 
   grs_t                          grs [1:0];
   logic                          output_QNaN [4:0];
@@ -138,10 +140,10 @@ module fp_mul_madd_fused (
   generate if (ENABLE_SUBNORMAL) begin
     // negative intermediate expo -> subnormal result;
     // to normalize a subnormal result, the exponent is set to abs(intermediate expo), and the frac is right shifted for the same amount. Normalization handles driving the expo_norm to 0
-    assign result_expo_intermediate =  ({1'b0, rs1_expo[2]} + {1'b0, rs2_expo[2]}) - {2'b0, pre_normalize_shift_amt[2]} - (EXPO_WIDTH+2)'(BIAS);
-    assign possible_subnormal[0] = result_expo_intermediate[EXPO_WIDTH+1];
+    assign result_expo_intermediate =  {1'b0, rs1_expo[2]} + ({1'b0, rs2_expo[2]} - {2'b0, pre_normalize_shift_amt[2]}) - (EXPO_WIDTH+2)'(BIAS);
     assign result_expo_intermediate_neg = - result_expo_intermediate;
-    assign right_shift[0] = result_expo_intermediate[EXPO_WIDTH+1];
+    assign right_shift[0] = result_expo_intermediate[EXPO_WIDTH+1] | (~|result_expo_intermediate[EXPO_WIDTH:0]);
+    assign possible_subnormal[0] = right_shift[0];
     assign result_expo[0] = result_expo_intermediate[EXPO_WIDTH+1] ? result_expo_intermediate_neg[EXPO_WIDTH:0] : result_expo_intermediate[EXPO_WIDTH:0];
   end else begin
     // TODO: assert possible_subnormal to drive expo_norm 0 in normalization
@@ -161,35 +163,31 @@ module fp_mul_madd_fused (
   ////////////////////////////////////////////////////
   //Output
   generate if (FRAC_WIDTH+2 <= 32) begin
+    localparam left_shift_amt_bias = (32 - (FRAC_WIDTH + 1));
     clz frac_clz (
       .clz_input (32'(result_frac[1])),
       .clz (clz_with_prepended_0s[4:0])
     );
-    assign left_shift_amt = clz_with_prepended_0s - (32 - (FRAC_WIDTH + 1));
+    assign left_shift_amt = (clz_with_prepended_0s & {EXPO_WIDTH{~output_special_case[1]}}) - (left_shift_amt_bias & {EXPO_WIDTH{~output_special_case[1]}});
   end else begin
+    localparam left_shift_amt_bias = (64 - (FRAC_WIDTH + 1));
     clz_tree frac_clz (
       .clz_input (64'(result_frac[1])),
       .clz (clz_with_prepended_0s[5:0])
     );
-    assign left_shift_amt = clz_with_prepended_0s - (64 - (FRAC_WIDTH + 1));
+    assign left_shift_amt = (clz_with_prepended_0s & {EXPO_WIDTH{~output_special_case[1]}}) - (left_shift_amt_bias & {EXPO_WIDTH{~output_special_case[1]}});
   end endgenerate
 
-  logic [FLEN-1:0] special_case_results[1:0];
-  logic output_special_case[1:0];
-  //pre-mux special case results
+  //Special case handling
+  //TODO: special_case_result can be pre-calculated
+  assign output_special_case[0] = output_inf[2] | output_QNaN[2];// | output_zero[2];
   always_comb begin
     if(output_inf[3]) begin
       special_case_results[0] = {result_sign[1], {(EXPO_WIDTH){1'b1}}, {(FRAC_WIDTH){1'b0}}}; 
-      output_special_case[0] = 1;
     end else if (output_QNaN[3]) begin 
       special_case_results[0] = CANONICAL_NAN;
-      output_special_case[0] = 1;
-    end else if (output_zero[3]) begin
-      special_case_results[0] = {result_sign[1], (FLEN-1)'(0)};
-      output_special_case[0] = 1;
     end else begin
       special_case_results[0] = {result_sign[1], (FLEN-1)'(0)};
-      output_special_case[0] = 0;
     end
   end
 
@@ -205,20 +203,19 @@ module fp_mul_madd_fused (
   assign issue.ready = advance_stage[0];
   assign fp_wb.done = done[2];
   assign fp_wb.id = id[2];
-  //assign fp_wb.fflags = {invalid_operation[4], 3'b0, |grs_round_compressed[0]};
   assign fp_wb.fflags = {invalid_operation[3], 4'b0};//, |grs[1]};
   assign fp_wb.carry = 1'b0;
   assign fp_wb.safe = result_frac[1][FRAC_WIDTH+1];
   assign fp_wb.hidden = result_frac[1][FRAC_WIDTH];
-  assign fp_wb.grs = grs[1];
+  assign fp_wb.grs = output_special_case[1] ? 0 : grs[1];
   assign fp_wb.rm = rm[3];
   assign fp_wb.clz = left_shift_amt;
-  assign fp_wb.expo_overflow = result_expo[1][EXPO_WIDTH]&~output_special_case[0];
-  assign fp_wb.rd = output_special_case[0] ? special_case_results[0] : 
+  assign fp_wb.expo_overflow = result_expo[1][EXPO_WIDTH]&~output_special_case[1];
+  assign fp_wb.rd = output_special_case[1] ? special_case_results[0] : 
                                              {result_sign[1], result_expo[1][EXPO_WIDTH-1:0], result_frac[1][FRAC_WIDTH-1:0]};
-  assign fp_wb.subnormal = possible_subnormal[1];
+  assign fp_wb.subnormal = possible_subnormal[1] & ~output_special_case[1];
   generate if (ENABLE_SUBNORMAL) begin
-    assign fp_wb.right_shift = right_shift[1] | result_frac[1][FRAC_WIDTH+1];
+    assign fp_wb.right_shift = (right_shift[1] | result_frac[1][FRAC_WIDTH+1] & ~output_special_case[1]);
     // if the result is denormal, right shift frac by 1 extra position
     assign fp_wb.right_shift_amt = possible_subnormal[1] ? result_expo[1][EXPO_WIDTH-1:0] + EXPO_WIDTH'(possible_subnormal[1]) : (EXPO_WIDTH)'(result_frac[1][FRAC_WIDTH+1]);;
   end else begin
@@ -322,6 +319,7 @@ module fp_mul_madd_fused (
       id[2] <= id[1];
       rm[3] <= rm[2];
     
+      output_special_case[1] <= output_special_case[0];
       output_QNaN[3] <= output_QNaN[2];
       invalid_operation[3] <= invalid_operation[2];
       output_inf[3] <= output_inf[2];

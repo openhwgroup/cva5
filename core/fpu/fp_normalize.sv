@@ -42,14 +42,15 @@ module fp_normalize (
     logic [EXPO_WIDTH:0] normal_expo; 
     logic [1:0] normal_right_shift_amt;
 
-    logic expo_less_than_left_shift_amt;
+    logic expo_less_than_left_shift_amt, expo_overflow_left;
     fp_shift_amt_t left_shift_amt_adjusted;
-    logic [EXPO_WIDTH-1:0] expo_norm_left_shift_intermediate;
+    logic [EXPO_WIDTH:0] expo_norm_left_shift_intermediate;
 
     ////////////////////////////////////////////////////
     //Implementation
     //Expo_overflow: FMUL, FDIV can assert
     //Expo_overflow_norm: FADD, FMUL can assert due to right shifting
+    //TODO: two shifters can be combined
     assign sign_norm = sign;
     assign grs = grs_in;//rm == 1? '0 : grs_in;
 
@@ -88,14 +89,15 @@ module fp_normalize (
     endgenerate
 
     always_comb begin
-      {expo_less_than_left_shift_amt, expo_norm_left_shift_intermediate} = expo - (EXPO_WIDTH)'(left_shift_amt);
+      {expo_less_than_left_shift_amt, expo_norm_left_shift_intermediate} = {expo_overflow, expo} - (EXPO_WIDTH+1)'(left_shift_amt);
       left_shift_amt_adjusted = expo_less_than_left_shift_amt ? expo : left_shift_amt;
       {frac_carry_bit_norm_left_shift, frac_safe_bit_norm_left_shift, hidden_bit_norm_left_shift, frac_norm_left_shift, grs_norm_left_shift} = left_shifted;
     end
     generate if (ENABLE_SUBNORMAL) 
       //FADD of two subnormals may result in promotion of subnormal to normal
       //This is handled by adding 1 to the expo if the hidden_bit is 1, and |expo==0
-      assign expo_norm_left_shift = ({expo_norm_left_shift_intermediate & {(EXPO_WIDTH){~expo_less_than_left_shift_amt}}}) + (EXPO_WIDTH)'({subnormal&hidden_bit}); 
+      assign expo_norm_left_shift = (expo_norm_left_shift_intermediate & {(EXPO_WIDTH+1){~expo_less_than_left_shift_amt}}) + 
+                                    (EXPO_WIDTH)'({subnormal&hidden_bit}); 
     else 
       assign expo_norm_left_shift = {1'b0, expo_norm_left_shift_intermediate & {(EXPO_WIDTH){~expo_less_than_left_shift_amt}}}; //drive exponent to 0s if left shift amt > expo
     endgenerate
@@ -109,6 +111,6 @@ module fp_normalize (
           {expo_overflow_norm, expo_norm} = expo_norm_left_shift;
           {frac_carry_bit_norm, frac_safe_bit_norm, hidden_bit_norm, frac_norm, grs_norm} = {frac_carry_bit_norm_left_shift, frac_safe_bit_norm_left_shift, hidden_bit_norm_left_shift, frac_norm_left_shift, grs_norm_left_shift};
         end
-      overflow_before_rounding = expo_overflow_norm | (&expo_norm);
+      overflow_before_rounding = (expo_overflow_norm | (&expo_norm)) & |left_shift_amt;
       end
 endmodule : fp_normalize
