@@ -40,6 +40,8 @@ module fp_div_sqrt_wrapper(
   assign sqrt_issue.possible_issue = issue.possible_issue;
 
   always_comb begin
+    div_wb.ack = wb.ack;
+    sqrt_wb.ack = wb.ack;
     if (div_wb.done) begin
       wb.rd = div_wb.rd;
       wb.id = div_wb.id;
@@ -53,7 +55,6 @@ module fp_div_sqrt_wrapper(
       wb.subnormal = div_wb.subnormal;
       wb.right_shift = div_wb.right_shift;
       wb.right_shift_amt = div_wb.right_shift_amt;
-      div_wb.ack = wb.ack;
     end else begin
       wb.rd = sqrt_wb.rd;
       wb.id = sqrt_wb.id;
@@ -67,7 +68,6 @@ module fp_div_sqrt_wrapper(
       wb.subnormal = sqrt_wb.subnormal;
       wb.right_shift = sqrt_wb.right_shift;
       wb.right_shift_amt = sqrt_wb.right_shift_amt;
-      sqrt_wb.ack = wb.ack;
     end
   end
 endmodule
