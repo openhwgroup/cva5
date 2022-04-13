@@ -30,6 +30,7 @@ module fp_mul_madd_fused (
   logic                          rs2_hidden_bit;
   logic                          rs2_sign [2:0];
   logic [EXPO_WIDTH-1:0]         rs2_expo [2:0], pre_normalize_shift_amt[3:0];
+  logic [EXPO_WIDTH-1:0]         rs3_expo;
   logic [FRAC_WIDTH:0]           rs2_frac [2:0];
 
   logic                          rs1_zero;
@@ -108,12 +109,12 @@ module fp_mul_madd_fused (
   //special cases 
   assign rs1_subnormal = ~rs1_hidden_bit;
   assign rs2_subnormal = ~rs2_hidden_bit;
-  assign rs1_zero = fp_madd_inputs.rs1_special_case[0];//rs1_subnormal && (rs1_frac[0][FRAC_WIDTH-1:0] == '0);
-  assign rs2_zero = fp_madd_inputs.rs2_special_case[0];//rs2_subnormal && (rs2_frac[0][FRAC_WIDTH-1:0] == '0);
-  assign rs1_inf = fp_madd_inputs.rs1_special_case[3];//(rs1_expo[0] == '1) && (rs1_frac[0][FRAC_WIDTH-1:0] == '0);
-  assign rs2_inf = fp_madd_inputs.rs2_special_case[3];//(rs2_expo[0] == '1) && (rs2_frac[0][FRAC_WIDTH-1:0] == '0);
-  assign rs1_NaN = |fp_madd_inputs.rs1_special_case[2:1];//(rs1_expo[0] == '1) && (rs1_frac[0][FRAC_WIDTH-1:0] != '0);
-  assign rs2_NaN = |fp_madd_inputs.rs2_special_case[2:1];//(rs2_expo[0] == '1) && (rs2_frac[0][FRAC_WIDTH-1:0] != '0);
+  assign rs1_zero = fp_madd_inputs.rs1_special_case[0];
+  assign rs2_zero = fp_madd_inputs.rs2_special_case[0];
+  assign rs1_inf = fp_madd_inputs.rs1_special_case[3];
+  assign rs2_inf = fp_madd_inputs.rs2_special_case[3];
+  assign rs1_NaN = |fp_madd_inputs.rs1_special_case[2:1];
+  assign rs2_NaN = |fp_madd_inputs.rs2_special_case[2:1];
   assign invalid_operation[0] = (((rs1_zero & rs2_inf) | (rs1_inf & rs2_zero)) & rs2 != CANONICAL_NAN)
                               | (rs1 == SNAN) | (rs2 == SNAN); 
   assign output_QNaN[0] = invalid_operation[0] | rs1_NaN | rs2_NaN;
@@ -162,6 +163,7 @@ module fp_mul_madd_fused (
 
   ////////////////////////////////////////////////////
   //Output
+  //pre-calculate clz for left shift
   generate if (FRAC_WIDTH+2 <= 32) begin
     localparam left_shift_amt_bias = (32 - (FRAC_WIDTH + 1));
     clz frac_clz (
@@ -230,6 +232,7 @@ module fp_mul_madd_fused (
   assign fma_mul_wb.id = id[1];
   assign fma_mul_wb.rd = {result_sign[0], result_expo[0][EXPO_WIDTH-1:0], result_frac[0][FRAC_WIDTH-1-:FRAC_WIDTH]};
   assign fma_mul_outputs.is_fma = done[1] & instruction[2][2];
+  assign fma_mul_outputs.mul_wb_rd_expo_overflow = result_expo[0][EXPO_WIDTH];
   assign fma_mul_outputs.mul_wb_rd_hidden = result_frac[0][FRAC_WIDTH+0];
   assign fma_mul_outputs.mul_wb_rd_safe = result_frac[0][FRAC_WIDTH+1];
   assign fma_mul_outputs.mul_wb = fma_mul_wb;
@@ -243,12 +246,10 @@ module fp_mul_madd_fused (
   assign fma_mul_outputs.instruction = instruction[2];
   assign fma_mul_outputs.invalid_operation = invalid_operation[2];
   assign fma_mul_outputs.rs1_special_case = {output_inf[2], 1'b0, output_QNaN[2], output_zero[2]};
-  logic [EXPO_WIDTH-1:0] rs3_expo;
-  logic [EXPO_WIDTH:0] result_expo_abs;
   assign rs3_expo = rs3[2][FLEN-2-:EXPO_WIDTH];
+
   generate if (ENABLE_SUBNORMAL) begin
     // subnormal expo is implicitly 1 
-    assign result_expo_abs = result_expo_intermediate[EXPO_WIDTH+1] ? -result_expo_intermediate[EXPO_WIDTH:0] : result_expo_intermediate[EXPO_WIDTH:0];
     assign expo_diff = result_expo_intermediate - ((EXPO_WIDTH+2)'(rs3_expo) + (EXPO_WIDTH+2)'({~rs3_hidden_bit[2]}));
     assign expo_diff_negate = ((EXPO_WIDTH+2)'(rs3_expo) + (EXPO_WIDTH+2)'({~rs3_hidden_bit[2]})) - result_expo_intermediate;
     assign fma_mul_outputs.expo_diff = expo_diff[EXPO_WIDTH+1] ? expo_diff_negate[EXPO_WIDTH:0] : expo_diff[EXPO_WIDTH:0];

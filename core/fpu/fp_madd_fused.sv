@@ -92,6 +92,7 @@ module fp_madd_fused_top (
   assign fma_add_inputs.rs1_special_case = fma_mul_outputs_r.rs1_special_case;//4'(fma_mul_outputs_r.rs1_zero);
   assign fma_add_inputs.rs1_hidden_bit = fma_mul_outputs_r.mul_wb_rd_hidden;
   assign fma_add_inputs.rs1_safe_bit = fma_mul_outputs_r.mul_wb_rd_safe;
+  assign fma_add_inputs.rs1_expo_overflow = fma_mul_outputs_r.mul_wb_rd_expo_overflow;
   assign fma_add_inputs.rs2 = fma_mul_outputs_r.rs3; 
   assign fma_add_inputs.rs2_special_case = fma_mul_outputs_r.rs2_special_case;
   assign fma_add_inputs.rs2_hidden_bit = fma_mul_outputs_r.rs3_hidden_bit;
@@ -117,6 +118,7 @@ module fp_madd_fused_top (
   assign add_inputs_fifo_data_in.rs1_special_case = fp_madd_inputs.rs1_special_case;
   assign add_inputs_fifo_data_in.rs1_hidden_bit = fp_madd_inputs.rs1_hidden_bit;
   assign add_inputs_fifo_data_in.rs1_safe_bit = 0;
+  assign add_inputs_fifo_data_in.rs1_expo_overflow = 0;
   assign add_inputs_fifo_data_in.rs2 = fp_madd_inputs.rs2;
   assign add_inputs_fifo_data_in.rs2_special_case = fp_madd_inputs.rs2_special_case;
   assign add_inputs_fifo_data_in.rs2_hidden_bit = fp_madd_inputs.rs2_hidden_bit;

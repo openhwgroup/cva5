@@ -189,6 +189,7 @@ package fpu_types;
         logic [FLEN-1:0]    rs1;
         logic [FLEN-1:0]    rs2;
         logic               rs1_hidden_bit;
+        logic               rs1_expo_overflow;
         logic               rs2_hidden_bit;
         logic               rs1_safe_bit;
         logic               rs2_safe_bit;
@@ -316,6 +317,7 @@ package fpu_types;
     typedef struct packed {
       logic is_fma;
       fp_unit_writeback_t mul_wb;
+      logic mul_wb_rd_expo_overflow;
       logic mul_wb_rd_hidden;
       logic mul_wb_rd_safe;
       grs_t mul_grs;
