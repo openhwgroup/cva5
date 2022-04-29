@@ -104,12 +104,20 @@ module fp_div_core (
   assign grs[0] = |div.remainder;
 
   //exponent handling
-  assign result_expo_intermediate[0] = ((EXPO_WIDTH+1)'(rs1_expo) - (EXPO_WIDTH+1)'(rs1_left_shift_amt)) - 
-                                       ((EXPO_WIDTH+1)'(rs2_expo) - (EXPO_WIDTH+1)'(rs2_left_shift_amt)) + BIAS;
-  assign result_expo_intermediate_neg = -result_expo_intermediate[1];
-  assign right_shift = result_expo_intermediate[1][EXPO_WIDTH+1] | (~|result_expo_intermediate[1][EXPO_WIDTH:0]);
-  assign right_shift_amt = result_expo[EXPO_WIDTH-1:0] + EXPO_WIDTH'(right_shift);
-  assign result_expo = right_shift ? result_expo_intermediate_neg[EXPO_WIDTH:0] : result_expo_intermediate[1][EXPO_WIDTH:0];
+  generate if (ENABLE_SUBNORMAL) begin
+    assign result_expo_intermediate[0] = ((EXPO_WIDTH+1)'(rs1_expo) - (EXPO_WIDTH+1)'(rs1_left_shift_amt)) - 
+                                         ((EXPO_WIDTH+1)'(rs2_expo) - (EXPO_WIDTH+1)'(rs2_left_shift_amt)) + BIAS;
+    assign result_expo_intermediate_neg = -result_expo_intermediate[1];
+    assign right_shift = result_expo_intermediate[1][EXPO_WIDTH+1] | (~|result_expo_intermediate[1][EXPO_WIDTH:0]);
+    assign right_shift_amt = result_expo[EXPO_WIDTH-1:0] + EXPO_WIDTH'(right_shift);
+    assign result_expo = right_shift ? result_expo_intermediate_neg[EXPO_WIDTH:0] : result_expo_intermediate[1][EXPO_WIDTH:0];
+  end else begin
+    assign result_expo_intermediate[0] = (EXPO_WIDTH+1)'(rs1_expo) - (EXPO_WIDTH+1)'(rs2_expo) + BIAS;
+    assign result_expo_intermediate_neg = -result_expo_intermediate[1];
+    assign right_shift = result_expo_intermediate[1][EXPO_WIDTH+1] | (~|result_expo_intermediate[1][EXPO_WIDTH:0]);
+    assign right_shift_amt = result_expo[EXPO_WIDTH-1:0] + EXPO_WIDTH'(right_shift);
+    assign result_expo = right_shift ? result_expo_intermediate_neg[EXPO_WIDTH:0] : result_expo_intermediate[1][EXPO_WIDTH:0];
+  end endgenerate
 
   // calculate CLZ 
   logic [EXPO_WIDTH-1:0] clz, clz_with_prepended_0s, left_shift_amt;

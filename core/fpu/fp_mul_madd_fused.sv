@@ -255,10 +255,10 @@ module fp_mul_madd_fused (
     assign fma_mul_outputs.expo_diff = expo_diff[EXPO_WIDTH+1] ? expo_diff_negate[EXPO_WIDTH:0] : expo_diff[EXPO_WIDTH:0];
     assign fma_mul_outputs.swap = expo_diff[EXPO_WIDTH+1];
   end else begin
-    assign expo_diff = (result_expo[0]) - (rs3_expo);
-    assign expo_diff_negate = (rs3_expo) - (result_expo[0]);
+    assign expo_diff = (EXPO_WIDTH+2)'({result_expo[0] - rs3_expo});
+    assign expo_diff_negate = (EXPO_WIDTH+2)'({rs3_expo - result_expo[0]});
     assign fma_mul_outputs.swap = expo_diff[EXPO_WIDTH];
-    assign fma_mul_outputs.expo_diff = expo_diff[EXPO_WIDTH] ? expo_diff_negate : expo_diff;
+    assign fma_mul_outputs.expo_diff = expo_diff[EXPO_WIDTH] ? expo_diff_negate[EXPO_WIDTH:0] : expo_diff[EXPO_WIDTH:0];
   end endgenerate
 
   always_ff @ (posedge clk) begin 

@@ -43,11 +43,7 @@ module fp_sqrt (
   assign invalid_operation = rs1_sign & ~is_zero;
   assign output_inf = is_inf & ~rs1_sign;
   assign output_QNaN = is_SNaN | is_QNaN | invalid_operation;
-  generate if (ENABLE_SUBNORMAL)
-    assign output_zero = is_zero;
-    else 
-    assign output_zero = is_zero | ~hidden_bit;
-  endgenerate
+  assign output_zero = is_zero;
   assign output_one = rs1_expo[EXPO_WIDTH-1:0] == {1'b0, {(EXPO_WIDTH-1){1'b1}}} & ~|rs1[0+:FRAC_WIDTH] & ~rs1_sign;
   assign early_terminate = output_inf | output_zero | output_QNaN | output_one;
 
@@ -182,7 +178,7 @@ module fp_sqrt (
     assign unbiased_result_expo = unbiased_expo[EXPO_WIDTH] ? -unbiased_result_expo_abs : unbiased_result_expo_abs;
     assign {result_expo_overflow, result_expo} = unbiased_result_expo + BIAS;
   end else begin
-    logic [EXPO_WIDTH-1:0] unbiased_expo, unbiased_expo_abs, unbiased_result_expo_abs, unbiased_result_expo;
+    logic [EXPO_WIDTH:0] unbiased_expo, unbiased_expo_abs, unbiased_result_expo_abs, unbiased_result_expo;
     assign odd_exponent_r = ~rs1_expo_r[0];//unbiased_expo[0];
     assign unbiased_expo = rs1_expo_r - EXPO_WIDTH'(odd_exponent_r) - BIAS;
     assign unbiased_expo_abs = unbiased_expo[EXPO_WIDTH-1] ? -unbiased_expo : unbiased_expo;

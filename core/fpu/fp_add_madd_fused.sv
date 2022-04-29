@@ -253,12 +253,12 @@ module fp_add_madd_fused (
   assign fp_wb.rd = output_special_case[1] ? special_case_results[0] : 
                                              {result_sign[1], result_expo[1], result_frac[1][FRAC_WIDTH-1:0]};
   assign fp_wb.right_shift_amt = EXPO_WIDTH'({fp_wb.carry, ~fp_wb.carry & fp_wb.safe});
-  generate if (ENABLE_SUBNORMAL) begin
-    assign fp_wb.subnormal = ~|result_expo[1];
-    assign fp_wb.right_shift = fp_wb.carry | fp_wb.safe;
-  end else begin
-    assign fp_wb.right_shift = fp_wb.carry | fp_wb.safe;
-  end endgenerate
+  assign fp_wb.subnormal = ~|result_expo[1];
+  assign fp_wb.right_shift = fp_wb.carry | fp_wb.safe;
+  //generate if (ENABLE_SUBNORMAL) begin
+  //end else begin
+    //assign fp_wb.right_shift = fp_wb.carry | fp_wb.safe;
+  //end endgenerate
 
   //pipeline 
   always_ff @ (posedge clk) begin 
