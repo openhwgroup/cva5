@@ -50,7 +50,7 @@ module load_store_unit
 
         axi_interface.master m_axi,
         avalon_interface.master m_avalon,
-        wishbone_interface.master m_wishbone,
+        wishbone_interface.master dwishbone,
 
         local_memory_interface.master data_bram,
 
@@ -338,7 +338,7 @@ endgenerate
                 wishbone_master wishbone_bus (
                     .clk (clk),
                     .rst (rst),
-                    .m_wishbone (m_wishbone),
+                    .wishbone (dwishbone),
                     .ls (sub_unit[BUS_ID])
                 );
             else if (CONFIG.PERIPHERAL_BUS_TYPE == AVALON_BUS)  begin

@@ -239,7 +239,7 @@ module fetch
         wishbone_master iwishbone_bus (
             .clk (clk),
             .rst (rst),
-            .m_wishbone (iwishbone),
+            .wishbone (iwishbone),
             .ls (sub_unit[BUS_ID])
         );
     end

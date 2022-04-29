@@ -112,22 +112,25 @@ interface avalon_interface;
 endinterface
 
 interface wishbone_interface;
-    logic [31:0] addr;
-    logic we;
+    logic [31:0] adr;
+    logic [31:0] dat_w;
     logic [3:0] sel;
-    logic [31:0] readdata;
-    logic [31:0] writedata;
-    logic stb;
     logic cyc;
+    logic stb;
+    logic we;
+    logic cti;
+    logic bte;
+    logic [31:0] dat_r;
     logic ack;
+    logic err;
 
-    modport master (input readdata, ack,
-            output addr, we, sel, writedata, stb, cyc);
-    modport slave (output readdata, ack,
-            input addr, we, sel, writedata, stb, cyc);
+    modport master (input dat_r, ack, err,
+            output adr, dat_w, sel, cyc, stb, we, cti, bte);
+    modport slave (output dat_r, ack, err,
+            input adr, dat_w, sel, cyc, stb, we, cti, bte);
 
 `ifdef __CVA5_FORMAL__
-    modport formal (input readdata, ack, addr, we, sel, writedata, stb, cyc);
+    modport formal (input adr, dat_w, sel, cyc, stb, we, cti, bte, dat_r, ack, err);
 `endif
 
 endinterface

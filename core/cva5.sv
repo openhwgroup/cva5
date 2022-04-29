@@ -42,7 +42,7 @@ module cva5
 
         axi_interface.master m_axi,
         avalon_interface.master m_avalon,
-        wishbone_interface.master m_wishbone,
+        wishbone_interface.master dwishbone,
         wishbone_interface.master iwishbone,
 
         output trace_outputs_t tr,
@@ -493,7 +493,7 @@ module cva5
         .sc_success (sc_success),                                       
         .m_axi (m_axi),
         .m_avalon (m_avalon),
-        .m_wishbone (m_wishbone),                                       
+        .dwishbone (dwishbone),                                       
         .data_bram (data_bram),
         .wb_snoop (wb_snoop),
         .retire_ids (retire_ids),

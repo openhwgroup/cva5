@@ -30,7 +30,7 @@ module wishbone_master
         input logic clk,
         input logic rst,
 
-        wishbone_interface.master m_wishbone,
+        wishbone_interface.master wishbone,
         memory_sub_unit_interface.responder ls
     );
     //implementation
@@ -38,16 +38,16 @@ module wishbone_master
 
     always_ff @ (posedge clk) begin
         if (ls.new_request) begin
-            m_wishbone.addr <= ls.addr;
-            m_wishbone.we <= ls.we;
-            m_wishbone.sel <= ls.be;
-            m_wishbone.writedata <= ls.data_in;
+            wishbone.adr <= ls.addr;
+            wishbone.we <= ls.we;
+            wishbone.sel <= ls.be;
+            wishbone.dat_w <= ls.data_in;
         end
     end
 
     set_clr_reg_with_rst #(.SET_OVER_CLR(0), .WIDTH(1), .RST_VALUE(1)) ready_m (
       .clk, .rst,
-      .set(m_wishbone.ack),
+      .set(wishbone.ack),
       .clr(ls.new_request),
       .result(ls.ready)
     );
@@ -55,31 +55,31 @@ module wishbone_master
     always_ff @ (posedge clk) begin
         if (rst)
             ls.data_valid <= 0;
-        else if (~m_wishbone.we & m_wishbone.ack)
+        else if (~wishbone.we & wishbone.ack)
             ls.data_valid <= 1;
         else
             ls.data_valid <= 0;
     end
 
     always_ff @ (posedge clk) begin
-        if (m_wishbone.ack)
-            ls.data_out <= m_wishbone.readdata;
+        if (wishbone.ack)
+            ls.data_out <= wishbone.dat_r;
         else
             ls.data_out <= 0;
     end
 
     always_ff @ (posedge clk) begin
         if (rst) begin
-            m_wishbone.stb <= 0;
-            m_wishbone.cyc <= 0;
+            wishbone.stb <= 0;
+            wishbone.cyc <= 0;
         end
         else if (ls.new_request) begin
-            m_wishbone.stb <= 1;
-            m_wishbone.cyc <= 1;
+            wishbone.stb <= 1;
+            wishbone.cyc <= 1;
         end
-        else if (m_wishbone.ack) begin
-            m_wishbone.stb <= 0;
-            m_wishbone.cyc <= 0;
+        else if (wishbone.ack) begin
+            wishbone.stb <= 0;
+            wishbone.cyc <= 0;
         end
     end
 

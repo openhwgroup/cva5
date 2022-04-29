@@ -184,7 +184,7 @@ module axi_l2_test # (
     axi_interface m_axi();
     //axi_interface ddr_axi();
     avalon_interface m_avalon();
-    wishbone_interface m_wishbone();
+    wishbone_interface dwishbone();
 
     trace_outputs_t tr;
 
