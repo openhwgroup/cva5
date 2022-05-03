@@ -240,7 +240,7 @@ module fp_writeback
     fp_round_simplified round(
       .sign(result_sign_norm),
       .rm(normalize_packet_r.rm),
-      .grs(grs_norm), 
+      .grs({grs_norm[GRS_WIDTH-1-:2], |grs_norm[0+:GRS_WIDTH-2]}), 
       .lsb(result_frac_norm[0]),
       .roundup(round_packet.roundup),
       .result_if_overflow(result_if_overflow)

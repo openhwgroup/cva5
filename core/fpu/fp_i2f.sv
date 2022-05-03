@@ -104,7 +104,7 @@ module fp_i2f (
   //Output
   assign wb.rd = i2f_rd;
   assign wb.clz = i2f_clz;
-  assign wb.grs = i2f_grs;
+  assign wb.grs = {i2f_grs, {($bits(grs_t)-3){1'b0}}};
   assign wb.fflags = 0;
   assign wb.hidden = 0;
   assign wb.rm = fp_i2f_inputs_r.rm;

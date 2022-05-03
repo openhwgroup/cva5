@@ -145,20 +145,20 @@ module fp_mul_madd_fused (
     assign result_expo_intermediate_neg = - result_expo_intermediate;
     assign right_shift[0] = result_expo_intermediate[EXPO_WIDTH+1] | (~|result_expo_intermediate[EXPO_WIDTH:0]);
     assign possible_subnormal[0] = right_shift[0];
-    assign result_expo[0] = result_expo_intermediate[EXPO_WIDTH+1] ? result_expo_intermediate_neg[EXPO_WIDTH:0] : result_expo_intermediate[EXPO_WIDTH:0];
+    assign result_expo[0] = {result_expo_intermediate[EXPO_WIDTH+1] ? result_expo_intermediate_neg[EXPO_WIDTH:0] : result_expo_intermediate[EXPO_WIDTH:0]} & {(EXPO_WIDTH+1){~output_zero[2]}};
   end else begin
     // TODO: assert possible_subnormal to drive expo_norm 0 in normalization
     // the fraction does not need to be driven to 0 as special_case_detection only looks at exponent field
     assign result_expo_intermediate = ({1'b0, rs1_expo[2]} + {1'b0, rs2_expo[2]}) - (EXPO_WIDTH+2)'(BIAS);
     assign possible_subnormal[0] = result_expo_intermediate[EXPO_WIDTH+1];
-    assign result_expo[0] = result_expo_intermediate[EXPO_WIDTH:0];
+    assign result_expo[0] = result_expo_intermediate[EXPO_WIDTH:0] & {(EXPO_WIDTH+1){~output_zero[2]}};
   end endgenerate
 
   always_comb begin 
     result_sign[0] = rs1_sign[2] ^ rs2_sign[2];
     result_frac[0] = result_frac_intermediate[2*FRAC_WIDTH+2-1-:(2+FRAC_WIDTH)]; // {safe_bit, hidden_bit, fraction}
     residual_bits = result_frac_intermediate[0+:FRAC_WIDTH]; // bottom bits preserved for rounding
-    grs[0] = {residual_bits[FRAC_WIDTH-1-:2], |residual_bits[FRAC_WIDTH-3:0]};
+    grs[0] = {residual_bits[FRAC_WIDTH-1-:(GRS_WIDTH-1)], |residual_bits[0+:FRAC_WIDTH-(GRS_WIDTH-1)]};
   end
 
   ////////////////////////////////////////////////////
@@ -250,8 +250,8 @@ module fp_mul_madd_fused (
 
   generate if (ENABLE_SUBNORMAL) begin
     // subnormal expo is implicitly 1 
-    assign expo_diff = result_expo_intermediate - ((EXPO_WIDTH+2)'(rs3_expo) + (EXPO_WIDTH+2)'({~rs3_hidden_bit[2]}));
-    assign expo_diff_negate = ((EXPO_WIDTH+2)'(rs3_expo) + (EXPO_WIDTH+2)'({~rs3_hidden_bit[2]})) - result_expo_intermediate;
+    assign expo_diff = result_expo[0] - ((EXPO_WIDTH+2)'(rs3_expo) + (EXPO_WIDTH+2)'({~rs3_hidden_bit[2]}));
+    assign expo_diff_negate = ((EXPO_WIDTH+2)'(rs3_expo) + (EXPO_WIDTH+2)'({~rs3_hidden_bit[2]})) - result_expo[0];
     assign fma_mul_outputs.expo_diff = expo_diff[EXPO_WIDTH+1] ? expo_diff_negate[EXPO_WIDTH:0] : expo_diff[EXPO_WIDTH:0];
     assign fma_mul_outputs.swap = expo_diff[EXPO_WIDTH+1];
   end else begin

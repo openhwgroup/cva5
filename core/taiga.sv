@@ -64,8 +64,6 @@ module taiga
     localparam int unsigned CSR_UNIT_ID = 32'd2;
     localparam int unsigned MUL_UNIT_ID = CSR_UNIT_ID + int'(CONFIG.INCLUDE_MUL);
     localparam int unsigned DIV_UNIT_ID = MUL_UNIT_ID + int'(CONFIG.INCLUDE_DIV);
-    localparam int unsigned F2I_UNIT_ID = DIV_UNIT_ID + 1;
-    localparam int unsigned FCMP_UNIT_ID = F2I_UNIT_ID + 1;
     //Non-writeback units
     localparam int unsigned BRANCH_UNIT_ID = DIV_UNIT_ID + 1;
     localparam int unsigned IEC_UNIT_ID = BRANCH_UNIT_ID + 1;
@@ -717,7 +715,7 @@ module taiga
         );
     endgenerate
 
-    generate if (INCLUDE_FPU)
+    generate if (INCLUDE_FPU) begin : fpu_block
         fpu_top #(
             .FP_NUM_UNITS(FP_NUM_UNITS),
             .FP_UNIT_IDS(FP_UNIT_IDS),
@@ -748,7 +746,7 @@ module taiga
             .oldest_fp_issued_fifo_pop (oldest_fp_issued_fifo_pop),
             .fflags (fflags_unit)
         );
-    endgenerate
+    end endgenerate
 
     ////////////////////////////////////////////////////
     //Writeback

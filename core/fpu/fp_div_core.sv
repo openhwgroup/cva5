@@ -147,7 +147,7 @@ module fp_div_core (
   assign fp_wb.hidden = result_hidden;
   assign fp_wb.safe = 1'b0;
   assign fp_wb.carry = 1'b0;
-  assign fp_wb.grs = grs & {$bits(grs_t){~output_special_case[0]}};
+  assign fp_wb.grs = {grs & {3{~output_special_case[0]}}, {($bits(grs_t)-3){1'b0}}};
 
   assign fp_wb.expo_overflow = result_expo[EXPO_WIDTH] & ~output_special_case[0];
   assign fp_wb.subnormal = right_shift & ~output_special_case[0];

@@ -620,7 +620,7 @@ module decode_and_issue
 
     ////////////////////////////////////////////////////
     //FPU support
-    generate if (CONFIG.FP.INCLUDE_FPU) begin
+    generate if (CONFIG.FP.INCLUDE_FPU) begin : fp_decode_and_issue_block
         fp_decode_and_issue #(
             .CONFIG(CONFIG),
             .FP_NUM_UNITS(FP_NUM_UNITS),
@@ -752,13 +752,13 @@ module decode_and_issue
     //Trace Interface
     generate if (ENABLE_TRACE_INTERFACE) begin
         assign tr_operand_stall = issue.stage_valid & ~gc.fetch_flush & ~gc.issue_hold & ~operands_ready & |issue_ready;
-        assign tr_unit_stall = issue_valid & ~gc.fetch_flush & ~|issue_ready;
+        assign tr_unit_stall = issue_valid & ~issue.is_float & ~gc.fetch_flush & ~|issue_ready;
         assign tr_no_id_stall = (~issue.stage_valid & ~pc_id_available & ~gc.fetch_flush); //All instructions in execution pipeline
         assign tr_no_instruction_stall = (~tr_no_id_stall & ~issue.stage_valid) | gc.fetch_flush;
         assign tr_other_stall = issue.stage_valid & ~instruction_issued & ~(tr_operand_stall | tr_unit_stall | tr_no_id_stall | tr_no_instruction_stall);
         assign tr_branch_operand_stall = tr_operand_stall & unit_needed_issue_stage[UNIT_IDS.BR];
         assign tr_alu_operand_stall = tr_operand_stall & unit_needed_issue_stage[UNIT_IDS.ALU] & ~unit_needed_issue_stage[UNIT_IDS.BR];
-        assign tr_ls_operand_stall = tr_operand_stall & unit_needed_issue_stage[UNIT_IDS.LS];
+        assign tr_ls_operand_stall = tr_operand_stall & unit_needed_issue_stage[UNIT_IDS.LS] & ~issue.is_float;
         assign tr_div_operand_stall = tr_operand_stall & unit_needed_issue_stage[UNIT_IDS.DIV];
 
         //Instruction Mix
@@ -774,7 +774,7 @@ module decode_and_issue
             end
         end
 
-        assign tr_instruction_issued_dec = instruction_issued;
+        assign tr_instruction_issued_dec = instruction_issued & ~issue.is_float;
         assign tr_instruction_pc_dec = issue.pc;
         assign tr_instruction_data_dec = issue.instruction;
     end endgenerate

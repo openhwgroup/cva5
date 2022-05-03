@@ -190,7 +190,7 @@ module fp_sqrt (
   ////////////////////////////////////////////////////
   assign wb.done = done_r;// | sqrt.done;
   assign wb.id = in_progress_attr.id;
-  assign wb.grs = {grs[0][2:1], grs[0][0] | |sqrt.remainder};
+  assign wb.grs = {{grs[0][2:1], grs[0][0] | |sqrt.remainder}, {($bits(grs_t)-3){1'b0}}};
   assign wb.fflags = {invalid_operation, 3'b000, |grs[0]};
   assign wb.rm = rm;
   assign wb.carry = 0;

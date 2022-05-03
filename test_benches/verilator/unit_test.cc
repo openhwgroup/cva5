@@ -240,11 +240,30 @@ void unit_test<TB, INT, FLOAT>::GenInputs() {
   }
 
   // generate inputs
+  std::ifstream fdiv_inputs("/localhdd/yuhuig/Research/Tests/subnormal/"
+                            "test_benches/verilator/fdiv_tests.txt");
+
   for (int i = 0; i < input_count; i++) {
-    FLOAT rs1_d = xoshiro256ss(state);
-    FLOAT rs2_d = xoshiro256ss(state);
-    INT rs1 = *(INT *)(&rs1_d);
-    INT rs2 = *(INT *)(&rs2_d);
+    std::getline(fdiv_inputs, line);
+
+    int j = 0;
+    std::istringstream iss(line);
+    std::vector<std::string> fdiv_input_rs1_rs2;
+    while (iss && j < 2) {
+      std::string rs;
+      if (!getline(iss, rs, ',')) {
+        break;
+      }
+      fdiv_input_rs1_rs2.push_back(rs);
+    }
+    INT rs1 = std::stoull(fdiv_input_rs1_rs2[0], NULL, 16);
+    INT rs2 = std::stoull(fdiv_input_rs1_rs2[1], NULL, 16);
+    fdiv_input_rs1_rs2.clear();
+
+    //FLOAT rs1_d = xoshiro256ss(state);
+    //FLOAT rs2_d = xoshiro256ss(state);
+    //INT rs1 = *(INT *)(&rs1_d);
+    //INT rs2 = *(INT *)(&rs2_d);
     test_queue.push(test_case_t(rs1, rs2));
 #if DIV_SQRT_UNIT == 1
 #if IS_DIV == 1

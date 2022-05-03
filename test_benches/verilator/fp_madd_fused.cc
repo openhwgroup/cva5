@@ -7,6 +7,7 @@
 #include "verilated_vcd_c.h"
 #include <algorithm>
 #include <cfenv>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
@@ -23,7 +24,6 @@
 #include <stdlib.h>
 #include <string>
 #include <vector>
-#include <cmath>
 using namespace tabulate;
 vluint64_t main_time = 0; // Current simulation time
 // This is a 64-bit integer to reduce wrap over issues and
@@ -95,12 +95,24 @@ long double stdev(std::vector<double> vec, long double &mean);
 double rand_normal_dp() {
   std::random_device rd;
   std::mt19937 gen(rd());
-  std::uniform_int_distribution<unsigned long> dis(std::numeric_limits<unsigned long>::min(),
-                                      std::numeric_limits<unsigned long>::max());
+  std::uniform_int_distribution<unsigned long> dis(
+      std::numeric_limits<unsigned long>::min(),
+      std::numeric_limits<unsigned long>::max());
   FP fp;
   fp.fp_hex = dis(gen);
   fp.fp_hex = fp.fp_hex & 0xffefffffffffffff;
   return (fp.fp);
+}
+
+std::vector<std::string> split(std::string s) {
+  std::vector<std::string> vec;
+  int pos = 0;
+  while (std::string::npos != (pos = s.find(',', pos))) {
+    vec.push_back(s.substr(0, pos));
+    s = s.substr(pos + 1);
+  }
+  vec.push_back(s);
+  return vec;
 }
 
 double rand_subnormal_dp() {
@@ -133,8 +145,11 @@ long double stdev(std::vector<double> vec, long double &mean) {
   return stdev;
 }
 
+std::ifstream fmul_inputs("/localhdd/yuhuig/Research/Tests/subnormal/"
+                          "test_benches/verilator/fma_tests.txt");
+
 int main(int argc, char **argv) {
-  int test_number = 20;
+  int test_number = 100000;
   int mca_iteration_max = 1;
   std::vector<std::vector<long double>> rounding_error;
   rounding_error.push_back(std::vector<long double>());
@@ -149,11 +164,6 @@ int main(int argc, char **argv) {
   std::ostringstream opObj;
   std::ostringstream testnumObj;
   std::ostringstream expectedObj;
-  // opObj << std::fixed << std::setprecision(15);
-  // rs1Obj << std::fixed << std::setprecision(15);
-  // rs2Obj << std::fixed << std::setprecision(15);
-  // rs3Obj << std::fixed << std::setprecision(15);
-  // expectedObj << std::fixed << std::setprecision(15);
   Table universal_constants;
   Table inputs;
   inputs.add_row({"test num", "op", "rs1", "rs2", "rs3", "expected"});
@@ -168,18 +178,38 @@ int main(int argc, char **argv) {
   } else if (rm == 2) {
     std::fesetround(FE_DOWNWARD);
   }
-  for (int i = 0; i < test_number; i++) {
+  // for (int i = 0; i < test_number; i++) {
+  std::string line;
+  int i;
+  while (std::getline(fmul_inputs, line) && (i < test_number)) {
+    std::getline(fmul_inputs, line);
+    std::getline(fmul_inputs, line);
     long double result = 0.0;
-    int op = FMADD;
+    int op = FNMSUB;
     int instruction = FMA_instruction[0]; //[rand()%3];
-    int fn7 = fadd_fn7[1];
+    int fn7 = fadd_fn7[0];
     string operation;
-    ull sub1 = 0xf84e53fca33ae761;
-    ull sub2 = 0x68649a35afea40e5;
-    ull sub3 = 0x7a87cc742c685dd4;
-    double rs1_L = rand_normal_dp();
-    double rs2_L = rand_normal_dp();
-    double rs3_L = rand_subnormal_dp();
+
+    std::istringstream iss(line);
+    int j = 0;
+    std::vector<std::string> fmul_input_rs1_rs2;
+    // std::cout << line << "\n";
+    while (iss && j < 3) {
+      string rs;
+      if (!getline(iss, rs, ',')) {
+        break;
+      }
+      fmul_input_rs1_rs2.push_back(rs);
+    }
+    ull sub1, sub2, sub3;
+    sub1 = std::stoull(fmul_input_rs1_rs2[0], NULL, 16);
+    sub2 = std::stoull(fmul_input_rs1_rs2[1], NULL, 16);
+    sub3 = std::stoull(fmul_input_rs1_rs2[2], NULL, 16);
+    fmul_input_rs1_rs2.clear();
+    // std::cout << std::hex << sub1 << " " << sub2 << " " << sub3 << "\n";
+    double rs1_L = *(double *)(&sub1);
+    double rs2_L = *(double *)(&sub2);
+    double rs3_L = *(double *)(&sub3);
     double rs1 = rs1_L;
     double rs2 = rs2_L;
     double rs3 = rs3_L;
@@ -252,6 +282,7 @@ int main(int argc, char **argv) {
 
     inputs.add_row({testnumObj.str(), opObj.str(), rs1Obj.str(), rs2Obj.str(),
                     rs3Obj.str(), expectedObj.str()});
+    i++;
   }
   std::cout << inputs << std::endl;
 
@@ -368,11 +399,10 @@ int main(int argc, char **argv) {
           expected_output.push_back(expected_result);
           dut_mean.push_back(mean);
           dut_rounding_error_avg.push_back(
-              std::accumulate(rounding_error[test_count].begin(),
-                              rounding_error[test_count].end(), 0.0,
-                              [](double a, double b) {
-                                return abs(a) + abs(b);
-                              }) /
+              std::accumulate(
+                  rounding_error[test_count].begin(),
+                  rounding_error[test_count].end(), 0.0,
+                  [](double a, double b) { return abs(a) + abs(b); }) /
               rounding_error[test_count].size());
           mca_mul_count = 0;
           test_count++;
@@ -401,11 +431,10 @@ int main(int argc, char **argv) {
           expected_output.push_back(expected_result);
           dut_mean.push_back(mean);
           dut_rounding_error_avg.push_back(
-              std::accumulate(rounding_error[test_count].begin(),
-                              rounding_error[test_count].end(), 0.0,
-                              [](double a, double b) {
-                                return abs(a) + abs(b);
-                              }) /
+              std::accumulate(
+                  rounding_error[test_count].begin(),
+                  rounding_error[test_count].end(), 0.0,
+                  [](double a, double b) { return abs(a) + abs(b); }) /
               rounding_error[test_count].size());
           mca_madd_count = 0;
           test_count++;
@@ -434,11 +463,10 @@ int main(int argc, char **argv) {
           expected_output.push_back(expected_result);
           dut_mean.push_back(mean);
           dut_rounding_error_avg.push_back(
-              std::accumulate(rounding_error[test_count].begin(),
-                              rounding_error[test_count].end(), 0.0,
-                              [](double a, double b) {
-                                return abs(a) + abs(b);
-                              }) /
+              std::accumulate(
+                  rounding_error[test_count].begin(),
+                  rounding_error[test_count].end(), 0.0,
+                  [](double a, double b) { return abs(a) + abs(b); }) /
               rounding_error[test_count].size());
           mca_add_count = 0;
           test_count++;

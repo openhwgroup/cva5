@@ -167,9 +167,13 @@ module fp_add_madd_fused (
   assign align_shift_amt = expo_diff[0];
   assign expo_diff_larger_than_frac_width[0] = |align_shift_amt[EXPO_WIDTH-1:SHIFT_AMT_WIDTH];
   assign shft_amt = align_shift_amt[SHIFT_AMT_WIDTH-1:0];
-  assign {rs2_frac_aligned[0], grs_in[2:1]} = {rs2_frac[0], rs2_grs[0][GRS_WIDTH-1-:2]} >> align_shift_amt;
-  assign rs2_grs_sticky_bit[0] = rs2_grs[0][0];
-  assign grs_in[0] = rs2_frac_sticky_bit;
+  generate if (FULL_GRS) begin 
+    assign {rs2_frac_aligned[0], grs_in} = {rs2_frac[0], rs2_grs[0]} >> align_shift_amt;
+  end else begin
+    assign {rs2_frac_aligned[0], grs_in[2:1]} = {rs2_frac[0], rs2_grs[0][GRS_WIDTH-1-:2]} >> align_shift_amt;
+    assign rs2_grs_sticky_bit[0] = rs2_grs[0][0];
+    assign grs_in[0] = rs2_frac_sticky_bit;
+  end endgenerate
 
   sticky_bit_logic # (.INPUT_WIDTH(FRAC_WIDTH+2)) frac_sticky (
     .shifter_input (rs2_frac[0]),
@@ -188,7 +192,7 @@ module fp_add_madd_fused (
 
   //LUT adder
   assign adder_in1 = {1'b0, rs1_frac[1], rs1_grs[1]};
-  assign adder_in2 = {1'b0, rs2_frac_aligned[1], {rs2_grs[1][2:1], rs2_grs[1][0] | rs2_grs_sticky_bit[1]}};
+  assign adder_in2 = {1'b0, rs2_frac_aligned[1], {rs2_grs[1][GRS_WIDTH-1-:(GRS_WIDTH-1)], rs2_grs[1][0] | rs2_grs_sticky_bit[1]}};
   assign adder_in1_1s = adder_in1;
   assign adder_in2_1s = adder_in2 ^ {(FRAC_WIDTH+GRS_WIDTH+3){subtract[1]}};
   assign in1 = {adder_in1_1s, subtract[1]};

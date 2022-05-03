@@ -176,7 +176,9 @@ module taiga_sim
         output logic taiga_events [0:$bits(taiga_trace_events_t)-1],
         output logic [31:0] instruction_pc_dec,
         input logic [63:0] debug_instructions,
-        output logic [31:0] instruction_data_dec
+        output logic [31:0] instruction_data_dec,
+        output logic fp_taiga_events [0:$bits(fp_taiga_trace_events_t)-1],
+        output logic LargeSigTrace [0:$bits(LargeSigTrace_t)-1]
     );
 
     logic [3:0] WRITE_COUNTER_MAX;
@@ -241,6 +243,7 @@ module taiga_sim
     wishbone_interface m_wishbone();
 
     trace_outputs_t tr;
+    fp_trace_outputs_t fp_tr;
 
     l2_requester_interface l2[L2_NUM_PORTS-1:0]();
     l2_memory_interface mem();
@@ -445,6 +448,18 @@ module taiga_sim
             taiga_events[$bits(taiga_trace_events_t)-1-i] = taiga_events_packed[i];
     end
 
+    logic [$bits(fp_taiga_trace_events_t)-1:0] fp_taiga_events_packed;
+    logic [$bits(LargeSigTrace_t)-1:0] LargeSigTrace_packed;
+    assign fp_taiga_events_packed = fp_tr.events;
+    assign LargeSigTrace_packed = fp_tr.sigs;
+    always_comb begin
+       foreach(fp_taiga_events_packed[i])
+         fp_taiga_events[$bits(fp_taiga_trace_events_t)-1-i] = fp_taiga_events_packed[i];
+
+       foreach(LargeSigTrace_packed[i])
+         LargeSigTrace[$bits(LargeSigTrace_t)-1-i] = LargeSigTrace_packed[i];
+    end 
+
     ////////////////////////////////////////////////////
     //Performs the lookups to provide the speculative architectural register file with
     //standard register names for simulation purposes
@@ -482,7 +497,232 @@ module taiga_sim
     assign store_queue_empty = cpu.sq_empty;
     assign load_store_idle = cpu.load_store_idle;
 
+
+    ////////////////////////////////////////////////////
+    //FPU Tracer 
+    generate if (ENABLE_TRACE_INTERFACE & INCLUDE_FPU) begin : fpu_tracer
+        logic fp_instruction_issued_dec;
+        logic fp_operand_stall;
+        logic fp_unit_stall;
+        logic fp_no_id_stall;
+        logic fp_no_instruction_stall;
+        logic fp_other_stall;
+        logic fls_operand_stall;
+        logic fmadd_operand_stall;
+        logic fadd_operand_stall;
+        logic fmul_operand_stall;
+        logic fdiv_operand_stall;
+        logic fsqrt_operand_stall;
+        logic fcmp_operand_stall;
+        logic fsign_inject_operand_stall;
+        logic fclass_operand_stall;
+        logic fcvt_operand_stall;
+        logic fp_load_op;
+        logic fp_store_op;
+        logic fp_fmadd_op;
+        logic fp_add_op;
+        logic fp_mul_op;
+        logic fp_div_op;
+        logic fp_sqrt_op;
+        logic fp_cvt_op;
+        logic fp_cmp_op;
+        logic fp_minmax_op;
+        logic fp_class_op;
+        logic fp_sign_inject_op;
+        logic operand_stall_due_to_fls;
+        logic operand_stall_due_to_fmadd;
+        logic operand_stall_due_to_fdiv_sqrt;
+        logic operand_stall_due_to_wb2fp;
+        logic fmadd_wb_stall;
+        logic fmul_wb_stall;
+        logic fdiv_sqrt_wb_stall;
+        logic wb2fp_wb_stall;
+        logic fmadd_stall_due_to_fmadd;
+        logic fmadd_operand_stall_rs1;
+        logic fmadd_operand_stall_rs2;
+        logic fmadd_operand_stall_rs3;
+        logic fadd_operand_stall_rs1;
+        logic fadd_operand_stall_rs2;
+        logic fmul_operand_stall_rs1;
+        logic fmul_operand_stall_rs2;
+        logic fadd_stall_due_to_fmadd; 
+        logic rs1_subnormal;
+        logic rs2_subnormal;
+        logic rs3_subnormal;
+        int in_flight_ids;
+
+        logic rs1_conflict, rs2_conflict, rs3_conflict;
+        logic uses_rs1, uses_rs2, uses_rs3;
+
+        //Operand Stall Source Tracking
+        logic [cpu.FP_NUM_UNITS:0] stall_unit_onehot [2:0];
+        logic [cpu.FP_NUM_UNITS:0] register_unit_id_table [63:0]; //maps each register and its result-producing issue-side unit {fls, fpu_issue_to}
+        //Writeback Stall Tracking
+        logic [cpu.FP_NUM_WB_UNITS-1:0] fp_units_pending_wb;
+        assign fp_units_pending_wb = cpu.fp_writeback_block.unit_done[0] ^ cpu.fp_writeback_block.unit_ack[0];
+
+        //the table holds, for each register, the unit_id (onehot) that will write to it
+        //the three unit_ids are read using the phys_rs_addr, and if conflict exists on any of the rs_addr, check if the unit_id matches that of the units, if so the unit caused the operand stall
+        logic [4:0] debug;
+        logic [4:0] debug_50;
+        assign debug_50 = register_unit_id_table[50];
+        assign debug = {cpu.unit_issue[cpu.UNIT_IDS.LS].new_request&cpu.issue.is_float&cpu.ls_inputs.load, cpu.decode_and_issue_block.issue_to[cpu.TOTAL_NUM_UNITS-1-:cpu.FP_NUM_UNITS]};
+
+        always_ff @ (posedge clk) begin
+            if (cpu.decode_and_issue_block.fp_instruction_issued_with_rd) begin
+                register_unit_id_table[cpu.issue.fp_phys_rd_addr] <= {cpu.unit_issue[cpu.UNIT_IDS.LS].new_request&cpu.issue.is_float&cpu.ls_inputs.load, cpu.decode_and_issue_block.issue_to[cpu.TOTAL_NUM_UNITS-1-:cpu.FP_NUM_UNITS]};
+                //$display("pc:0x%h-> fp_rd_instruction issued! unit writing to register %d: %b", cpu.issue.pc, cpu.issue.phys_rd_addr, debug);
+            end
+
+            if (cpu.fp_commit_packet[0].valid) begin
+                register_unit_id_table[cpu.fp_commit_packet[0].phys_addr] <= 0;
+                //$display("pc:0x%h-> fp_rd_instruction committed! register %d is cleared", cpu.issue.pc, cpu.fp_commit_packet[0].phys_addr);
+            end
+        end
+
+        always_comb begin
+            stall_unit_onehot[2] = register_unit_id_table[cpu.issue.fp_phys_rs_addr[RS3]]; 
+            stall_unit_onehot[1] = register_unit_id_table[cpu.issue.fp_phys_rs_addr[RS2]]; 
+            stall_unit_onehot[0] = register_unit_id_table[cpu.issue.fp_phys_rs_addr[RS1]]; 
+        end
+
+        //operand stall source tracking signals
+        assign rs1_conflict = cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.rs1_conflict;
+        assign rs2_conflict = cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.rs2_conflict;
+        assign rs3_conflict = cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.rs3_conflict;
+        assign uses_rs1 = cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.uses_rs1;
+        assign uses_rs2 = cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.uses_rs2;
+        assign uses_rs3 = cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.uses_rs3;
+
+        ////////////////////////////////////////////////////
+        //Stall 
+        always_comb begin
+            //if (cpu.fp_commit_packet[0].valid)
+                //$display("time:%0t, commit! Addr:0x%h, Data:0x%h", $time ,cpu.fp_commit_packet[0].phys_addr, cpu.fp_commit_packet[0].data);
+            if (cpu.fpu_block.fpu_block.wb2int_misc_inst.cmp_issue.new_request)
+                $display("%h,%h,%h", cpu.fp_madd_inputs.rs1, cpu.fp_madd_inputs.rs2, cpu.fp_madd_inputs.rm);
+
+            //stall
+            fp_instruction_issued_dec = cpu.instruction_issued & cpu.issue.is_float;
+            fp_operand_stall        = cpu.issue.stage_valid & ~cpu.gc.fetch_flush & ~cpu.gc.issue_hold & ~cpu.decode_and_issue_block.fp_operands_ready & |cpu.decode_and_issue_block.issue_ready;
+            fp_no_id_stall          = (~cpu.issue.stage_valid & ~cpu.pc_id_available & ~cpu.gc.fetch_flush); //All instructions in execution pipeline
+            fp_unit_stall           = cpu.decode_and_issue_block.issue_valid & cpu.issue.is_float & ~cpu.gc.fetch_flush & ~|cpu.decode_and_issue_block.issue_ready;
+            fp_no_instruction_stall = (~fp_no_id_stall & ~cpu.issue.stage_valid) | cpu.gc.fetch_flush;
+            fp_other_stall          = cpu.issue.stage_valid & ~cpu.instruction_issued & ~(fp_operand_stall | fp_unit_stall  | fp_no_id_stall | fp_no_instruction_stall);
+
+            fls_operand_stall   = fp_operand_stall & cpu.decode_and_issue_block.unit_needed_issue_stage[cpu.UNIT_IDS.LS] & cpu.issue.is_float;
+            fmadd_operand_stall = fp_operand_stall & cpu.decode_and_issue_block.unit_needed_issue_stage[cpu.NUM_UNITS+cpu.FMADD_UNIT_ID] & cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.is_fma;
+            fadd_operand_stall  = fp_operand_stall & cpu.decode_and_issue_block.unit_needed_issue_stage[cpu.NUM_UNITS+cpu.FMADD_UNIT_ID] & cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.is_fadd;
+            fmul_operand_stall  = fp_operand_stall & cpu.decode_and_issue_block.unit_needed_issue_stage[cpu.NUM_UNITS+cpu.FMADD_UNIT_ID] & cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.is_fmul;
+            fdiv_operand_stall  = fp_operand_stall & cpu.decode_and_issue_block.unit_needed_issue_stage[cpu.NUM_UNITS+cpu.FDIV_SQRT_UNIT_ID] & cpu.issue.fn7 == FDIV;
+            fsqrt_operand_stall = fp_operand_stall & cpu.decode_and_issue_block.unit_needed_issue_stage[cpu.NUM_UNITS+cpu.FDIV_SQRT_UNIT_ID] & cpu.issue.fn7 == FSQRT;
+            fcmp_operand_stall  = fp_operand_stall & ((cpu.decode_and_issue_block.unit_needed_issue_stage[cpu.NUM_UNITS+cpu.MISC_WB2INT_UNIT_ID] & cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.is_fcmp_r) | (cpu.decode_and_issue_block.unit_needed_issue_stage[cpu.NUM_UNITS+cpu.MISC_WB2FP_UNIT_ID] & cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.is_minmax_r));
+            fsign_inject_operand_stall = fp_operand_stall & cpu.decode_and_issue_block.unit_needed_issue_stage[cpu.NUM_UNITS+cpu.MISC_WB2FP_UNIT_ID] & cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.is_sign_inj_r;
+            fclass_operand_stall       = fp_operand_stall & cpu.decode_and_issue_block.unit_needed_issue_stage[cpu.NUM_UNITS+cpu.MISC_WB2INT_UNIT_ID] & cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.is_class_r;
+            fcvt_operand_stall         = (fp_operand_stall & cpu.decode_and_issue_block.unit_needed_issue_stage[cpu.NUM_UNITS+cpu.FP_UNIT_IDS.MISC_WB2INT] & cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.is_f2i_r);// | (fp_operand_stall & cpu.decode_and_issue_block.unit_needed_issue_stage[cpu.NUM_UNITS+cpu.MISC_WB2FP_UNIT_ID] & cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.is_i2f_r);
+
+            //instruction mix
+            fp_load_op  = cpu.unit_issue[cpu.UNIT_IDS.LS].new_request & cpu.issue.is_float & cpu.ls_inputs.load;
+            fp_store_op = cpu.unit_issue[cpu.UNIT_IDS.LS].new_request & cpu.issue.is_float & cpu.ls_inputs.store;
+            fp_fmadd_op = cpu.fpu_block.fpu_block.fp_madd_inst.mul_issue.new_request & cpu.fp_madd_inputs.instruction[2];
+            fp_add_op   = cpu.fpu_block.fpu_block.fp_madd_inst.fp_add_inputs_fifo.push;// & cpu.fp_madd_inputs.instruction[1];
+            fp_mul_op   = cpu.fpu_block.fpu_block.fp_madd_inst.mul_issue.new_request & cpu.fp_madd_inputs.instruction[0];
+            fp_div_op   = cpu.fpu_block.fpu_block.div_sqrt_inst.div_issue.new_request & cpu.issue.fn7 == FDIV;
+            fp_sqrt_op  = cpu.fpu_block.fpu_block.div_sqrt_inst.sqrt_issue.new_request & cpu.issue.fn7 == FSQRT;
+            fp_cvt_op   = cpu.fpu_block.fpu_block.wb2fp_misc_inst.i2f_issue.new_request | cpu.fpu_block.fpu_block.wb2int_misc_inst.f2i_issue.new_request;
+            fp_cmp_op         = cpu.fpu_block.fpu_block.wb2int_misc_inst.cmp_issue.new_request;
+            fp_minmax_op      = cpu.fpu_block.fpu_block.wb2fp_misc_inst.minmax_issue.new_request;
+            fp_class_op       = cpu.fpu_block.fpu_block.wb2int_misc_inst.class_issue.new_request;
+            fp_sign_inject_op = cpu.fpu_block.fpu_block.wb2fp_misc_inst.sign_inj_issue.new_request;
+
+            //unit stall
+            operand_stall_due_to_fls = ((stall_unit_onehot[RS3][cpu.FP_NUM_UNITS] & rs3_conflict) | (stall_unit_onehot[RS2][cpu.FP_NUM_UNITS] & rs2_conflict) | (stall_unit_onehot[RS1][cpu.FP_NUM_UNITS] & rs1_conflict)) & fp_operand_stall;
+            operand_stall_due_to_fmadd = ((stall_unit_onehot[RS3][cpu.FMADD_UNIT_ID] & rs3_conflict) | (stall_unit_onehot[RS2][cpu.FMADD_UNIT_ID] & rs2_conflict) | (stall_unit_onehot[RS1][cpu.FMADD_UNIT_ID] & rs1_conflict)) & fp_operand_stall;
+            operand_stall_due_to_fdiv_sqrt = ((stall_unit_onehot[RS3][cpu.FDIV_SQRT_UNIT_ID] & rs3_conflict) | (stall_unit_onehot[RS2][cpu.FDIV_SQRT_UNIT_ID] & rs2_conflict) | (stall_unit_onehot[RS1][cpu.FDIV_SQRT_UNIT_ID] & rs1_conflict)) & fp_operand_stall;
+            operand_stall_due_to_wb2fp = ((stall_unit_onehot[RS3][cpu.MISC_WB2FP_UNIT_ID] & rs3_conflict) | (stall_unit_onehot[RS2][cpu.MISC_WB2FP_UNIT_ID] & rs2_conflict) | (stall_unit_onehot[RS1][cpu.MISC_WB2FP_UNIT_ID] & rs1_conflict)) & fp_operand_stall;
+
+            //writeback stall
+            fmadd_wb_stall           = fp_units_pending_wb[cpu.FMADD_WB_ID];
+            fmul_wb_stall            = fp_units_pending_wb[cpu.FMUL_WB_ID];
+            fdiv_sqrt_wb_stall       = fp_units_pending_wb[cpu.FDIV_SQRT_WB_ID];
+            wb2fp_wb_stall           = fp_units_pending_wb[cpu.MISC_WB2FP_WB_ID];
+
+            fmadd_stall_due_to_fmadd = operand_stall_due_to_fmadd & (fmadd_operand_stall | fmul_operand_stall | fadd_operand_stall);
+            fmadd_operand_stall_rs1  = fmadd_operand_stall & rs1_conflict;
+            fmadd_operand_stall_rs2  = fmadd_operand_stall & rs2_conflict;
+            fmadd_operand_stall_rs3  = fmadd_operand_stall & rs3_conflict;
+            fadd_operand_stall_rs1   = fadd_operand_stall & rs1_conflict;
+            fadd_operand_stall_rs2   = fadd_operand_stall & rs2_conflict;
+            fmul_operand_stall_rs1   = fmul_operand_stall & rs1_conflict;
+            fmul_operand_stall_rs2   = fmul_operand_stall & rs2_conflict;
+            fadd_stall_due_to_fmadd  = cpu.fpu_block.fpu_block.fp_madd_inst.add_issue.new_request & ~cpu.fpu_block.fpu_block.fp_madd_inst.fp_add_inputs_fifo.pop & cpu.fpu_block.fpu_block.fp_madd_inst.fp_add_inputs_fifo.valid; //fadd input fifo not issued though valid
+            rs1_subnormal = uses_rs1 & ~cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.hidden_bit[RS1];
+            rs2_subnormal = uses_rs2 & ~cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.hidden_bit[RS2];
+            rs3_subnormal = uses_rs3 & ~cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.hidden_bit[RS3];
+            
+            in_flight_ids = cpu.id_block.inflight_count[LOG2_MAX_IDS] ? 32'(MAX_IDS) : 32'(cpu.id_block.inflight_count[LOG2_MAX_IDS-1:0]);
+        end
+
+        always_ff @ (posedge clk) begin
+            fp_tr.events.fp_instruction_issued_dec <= fp_instruction_issued_dec;
+            fp_tr.events.fp_operand_stall <= fp_operand_stall;
+            fp_tr.events.fp_unit_stall <= fp_unit_stall;
+            fp_tr.events.fp_no_id_stall <= fp_no_id_stall;
+            fp_tr.events.fp_no_instruction_stall <= fp_no_instruction_stall;
+            fp_tr.events.fp_other_stall <= fp_other_stall;
+            fp_tr.events.fls_operand_stall <= fls_operand_stall;
+            fp_tr.events.fmadd_operand_stall <= fmadd_operand_stall;
+            fp_tr.events.fadd_operand_stall <= fadd_operand_stall;
+            fp_tr.events.fmul_operand_stall <= fmul_operand_stall;
+            fp_tr.events.fdiv_operand_stall <= fdiv_operand_stall;
+            fp_tr.events.fsqrt_operand_stall <= fsqrt_operand_stall;
+            fp_tr.events.fcmp_operand_stall <= fcmp_operand_stall;
+            fp_tr.events.fsign_inject_operand_stall <= fsign_inject_operand_stall;
+            fp_tr.events.fclass_operand_stall <= fclass_operand_stall;
+            fp_tr.events.fcvt_operand_stall <= fcvt_operand_stall;
+            fp_tr.events.fp_load_op <= fp_load_op;
+            fp_tr.events.fp_store_op <= fp_store_op;
+            fp_tr.events.fp_fmadd_op <= fp_fmadd_op;
+            fp_tr.events.fp_add_op <= fp_add_op;
+            fp_tr.events.fp_mul_op <= fp_mul_op;
+            fp_tr.events.fp_div_op <= fp_div_op;
+            fp_tr.events.fp_sqrt_op <= fp_sqrt_op;
+            fp_tr.events.fp_cvt_op <= fp_cvt_op;
+            fp_tr.events.fp_cmp_op <= fp_cmp_op;
+            fp_tr.events.fp_minmax_op <= fp_minmax_op;
+            fp_tr.events.fp_class_op <= fp_class_op;
+            fp_tr.events.fp_sign_inject_op <= fp_sign_inject_op;
+            fp_tr.events.operand_stall_due_to_fls <= operand_stall_due_to_fls;
+            fp_tr.events.operand_stall_due_to_fmadd <= operand_stall_due_to_fmadd;
+            fp_tr.events.operand_stall_due_to_fdiv_sqrt <= operand_stall_due_to_fdiv_sqrt;
+            fp_tr.events.operand_stall_due_to_wb2fp <= operand_stall_due_to_wb2fp;
+            fp_tr.events.fmadd_wb_stall <= fmadd_wb_stall;
+            fp_tr.events.fmul_wb_stall <= fmul_wb_stall;
+            fp_tr.events.fdiv_sqrt_wb_stall <= fdiv_sqrt_wb_stall;
+            fp_tr.events.wb2fp_wb_stall <= wb2fp_wb_stall;
+            fp_tr.events.fmadd_stall_due_to_fmadd <= fmadd_stall_due_to_fmadd;
+            fp_tr.events.fmadd_operand_stall_rs1 <= fmadd_operand_stall_rs1;
+            fp_tr.events.fmadd_operand_stall_rs2 <= fmadd_operand_stall_rs2;
+            fp_tr.events.fmadd_operand_stall_rs3 <= fmadd_operand_stall_rs3;
+            fp_tr.events.fadd_operand_stall_rs1 <= fadd_operand_stall_rs1;
+            fp_tr.events.fadd_operand_stall_rs2 <= fadd_operand_stall_rs2;
+            fp_tr.events.fmul_operand_stall_rs1 <= fmul_operand_stall_rs1;
+            fp_tr.events.fmul_operand_stall_rs2 <= fmul_operand_stall_rs2;
+            fp_tr.events.fadd_stall_due_to_fmadd <= fadd_stall_due_to_fmadd;
+            fp_tr.events.rs1_subnormal <= rs1_subnormal;
+            fp_tr.events.rs2_subnormal <= rs2_subnormal;
+            fp_tr.events.rs3_subnormal <= rs3_subnormal;
+            fp_tr.sigs.in_flight_ids <= in_flight_ids;
+            //if (cpu.decode_and_issue_block.fp_instruction_issued_with_rd)
+                //$display("instruction:0x%h", cpu.issue.pc);
+
+        end
+        //operand_stall_source_check:
+            //assert property (@(posedge clk) disable iff (rst)
+                //fp_operand_stall |-> $onehot({operand_stall_due_to_fls, operand_stall_due_to_fmadd, operand_stall_due_to_fdiv_sqrt, operand_stall_due_to_wb2fp, operand_stall_due_to_wb2int})
+                //);
+    end endgenerate
+
     ////////////////////////////////////////////////////
     //Assertion Binding
-
 endmodule

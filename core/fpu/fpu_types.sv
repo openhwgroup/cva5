@@ -35,10 +35,7 @@ package fpu_types;
     //typedef logic [LOG2_MAX_IDS-1:0] id_t;
     //Hardcoding fp_rs_wb_group_t width to 1
     //typedef logic [$clog2(FP_NUM_WB_GROUPS)-1:0] fp_rs_wb_group_t;
-    typedef logic fp_rs_wb_group_t;
-    //typedef logic [FRAC_WIDTH-1:0] grs_t;
-    typedef logic [2:0] grs_t;
-    localparam GRS_WIDTH = $bits(grs_t);
+    typedef logic [GRS_WIDTH-1:0] grs_t;
     typedef logic [EXPO_WIDTH-1:0] fp_shift_amt_t;
 
     //constants
@@ -102,7 +99,7 @@ package fpu_types;
         logic carry;
         logic safe;
         logic hidden;
-        logic [2:0] grs;
+        logic [GRS_WIDTH-1:0] grs;
         fp_shift_amt_t clz;
         logic subnormal;
         logic right_shift;
@@ -354,50 +351,73 @@ package fpu_types;
         logic we;
     } fp_sq_entry_t;
 
-    //typedef struct packed {
-        //logic int_rs1_conflict;
-        //logic [XLEN-1:0] int_rs1_data;
-        //logic fp_rs1_conflict;
-        //logic [FLEN-1:0] fp_rs1_data;
-    //} shared_decode_t;
-
     typedef struct packed {
-        //Decode
-        logic fp_operand_stall;
-        logic fp_unit_stall;
-        logic fp_no_id_stall;
-        logic fp_no_instruction_stall;
-        logic fp_other_stall;
-        logic fdiv_operand_stall;
-        logic fmadd_operand_stall;
-        logic fcmp_operand_stall;
-        logic fsign_inject_operand_stall;
-        logic fclass_operand_stall;
-        logic fcvt_operand_stall;
+       //Decode
+       logic fp_instruction_issued_dec;
+       logic fp_operand_stall;
+       logic fp_unit_stall;
+       logic fp_no_id_stall;
+       logic fp_no_instruction_stall;
+       logic fp_other_stall;
+       logic fls_operand_stall;
+       logic fmadd_operand_stall;
+       logic fadd_operand_stall;
+       logic fmul_operand_stall;
+       logic fdiv_operand_stall;
+       logic fsqrt_operand_stall;
+       logic fcmp_operand_stall;
+       logic fsign_inject_operand_stall;
+       logic fclass_operand_stall;
+       logic fcvt_operand_stall;
 
-        //Instruction mix
-        logic fp_fmadd_op;
-        logic fp_add_op;
-        logic fp_mul_op;
-        logic fp_div_op;
-        logic fp_sqrt_op;
-        logic fp_cvt_op;
-        logic fp_cmp_op;
-        logic fp_minmax_op;
-        logic fp_class_op;
+       //Instruction mix
+       logic fp_load_op;
+       logic fp_store_op;
+       logic fp_fmadd_op;
+       logic fp_add_op;
+       logic fp_mul_op;
+       logic fp_div_op;
+       logic fp_sqrt_op;
+       logic fp_cvt_op;
+       logic fp_cmp_op;
+       logic fp_minmax_op;
+       logic fp_class_op;
+       logic fp_sign_inject_op;
 
-        //Register File
-        logic rs1_forwarding_needed;
-        logic rs2_forwarding_needed;
-        logic rs1_and_rs2_forwarding_needed;
+       //unit stall 
+       logic operand_stall_due_to_fls;
+       logic operand_stall_due_to_fmadd;
+       logic operand_stall_due_to_fdiv_sqrt;
+       logic operand_stall_due_to_wb2fp;
 
-        //Writeback
-        id_t num_instructions_in_flight;
-        id_t num_of_instructions_pending_writeback;
+       //writeback stall
+       logic fmadd_wb_stall;
+       logic fmul_wb_stall;
+       logic fdiv_sqrt_wb_stall;
+       logic wb2fp_wb_stall;
+
+       logic fmadd_stall_due_to_fmadd;
+       logic fmadd_operand_stall_rs1;
+       logic fmadd_operand_stall_rs2;
+       logic fmadd_operand_stall_rs3;
+       logic fadd_operand_stall_rs1;
+       logic fadd_operand_stall_rs2;
+       logic fmul_operand_stall_rs1;
+       logic fmul_operand_stall_rs2;
+       logic fadd_stall_due_to_fmadd; 
+
+       logic rs1_subnormal;
+       logic rs2_subnormal;
+       logic rs3_subnormal;
     } fp_taiga_trace_events_t;
 
     typedef struct packed {
-        taiga_trace_events_t events;
+      int in_flight_ids;
+    } LargeSigTrace_t;
+
+    typedef struct packed {
+      fp_taiga_trace_events_t events;
+      LargeSigTrace_t sigs;
     } fp_trace_outputs_t;
 
     //fflag tracking for FP units that writeback to integer reg
