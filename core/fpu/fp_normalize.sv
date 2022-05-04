@@ -88,7 +88,6 @@ module fp_normalize (
       end
     endgenerate
 
-    logic signed [FRAC_WIDTH+3+GRS_WIDTH-1:0] left_debug;
     generate if (ENABLE_SUBNORMAL) begin
       //FADD of two subnormals may result in promotion of subnormal to normal
       //This is handled by adding 1 to the expo if the hidden_bit is 1, and |expo==0
@@ -96,7 +95,6 @@ module fp_normalize (
       assign left_shift_amt_adjusted = expo_less_than_left_shift_amt ? expo : left_shift_amt;
       assign {frac_carry_bit_norm_left_shift, frac_safe_bit_norm_left_shift, hidden_bit_norm_left_shift, frac_norm_left_shift, grs_norm_left_shift} = left_shifted;
       assign expo_norm_left_shift = (expo_norm_left_shift_intermediate & {(EXPO_WIDTH+1){~expo_less_than_left_shift_amt}}) + (EXPO_WIDTH)'({subnormal&hidden_bit}); 
-      assign left_debug = left << left_shift_amt_adjusted;
     end else begin 
       assign {expo_less_than_left_shift_amt, expo_norm_left_shift_intermediate} = {{expo_overflow, expo} & {(EXPO_WIDTH+1){~subnormal}}} - (EXPO_WIDTH+1)'(left_shift_amt); //drive to zero if subnormal
       assign left_shift_amt_adjusted = expo_less_than_left_shift_amt ? expo : left_shift_amt;

@@ -45,7 +45,7 @@ module fp_special_case_detection_sandboxed #(parameter SANDBOX_FRAC_W=52, parame
   generate if (ENABLE_SUBNORMAL) 
     assign hidden = |expo_sandboxed;
   else
-    assign hidden = 1;
+    assign hidden = |expo_sandboxed;
   endgenerate
 
   //process

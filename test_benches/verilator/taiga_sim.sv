@@ -578,6 +578,9 @@ module taiga_sim
                 register_unit_id_table[cpu.fp_commit_packet[0].phys_addr] <= 0;
                 //$display("pc:0x%h-> fp_rd_instruction committed! register %d is cleared", cpu.issue.pc, cpu.fp_commit_packet[0].phys_addr);
             end
+
+            //if (cpu.fpu_block.fpu_block.fp_madd_inst.mul_issue.new_request & cpu.fpu_block.fpu_block.fp_madd_inst.is_fma)
+                //$display("%h,%h,%h,%h", cpu.fp_madd_inputs.rs1,cpu.fp_madd_inputs.rs2,cpu.fp_madd_inputs.rs3,cpu.fp_madd_inputs.op);
         end
 
         always_comb begin
@@ -590,18 +593,13 @@ module taiga_sim
         assign rs1_conflict = cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.rs1_conflict;
         assign rs2_conflict = cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.rs2_conflict;
         assign rs3_conflict = cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.rs3_conflict;
-        assign uses_rs1 = cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.uses_rs1;
-        assign uses_rs2 = cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.uses_rs2;
-        assign uses_rs3 = cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.uses_rs3;
+        assign uses_rs1 = cpu.issue.fp_uses_rs1;
+        assign uses_rs2 = cpu.issue.fp_uses_rs2;
+        assign uses_rs3 = cpu.issue.fp_uses_rs3;
 
         ////////////////////////////////////////////////////
         //Stall 
         always_comb begin
-            //if (cpu.fp_commit_packet[0].valid)
-                //$display("time:%0t, commit! Addr:0x%h, Data:0x%h", $time ,cpu.fp_commit_packet[0].phys_addr, cpu.fp_commit_packet[0].data);
-            if (cpu.fpu_block.fpu_block.wb2int_misc_inst.cmp_issue.new_request)
-                $display("%h,%h,%h", cpu.fp_madd_inputs.rs1, cpu.fp_madd_inputs.rs2, cpu.fp_madd_inputs.rm);
-
             //stall
             fp_instruction_issued_dec = cpu.instruction_issued & cpu.issue.is_float;
             fp_operand_stall        = cpu.issue.stage_valid & ~cpu.gc.fetch_flush & ~cpu.gc.issue_hold & ~cpu.decode_and_issue_block.fp_operands_ready & |cpu.decode_and_issue_block.issue_ready;
@@ -656,9 +654,9 @@ module taiga_sim
             fmul_operand_stall_rs1   = fmul_operand_stall & rs1_conflict;
             fmul_operand_stall_rs2   = fmul_operand_stall & rs2_conflict;
             fadd_stall_due_to_fmadd  = cpu.fpu_block.fpu_block.fp_madd_inst.add_issue.new_request & ~cpu.fpu_block.fpu_block.fp_madd_inst.fp_add_inputs_fifo.pop & cpu.fpu_block.fpu_block.fp_madd_inst.fp_add_inputs_fifo.valid; //fadd input fifo not issued though valid
-            rs1_subnormal = uses_rs1 & ~cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.hidden_bit[RS1];
-            rs2_subnormal = uses_rs2 & ~cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.hidden_bit[RS2];
-            rs3_subnormal = uses_rs3 & ~cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.hidden_bit[RS3];
+            rs1_subnormal = cpu.instruction_issued & uses_rs1 & ~cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.hidden_bit[RS1] & ~cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.is_zero[RS1];
+            rs2_subnormal = cpu.instruction_issued & uses_rs2 & ~cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.hidden_bit[RS2] & ~cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.is_zero[RS2];
+            rs3_subnormal = cpu.instruction_issued & uses_rs3 & ~cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.hidden_bit[RS3] & ~cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.is_zero[RS3];
             
             in_flight_ids = cpu.id_block.inflight_count[LOG2_MAX_IDS] ? 32'(MAX_IDS) : 32'(cpu.id_block.inflight_count[LOG2_MAX_IDS-1:0]);
         end
@@ -713,13 +711,10 @@ module taiga_sim
             fp_tr.events.rs2_subnormal <= rs2_subnormal;
             fp_tr.events.rs3_subnormal <= rs3_subnormal;
             fp_tr.sigs.in_flight_ids <= in_flight_ids;
-            //if (cpu.decode_and_issue_block.fp_instruction_issued_with_rd)
-                //$display("instruction:0x%h", cpu.issue.pc);
-
         end
         //operand_stall_source_check:
             //assert property (@(posedge clk) disable iff (rst)
-                //fp_operand_stall |-> $onehot({operand_stall_due_to_fls, operand_stall_due_to_fmadd, operand_stall_due_to_fdiv_sqrt, operand_stall_due_to_wb2fp, operand_stall_due_to_wb2int})
+                //fp_operand_stall |-> $onehot({operand_stall_due_to_fls, operand_stall_due_to_fmadd, operand_stall_due_to_fdiv_sqrt, operand_stall_due_to_wb2fp, 1'b0})
                 //);
     end endgenerate
 

@@ -35,6 +35,7 @@ double sc_time_stamp() { // Called by $time in Verilog
                          // what SystemC does
 }
 
+#pragma STDC FENV_ACCESS ON
 #define TRACE_ON
 #define FMADD 67
 #define FMSUB 71
@@ -149,7 +150,7 @@ std::ifstream fmul_inputs("/localhdd/yuhuig/Research/Tests/subnormal/"
                           "test_benches/verilator/fma_tests.txt");
 
 int main(int argc, char **argv) {
-  int test_number = 100000;
+  int test_number = 10;//165000;
   int mca_iteration_max = 1;
   std::vector<std::vector<long double>> rounding_error;
   rounding_error.push_back(std::vector<long double>());
@@ -168,7 +169,9 @@ int main(int argc, char **argv) {
   Table inputs;
   inputs.add_row({"test num", "op", "rs1", "rs2", "rs3", "expected"});
 
-#pragma STDC FENV_ACCESS ON
+  int round = fegetround();
+  std::cout << "old rounding mode: " << round << std::endl;
+
   if (rm == 1) {
     std::fesetround(FE_TOWARDZERO);
   } else if (rm == 0) {
@@ -178,12 +181,14 @@ int main(int argc, char **argv) {
   } else if (rm == 2) {
     std::fesetround(FE_DOWNWARD);
   }
+  round = fegetround();
+  std::cout << "new rounding mode: " << round << std::endl;
+
+
   // for (int i = 0; i < test_number; i++) {
   std::string line;
   int i;
   while (std::getline(fmul_inputs, line) && (i < test_number)) {
-    std::getline(fmul_inputs, line);
-    std::getline(fmul_inputs, line);
     long double result = 0.0;
     int op = FNMSUB;
     int instruction = FMA_instruction[0]; //[rand()%3];

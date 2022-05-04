@@ -6,7 +6,6 @@ module fp_new_cvt_simulation_wrapper (
   input clk,
   input rst,
   //inputs
-  input logic [FLEN-1:0]    f2i_rs1,
   input logic [XLEN-1:0]    i2f_rs1,
   input logic [2:0]         rm,
   input logic               is_mv,
