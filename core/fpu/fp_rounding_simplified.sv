@@ -16,30 +16,35 @@ module fp_round_simplified (
   output logic [FLEN-1:0]       result_if_overflow 
   );
 
-  always_comb begin 
-    case(rm)
-      default: begin  //nearest ties to even
-        result_if_overflow = {sign, {EXPO_WIDTH{1'b1}}, {FRAC_WIDTH{1'b0}}};
-        roundup = grs[2] & lsb | (grs[2] & |grs[1:0]);
-     end
-      3'b100: begin  //nearest ties to away
-        result_if_overflow = {sign, {EXPO_WIDTH{1'b1}}, {FRAC_WIDTH{1'b0}}};
-        roundup = grs[2];
-     end
-      3'b011: begin //round to positive inf
-        //only round if: positive, has extra bits in grs 
-        result_if_overflow = {sign, {(EXPO_WIDTH-1){1'b1}}, !sign, {FRAC_WIDTH{sign}}};
-        roundup = ~sign & |grs;
-      end
-      3'b010: begin  //round to negative inf
-        //only round if: negative, has extra bits in grs 
-        result_if_overflow = {sign, {(EXPO_WIDTH-1){1'b1}}, sign, {FRAC_WIDTH{!sign}}};
-        roundup = sign & |grs;
-      end
-      3'b001: begin //round to zero
-        result_if_overflow = {sign, {(EXPO_WIDTH-1){1'b1}}, 1'b0, {FRAC_WIDTH{1'b1}}};
-        roundup = 0;
-      end
-    endcase
-  end
+  generate if (FULL_ROUNDING_MODES_ENABLE) begin
+    always_comb begin 
+      case(rm)
+        default: begin  //nearest ties to even
+          result_if_overflow = {sign, {EXPO_WIDTH{1'b1}}, {FRAC_WIDTH{1'b0}}};
+          roundup = grs[2] & lsb | (grs[2] & |grs[1:0]);
+       end
+        3'b100: begin  //nearest ties to away
+          result_if_overflow = {sign, {EXPO_WIDTH{1'b1}}, {FRAC_WIDTH{1'b0}}};
+          roundup = grs[2];
+       end
+        3'b011: begin //round to positive inf
+          //only round if: positive, has extra bits in grs 
+          result_if_overflow = {sign, {(EXPO_WIDTH-1){1'b1}}, !sign, {FRAC_WIDTH{sign}}};
+          roundup = ~sign & |grs;
+        end
+        3'b010: begin  //round to negative inf
+          //only round if: negative, has extra bits in grs 
+          result_if_overflow = {sign, {(EXPO_WIDTH-1){1'b1}}, sign, {FRAC_WIDTH{!sign}}};
+          roundup = sign & |grs;
+        end
+        3'b001: begin //round to zero
+          result_if_overflow = {sign, {(EXPO_WIDTH-1){1'b1}}, 1'b0, {FRAC_WIDTH{1'b1}}};
+          roundup = 0;
+        end
+      endcase
+    end
+  end else begin
+    assign result_if_overflow = {sign, {EXPO_WIDTH{1'b1}}, {FRAC_WIDTH{1'b0}}};
+    assign roundup = grs[2] & lsb | (grs[2] & |grs[1:0]);
+  end endgenerate
 endmodule

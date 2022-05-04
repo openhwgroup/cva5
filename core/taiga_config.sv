@@ -100,6 +100,7 @@ package taiga_config;
     //parameter GRS_WIDTH = FRAC_WIDTH;
     parameter GRS_WIDTH = 3;
     parameter FULL_GRS = (GRS_WIDTH == FRAC_WIDTH);
+    parameter FULL_ROUNDING_MODES_ENABLE = 1;
 
     typedef struct packed {
       bit INCLUDE_FPU;
