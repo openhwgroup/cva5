@@ -119,7 +119,8 @@ static const char * const fp_eventNames[] = {
         "fadd_stall_due_to_fmadd",
         "rs1_subnormal",
         "rs2_subnormal",
-        "rs3_subnormal"
+        "rs3_subnormal",
+        "rd_subnormal"
 };
 
 static const char * const LargeTraceSigsNames[] = {

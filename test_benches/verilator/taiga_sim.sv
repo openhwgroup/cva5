@@ -549,6 +549,7 @@ module taiga_sim
         logic rs1_subnormal;
         logic rs2_subnormal;
         logic rs3_subnormal;
+        logic rd_subnormal;
         int in_flight_ids;
 
         logic rs1_conflict, rs2_conflict, rs3_conflict;
@@ -657,6 +658,7 @@ module taiga_sim
             rs1_subnormal = cpu.instruction_issued & uses_rs1 & ~cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.hidden_bit[RS1] & ~cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.is_zero[RS1];
             rs2_subnormal = cpu.instruction_issued & uses_rs2 & ~cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.hidden_bit[RS2] & ~cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.is_zero[RS2];
             rs3_subnormal = cpu.instruction_issued & uses_rs3 & ~cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.hidden_bit[RS3] & ~cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.is_zero[RS3];
+            rd_subnormal = cpu.fp_commit_packet[0].valid & ~(|cpu.fp_commit_packet[0].data[FLEN-2-:EXPO_WIDTH]) & |cpu.fp_commit_packet[0].data[0+:FRAC_WIDTH];
             
             in_flight_ids = cpu.id_block.inflight_count[LOG2_MAX_IDS] ? 32'(MAX_IDS) : 32'(cpu.id_block.inflight_count[LOG2_MAX_IDS-1:0]);
         end
@@ -710,6 +712,7 @@ module taiga_sim
             fp_tr.events.rs1_subnormal <= rs1_subnormal;
             fp_tr.events.rs2_subnormal <= rs2_subnormal;
             fp_tr.events.rs3_subnormal <= rs3_subnormal;
+            fp_tr.events.rd_subnormal <= rd_subnormal;
             fp_tr.sigs.in_flight_ids <= in_flight_ids;
         end
         //operand_stall_source_check:
