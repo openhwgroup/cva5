@@ -410,6 +410,7 @@ package fpu_types;
        logic rs2_subnormal;
        logic rs3_subnormal;
        logic rd_subnormal;
+       logic wb_round_overflow;
     } fp_taiga_trace_events_t;
 
     typedef struct packed {
