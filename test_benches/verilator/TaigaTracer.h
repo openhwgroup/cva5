@@ -121,7 +121,8 @@ static const char * const fp_eventNames[] = {
         "rs2_subnormal",
         "rs3_subnormal",
         "rd_subnormal",
-        "wb_round_overflow"
+        "wb_round_overflow",
+        "round_up"
 };
 
 static const char * const LargeTraceSigsNames[] = {
