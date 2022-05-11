@@ -50,6 +50,13 @@ package cva5_config;
         csr_non_standard_config_t NON_STANDARD_OPTIONS;
     } csr_config_t;
 
+    //Memory range [L, H]
+    //Address range is inclusive and must be aligned to its size
+    typedef struct packed {
+        bit [31:0] L;
+        bit [31:0] H;
+    } memory_config_t;
+
     ////////////////////////////////////////////////////
     //Cache Options
     //Size in bytes: (LINES * WAYS * LINE_W * 4)
@@ -59,6 +66,8 @@ package cva5_config;
         int unsigned LINE_W;// In words
         int unsigned WAYS;
         bit USE_EXTERNAL_INVALIDATIONS;
+        bit USE_NON_CACHEABLE;
+        memory_config_t NON_CACHEABLE;
     } cache_config_t;
 
     typedef struct packed {
@@ -66,13 +75,6 @@ package cva5_config;
         int unsigned SUB_LINE_ADDR_W;
         int unsigned TAG_W;
     } derived_cache_config_t;
-
-    //Memory range [L, H]
-    //Address range is inclusive and must be aligned to its size
-    typedef struct packed {
-        bit [31:0] L;
-        bit [31:0] H;
-    } memory_config_t;
 
     ////////////////////////////////////////////////////
     //Branch Predictor Options
@@ -185,7 +187,12 @@ package cva5_config;
             LINES : 512,
             LINE_W : 4,
             WAYS : 2,
-            USE_EXTERNAL_INVALIDATIONS : 0
+            USE_EXTERNAL_INVALIDATIONS : 0,
+            USE_NON_CACHEABLE : 0,
+            NON_CACHEABLE : '{
+                L: 32'h00000000,
+                H: 32'h00000000
+            }
         },
         ITLB : '{
             WAYS : 2,
@@ -200,7 +207,12 @@ package cva5_config;
             LINES : 512,
             LINE_W : 4,
             WAYS : 2,
-            USE_EXTERNAL_INVALIDATIONS : 0
+            USE_EXTERNAL_INVALIDATIONS : 0,
+            USE_NON_CACHEABLE : 0,
+            NON_CACHEABLE : '{
+                L: 32'h00000000,
+                H: 32'h00000000
+            }
         },
         DTLB : '{
             WAYS : 2,

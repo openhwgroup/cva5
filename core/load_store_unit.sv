@@ -78,13 +78,16 @@ module load_store_unit
     localparam DCACHE_ID = int'(CONFIG.INCLUDE_DLOCAL_MEM) + int'(CONFIG.INCLUDE_PERIPHERAL_BUS);
 
     //Should be equal to pipeline depth of longest load/store subunit 
-    localparam ATTRIBUTES_DEPTH = CONFIG.INCLUDE_DCACHE ? 2 : 1;
+    localparam ATTRIBUTES_DEPTH = 2;//CONFIG.INCLUDE_DCACHE ? 2 : 1;
 
     //Subunit signals
     addr_utils_interface #(CONFIG.DLOCAL_MEM_ADDR.L, CONFIG.DLOCAL_MEM_ADDR.H) dlocal_mem_addr_utils ();
     addr_utils_interface #(CONFIG.PERIPHERAL_BUS_ADDR.L, CONFIG.PERIPHERAL_BUS_ADDR.H) dpbus_addr_utils ();
     addr_utils_interface #(CONFIG.DCACHE_ADDR.L, CONFIG.DCACHE_ADDR.H) dcache_addr_utils ();
     memory_sub_unit_interface sub_unit[NUM_SUB_UNITS-1:0]();
+
+    addr_utils_interface #(CONFIG.DCACHE.NON_CACHEABLE.L, CONFIG.DCACHE.NON_CACHEABLE.H) uncacheable_utils ();
+
 
     data_access_shared_inputs_t shared_inputs;
     logic [31:0] unit_data_array [NUM_SUB_UNITS-1:0];
@@ -353,7 +356,10 @@ endgenerate
     endgenerate
 
     generate if (CONFIG.INCLUDE_DCACHE) begin : gen_ls_dcache
+            logic uncacheable;
             assign sub_unit_address_match[DCACHE_ID] = dcache_addr_utils.address_range_check(shared_inputs.addr);
+            assign uncacheable = uncacheable_utils.address_range_check(shared_inputs.addr);
+
             dcache # (.CONFIG(CONFIG))
             data_cache (
                 .clk (clk),
@@ -365,6 +371,7 @@ endgenerate
                 .sc_success (sc_success),
                 .clear_reservation (clear_reservation),
                 .amo (ls_inputs.amo),
+                .uncacheable (uncacheable),
                 .ls (sub_unit[DCACHE_ID])
             );
         end
