@@ -58,7 +58,6 @@ module icache
     logic [31:0] miss_data;
 
     logic miss_in_progress;
-    logic miss_aborted_by_flush;
 
     logic miss_data_valid;
     logic second_cycle;
@@ -73,22 +72,13 @@ module icache
     //On the second cycle of a request hit/miss determination is performed
     //On a miss, the memory request starts on the third cycle
 
-    //A fetch flush can occur during an cycle of operation
-    //  If it occurs on the cycle that data output is valid, the output will be suppressed by the ID management logic
-    //  If it occurs before the data is valid the request should be aborted or the output suppressed
-    //    If it occurs on the first cycle, stay in idle state, abort
-    //    If it occurs on the second cycle and is a tag hit, nothing is required to be done
-    //    If it occurs on the third+ cycle, but before the l1_request has been acked, abort the memory request and return to idle
-    //    If it occurs on the third+ cycle, and the memory request has already been acked, mask the output data valid signals,
-    //       but otherwise complete the transaction as normal
-
     ////////////////////////////////////////////////////
     //General Control Logic
     always_ff @ (posedge clk) begin
         if (rst)
             second_cycle <= 0;
         else
-            second_cycle <= fetch_sub.new_request & ~gc.fetch_flush;
+            second_cycle <= fetch_sub.new_request;
     end
 
     always_ff @(posedge clk) begin
@@ -131,12 +121,12 @@ module icache
 
     assign initiate_l1_request = second_cycle & (~tag_hit | ~icache_on);
     always_ff @ (posedge clk) begin
-        if (rst | gc.fetch_flush)
+        if (rst)
             request_r <= 0;
         else
             request_r <= (initiate_l1_request | request_r) & ~l1_request.ack;
     end
-    assign l1_request.request = request_r & ~gc.fetch_flush;
+    assign l1_request.request = request_r;
 
     ////////////////////////////////////////////////////
     //Miss state tracking
@@ -147,19 +137,12 @@ module icache
             miss_in_progress <= l1_request.ack | (miss_in_progress & ~line_complete);
     end
 
-    always_ff @ (posedge clk) begin
-        if (rst)
-            miss_aborted_by_flush <= 0;
-        else
-            miss_aborted_by_flush <= (~line_complete) & ((miss_in_progress & gc.fetch_flush) | miss_aborted_by_flush);
-    end
-
     ////////////////////////////////////////////////////
     //Tag banks
     itag_banks #(.CONFIG(CONFIG), .SCONFIG(SCONFIG))
     icache_tag_banks (
             .clk(clk),
-            .rst(rst | gc.fetch_flush), //clears the read_hit_allowed flag
+            .rst(rst), //clears the read_hit_allowed flag
             .stage1_addr(fetch_sub.addr),
             .stage2_addr(second_cycle_addr),
             .update_way(tag_update_way),
@@ -207,10 +190,10 @@ module icache
     end
 
     always_ff @ (posedge clk) begin
-        if (rst | gc.fetch_flush)
+        if (rst)
             miss_data_valid <= 0;
         else
-            miss_data_valid <= (miss_in_progress & ~miss_aborted_by_flush) & l1_response.data_valid & is_target_word;
+            miss_data_valid <= miss_in_progress & l1_response.data_valid & is_target_word;
     end
 
     assign  line_complete = (l1_response.data_valid && (word_count == SCONFIG.SUB_LINE_ADDR_W'(CONFIG.ICACHE.LINE_W-1)));
@@ -237,9 +220,9 @@ module icache
     always_ff @ (posedge clk) begin
         if (rst)
             idle <= 1;
-        else if (fetch_sub.new_request & ~gc.fetch_flush)
+        else if (fetch_sub.new_request)
             idle <= 0;
-        else if (memory_complete | tag_hit | (second_cycle & gc.fetch_flush) | (~miss_in_progress & gc.fetch_flush)) //read miss OR write through complete
+        else if (memory_complete | tag_hit) //read miss OR write through complete
             idle <= 1;
     end
 
