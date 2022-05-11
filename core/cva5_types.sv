@@ -180,15 +180,6 @@ package cva5_types;
         logic is_sret;
     } gc_inputs_t;
 
-    typedef struct packed{
-        logic [31:2] addr;
-        logic [31:0] data;
-        logic rnw;
-        logic [0:3] be;
-        logic [2:0] size;
-        logic con;
-    } to_l1_arbiter_packet;
-
     typedef struct packed {
         logic [31:0] addr;
         logic load;
