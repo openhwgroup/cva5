@@ -33,54 +33,42 @@ module wishbone_master
         wishbone_interface.master wishbone,
         memory_sub_unit_interface.responder ls
     );
-    //implementation
+
+    logic busy;
     ////////////////////////////////////////////////////
+    //Implementation
+    assign wishbone.cti = 0;
+    assign wishbone.bte = 0;
 
     always_ff @ (posedge clk) begin
         if (ls.new_request) begin
-            wishbone.adr <= ls.addr;
+            wishbone.adr <= ls.addr[29:0];
+            wishbone.sel <= ls.we ? ls.be : '1;
             wishbone.we <= ls.we;
-            wishbone.sel <= ls.be;
             wishbone.dat_w <= ls.data_in;
         end
     end
 
-    set_clr_reg_with_rst #(.SET_OVER_CLR(0), .WIDTH(1), .RST_VALUE(1)) ready_m (
-      .clk, .rst,
-      .set(wishbone.ack),
-      .clr(ls.new_request),
-      .result(ls.ready)
-    );
+    always_ff @ (posedge clk) begin
+        if (rst)
+            busy <= 0;
+        else
+            busy <= (busy & ~wishbone.ack) | ls.new_request;
+    end
+    assign ls.ready = (~busy);
+
+    assign wishbone.stb = busy;
+    assign wishbone.cyc = busy;
 
     always_ff @ (posedge clk) begin
         if (rst)
             ls.data_valid <= 0;
-        else if (~wishbone.we & wishbone.ack)
-            ls.data_valid <= 1;
         else
-            ls.data_valid <= 0;
+            ls.data_valid <= ~wishbone.we & wishbone.ack;
     end
-
     always_ff @ (posedge clk) begin
         if (wishbone.ack)
             ls.data_out <= wishbone.dat_r;
-        else
-            ls.data_out <= 0;
-    end
-
-    always_ff @ (posedge clk) begin
-        if (rst) begin
-            wishbone.stb <= 0;
-            wishbone.cyc <= 0;
-        end
-        else if (ls.new_request) begin
-            wishbone.stb <= 1;
-            wishbone.cyc <= 1;
-        end
-        else if (wishbone.ack) begin
-            wishbone.stb <= 0;
-            wishbone.cyc <= 0;
-        end
     end
 
 endmodule

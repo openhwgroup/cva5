@@ -112,14 +112,14 @@ interface avalon_interface;
 endinterface
 
 interface wishbone_interface;
-    logic [31:0] adr;
+    logic [29:0] adr;
     logic [31:0] dat_w;
     logic [3:0] sel;
     logic cyc;
     logic stb;
     logic we;
-    logic cti;
-    logic bte;
+    logic [2:0] cti;
+    logic [1:0] bte;
     logic [31:0] dat_r;
     logic ack;
     logic err;
