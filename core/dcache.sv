@@ -220,9 +220,9 @@ module dcache
     dcache_tag_banks (
         .clk (clk),
         .rst (rst),
-        .stage1_addr (ls.addr),
-        .stage2_addr ({stage2.addr, 2'b0}),
-        .inv_addr ({l1_response.inv_addr, 2'b0}),
+        .stage1_addr (ls.addr[31:2]),
+        .stage2_addr (stage2.addr),
+        .inv_addr (l1_response.inv_addr),
         .update_way (tag_update_way),
         .update (tag_update),
         .stage1_adv (ls.new_request),
