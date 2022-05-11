@@ -44,7 +44,14 @@ module fp_round_simplified (
       endcase
     end
   end else begin
-    assign result_if_overflow = {sign, {EXPO_WIDTH{1'b1}}, {FRAC_WIDTH{1'b0}}};
-    assign roundup = grs[2] & lsb | (grs[2] & |grs[1:0]);
+    always_comb begin
+      if(rm == 3'b000) begin
+        result_if_overflow = {sign, {EXPO_WIDTH{1'b1}}, {FRAC_WIDTH{1'b0}}};
+        roundup = grs[2] & lsb | (grs[2] & |grs[1:0]);
+      end else begin
+        result_if_overflow = 0;//{sign, {EXPO_WIDTH{1'b1}}, {FRAC_WIDTH{1'b0}}};
+        roundup = 0;//grs[2] & lsb | (grs[2] & |grs[1:0]);
+      end
+    end
   end endgenerate
 endmodule
