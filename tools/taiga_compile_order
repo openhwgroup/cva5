@@ -135,6 +135,7 @@ core/fpu/fp_div_sqrt_wrapper.sv
 core/fpu/fflags_mux.sv
 core/fpu/sandbox.sv
 core/fpu/fpu_top.sv
+core/fpu/fp_normalize_rounding_top.sv
 
 
 core/placer_randomizer.sv

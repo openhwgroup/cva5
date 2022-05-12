@@ -581,9 +581,6 @@ module taiga_sim
                 register_unit_id_table[cpu.fp_commit_packet[0].phys_addr] <= 0;
                 //$display("pc:0x%h-> fp_rd_instruction committed! register %d is cleared", cpu.issue.pc, cpu.fp_commit_packet[0].phys_addr);
             end
-
-            //if (cpu.fpu_block.fpu_block.fp_madd_inst.mul_issue.new_request & cpu.fpu_block.fpu_block.fp_madd_inst.is_fma)
-                //$display("%h,%h,%h,%h", cpu.fp_madd_inputs.rs1,cpu.fp_madd_inputs.rs2,cpu.fp_madd_inputs.rs3,cpu.fp_madd_inputs.op);
         end
 
         always_comb begin
@@ -661,9 +658,8 @@ module taiga_sim
             rs2_subnormal = cpu.instruction_issued & uses_rs2 & ~cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.hidden_bit[RS2] & ~cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.is_zero[RS2];
             rs3_subnormal = cpu.instruction_issued & uses_rs3 & ~cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.hidden_bit[RS3] & ~cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.is_zero[RS3];
             rd_subnormal = cpu.fp_commit_packet[0].valid & ~(|cpu.fp_commit_packet[0].data[FLEN-2-:EXPO_WIDTH]) & |cpu.fp_commit_packet[0].data[0+:FRAC_WIDTH];
-            wb_round_overflow = cpu.fp_writeback_block.frac_overflow & cpu.fp_wb_packet[0].valid;
-            roundup = cpu.fp_writeback_block.roundup & cpu.fp_wb_packet[0].valid;
-            
+            wb_round_overflow = cpu.fpu_block.fpu_block.norm_round_inst.frac_overflow & cpu.fpu_block.fpu_block.norm_round_inst.round_packet_r.valid;
+            roundup = cpu.fpu_block.fpu_block.norm_round_inst.roundup & cpu.fpu_block.fpu_block.norm_round_inst.round_packet_r.valid;
             in_flight_ids = cpu.id_block.inflight_count[LOG2_MAX_IDS] ? 32'(MAX_IDS) : 32'(cpu.id_block.inflight_count[LOG2_MAX_IDS-1:0]);
         end
 

@@ -74,10 +74,14 @@ module taiga
     localparam int unsigned MISC_WB2INT_UNIT_ID = MISC_WB2FP_UNIT_ID + 1;
     //FP Writeback units
     localparam int unsigned FLS_WB_ID = 32'd0;
-    localparam int unsigned FMADD_WB_ID = FLS_WB_ID + 1;
+    localparam int unsigned FP_ARITH_WB_ID = FLS_WB_ID + 1;
+
+    //FP Units that require norm/rounding
+    localparam int unsigned FMADD_WB_ID = 32'd0;
     localparam int unsigned FMUL_WB_ID = FMADD_WB_ID + 1;
     localparam int unsigned FDIV_SQRT_WB_ID = FMUL_WB_ID + 1;
     localparam int unsigned MISC_WB2FP_WB_ID = FDIV_SQRT_WB_ID + 1;
+    localparam int unsigned FP_NUM_NORM_ROUND_UNITS = MISC_WB2FP_WB_ID + 1;
 
     //Total number of units
     localparam int unsigned NUM_UNITS = IEC_UNIT_ID + 1; 
@@ -111,12 +115,16 @@ module taiga
     //FP Writeback ports
     localparam fp_wb_id_param_t FP_WB_IDS = '{
         FLS        : FLS_WB_ID,
-        FMADD      : FMADD_WB_ID,
-        FMUL       : FMUL_WB_ID,
-        FDIV_SQRT  : FDIV_SQRT_WB_ID,
+        FP_ARITH   : FP_ARITH_WB_ID
+    };
+    localparam int unsigned FP_NUM_WB_UNITS = FP_ARITH_WB_ID + 1;
+
+    localparam fp_wb_norm_round_param_t FP_NORM_ROUND_WB_IDS = '{
+        FMADD : FMADD_WB_ID,
+        FMUL: FMUL_WB_ID,
+        FDIV_SQRT: FDIV_SQRT_WB_ID,
         MISC_WB2FP : MISC_WB2FP_WB_ID
     };
-    localparam int unsigned FP_NUM_WB_UNITS = MISC_WB2FP_WB_ID + 1;
 
     localparam fp_wb_int_id_param_t FP_WB_INT_IDS = '{
         MISC_WB2INT     : 0
@@ -721,6 +729,8 @@ module taiga
             .FP_UNIT_IDS(FP_UNIT_IDS),
             .FP_NUM_WB_UNITS(FP_NUM_WB_UNITS),
             .FP_WB_IDS(FP_WB_IDS),
+            .FP_NUM_NORM_ROUND_UNITS(FP_NUM_NORM_ROUND_UNITS),
+            .FP_NORM_ROUND_WB_IDS(FP_NORM_ROUND_WB_IDS),
             .FP_WB_INT_NUM_UNITS(FP_WB_INT_NUM_UNITS),
             .FP_WB_INT_IDS(FP_WB_INT_IDS)
             )
@@ -781,7 +791,6 @@ module taiga
         .fflags_wb_packet (fp_unit_fflag_wb_packet),
         .wb_snoop (fp_wb_snoop)
     );
-
 
     ////////////////////////////////////////////////////
     //End of Implementation

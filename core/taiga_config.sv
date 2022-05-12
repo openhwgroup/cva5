@@ -90,7 +90,7 @@ package taiga_config;
     //FP Options
     parameter INCLUDE_FPU = 1;
     parameter EXPO_WIDTH = 11;
-	parameter FRAC_WIDTH = 52;
+	parameter FRAC_WIDTH = 52; 
     parameter FLEN = 1 + EXPO_WIDTH + FRAC_WIDTH;
     parameter INTERFACE_EXPO_WIDTH = 11;
     parameter INTERFACE_FRAC_WIDTH = 52;
@@ -169,7 +169,7 @@ package taiga_config;
         //ISA options
         INCLUDE_M_MODE : 1,
         INCLUDE_S_MODE : 0,
-        INCLUDE_U_MODE : 1,
+        INCLUDE_U_MODE : 0,
         INCLUDE_MUL : 1,
         INCLUDE_DIV : 1,
         INCLUDE_IFENCE : 1,
@@ -289,11 +289,15 @@ package taiga_config;
     //FPU Writeback IDs
     typedef struct packed {
         int unsigned FLS;
+        int unsigned FP_ARITH;
+    } fp_wb_id_param_t;
+
+    typedef struct packed {
         int unsigned FMADD;
         int unsigned FMUL;
         int unsigned FDIV_SQRT;
         int unsigned MISC_WB2FP;
-    } fp_wb_id_param_t;
+    } fp_wb_norm_round_param_t;
 
     typedef struct packed {
         int unsigned MISC_WB2INT;
