@@ -48,7 +48,7 @@ module fpu_top #(
     );
 
   logic flt_minmax;
-  fp_unit_writeback_interface intermediate_unit_wb [FP_NUM_NORM_ROUND_UNITS]; //units that require normalization/rounding
+  fp_unit_writeback_interface intermediate_unit_wb [FP_NUM_NORM_ROUND_UNITS](); //units that require normalization/rounding
   
   localparam int unsigned FP_NUM_NORM_ROUND_UNITS_PER_PORT [FP_NUM_WB_GROUPS] = '{FP_NUM_NORM_ROUND_UNITS};
   fp_normalize_rounding_top #(
