@@ -168,7 +168,6 @@ module cva5_sim
         output logic [31:0] retire_ports_pc [RETIRE_PORTS],
         output logic retire_ports_valid [RETIRE_PORTS],
         output logic store_queue_empty,
-        output logic load_store_idle,
 
         output logic instruction_issued,
         output logic cva5_events [0:$bits(cva5_trace_events_t)-1],
@@ -476,8 +475,7 @@ module cva5_sim
         assign retire_ports_valid[i] = cpu.retire_port_valid[i];
     end endgenerate
 
-    assign store_queue_empty = cpu.sq_empty;
-    assign load_store_idle = cpu.load_store_idle;
+    assign store_queue_empty = cpu.load_store_status.sq_empty;
 
     ////////////////////////////////////////////////////
     //Assertion Binding

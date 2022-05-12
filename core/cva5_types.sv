@@ -209,6 +209,12 @@ package cva5_types;
         logic forwarded_store;
     } sq_entry_t;
 
+    typedef struct packed {
+        logic sq_empty;
+        logic no_released_stores_pending;
+        logic idle;
+    } load_store_status_t;
+
     typedef struct packed{
         id_t id;
         logic valid;
