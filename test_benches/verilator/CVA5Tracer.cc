@@ -112,7 +112,10 @@ void CVA5Tracer::reset() {
 void CVA5Tracer::set_log_file(std::ofstream* logFile) {
     this->logFile = logFile;
 }
-
+void CVA5Tracer::set_pc_file(std::ofstream* pcFile) {
+    this->pcFile = pcFile;
+    logPC = true;
+}
 
 void CVA5Tracer::update_UART() {
 	if (tb->write_uart) {
@@ -151,7 +154,6 @@ void CVA5Tracer::tick() {
             verilatorWaveformTracer->dump(vluint32_t(cycle_count));
         #endif
 
-
         if (check_if_instruction_retired(BENCHMARK_START_COLLECTION_NOP)) {
             reset_stats();
             collect_stats = true;
@@ -170,6 +172,15 @@ void CVA5Tracer::tick() {
         update_stats();
         update_UART();
         update_memory();
+
+	#ifdef TRACE_ON
+        for (int i =0; i < tb->NUM_RETIRE_PORTS; i++) {
+            if (logPC && tb->retire_ports_valid[i]) {
+            	*pcFile << std::hex << tb->retire_ports_pc[i] << std::endl;
+            }
+        }
+	#endif
+
 }
 
 

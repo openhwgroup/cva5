@@ -87,6 +87,7 @@ public:
   void tick();
 
   void set_log_file(std::ofstream* logFile);
+  void set_pc_file(std::ofstream* pcFile);
   void start_tracer(const char *trace_file);
   uint64_t get_cycle_count();
 
@@ -99,6 +100,9 @@ private:
 		VerilatedVcdC	*verilatorWaveformTracer;
 #endif
   std::ofstream* logFile;
+  std::ofstream* pcFile;
+  bool logPC = false;
+
   int reset_length = 64;
   int stall_limit = 2000;
   int stall_count = 0;

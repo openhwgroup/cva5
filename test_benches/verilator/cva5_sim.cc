@@ -16,7 +16,7 @@ CVA5Tracer *cva5Tracer;
 //#define TRACE_ON
 using namespace std;
 int main(int argc, char **argv) {
-    ofstream logFile, sigFile;
+    ofstream logFile, sigFile, pcFile;
     ifstream programFile;
 
 	// Initialize Verilators variables
@@ -42,6 +42,8 @@ int main(int argc, char **argv) {
     	exit(EXIT_FAILURE);
     }
 
+
+
     logFile.open (argv[1]);
     sigFile.open (argv[2]);
     //printf("HW INIT:%s \n", argv[3]);
@@ -55,14 +57,18 @@ int main(int argc, char **argv) {
     	cout << "Failed to open sigFile: " << argv[2] << endl;
     	exit(EXIT_FAILURE);
     }
-    if (!programFile.is_open()) {
-    	cout << "Failed to open programFile: " << argv[3] << endl;
-    	exit(EXIT_FAILURE);
-    }
 
 	// Create an instance of our module under test
     cva5Tracer = new CVA5Tracer(programFile);
     cva5Tracer->set_log_file(&logFile);
+
+    if (argv[5]) {
+        pcFile.open (argv[5]);
+    }
+    if (pcFile.is_open()) {
+        cva5Tracer->set_pc_file(&pcFile);
+    }
+
     #ifdef TRACE_ON
         cva5Tracer->start_tracer(argv[4]);
 	#endif
@@ -93,6 +99,7 @@ int main(int argc, char **argv) {
 	logFile.close();
 	sigFile.close();
     programFile.close();
+    pcFile.close();
 
 	delete cva5Tracer;
 
