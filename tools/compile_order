@@ -52,7 +52,6 @@ core/dtag_banks.sv
 core/amo_alu.sv  
 core/dcache.sv  
 core/addr_hash.sv
-core/load_queue.sv
 core/store_queue.sv
 core/load_store_queue.sv
 core/load_store_unit.sv  

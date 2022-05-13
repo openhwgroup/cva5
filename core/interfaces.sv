@@ -194,30 +194,59 @@ interface load_store_queue_interface;
     import riscv_types::*;
     import cva5_types::*;
 
-    logic [31:0] addr;
-    logic load;
-    logic store;
-    logic [3:0] be;
-    logic [2:0] fn3;
-    logic [31:0] data_in;
-    id_t id;
-    logic forwarded_store;
-    id_t data_id;
+    //Issue inputs
+    lsq_entry_t data_in;
+    logic potential_push;
+    logic push;
+    logic full;
 
-    logic possible_issue;
-    logic new_issue;
-    logic ready;
+    //LSQ outputs
+    data_access_shared_inputs_t data_out;
+    logic valid;
+    logic pop;
 
-    data_access_shared_inputs_t transaction_out;
-    logic transaction_ready;
+    //LSQ status
     logic sq_empty;
     logic empty;
     logic no_released_stores_pending;
 
-    logic accepted;
+    modport queue (
+        input data_in, potential_push, push, pop,
+        output full, data_out, valid, sq_empty, empty, no_released_stores_pending
+    );
+    modport ls (
+        output data_in, potential_push, push, pop,
+        input full, data_out, valid, sq_empty, empty, no_released_stores_pending
+    );
+endinterface
 
-    modport queue (input addr, load, store, be, fn3, data_in, id, forwarded_store, data_id, possible_issue, new_issue, accepted, output ready, transaction_out, transaction_ready, sq_empty, empty, no_released_stores_pending);
-    modport ls  (output addr, load, store, be, fn3, data_in, id, forwarded_store, data_id, possible_issue, new_issue, accepted, input ready, transaction_out, transaction_ready, sq_empty, empty, no_released_stores_pending);
+
+interface store_queue_interface #(parameter DEPTH = 4);
+    import riscv_types::*;
+    import cva5_types::*;
+
+    //Issue inputs
+    lsq_entry_t data_in;
+    logic push;
+    logic full;
+
+    sq_entry_t data_out;
+
+    logic valid;
+    logic pop;
+
+    //SQ status
+    logic empty;
+    logic no_released_stores_pending;
+
+    modport queue (
+        input data_in, push, pop,
+        output full, data_out, valid, empty, no_released_stores_pending
+    );
+    modport ls (
+        output data_in, push, pop,
+        input full, data_out, valid, empty, no_released_stores_pending
+    );
 endinterface
 
 interface writeback_store_interface;
@@ -246,13 +275,12 @@ interface addr_utils_interface #(parameter bit [31:0] BASE_ADDR = 32'h00000000, 
         //Based on the lower and upper address ranges,
         //find the number of bits needed to uniquely identify this memory range.
         //Assumption: address range is aligned to its size
-        function automatic int unsigned bit_range ();
-            int unsigned i;
-            for(i=0; i < 32; i++) begin
+        function int unsigned bit_range ();
+            for(int i=0; i < 32; i++) begin
                 if (BASE_ADDR[i] == UPPER_BOUND[i])
-                    break;
+                    return (32 - i);
             end
-            return (32 - i);
+            return 0;
         endfunction
 
         localparam int unsigned BIT_RANGE = bit_range();

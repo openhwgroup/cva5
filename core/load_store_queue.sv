@@ -42,106 +42,103 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
         output logic tr_possible_load_conflict_delay
     );
     localparam SQ_DEPTH = 4;
+
+    typedef struct packed {
+        logic [31:0] addr;
+        logic [2:0] fn3;
+        id_t id;
+        logic [SQ_DEPTH-1:0] potential_store_conflicts;
+    } lq_entry_t;
+
     addr_hash_t addr_hash;
-
-    lsq_entry_t lsq_entry;
-
-    lq_entry_t lq_entry;
     logic [SQ_DEPTH-1:0] potential_store_conflicts;
-    logic load_ack;
-    logic lq_output_valid;
-
-    logic sq_full;
-    logic sq_empty;
-    logic no_released_stores_pending;
-
     sq_entry_t sq_entry;
-    logic [31:0] sq_data;
     logic store_conflict;
-    logic store_ack;
-    logic sq_output_valid;
+    logic load_selected;
 
+    lq_entry_t lq_data_in;
+    lq_entry_t lq_data_out;
+
+    fifo_interface #(.DATA_WIDTH($bits(lq_entry_t))) lq();
+    store_queue_interface #(.DEPTH(SQ_DEPTH)) sq();
     ////////////////////////////////////////////////////
     //Implementation
 
     //Can accept requests so long as store queue is not needed or is not full
-    assign lsq.ready = lsq.load | (~sq_full);
-
+    assign lsq.full = lsq.data_in.store & sq.full;
 
     //Address hash for load-store collision checking
     addr_hash lsq_addr_hash (
         .clk (clk),
         .rst (rst | gc.sq_flush),
-        .addr (lsq.addr),
+        .addr (lsq.data_in.addr),
         .addr_hash (addr_hash)
     );
 
-    assign lsq_entry.addr = lsq.addr;
-    assign lsq_entry.load = lsq.load;
-    assign lsq_entry.store = lsq.store;
-    assign lsq_entry.be = lsq.be;
-    assign lsq_entry.fn3 = lsq.fn3;
-    assign lsq_entry.data_in = lsq.data_in;
-    assign lsq_entry.id = lsq.id;
-    assign lsq_entry.forwarded_store = lsq.forwarded_store;
-    assign lsq_entry.data_id = lsq.data_id;
-    assign lsq_entry.possible_issue = lsq.possible_issue;
-    assign lsq_entry.new_issue = lsq.new_issue;
-
-    load_queue #(.SQ_DEPTH(SQ_DEPTH)) lq_block (
-        .clk (clk),
-        .rst (rst),
-        .lsq (lsq_entry),
-        .lq_entry (lq_entry),
-        .potential_store_conflicts (potential_store_conflicts),
-        .load_ack (load_ack),
-        .lq_output_valid (lq_output_valid)
+    ////////////////////////////////////////////////////
+    //Load Queue
+    cva5_fifo #(.DATA_WIDTH($bits(lq_entry_t)), .FIFO_DEPTH(MAX_IDS))
+    load_queue_fifo (
+        .clk(clk),
+        .rst(rst),
+        .fifo(lq)
     );
+
+    //FIFO control signals
+    assign lq.push = lsq.push & lsq.data_in.load;
+    assign lq.potential_push = lsq.potential_push;
+    assign lq.pop = lsq.pop & load_selected;
+
+    //FIFO data ports
+    assign lq_data_in = '{
+        addr : lsq.data_in.addr,
+        fn3 : lsq.data_in.fn3,
+        id : lsq.data_in.id, 
+        potential_store_conflicts : potential_store_conflicts
+    };
+    assign lq.data_in = lq_data_in;
+    assign lq_data_out = lq.data_out;
+    ////////////////////////////////////////////////////
+    //Store Queue
+    assign sq.push = lsq.push &  lsq.data_in.store;
+    assign sq.pop = lsq.pop & ~load_selected;
+    assign sq.data_in = lsq.data_in;
 
     store_queue #(.DEPTH(SQ_DEPTH)) sq_block (
         .clk (clk),
         .rst (rst | gc.sq_flush),
-        .lsq (lsq_entry),
-        .sq_empty (sq_empty),
-        .sq_full (sq_full),
-        .no_released_stores_pending (no_released_stores_pending),
+        .lq_push (lq.push),
+        .lq_pop (lq.pop),
+        .sq (sq),
         .addr_hash (addr_hash),
         .potential_store_conflicts (potential_store_conflicts),
-        .load_issued (load_ack),
-        .prev_store_conflicts (lq_entry.potential_store_conflicts),
+        .prev_store_conflicts (lq_data_out.potential_store_conflicts),
         .store_conflict (store_conflict),
-        .sq_entry (sq_entry),
-        .sq_data (sq_data),
         .wb_snoop (wb_snoop),
         .retire_ids (retire_ids),
-        .retire_port_valid (retire_port_valid),
-        .store_ack (store_ack),
-        .sq_output_valid (sq_output_valid)
+        .retire_port_valid (retire_port_valid)
     );
 
     ////////////////////////////////////////////////////
     //Output
-    logic load_selected;
-
     //Priority is for loads over stores.
     //A store will be selected only if either no loads are ready, OR if the store queue is full and a store is ready
-    assign load_selected = lq_output_valid & ~store_conflict;// & ~(sq_full & sq_output_valid);
+    assign load_selected = lq.valid & ~store_conflict;// & ~(sq_full & sq.valid);
 
-    assign lsq.transaction_ready = (lq_output_valid & ~store_conflict) | sq_output_valid;
-    assign load_ack = lsq.accepted & load_selected;
-    assign store_ack = lsq.accepted & ~load_selected;
+    assign lsq.valid = load_selected | sq.valid;
+    assign lsq.data_out = '{
+        addr : load_selected ? lq_data_out.addr : sq.data_out.addr,
+        load : load_selected,
+        store : ~load_selected,
+        be : load_selected ? '0 : sq.data_out.be,
+        fn3 : load_selected ? lq_data_out.fn3 : sq.data_out.fn3,
+        data_in : sq.data_out.data,
+        id : lq_data_out.id
+    };
 
-    assign lsq.transaction_out.addr = load_selected ? lq_entry.addr : sq_entry.addr;
-    assign lsq.transaction_out.load = load_selected;
-    assign lsq.transaction_out.store = ~load_selected;
-    assign lsq.transaction_out.be = load_selected ? '0 : sq_entry.be;
-    assign lsq.transaction_out.fn3 = load_selected ? lq_entry.fn3 : sq_entry.fn3;
-    assign lsq.transaction_out.data_in = sq_data;
-    assign lsq.transaction_out.id = lq_entry.id;
-
-    assign lsq.sq_empty = sq_empty;
-    assign lsq.no_released_stores_pending = no_released_stores_pending;
-    assign lsq.empty = ~lq_output_valid & sq_empty;
+    assign lsq.sq_empty = sq.empty;
+    assign lsq.no_released_stores_pending = sq.no_released_stores_pending;
+    assign lsq.empty = ~lq.valid & sq.empty;
 
     ////////////////////////////////////////////////////
     //End of Implementation
@@ -153,7 +150,7 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
     ////////////////////////////////////////////////////
     //Trace Interface
     generate if (ENABLE_TRACE_INTERFACE) begin : gen_lsq_trace
-        assign tr_possible_load_conflict_delay = lq_output_valid & (store_conflict | (sq_full & sq_output_valid));
+        assign tr_possible_load_conflict_delay = lq.valid & (store_conflict | (sq.full & sq.valid));
     end
     endgenerate
 

@@ -210,18 +210,20 @@ module load_store_unit
 
     ////////////////////////////////////////////////////
     //Load Store Queue
-    assign lsq.addr = tlb_on ? tlb.physical_address : virtual_address;
-    assign lsq.fn3 = ls_inputs.fn3;
-    assign lsq.be = be;
-    assign lsq.data_in = ls_inputs.rs2;
-    assign lsq.load = ls_inputs.load;
-    assign lsq.store = ls_inputs.store;
-    assign lsq.id = issue.id;
-    assign lsq.forwarded_store = ls_inputs.forwarded_store;
-    assign lsq.data_id = ls_inputs.store_forward_id;
+    assign lsq.data_in = '{
+        addr : tlb_on ? tlb.physical_address : virtual_address,
+        fn3 : ls_inputs.fn3,
+        be : be,
+        data : ls_inputs.rs2,
+        load : ls_inputs.load,
+        store : ls_inputs.store,
+        id : issue.id,
+        forwarded_store : ls_inputs.forwarded_store,
+        id_needed : ls_inputs.store_forward_id
+    };
 
-    assign lsq.possible_issue = issue.possible_issue;
-    assign lsq.new_issue = issue.new_request & ~unaligned_addr & (~tlb_on | tlb.done) & ~ls_inputs.fence;
+    assign lsq.potential_push = issue.possible_issue;
+    assign lsq.push = issue.new_request & ~unaligned_addr & (~tlb_on | tlb.done) & ~ls_inputs.fence;
 
     load_store_queue lsq_block (
         .clk (clk),
@@ -233,8 +235,8 @@ module load_store_unit
         .retire_port_valid (retire_port_valid),
         .tr_possible_load_conflict_delay (tr_possible_load_conflict_delay)
     );
-    assign shared_inputs = lsq.transaction_out;
-    assign lsq.accepted = sub_unit_issue;
+    assign shared_inputs = lsq.data_out;
+    assign lsq.pop = sub_unit_issue;
 
 
     ////////////////////////////////////////////////////
@@ -258,8 +260,8 @@ module load_store_unit
     assign units_ready = &unit_ready & (~unit_switch_hold);
     assign load_complete = |unit_data_valid;
 
-    assign issue.ready = (~tlb_on | tlb.ready) & lsq.ready & ~fence_hold & ~exception.valid;
-    assign sub_unit_issue = lsq.transaction_ready & units_ready;
+    assign issue.ready = (~tlb_on | tlb.ready) & (~lsq.full) & (~fence_hold) & (~exception.valid);
+    assign sub_unit_issue = lsq.valid & units_ready;
 
     always_ff @ (posedge clk) begin
         if (rst)
