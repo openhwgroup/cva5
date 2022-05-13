@@ -26,6 +26,9 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
     import riscv_types::*;
     import cva5_types::*;
 
+    # (
+        parameter cpu_config_t CONFIG = EXAMPLE_CONFIG
+    )
     (
         input logic clk,
         input logic rst,
@@ -41,17 +44,16 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
 
         output logic tr_possible_load_conflict_delay
     );
-    localparam SQ_DEPTH = 4;
 
     typedef struct packed {
         logic [31:0] addr;
         logic [2:0] fn3;
         id_t id;
-        logic [SQ_DEPTH-1:0] potential_store_conflicts;
+        logic [CONFIG.SQ_DEPTH-1:0] potential_store_conflicts;
     } lq_entry_t;
 
     addr_hash_t addr_hash;
-    logic [SQ_DEPTH-1:0] potential_store_conflicts;
+    logic [CONFIG.SQ_DEPTH-1:0] potential_store_conflicts;
     sq_entry_t sq_entry;
     logic store_conflict;
     logic load_selected;
@@ -60,7 +62,7 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
     lq_entry_t lq_data_out;
 
     fifo_interface #(.DATA_WIDTH($bits(lq_entry_t))) lq();
-    store_queue_interface #(.DEPTH(SQ_DEPTH)) sq();
+    store_queue_interface sq();
     ////////////////////////////////////////////////////
     //Implementation
 
@@ -104,7 +106,7 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
     assign sq.pop = lsq.pop & ~load_selected;
     assign sq.data_in = lsq.data_in;
 
-    store_queue #(.DEPTH(SQ_DEPTH)) sq_block (
+    store_queue  # (.CONFIG(CONFIG)) sq_block (
         .clk (clk),
         .rst (rst | gc.sq_flush),
         .lq_push (lq.push),

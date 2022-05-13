@@ -225,7 +225,7 @@ module load_store_unit
     assign lsq.potential_push = issue.possible_issue;
     assign lsq.push = issue.new_request & ~unaligned_addr & (~tlb_on | tlb.done) & ~ls_inputs.fence;
 
-    load_store_queue lsq_block (
+    load_store_queue  # (.CONFIG(CONFIG)) lsq_block (
         .clk (clk),
         .rst (rst),
         .gc (gc),

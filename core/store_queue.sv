@@ -27,7 +27,7 @@ module store_queue
     import cva5_types::*;
 
     # (
-        parameter DEPTH = 4
+        parameter cpu_config_t CONFIG = EXAMPLE_CONFIG
     )
     ( 
         input logic clk,
@@ -40,9 +40,9 @@ module store_queue
         //Address hash (shared by loads and stores)
         input addr_hash_t addr_hash,
         //hash check on adding a load to the queue
-        output logic [DEPTH-1:0] potential_store_conflicts,
+        output logic [CONFIG.SQ_DEPTH-1:0] potential_store_conflicts,
         //Load issue collision check
-        input logic [DEPTH-1:0] prev_store_conflicts,
+        input logic [CONFIG.SQ_DEPTH-1:0] prev_store_conflicts,
         output logic store_conflict,
 
         //Writeback snooping
@@ -53,42 +53,42 @@ module store_queue
         input logic retire_port_valid [RETIRE_PORTS]
     );
 
-    localparam LOG2_DEPTH = $clog2(DEPTH);
-    typedef logic [LOG2_MAX_IDS-1:0] load_check_count_t;
+    localparam LOG2_SQ_DEPTH = $clog2(CONFIG.SQ_DEPTH);
+    typedef logic [LOG2_MAX_IDS:0] load_check_count_t;
 
 
     wb_packet_t wb_snoop_r;
 
     //Register-based memory blocks
-    logic [DEPTH-1:0] valid;
-    logic [DEPTH-1:0] valid_next;
-    addr_hash_t [DEPTH-1:0] hashes;
-    logic [DEPTH-1:0] released;
-    id_t [DEPTH-1:0] id_needed;
-    load_check_count_t [DEPTH-1:0] load_check_count;
-    logic [31:0] store_data_from_wb [DEPTH];
+    logic [CONFIG.SQ_DEPTH-1:0] valid;
+    logic [CONFIG.SQ_DEPTH-1:0] valid_next;
+    addr_hash_t [CONFIG.SQ_DEPTH-1:0] hashes;
+    logic [CONFIG.SQ_DEPTH-1:0] released;
+    id_t [CONFIG.SQ_DEPTH-1:0] id_needed;
+    load_check_count_t [CONFIG.SQ_DEPTH-1:0] load_check_count;
+    logic [31:0] store_data_from_wb [CONFIG.SQ_DEPTH];
 
     //LUTRAM-based memory blocks
     sq_entry_t sq_entry_in;
-    (* ramstyle = "MLAB, no_rw_check" *) logic [$bits(sq_entry_t)-1:0] sq_entry [DEPTH];
-    (* ramstyle = "MLAB, no_rw_check" *) id_t [DEPTH-1:0] ids;
-    (* ramstyle = "MLAB, no_rw_check" *) logic [LOG2_DEPTH-1:0] sq_ids [MAX_IDS];
+    (* ramstyle = "MLAB, no_rw_check" *) logic [$bits(sq_entry_t)-1:0] sq_entry [CONFIG.SQ_DEPTH];
+    (* ramstyle = "MLAB, no_rw_check" *) id_t [CONFIG.SQ_DEPTH-1:0] ids;
+    (* ramstyle = "MLAB, no_rw_check" *) logic [LOG2_SQ_DEPTH-1:0] sq_ids [MAX_IDS];
 
-    load_check_count_t [DEPTH-1:0] load_check_count_next;
+    load_check_count_t [CONFIG.SQ_DEPTH-1:0] load_check_count_next;
 
-    logic [LOG2_DEPTH-1:0] sq_index;
-    logic [LOG2_DEPTH-1:0] sq_index_next;
-    logic [LOG2_DEPTH-1:0] sq_oldest;
+    logic [LOG2_SQ_DEPTH-1:0] sq_index;
+    logic [LOG2_SQ_DEPTH-1:0] sq_index_next;
+    logic [LOG2_SQ_DEPTH-1:0] sq_oldest;
 
-    logic [DEPTH-1:0] new_request_one_hot;
-    logic [DEPTH-1:0] issued_one_hot;
+    logic [CONFIG.SQ_DEPTH-1:0] new_request_one_hot;
+    logic [CONFIG.SQ_DEPTH-1:0] issued_one_hot;
 
 
-    logic [DEPTH-1:0] wb_id_match;
+    logic [CONFIG.SQ_DEPTH-1:0] wb_id_match;
 
     ////////////////////////////////////////////////////
     //Implementation     
-    assign sq_index_next = sq_index + LOG2_DEPTH'(sq.push);
+    assign sq_index_next = sq_index +LOG2_SQ_DEPTH'(sq.push);
     always_ff @ (posedge clk) begin
         if (rst)
             sq_index <= 0;
@@ -100,11 +100,11 @@ module store_queue
         if (rst)
             sq_oldest <= 0;
         else
-            sq_oldest <= sq_oldest + LOG2_DEPTH'(sq.pop);
+            sq_oldest <= sq_oldest +LOG2_SQ_DEPTH'(sq.pop);
     end
 
-    assign new_request_one_hot = DEPTH'(sq.push) << sq_index;
-    assign issued_one_hot = DEPTH'(sq.pop) << sq_oldest;
+    assign new_request_one_hot = CONFIG.SQ_DEPTH'(sq.push) << sq_index;
+    assign issued_one_hot = CONFIG.SQ_DEPTH'(sq.pop) << sq_oldest;
 
     assign valid_next = (valid | new_request_one_hot) & ~issued_one_hot;
     always_ff @ (posedge clk) begin
@@ -122,7 +122,7 @@ module store_queue
         else
             sq.full <= valid_next[sq_index_next] | (|load_check_count_next[sq_index_next]);
     end
-    
+
     //SQ attributes and issue data
     assign sq_entry_in = '{
         addr : sq.data_in.addr,
@@ -144,11 +144,11 @@ module store_queue
 
     //Keep count of the number of pending loads that might need a store result
     //Mask out any store completing on this cycle
-    logic [DEPTH-1:0] new_load_waiting;
-    logic [DEPTH-1:0] waiting_load_completed;
+    logic [CONFIG.SQ_DEPTH-1:0] new_load_waiting;
+    logic [CONFIG.SQ_DEPTH-1:0] waiting_load_completed;
 
     always_comb begin
-        for (int i = 0; i < DEPTH; i++) begin
+        for (int i = 0; i < CONFIG.SQ_DEPTH; i++) begin
             potential_store_conflicts[i] = (valid[i] & ~issued_one_hot[i]) & (addr_hash == hashes[i]);
             new_load_waiting[i] = potential_store_conflicts[i] & lq_push;
             waiting_load_completed[i] = prev_store_conflicts[i] & lq_pop;
@@ -190,15 +190,15 @@ module store_queue
 
     ////////////////////////////////////////////////////
     //Release Handling
-    logic [DEPTH-1:0] newly_released;
-    logic [LOG2_DEPTH-1:0] store_released_index [RETIRE_PORTS];
+    logic [CONFIG.SQ_DEPTH-1:0] newly_released;
+    logic [LOG2_SQ_DEPTH-1:0] store_released_index [RETIRE_PORTS];
     logic store_released [RETIRE_PORTS];
     always_comb begin
         newly_released = '0;
         for (int i = 0; i < RETIRE_PORTS; i++) begin
             store_released_index[i] = sq_ids[retire_ids[i]];            
             store_released[i] = {1'b1, ids[store_released_index[i]]} == {retire_port_valid[i], retire_ids[i]};
-            newly_released |= DEPTH'(store_released[i]) << store_released_index[i];
+            newly_released |= CONFIG.SQ_DEPTH'(store_released[i]) << store_released_index[i];
         end
     end
     always_ff @ (posedge clk) begin
@@ -214,7 +214,7 @@ module store_queue
     end
 
     always_ff @ (posedge clk) begin
-        for (int i = 0; i < DEPTH; i++) begin
+        for (int i = 0; i < CONFIG.SQ_DEPTH; i++) begin
             if ({1'b0, wb_snoop_r.valid, wb_snoop_r.id} == {released[i], 1'b1, id_needed[i]})
                 store_data_from_wb[i] <= wb_snoop_r.data;
         end
@@ -258,5 +258,10 @@ module store_queue
 
     ////////////////////////////////////////////////////
     //Assertions
+    sq_overflow_assertion:
+        assert property (@(posedge clk) disable iff (rst) sq.push |-> (~sq.full | sq.pop)) else $error("sq overflow");
+    fifo_underflow_assertion:
+        assert property (@(posedge clk) disable iff (rst) sq.pop |-> sq.valid) else $error("sq underflow");
+
 
 endmodule

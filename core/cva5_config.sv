@@ -112,6 +112,7 @@ package cva5_config;
         //CSR constants
         csr_config_t CSRS;
         //Memory Options
+        int unsigned SQ_DEPTH;//CAM-based reasonable max of 4
         //Caches
         bit INCLUDE_ICACHE;
         cache_config_t ICACHE;
@@ -178,10 +179,11 @@ package cva5_config;
             }
         },
         //Memory Options
+        SQ_DEPTH : 4,
         INCLUDE_ICACHE : 0,
         ICACHE_ADDR : '{
-            L: 32'h40000000,
-            H: 32'h4FFFFFFF
+            L: 32'h80000000,
+            H: 32'h8FFFFFFF
         },
         ICACHE : '{
             LINES : 512,
@@ -190,8 +192,8 @@ package cva5_config;
             USE_EXTERNAL_INVALIDATIONS : 0,
             USE_NON_CACHEABLE : 0,
             NON_CACHEABLE : '{
-                L: 32'h00000000,
-                H: 32'h00000000
+                L: 32'h70000000,
+                H: 32'h7FFFFFFF
             }
         },
         ITLB : '{
@@ -200,8 +202,8 @@ package cva5_config;
         },
         INCLUDE_DCACHE : 0,
         DCACHE_ADDR : '{
-            L: 32'h40000000,
-            H: 32'h4FFFFFFF
+            L: 32'h80000000,
+            H: 32'h8FFFFFFF
         },
         DCACHE : '{
             LINES : 512,
@@ -210,8 +212,8 @@ package cva5_config;
             USE_EXTERNAL_INVALIDATIONS : 0,
             USE_NON_CACHEABLE : 0,
             NON_CACHEABLE : '{
-                L: 32'h00000000,
-                H: 32'h00000000
+                L: 32'h70000000,
+                H: 32'h7FFFFFFF
             }
         },
         DTLB : '{

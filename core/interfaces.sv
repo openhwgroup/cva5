@@ -221,7 +221,7 @@ interface load_store_queue_interface;
 endinterface
 
 
-interface store_queue_interface #(parameter DEPTH = 4);
+interface store_queue_interface;
     import riscv_types::*;
     import cva5_types::*;
 
