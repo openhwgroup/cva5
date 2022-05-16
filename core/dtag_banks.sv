@@ -34,9 +34,9 @@ module dtag_banks
         input logic clk,
         input logic rst,
 
-        input logic[31:0] stage1_addr,
-        input logic[31:0] stage2_addr,
-        input logic[31:0] inv_addr,
+        input logic[29:0] stage1_addr,
+        input logic[29:0] stage2_addr,
+        input logic[29:0] inv_addr,
 
         input logic[CONFIG.DCACHE.WAYS-1:0] update_way,
         input logic update,
@@ -56,21 +56,20 @@ module dtag_banks
         logic [SCONFIG.TAG_W-1:0] tag;
     } dtag_entry_t;
 
-    function logic[SCONFIG.TAG_W-1:0] getTag(logic[31:0] addr);
-        return addr[2+SCONFIG.SUB_LINE_ADDR_W+SCONFIG.LINE_ADDR_W +: SCONFIG.TAG_W];
+    function logic[SCONFIG.TAG_W-1:0] getTag(logic[29:0] addr);
+        return addr[SCONFIG.SUB_LINE_ADDR_W + SCONFIG.LINE_ADDR_W +: SCONFIG.TAG_W];
     endfunction
 
-    function logic[SCONFIG.LINE_ADDR_W-1:0] getLineAddr(logic[31:0] addr);
-        return addr[SCONFIG.LINE_ADDR_W + SCONFIG.SUB_LINE_ADDR_W + 1 : SCONFIG.SUB_LINE_ADDR_W + 2];
+    function logic[SCONFIG.LINE_ADDR_W-1:0] getLineAddr(logic[29:0] addr);
+        return addr[SCONFIG.LINE_ADDR_W + SCONFIG.SUB_LINE_ADDR_W - 1 : SCONFIG.SUB_LINE_ADDR_W];
     endfunction
 
-    dtag_entry_t  tag_line [CONFIG.DCACHE.WAYS - 1:0];
-    dtag_entry_t  inv_tag_line [CONFIG.DCACHE.WAYS - 1:0];
+    dtag_entry_t  tag_line [CONFIG.DCACHE.WAYS-1:0];
+    dtag_entry_t  inv_tag_line [CONFIG.DCACHE.WAYS-1:0];
 
     dtag_entry_t new_tagline;
 
-    logic miss_or_extern_invalidate;
-    logic [CONFIG.DCACHE.WAYS - 1:0] update_tag_way;
+    logic [CONFIG.DCACHE.WAYS-1:0] update_tag_way;
 
     logic inv_tags_accessed;
 
@@ -78,17 +77,21 @@ module dtag_banks
     logic[CONFIG.DCACHE.WAYS-1:0] inv_hit_way_r;
 
     logic [SCONFIG.LINE_ADDR_W-1:0] update_port_addr;
+
+    dtag_entry_t stage2_hit_comparison_tagline;
+    dtag_entry_t inv_hit_comparison_tagline;
     ////////////////////////////////////////////////////
     //Implementation
 
 
     ////////////////////////////////////////////////////
     //Muxing of cache miss or invalidation control logic and tags
-    assign miss_or_extern_invalidate = update | extern_inv;
-    assign update_port_addr = (extern_inv & ~update) ? getLineAddr(inv_addr) : getLineAddr(stage2_addr);
+    assign update_port_addr =
+        CONFIG.DCACHE.USE_EXTERNAL_INVALIDATIONS ? 
+        ((update) ? getLineAddr(stage2_addr) : getLineAddr(inv_addr)) :
+        getLineAddr(stage2_addr);
 
-    assign new_tagline.valid = update;//If not update then an invalidation is being performed
-    assign new_tagline.tag = getTag(stage2_addr);
+    assign new_tagline = '{valid: update, tag: getTag(stage2_addr)};
 
     always_ff @ (posedge clk) begin
         if (rst)
@@ -101,38 +104,31 @@ module dtag_banks
 
     ////////////////////////////////////////////////////
     //Memory instantiation and hit detection
-    generate
-    	genvar i;
-    	dtag_entry_t stage2_hit_comparison_tagline;
-    	dtag_entry_t inv_hit_comparison_tagline;
+    assign stage2_hit_comparison_tagline = '{valid: 1, tag: getTag(stage2_addr)};
+    assign inv_hit_comparison_tagline = '{valid: 1, tag: getTag(inv_addr)};
 
-    	assign stage2_hit_comparison_tagline.valid = 1;
-        assign stage2_hit_comparison_tagline.tag = getTag(stage2_addr);
-    	assign inv_hit_comparison_tagline.valid = 1;
-        assign inv_hit_comparison_tagline.tag = getTag(inv_addr);
+    generate for (genvar i=0; i < CONFIG.DCACHE.WAYS; i++) begin : dtag_bank_gen
+        assign update_tag_way[i] = update_way[i] | (inv_hit_way[i] & extern_inv_complete);
 
-        for (i=0; i < CONFIG.DCACHE.WAYS; i=i+1) begin : dtag_bank_gen
-            assign update_tag_way[i] = update_way[i] | (inv_hit_way[i] & extern_inv_complete);
+        tag_bank #($bits(dtag_entry_t), CONFIG.DCACHE.LINES) dtag_bank ( 
+            .clk (clk),
+            .rst (rst),
+            .en_a (stage1_adv), 
+            .wen_a (stage1_inv),
+            .addr_a (getLineAddr(stage1_addr)),
+            .data_in_a ('0), 
+            .data_out_a (tag_line[i]),
+            .en_b (update | extern_inv), 
+            .wen_b (update_tag_way[i]),
+            .addr_b (update_port_addr),
+            .data_in_b (new_tagline),
+            .data_out_b(inv_tag_line[i])
+        );
 
-            tag_bank #($bits(dtag_entry_t), CONFIG.DCACHE.LINES) dtag_bank ( 
-                .clk            (clk),
-                .rst            (rst),
-                .en_a           (stage1_adv), 
-                .wen_a          (stage1_inv),
-                .addr_a         (getLineAddr(stage1_addr)),
-                .data_in_a      ('0), 
-                .data_out_a     (tag_line[i]),
-                .en_b           (miss_or_extern_invalidate), 
-                .wen_b          (update_tag_way[i]),
-                .addr_b         (update_port_addr),
-                .data_in_b      (new_tagline), .data_out_b(inv_tag_line[i])
-            );
+        assign inv_hit_way[i] = (inv_hit_comparison_tagline == inv_tag_line[i]);
+        assign tag_hit_way[i] = (stage2_hit_comparison_tagline == tag_line[i]);
 
-            assign inv_hit_way[i] = (inv_hit_comparison_tagline == inv_tag_line[i]);
-            assign tag_hit_way[i] = (stage2_hit_comparison_tagline == tag_line[i]);
-
-        end
-    endgenerate
+    end endgenerate
 
     assign tag_hit = |tag_hit_way;
     ////////////////////////////////////////////////////

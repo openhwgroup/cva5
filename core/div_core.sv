@@ -34,7 +34,6 @@ module div_core
     logic [CLZ_W-1:0] CLZ_delta;
     
     logic divisor_greater_than_dividend;
-    logic first_cycle_abort;
 
     logic [DIV_WIDTH-1:0] shifted_divisor;
 
@@ -64,7 +63,7 @@ module div_core
     //Subtractions
     logic sub2x_toss;
     assign {sub_2x_overflow, sub2x_toss, sub_2x} = {1'b0, div.remainder} - {shifted_divisor, 1'b0};
-    assign {sub_1x_overflow, sub_1x} = {1'b0, (sub_2x_overflow ? div.remainder : sub_2x)} - {1'b0, shifted_divisor};
+    assign {sub_1x_overflow, sub_1x} = sub_2x_overflow ? {sub2x_toss, sub_2x} + {1'b0, shifted_divisor} : {sub2x_toss, sub_2x} - {1'b0, shifted_divisor};
 
     assign new_quotient_bits[1] = ~sub_2x_overflow;
     assign new_quotient_bits[0] = ~sub_1x_overflow;
@@ -89,8 +88,8 @@ module div_core
     
     ////////////////////////////////////////////////////
     //Control Signals
-    assign first_cycle_abort = divisor_greater_than_dividend | div.divisor_is_zero;
 
+    //can merge with CLZ subtraction and remove mux on divisor if inputs held constant
     assign {terminate, cycles_remaining_next} = cycles_remaining - 1;
     always_ff @ (posedge clk) begin
         cycles_remaining <= running ? cycles_remaining_next : CLZ_delta[CLZ_W-1:1];
@@ -100,10 +99,10 @@ module div_core
         if (rst)
             running <= 0;
         else
-            running <= (running & ~terminate) | (div.start & ~first_cycle_abort);
+            running <= (running & ~terminate) | (div.start & ~divisor_greater_than_dividend);
     end
     
-    assign div.done = (running & terminate) | (div.start & first_cycle_abort);
+    assign div.done = (running & terminate) | (div.start & divisor_greater_than_dividend);
 
     ////////////////////////////////////////////////////
     //End of Implementation

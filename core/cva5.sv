@@ -42,7 +42,8 @@ module cva5
 
         axi_interface.master m_axi,
         avalon_interface.master m_avalon,
-        wishbone_interface.master m_wishbone,
+        wishbone_interface.master dwishbone,
+        wishbone_interface.master iwishbone,
 
         output trace_outputs_t tr,
 
@@ -170,9 +171,7 @@ module cva5
     exception_interface exception [NUM_EXCEPTION_SOURCES]();
     logic [$clog2(NUM_EXCEPTION_SOURCES)-1:0] current_exception_unit;
     gc_outputs_t gc;
-    logic sq_empty;
-    logic no_released_stores_pending;
-    logic load_store_idle;
+    load_store_status_t load_store_status;
     logic [LOG2_MAX_IDS:0] post_issue_count;
 
     logic [1:0] current_privilege;
@@ -305,6 +304,7 @@ module cva5
         .if_pc (if_pc),
         .fetch_instruction (fetch_instruction),                                
         .instruction_bram (instruction_bram), 
+        .iwishbone (iwishbone),
         .icache_on ('1),
         .tlb (itlb), 
         .tlb_on (tlb_on),
@@ -491,15 +491,13 @@ module cva5
         .sc_success (sc_success),                                       
         .m_axi (m_axi),
         .m_avalon (m_avalon),
-        .m_wishbone (m_wishbone),                                       
+        .dwishbone (dwishbone),                                       
         .data_bram (data_bram),
         .wb_snoop (wb_snoop),
         .retire_ids (retire_ids),
         .retire_port_valid(retire_port_valid),
         .exception (exception[LS_EXCEPTION]),
-        .sq_empty (sq_empty),
-        .no_released_stores_pending (no_released_stores_pending),
-        .load_store_idle (load_store_idle),
+        .load_store_status(load_store_status),
         .wb (unit_wb[UNIT_IDS.LS]),
         .tr_load_conflict_delay (tr_load_conflict_delay)
     );
@@ -581,8 +579,7 @@ module cva5
         .interrupt_taken(interrupt_taken),
         .interrupt_pending(interrupt_pending),
         .processing_csr(processing_csr),
-        .sq_empty (sq_empty),
-        .no_released_stores_pending (no_released_stores_pending),
+        .load_store_status(load_store_status),
         .post_issue_count (post_issue_count)
     );
 

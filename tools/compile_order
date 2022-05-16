@@ -14,7 +14,22 @@ core/external_interfaces.sv
 core/lutrams/lutram_1w_1r.sv
 core/lutrams/lutram_1w_mr.sv
 
+core/set_clr_reg_with_rst.sv
+core/one_hot_occupancy.sv 
+core/binary_occupancy.sv 
+core/one_hot_to_integer.sv  
+core/cycler.sv  
 core/lfsr.sv
+core/cva5_fifo.sv  
+core/shift_counter.sv
+core/priority_encoder.sv
+
+core/toggle_memory.sv
+core/toggle_memory_set.sv
+
+core/intel/intel_byte_enable_ram.sv
+core/xilinx/xilinx_byte_enable_ram.sv
+core/byte_en_BRAM.sv 
 
 core/csr_unit.sv  
 core/gc_unit.sv  
@@ -25,50 +40,24 @@ core/branch_unit.sv
 core/barrel_shifter.sv  
 core/alu_unit.sv  
 
+core/local_mem_sub_unit.sv
 core/axi_master.sv  
 core/avalon_master.sv  
 core/wishbone_master.sv  
 
-core/axi_to_arb.sv  
 
-core/one_hot_occupancy.sv 
-core/binary_occupancy.sv 
-core/cva5_fifo.sv  
-core/shift_counter.sv
-core/priority_encoder.sv
-
-core/set_clr_reg_with_rst.sv
-
-core/intel/intel_byte_enable_ram.sv
-core/xilinx/xilinx_byte_enable_ram.sv
-core/byte_en_BRAM.sv 
-
-core/one_hot_to_integer.sv  
-  
-core/cycler.sv  
-  
 core/tag_bank.sv  
-core/dbram.sv  
 core/ddata_bank.sv  
 core/dtag_banks.sv  
 core/amo_alu.sv  
 core/dcache.sv  
 core/addr_hash.sv
-core/load_queue.sv
 core/store_queue.sv
 core/load_store_queue.sv
 core/load_store_unit.sv  
 
-
-core/ibram.sv  
 core/itag_banks.sv  
 core/icache.sv  
-
-
-
-
-
-
 
 core/clz.sv
 core/div_core.sv
@@ -79,10 +68,6 @@ core/mmu.sv
 
 core/mul_unit.sv  
 
-
-
-
-core/l1_arbiter.sv  
 core/ras.sv  
 core/branch_predictor_ram.sv
 core/branch_predictor.sv  
@@ -97,16 +82,15 @@ core/register_bank.sv
 core/register_file.sv
 core/writeback.sv
 
-core/placer_randomizer.sv
-
 l2_arbiter/l2_fifo.sv
 l2_arbiter/l2_reservation_logic.sv
 l2_arbiter/l2_round_robin.sv
 l2_arbiter/l2_arbiter.sv
+core/axi_to_arb.sv  
 
-core/toggle_memory.sv
-core/toggle_memory_set.sv
 core/instruction_metadata_and_id_management.sv
+
+core/l1_arbiter.sv  
 
 core/cva5.sv
 

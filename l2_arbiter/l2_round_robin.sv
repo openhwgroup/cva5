@@ -60,11 +60,8 @@ module l2_round_robin
         //Select mux output based on current state
         assign arb.grantee_i = muxes[state];
 
-            //Integer to one-hot
-        always_comb begin
-            arb.grantee_v = '0;
-            arb.grantee_v[arb.grantee_i] = 1;
-        end
+        //Integer to one-hot
+        assign arb.grantee_v = 1 << arb.grantee_i;
 
         //any valid request
         assign arb.grantee_valid = |arb.requests;

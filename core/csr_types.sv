@@ -154,7 +154,7 @@ package csr_types;
     } mie_t;
 
     typedef struct packed {
-        logic interrupt;
+        logic is_interrupt;
         logic [XLEN-1-1-ECODE_W:0] zeroes;
         logic [ECODE_W-1:0] code;
     } mcause_t;

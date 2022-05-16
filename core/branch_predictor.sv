@@ -42,12 +42,22 @@ module branch_predictor
     //support is not enabled
     localparam longint CACHE_RANGE = 64'(CONFIG.ICACHE_ADDR.H) - 64'(CONFIG.ICACHE_ADDR.L) + 1;
     localparam longint SCRATCH_RANGE = 64'(CONFIG.ILOCAL_MEM_ADDR.H) - 64'(CONFIG.ILOCAL_MEM_ADDR.L) + 1;
+    localparam longint BUS_RANGE = 64'(CONFIG.IBUS_ADDR.H) - 64'(CONFIG.IBUS_ADDR.L) + 1;
 
     function int get_memory_width();
         if(CONFIG.INCLUDE_S_MODE)
             return 32;
-        else if (CONFIG.INCLUDE_ICACHE && CACHE_RANGE > SCRATCH_RANGE)
+        else if (CONFIG.INCLUDE_ICACHE && (
+            (CONFIG.INCLUDE_ILOCAL_MEM && CACHE_RANGE > SCRATCH_RANGE) ||
+            (CONFIG.INCLUDE_IBUS && CACHE_RANGE > BUS_RANGE) ||
+            (!CONFIG.INCLUDE_ILOCAL_MEM && !CONFIG.INCLUDE_IBUS))
+        )
             return $clog2(CACHE_RANGE);
+        else if (CONFIG.INCLUDE_IBUS && (
+            (CONFIG.INCLUDE_ILOCAL_MEM && BUS_RANGE > SCRATCH_RANGE) ||
+            (!CONFIG.INCLUDE_ILOCAL_MEM))
+        )
+            return $clog2(BUS_RANGE);
         else
             return $clog2(SCRATCH_RANGE);
     endfunction

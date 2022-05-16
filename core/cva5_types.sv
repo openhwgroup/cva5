@@ -180,43 +180,31 @@ package cva5_types;
         logic is_sret;
     } gc_inputs_t;
 
-    typedef struct packed{
-        logic [31:2] addr;
-        logic [31:0] data;
-        logic rnw;
-        logic [0:3] be;
-        logic [2:0] size;
-        logic con;
-    } to_l1_arbiter_packet;
-
     typedef struct packed {
         logic [31:0] addr;
         logic load;
         logic store;
         logic [3:0] be;
         logic [2:0] fn3;
-        logic [31:0] data_in;
+        logic [31:0] data;
         id_t id;
         logic forwarded_store;
-        id_t data_id;
-
-        logic possible_issue;
-        logic new_issue;
+        id_t id_needed;
     } lsq_entry_t;
-
-    typedef struct packed {
-        logic [31:0] addr;
-        logic [2:0] fn3;
-        id_t id;
-        logic [3:0] potential_store_conflicts;
-    } lq_entry_t;
 
     typedef struct packed {
         logic [31:0] addr;
         logic [3:0] be;
         logic [2:0] fn3;
         logic forwarded_store;
+        logic [31:0] data;
     } sq_entry_t;
+
+    typedef struct packed {
+        logic sq_empty;
+        logic no_released_stores_pending;
+        logic idle;
+    } load_store_status_t;
 
     typedef struct packed{
         id_t id;

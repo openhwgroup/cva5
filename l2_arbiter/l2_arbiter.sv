@@ -200,7 +200,7 @@ module l2_arbiter
             .lr (reserv_lr),
             .sc (reserv_sc),
             .store (reserv_store),
-            .abort(mem.abort)
+            .abort_request(mem.abort_request)
         );
 
     //sc response
@@ -211,7 +211,7 @@ module l2_arbiter
                     request[i].con_valid <= 0;
                 end
                 else begin
-                    request[i].con_result <= ~mem.abort;
+                    request[i].con_result <= ~mem.abort_request;
                     request[i].con_valid <= reserv_sc & reserv_valid & reserv_id_v[i];
                 end
             end
@@ -239,11 +239,11 @@ module l2_arbiter
      *************************************/
     assign new_attr.id = reserv_id;
     assign new_attr.burst_size = reserv_request.amo_type_or_burst_size;
-    assign new_attr.abort = mem.abort;
+    assign new_attr.abort_request = mem.abort_request;
 
     assign data_attributes.data_in = new_attr;
-    assign data_attributes.push = reserv_valid & ~reserv_request.rnw & ~mem.abort;
-    assign data_attributes.potential_push = reserv_valid & ~reserv_request.rnw & ~mem.abort;
+    assign data_attributes.push = reserv_valid & ~reserv_request.rnw & ~mem.abort_request;
+    assign data_attributes.potential_push = reserv_valid & ~reserv_request.rnw & ~mem.abort_request;
 
     cva5_fifo #(.DATA_WIDTH($bits(l2_data_attributes_t)), .FIFO_DEPTH(L2_DATA_ATTRIBUTES_FIFO_DEPTH))  data_attributes_fifo (.*, .fifo(data_attributes));
 
@@ -263,8 +263,8 @@ module l2_arbiter
 
     cva5_fifo #(.DATA_WIDTH($bits(32)), .FIFO_DEPTH(L2_MEM_ADDR_FIFO_DEPTH))  mem_data (.*, .fifo(mem_data_fifo));
 
-    assign mem_data_fifo.push = data_attributes.valid & ~mem_data_fifo.full & ~current_attr.abort;
-    assign mem_data_fifo.potential_push = data_attributes.valid & ~mem_data_fifo.full & ~current_attr.abort;
+    assign mem_data_fifo.push = data_attributes.valid & ~mem_data_fifo.full & ~current_attr.abort_request;
+    assign mem_data_fifo.potential_push = data_attributes.valid & ~mem_data_fifo.full & ~current_attr.abort_request;
 
     assign mem_data_fifo.data_in = input_data[current_attr.id];
 

@@ -30,61 +30,45 @@ module wishbone_master
         input logic clk,
         input logic rst,
 
-        wishbone_interface.master m_wishbone,
-        output logic[31:0] data_out,
-
-        input data_access_shared_inputs_t ls_inputs,
-        ls_sub_unit_interface.sub_unit ls
-
+        wishbone_interface.master wishbone,
+        memory_sub_unit_interface.responder ls
     );
-    //implementation
+
+    logic busy;
     ////////////////////////////////////////////////////
+    //Implementation
+    assign wishbone.cti = 0;
+    assign wishbone.bte = 0;
 
     always_ff @ (posedge clk) begin
         if (ls.new_request) begin
-            m_wishbone.addr <= ls_inputs.addr;
-            m_wishbone.we <= ls_inputs.store;
-            m_wishbone.sel <= ls_inputs.be;
-            m_wishbone.writedata <= ls_inputs.data_in;
+            wishbone.adr <= ls.addr[31:2];
+            wishbone.sel <= ls.we ? ls.be : '1;
+            wishbone.we <= ls.we;
+            wishbone.dat_w <= ls.data_in;
         end
     end
 
-    set_clr_reg_with_rst #(.SET_OVER_CLR(0), .WIDTH(1), .RST_VALUE(1)) ready_m (
-      .clk, .rst,
-      .set(m_wishbone.ack),
-      .clr(ls.new_request),
-      .result(ls.ready)
-    );
+    always_ff @ (posedge clk) begin
+        if (rst)
+            busy <= 0;
+        else
+            busy <= (busy & ~wishbone.ack) | ls.new_request;
+    end
+    assign ls.ready = (~busy);
+
+    assign wishbone.stb = busy;
+    assign wishbone.cyc = busy;
 
     always_ff @ (posedge clk) begin
         if (rst)
             ls.data_valid <= 0;
-        else if (~m_wishbone.we & m_wishbone.ack)
-            ls.data_valid <= 1;
         else
-            ls.data_valid <= 0;
+            ls.data_valid <= ~wishbone.we & wishbone.ack;
     end
-
     always_ff @ (posedge clk) begin
-        if (m_wishbone.ack)
-            data_out <= m_wishbone.readdata;
-        else
-            data_out <= 0;
-    end
-
-    always_ff @ (posedge clk) begin
-        if (rst) begin
-            m_wishbone.stb <= 0;
-            m_wishbone.cyc <= 0;
-        end
-        else if (ls.new_request) begin
-            m_wishbone.stb <= 1;
-            m_wishbone.cyc <= 1;
-        end
-        else if (m_wishbone.ack) begin
-            m_wishbone.stb <= 0;
-            m_wishbone.cyc <= 0;
-        end
+        if (wishbone.ack)
+            ls.data_out <= wishbone.dat_r;
     end
 
 endmodule

@@ -31,20 +31,16 @@ module avalon_master
         input logic rst,
 
         avalon_interface.master m_avalon,
-        output logic[31:0] data_out,
-
-        input data_access_shared_inputs_t ls_inputs,
-        ls_sub_unit_interface.sub_unit ls
-
+        memory_sub_unit_interface.responder ls
     );
     //implementation
     ////////////////////////////////////////////////////
 
     always_ff @ (posedge clk) begin
         if (ls.new_request) begin
-            m_avalon.addr <= ls_inputs.addr;
-            m_avalon.byteenable <= ls_inputs.be;
-            m_avalon.writedata <= ls_inputs.data_in;
+            m_avalon.addr <= ls.addr;
+            m_avalon.byteenable <= ls.be;
+            m_avalon.writedata <= ls.data_in;
         end
     end
 
@@ -68,15 +64,15 @@ module avalon_master
 
     always_ff @ (posedge clk) begin
         if (m_avalon.read & ~m_avalon.waitrequest)
-            data_out <= m_avalon.readdata;
+            ls.data_out <= m_avalon.readdata;
         else
-            data_out <= 0;
+            ls.data_out <= 0;
     end
 
     always_ff @ (posedge clk) begin
         if (rst)
             m_avalon.read <= 0;
-        else if (ls.new_request & ls_inputs.load)
+        else if (ls.new_request & ls.re)
             m_avalon.read <= 1;
         else if (~m_avalon.waitrequest)
             m_avalon.read <= 0;
@@ -85,7 +81,7 @@ module avalon_master
     always_ff @ (posedge clk) begin
         if (rst)
             m_avalon.write <= 0;
-        else if (ls.new_request & ls_inputs.store)
+        else if (ls.new_request & ls.we)
             m_avalon.write <= 1;
         else if (~m_avalon.waitrequest)
             m_avalon.write <= 0;

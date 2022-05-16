@@ -50,6 +50,13 @@ package cva5_config;
         csr_non_standard_config_t NON_STANDARD_OPTIONS;
     } csr_config_t;
 
+    //Memory range [L, H]
+    //Address range is inclusive and must be aligned to its size
+    typedef struct packed {
+        bit [31:0] L;
+        bit [31:0] H;
+    } memory_config_t;
+
     ////////////////////////////////////////////////////
     //Cache Options
     //Size in bytes: (LINES * WAYS * LINE_W * 4)
@@ -59,6 +66,8 @@ package cva5_config;
         int unsigned LINE_W;// In words
         int unsigned WAYS;
         bit USE_EXTERNAL_INVALIDATIONS;
+        bit USE_NON_CACHEABLE;
+        memory_config_t NON_CACHEABLE;
     } cache_config_t;
 
     typedef struct packed {
@@ -66,13 +75,6 @@ package cva5_config;
         int unsigned SUB_LINE_ADDR_W;
         int unsigned TAG_W;
     } derived_cache_config_t;
-
-    //Memory range [L, H]
-    //Address range is inclusive and must be aligned to its size
-    typedef struct packed {
-        bit [31:0] L;
-        bit [31:0] H;
-    } memory_config_t;
 
     ////////////////////////////////////////////////////
     //Branch Predictor Options
@@ -110,6 +112,7 @@ package cva5_config;
         //CSR constants
         csr_config_t CSRS;
         //Memory Options
+        int unsigned SQ_DEPTH;//CAM-based reasonable max of 4
         //Caches
         bit INCLUDE_ICACHE;
         cache_config_t ICACHE;
@@ -124,6 +127,9 @@ package cva5_config;
         memory_config_t ILOCAL_MEM_ADDR;
         bit INCLUDE_DLOCAL_MEM;
         memory_config_t DLOCAL_MEM_ADDR;
+        //Instruction bus
+        bit INCLUDE_IBUS;
+        memory_config_t IBUS_ADDR;
         //Peripheral bus
         bit INCLUDE_PERIPHERAL_BUS;
         memory_config_t PERIPHERAL_BUS_ADDR;
@@ -173,16 +179,22 @@ package cva5_config;
             }
         },
         //Memory Options
+        SQ_DEPTH : 4,
         INCLUDE_ICACHE : 0,
         ICACHE_ADDR : '{
-            L: 32'h40000000,
-            H: 32'h4FFFFFFF
+            L: 32'h80000000,
+            H: 32'h8FFFFFFF
         },
         ICACHE : '{
             LINES : 512,
             LINE_W : 4,
             WAYS : 2,
-            USE_EXTERNAL_INVALIDATIONS : 0
+            USE_EXTERNAL_INVALIDATIONS : 0,
+            USE_NON_CACHEABLE : 0,
+            NON_CACHEABLE : '{
+                L: 32'h70000000,
+                H: 32'h7FFFFFFF
+            }
         },
         ITLB : '{
             WAYS : 2,
@@ -190,14 +202,19 @@ package cva5_config;
         },
         INCLUDE_DCACHE : 0,
         DCACHE_ADDR : '{
-            L: 32'h40000000,
-            H: 32'h4FFFFFFF
+            L: 32'h80000000,
+            H: 32'h8FFFFFFF
         },
         DCACHE : '{
             LINES : 512,
             LINE_W : 4,
             WAYS : 2,
-            USE_EXTERNAL_INVALIDATIONS : 0
+            USE_EXTERNAL_INVALIDATIONS : 0,
+            USE_NON_CACHEABLE : 0,
+            NON_CACHEABLE : '{
+                L: 32'h70000000,
+                H: 32'h7FFFFFFF
+            }
         },
         DTLB : '{
             WAYS : 2,
@@ -212,6 +229,11 @@ package cva5_config;
         DLOCAL_MEM_ADDR : '{
             L : 32'h80000000,
             H : 32'h8FFFFFFF
+        },
+        INCLUDE_IBUS : 0,
+        IBUS_ADDR : '{
+            L : 32'h60000000, 
+            H : 32'h6FFFFFFF
         },
         INCLUDE_PERIPHERAL_BUS : 1,
         PERIPHERAL_BUS_ADDR : '{

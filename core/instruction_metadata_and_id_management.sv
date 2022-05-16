@@ -292,7 +292,7 @@ module instruction_metadata_and_id_management
     //retire_next packet
     priority_encoder #(.WIDTH(RETIRE_PORTS))
     phys_id_sel_encoder (
-        .priority_vector (retire_id_uses_rd & ~retire_id_waiting_for_writeback),
+        .priority_vector (retire_id_uses_rd),
         .encoded_result (phys_id_sel)
     );
     assign retire_next.phys_id = retire_ids_next[phys_id_sel];
@@ -309,7 +309,8 @@ module instruction_metadata_and_id_management
         retire.valid <= retire_next.valid;
         retire.phys_id <= retire_next.phys_id;
         retire.count <= gc.writeback_supress ? '0 : retire_next.count;
-        retire_port_valid <= retire_port_valid_next;
+        for (int i = 0; i < RETIRE_PORTS; i++)
+            retire_port_valid[i] <= retire_port_valid_next[i] & ~gc.writeback_supress;
     end
 
     ////////////////////////////////////////////////////
@@ -321,7 +322,7 @@ module instruction_metadata_and_id_management
     assign decode.valid = fetched_count_neg[LOG2_MAX_IDS];
     assign decode.pc = pc_table[decode_id];
     assign decode.instruction = instruction_table[decode_id];
-    assign decode.fetch_metadata = fetch_metadata_table[decode_id];
+    assign decode.fetch_metadata = CONFIG.INCLUDE_M_MODE ? fetch_metadata_table[decode_id] : '{ok : 1, error_code : INST_ACCESS_FAULT};
 
     //Writeback/Commit support
     phys_addr_t commit_phys_addr [CONFIG.NUM_WB_GROUPS];

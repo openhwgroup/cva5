@@ -20,36 +20,33 @@
  *             Eric Matthews <ematthew@sfu.ca>
  */
 
-module dbram
+module local_mem_sub_unit
 
     import cva5_config::*;
+    import riscv_types::*;
     import cva5_types::*;
 
     (
         input logic clk,
         input logic rst,
 
-        input data_access_shared_inputs_t ls_inputs,
-        ls_sub_unit_interface.sub_unit ls,
-        output logic[31:0] data_out,
-
-        local_memory_interface.master data_bram
+        memory_sub_unit_interface.responder unit,
+        local_memory_interface.master local_mem
     );
 
-    assign ls.ready = 1;
+    assign unit.ready = 1;
 
-    assign data_bram.addr = ls_inputs.addr[31:2];
-    assign data_bram.en = ls.new_request;
-    assign data_bram.be = ls_inputs.be;
-    assign data_bram.data_in = ls_inputs.data_in;
-    assign data_out = data_bram.data_out;
+    assign local_mem.addr = unit.addr[31:2];
+    assign local_mem.en = unit.new_request;
+    assign local_mem.be = unit.be;
+    assign local_mem.data_in = unit.data_in;
+    assign unit.data_out = local_mem.data_out;
 
     always_ff @ (posedge clk) begin
         if (rst)
-            ls.data_valid <= 0;
+            unit.data_valid <= 0;
         else
-            ls.data_valid <= ls.new_request & ls_inputs.load;
+            unit.data_valid <= unit.new_request & unit.re;
     end
-
 
 endmodule

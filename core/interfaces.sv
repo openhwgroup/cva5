@@ -56,13 +56,12 @@ interface unit_issue_interface;
 
     logic possible_issue;
     logic new_request;
-    logic new_request_r;
     id_t id;
 
     logic ready;
 
-    modport decode (input ready, output possible_issue, new_request, new_request_r, id);
-    modport unit (output ready, input possible_issue, new_request, new_request_r, id);
+    modport decode (input ready, output possible_issue, new_request, id);
+    modport unit (output ready, input possible_issue, new_request, id);
 endinterface
 
 interface unit_writeback_interface;
@@ -195,30 +194,59 @@ interface load_store_queue_interface;
     import riscv_types::*;
     import cva5_types::*;
 
-    logic [31:0] addr;
-    logic load;
-    logic store;
-    logic [3:0] be;
-    logic [2:0] fn3;
-    logic [31:0] data_in;
-    id_t id;
-    logic forwarded_store;
-    id_t data_id;
+    //Issue inputs
+    lsq_entry_t data_in;
+    logic potential_push;
+    logic push;
+    logic full;
 
-    logic possible_issue;
-    logic new_issue;
-    logic ready;
+    //LSQ outputs
+    data_access_shared_inputs_t data_out;
+    logic valid;
+    logic pop;
 
-    data_access_shared_inputs_t transaction_out;
-    logic transaction_ready;
+    //LSQ status
     logic sq_empty;
     logic empty;
     logic no_released_stores_pending;
 
-    logic accepted;
+    modport queue (
+        input data_in, potential_push, push, pop,
+        output full, data_out, valid, sq_empty, empty, no_released_stores_pending
+    );
+    modport ls (
+        output data_in, potential_push, push, pop,
+        input full, data_out, valid, sq_empty, empty, no_released_stores_pending
+    );
+endinterface
 
-    modport queue (input addr, load, store, be, fn3, data_in, id, forwarded_store, data_id, possible_issue, new_issue, accepted, output ready, transaction_out, transaction_ready, sq_empty, empty, no_released_stores_pending);
-    modport ls  (output addr, load, store, be, fn3, data_in, id, forwarded_store, data_id, possible_issue, new_issue, accepted, input ready, transaction_out, transaction_ready, sq_empty, empty, no_released_stores_pending);
+
+interface store_queue_interface;
+    import riscv_types::*;
+    import cva5_types::*;
+
+    //Issue inputs
+    lsq_entry_t data_in;
+    logic push;
+    logic full;
+
+    sq_entry_t data_out;
+
+    logic valid;
+    logic pop;
+
+    //SQ status
+    logic empty;
+    logic no_released_stores_pending;
+
+    modport queue (
+        input data_in, push, pop,
+        output full, data_out, valid, empty, no_released_stores_pending
+    );
+    modport ls (
+        output data_in, push, pop,
+        input full, data_out, valid, empty, no_released_stores_pending
+    );
 endinterface
 
 interface writeback_store_interface;
@@ -243,66 +271,45 @@ interface writeback_store_interface;
         );
 endinterface
 
-interface ls_sub_unit_interface #(parameter bit [31:0] BASE_ADDR = 32'h00000000, parameter bit [31:0] UPPER_BOUND = 32'hFFFFFFFF);
-    logic data_valid;
-    logic ready;
-    logic new_request;
+interface addr_utils_interface #(parameter bit [31:0] BASE_ADDR = 32'h00000000, parameter bit [31:0] UPPER_BOUND = 32'hFFFFFFFF);
+        //Based on the lower and upper address ranges,
+        //find the number of bits needed to uniquely identify this memory range.
+        //Assumption: address range is aligned to its size
+        function int unsigned bit_range ();
+            for(int i=0; i < 32; i++) begin
+                if (BASE_ADDR[i] == UPPER_BOUND[i])
+                    return (32 - i);
+            end
+            return 0;
+        endfunction
 
-    //Based on the lower and upper address ranges,
-    //find the number of bits needed to uniquely identify this memory range.
-    //Assumption: address range is aligned to its size
-    function automatic int unsigned bit_range ();
-        int unsigned i;
-        for(i=0; i < 32; i++) begin
-            if (BASE_ADDR[i] == UPPER_BOUND[i])
-                break;
-        end
-        return (32 - i);
-    endfunction
+        localparam int unsigned BIT_RANGE = bit_range();
 
-    localparam int unsigned BIT_RANGE = bit_range();
-
-    function address_range_check (input logic[31:0] addr);
-        return (addr[31:32-BIT_RANGE] == BASE_ADDR[31:32-BIT_RANGE]);
-    endfunction
-
-    modport sub_unit (input new_request, output data_valid, ready);
-    modport ls (output new_request, input data_valid, ready);
-
+        function address_range_check (input logic[31:0] addr);
+            return (BIT_RANGE == 0) ? 1 : (addr[31:32-BIT_RANGE] == BASE_ADDR[31:32-BIT_RANGE]);
+        endfunction
 endinterface
 
-
-interface fetch_sub_unit_interface #(parameter bit [31:0] BASE_ADDR = 32'h00000000, parameter bit [31:0] UPPER_BOUND = 32'hFFFFFFFF);
-    logic [31:0] stage1_addr;
-    logic [31:0] stage2_addr;
+interface memory_sub_unit_interface;
+    logic new_request;
+    logic [31:0] addr;
+    logic re;
+    logic we;
+    logic [3:0] be;
+    logic [31:0] data_in;
 
     logic [31:0] data_out;
     logic data_valid;
     logic ready;
-    logic new_request;
-    logic flush;
 
-    //Based on the lower and upper address ranges,
-    //find the number of bits needed to uniquely identify this memory range.
-    //Assumption: address range is aligned to its size
-    function automatic int unsigned bit_range ();
-        int unsigned i;
-        for(i=0; i < 32; i++) begin
-            if (BASE_ADDR[i] == UPPER_BOUND[i])
-                break;
-        end
-        return (32 - i);
-    endfunction
-
-    localparam int unsigned BIT_RANGE = bit_range();
-
-    function address_range_check (input logic[31:0] addr);
-        return (addr[31:32-BIT_RANGE] == BASE_ADDR[31:32-BIT_RANGE]);
-    endfunction
-
-    modport sub_unit (input stage1_addr, stage2_addr,  new_request, flush, output data_out, data_valid, ready);
-    modport fetch (output stage1_addr, stage2_addr,  new_request, flush, input data_out, data_valid, ready);
-
+    modport responder (
+        input addr, re, we, be, data_in, new_request,
+        output data_out, data_valid, ready
+    );
+    modport controller (
+        input data_out, data_valid, ready,
+        output addr, re, we, be, data_in, new_request
+    );
 endinterface
 
 //start and done are cycle cycle pulses

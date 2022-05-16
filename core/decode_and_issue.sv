@@ -437,8 +437,6 @@ module decode_and_issue
         end
     end
 
-    logic[2:0] br_fn3;
-
     assign branch_inputs.is_return = is_return;
     assign branch_inputs.is_call = is_call;
     assign branch_inputs.fn3 = issue.fn3;
@@ -556,9 +554,6 @@ module decode_and_issue
         assign unit_issue[i].possible_issue = issue.stage_valid & unit_needed_issue_stage[i] & unit_issue[i].ready;
         assign unit_issue[i].new_request = issue_to[i];
         assign unit_issue[i].id = issue.id;
-        always_ff @(posedge clk) begin
-            unit_issue[i].new_request_r <= issue_to[i];
-        end
     end endgenerate
 
     ////////////////////////////////////////////////////

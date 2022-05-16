@@ -24,7 +24,7 @@
 module lfsr
 
     #(
-        parameter WIDTH = 3,
+        parameter int unsigned WIDTH = 3,
         parameter NEEDS_RESET = 1
     )
     (
@@ -34,50 +34,37 @@ module lfsr
         output logic [WIDTH-1:0] value
     );
 
-    //Workaround for verilator: index in multi-dimensional array interpreted as non-constant
-    //thus pulled out into separate array here
-    localparam integer NUM_TAPS [14] = '{
-        2, //3
-        2, //4
-        2,
-        2,
-        2,
-        4, //8
-        2,
-        2,
-        2,
-        4, //12
-        4,
-        4,
-        2, //15
-        4 //16
-    };
+    typedef struct packed {
+        int unsigned NUM;
+        bit [3:0][31:0] INDICIES;
+    } tap_t;
 
     //XNOR taps for LFSR from 3-16 bits wide (source: Xilinx xapp052)
-    //tap index 1-N
-    //Structure:
-    //   Num-taps,   list of up-to 4 taps
-    localparam integer TAPS [14][5] = '{
-        '{2,  3,2,0,0}, //3
-        '{2,  4,3,0,0}, //4
-        '{2,  5,3,0,0},
-        '{2,  6,5,0,0},
-        '{2,  7,6,0,0},
-        '{4,  8,6,5,4}, //8
-        '{2,  9,5,0,0},
-        '{2,  10,7,0,0},
-        '{2,  11,9,0,0},
-        '{4,  12,6,4,1}, //12
-        '{4,  13,4,3,1},
-        '{4,  14,5,3,1},
-        '{2,  15,14,0,0}, //15
-        '{4,  16,15,13,4} //16
+    localparam tap_t LFSR_TAPS [17] = '{
+        //Dummy entries for widths 0-2
+        '{NUM : 1,    INDICIES : '{0,0,0,0}},
+        '{NUM : 1,    INDICIES : '{0,0,0,0}},
+        '{NUM : 1,    INDICIES : '{0,0,0,0}}, 
+        //Number of taps and indicies[3:0] for LFSRs width 3 to 16
+        '{NUM : 2,    INDICIES : '{0,0,1,2}}, //3
+        '{NUM : 2,    INDICIES : '{0,0,2,3}}, //4
+        '{NUM : 2,    INDICIES : '{0,0,2,4}},
+        '{NUM : 2,    INDICIES : '{0,0,4,5}},
+        '{NUM : 2,    INDICIES : '{0,0,5,6}},
+        '{NUM : 4,    INDICIES : '{3,4,5,7}}, //8
+        '{NUM : 2,    INDICIES : '{0,0,4,8}},
+        '{NUM : 2,    INDICIES : '{0,0,6,9}},
+        '{NUM : 2,    INDICIES : '{0,0,8,10}},
+        '{NUM : 4,    INDICIES : '{0,3,5,11}}, //12
+        '{NUM : 4,    INDICIES : '{0,2,3,12}},
+        '{NUM : 4,    INDICIES : '{0,2,4,13}},
+        '{NUM : 2,    INDICIES : '{0,0,13,14}}, //15
+        '{NUM : 4,    INDICIES : '{3,12,14,15}} //16
     };
 
-    //Min-width is 3
-    localparam TAPS_INDEX = WIDTH - 3;
+    localparam tap_t TAPS = LFSR_TAPS[WIDTH];
 
-    logic [NUM_TAPS[TAPS_INDEX]-1:0] feedback_input;
+    logic [TAPS.NUM-1:0] feedback_input;
     logic feedback;
     ////////////////////////////////////////////////////
     //Implementation
@@ -85,8 +72,8 @@ module lfsr
         assign feedback = ~value[WIDTH-1];
     end
     else begin : gen_width_three_plus
-        for (genvar i = 0; i < NUM_TAPS[TAPS_INDEX]; i++) begin : gen_taps
-            assign feedback_input[i] = value[TAPS[TAPS_INDEX][i + 1] - 1];
+        for (genvar i = 0; i < TAPS.NUM; i++) begin : gen_taps
+            assign feedback_input[i] = value[int'(TAPS.INDICIES[i])];
         end
         //XNOR of taps and range extension to include all ones
         assign feedback = (~^feedback_input) ^ |value[WIDTH-2:0];

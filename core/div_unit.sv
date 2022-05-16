@@ -51,8 +51,7 @@ module div_unit
 
     typedef struct packed{
         logic remainder_op;
-        logic negate_remainder;
-        logic negate_quotient;
+        logic negate_result;
         logic divisor_is_zero;
         logic reuse_result;
         id_t id;
@@ -66,11 +65,11 @@ module div_unit
         div_attributes_t attr;
     } div_fifo_inputs_t;
 
-    div_fifo_inputs_t fifo_inputs;
-    div_fifo_inputs_t div_op;
-    div_attributes_t in_progress_attr;
+    div_fifo_inputs_t issue_fifo_inputs;
+    div_fifo_inputs_t div_stage;
+    div_attributes_t wb_attr;
 
-    unsigned_division_interface #(.DATA_WIDTH(32)) div();
+    unsigned_division_interface #(.DATA_WIDTH(32)) div_core();
 
     logic in_progress;
     logic div_done;
@@ -105,17 +104,16 @@ module div_unit
     clz divisor_clz_block (.clz_input(unsigned_divisor), .clz(divisor_CLZ));
     assign divisor_is_zero = (&divisor_CLZ) & ~div_inputs.rs2[0];
 
-    assign fifo_inputs.unsigned_dividend = unsigned_dividend;
-    assign fifo_inputs.unsigned_divisor = unsigned_divisor;
-    assign fifo_inputs.dividend_CLZ = dividend_CLZ;
-    assign fifo_inputs.divisor_CLZ = divisor_CLZ;
+    assign issue_fifo_inputs.unsigned_dividend = unsigned_dividend;
+    assign issue_fifo_inputs.unsigned_divisor = unsigned_divisor;
+    assign issue_fifo_inputs.dividend_CLZ = divisor_is_zero ? '0 : dividend_CLZ;
+    assign issue_fifo_inputs.divisor_CLZ = divisor_CLZ;
 
-    assign fifo_inputs.attr.remainder_op = div_inputs.op[1];
-    assign fifo_inputs.attr.negate_remainder = negate_remainder;
-    assign fifo_inputs.attr.negate_quotient = negate_quotient;
-    assign fifo_inputs.attr.divisor_is_zero = divisor_is_zero;
-    assign fifo_inputs.attr.reuse_result = div_inputs.reuse_result;
-    assign fifo_inputs.attr.id = issue.id;
+    assign issue_fifo_inputs.attr.remainder_op = div_inputs.op[1];
+    assign issue_fifo_inputs.attr.negate_result = div_inputs.op[1] ? negate_remainder : (negate_quotient & ~divisor_is_zero);
+    assign issue_fifo_inputs.attr.divisor_is_zero = divisor_is_zero;
+    assign issue_fifo_inputs.attr.reuse_result = div_inputs.reuse_result;
+    assign issue_fifo_inputs.attr.id = issue.id;
 
     ////////////////////////////////////////////////////
     //Input FIFO
@@ -131,17 +129,17 @@ module div_unit
     logic div_ready;
     assign div_ready = (~in_progress) | wb.ack;
 
-    assign input_fifo.data_in = fifo_inputs;
+    assign input_fifo.data_in = issue_fifo_inputs;
     assign input_fifo.push = issue.new_request;
     assign input_fifo.potential_push = issue.possible_issue;
     assign issue.ready = ~input_fifo.full | (~in_progress);
     assign input_fifo.pop = input_fifo.valid & div_ready;
-    assign div_op = input_fifo.data_out;
+    assign div_stage = input_fifo.data_out;
 
     ////////////////////////////////////////////////////
     //Control Signals
-    assign div.start = input_fifo.valid & div_ready & ~div_op.attr.reuse_result;
-    assign div_done = div.done | (input_fifo.valid & div_ready & div_op.attr.reuse_result);
+    assign div_core.start = input_fifo.pop & ~div_stage.attr.reuse_result;
+    assign div_done = div_core.done | (input_fifo.pop & div_stage.attr.reuse_result);
 
     //If more than one cycle, set in_progress so that multiple div.start signals are not sent to the div unit.
     set_clr_reg_with_rst #(.SET_OVER_CLR(1), .WIDTH(1), .RST_VALUE('0))
@@ -153,30 +151,27 @@ module div_unit
     );
     always_ff @ (posedge clk) begin
         if (input_fifo.pop)
-            in_progress_attr <= div_op.attr;
+            wb_attr <= div_stage.attr;
     end
 
     ////////////////////////////////////////////////////
     //Div core
-    assign div.dividend = div_op.unsigned_dividend;
-    assign div.divisor = div_op.unsigned_divisor;
-    assign div.dividend_CLZ = div_op.dividend_CLZ;
-    assign div.divisor_CLZ = div_op.divisor_CLZ;
-
-    assign div.divisor_is_zero = div_op.attr.divisor_is_zero;
+    assign div_core.dividend = div_stage.unsigned_dividend;
+    assign div_core.divisor = div_stage.unsigned_divisor;
+    assign div_core.dividend_CLZ = div_stage.dividend_CLZ;
+    assign div_core.divisor_CLZ = div_stage.divisor_CLZ;
+    assign div_core.divisor_is_zero = div_stage.attr.divisor_is_zero;
     
     div_core #(.DIV_WIDTH(32)) 
     divider_block (
         .clk(clk),
         .rst(rst),
-        .div(div)
+        .div(div_core)
     );
 
     ////////////////////////////////////////////////////
     //Output
-    logic negate_result;
-    assign negate_result = in_progress_attr.remainder_op ? in_progress_attr.negate_remainder : (~in_progress_attr.divisor_is_zero & in_progress_attr.negate_quotient);
-    assign wb.rd = negate_if (in_progress_attr.remainder_op ? div.remainder : ({32{in_progress_attr.divisor_is_zero}} | div.quotient), negate_result);
+    assign wb.rd = negate_if (wb_attr.remainder_op ? div_core.remainder : div_core.quotient, wb_attr.negate_result);
 
     always_ff @ (posedge clk) begin
         if (rst)
@@ -185,7 +180,7 @@ module div_unit
             wb.done <= (wb.done & ~wb.ack) | div_done;
     end
 
-    assign wb.id = in_progress_attr.id;
+    assign wb.id = wb_attr.id;
     ////////////////////////////////////////////////////
     //Assertions
 

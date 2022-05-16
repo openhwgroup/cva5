@@ -69,8 +69,7 @@ module gc_unit
         output gc_outputs_t gc,
 
         //Ordering support
-        input logic sq_empty,
-        input logic no_released_stores_pending,
+        input load_store_status_t load_store_status,
         input logic [LOG2_MAX_IDS:0] post_issue_count
     );
 
@@ -162,7 +161,7 @@ module gc_unit
 
     ////////////////////////////////////////////////////
     //GC Operation
-    assign post_issue_idle = (post_issue_count == 0) & sq_empty;
+    assign post_issue_idle = (post_issue_count == 0) & load_store_status.sq_empty;
     assign gc.fetch_flush = branch_flush | gc_pc_override;
 
     always_ff @ (posedge clk) begin
@@ -204,9 +203,9 @@ module gc_unit
                     next_state = POST_ISSUE_DRAIN;
             end
             TLB_CLEAR_STATE : if (tlb_clear_done) next_state = IDLE_STATE;
-            POST_ISSUE_DRAIN : if (((ifence_in_progress | ret_in_progress) & post_issue_idle) | gc.exception.valid) next_state = PRE_ISSUE_FLUSH;
+            POST_ISSUE_DRAIN : if (((ifence_in_progress | ret_in_progress) & post_issue_idle) | gc.exception.valid | interrupt_pending) next_state = PRE_ISSUE_FLUSH;
             PRE_ISSUE_FLUSH : next_state = POST_ISSUE_DISCARD;
-            POST_ISSUE_DISCARD : if ((post_issue_count == 0) & no_released_stores_pending) next_state = IDLE_STATE;
+            POST_ISSUE_DISCARD : if ((post_issue_count == 0) & load_store_status.no_released_stores_pending) next_state = IDLE_STATE;
             default : next_state = RST_STATE;
         endcase
     end

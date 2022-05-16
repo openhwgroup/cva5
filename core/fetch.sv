@@ -57,6 +57,7 @@ module fetch
 
         tlb_interface.requester tlb,
         local_memory_interface.master instruction_bram,
+        wishbone_interface.master iwishbone,
         input logic icache_on,
         l1_arbiter_request_interface.master l1_request,
         l1_arbiter_return_interface.master l1_response,
@@ -65,17 +66,21 @@ module fetch
         output logic tr_early_branch_correction
     );
 
-    localparam NUM_SUB_UNITS = int'(CONFIG.INCLUDE_ILOCAL_MEM) + int'(CONFIG.INCLUDE_ICACHE);
+    localparam NUM_SUB_UNITS = int'(CONFIG.INCLUDE_ILOCAL_MEM) + int'(CONFIG.INCLUDE_ICACHE) + int'(CONFIG.INCLUDE_IBUS);
     localparam NUM_SUB_UNITS_W = (NUM_SUB_UNITS == 1) ? 1 : $clog2(NUM_SUB_UNITS);
 
-    localparam BRAM_ID = 0;
+    localparam LOCAL_MEM_ID = 0;
     localparam ICACHE_ID = int'(CONFIG.INCLUDE_ILOCAL_MEM);
+    localparam BUS_ID = ICACHE_ID + int'(CONFIG.INCLUDE_ICACHE);
 
-    localparam NEXT_ID_DEPTH = CONFIG.INCLUDE_ICACHE ? 2 : 1;
-
+    localparam MAX_OUTSTANDING_REQUESTS = 2;
+    localparam MAX_OUTSTANDING_REQUESTS_W = $clog2(MAX_OUTSTANDING_REQUESTS);
     //Subunit signals
-    fetch_sub_unit_interface #(.BASE_ADDR(CONFIG.ILOCAL_MEM_ADDR.L), .UPPER_BOUND(CONFIG.ILOCAL_MEM_ADDR.H)) bram();
-    fetch_sub_unit_interface #(.BASE_ADDR(CONFIG.ICACHE_ADDR.L), .UPPER_BOUND(CONFIG.ICACHE_ADDR.H)) cache();
+    addr_utils_interface #(CONFIG.ILOCAL_MEM_ADDR.L, CONFIG.ILOCAL_MEM_ADDR.H) ilocal_mem_addr_utils ();
+    addr_utils_interface #(CONFIG.ICACHE_ADDR.L, CONFIG.ICACHE_ADDR.H) icache_addr_utils ();
+    addr_utils_interface #(CONFIG.IBUS_ADDR.L, CONFIG.IBUS_ADDR.H) ibus_addr_utils ();
+
+    memory_sub_unit_interface sub_unit[NUM_SUB_UNITS-1:0]();
 
     logic [NUM_SUB_UNITS-1:0] sub_unit_address_match;
     logic [NUM_SUB_UNITS-1:0] unit_ready;
@@ -95,6 +100,12 @@ module fetch
     fetch_attributes_t fetch_attr_next;
     fetch_attributes_t fetch_attr;
 
+    logic [MAX_OUTSTANDING_REQUESTS_W:0] inflight_count;
+    logic [MAX_OUTSTANDING_REQUESTS_W:0] inflight_count_next;
+    logic [MAX_OUTSTANDING_REQUESTS_W:0] flush_count;
+    logic [MAX_OUTSTANDING_REQUESTS_W:0] flush_count_next;
+
+
     logic [31:0] pc_plus_4;
     logic [31:0] pc_mux [4];
     logic [1:0] pc_sel;
@@ -107,11 +118,9 @@ module fetch
     logic update_pc;
     logic new_mem_request;
     logic exception_pending;
+    logic internal_fetch_complete;
 
     logic [31:0] translated_address;
-
-    //Cache related
-    logic [31:0] stage2_phys_address;
 
     genvar i;
     ////////////////////////////////////////////////////
@@ -168,27 +177,22 @@ module fetch
     assign tlb.new_request = tlb.ready & (CONFIG.INCLUDE_S_MODE & tlb_on);
     assign translated_address = (CONFIG.INCLUDE_S_MODE & tlb_on) ? tlb.physical_address : pc;
 
-    always_ff @(posedge clk) begin
-        if (new_mem_request)
-            stage2_phys_address <= translated_address;
-    end
-
     //////////////////////////////////////////////
     //Issue Control Signals
     assign flush_or_rst = (rst | gc.fetch_flush | early_branch_flush);
 
-    assign new_mem_request = (~tlb_on | tlb.done) & pc_id_available & units_ready & (~gc.fetch_hold) & (~exception_pending);
+    assign new_mem_request = (~tlb_on | tlb.done) & pc_id_available & ~fetch_attr_fifo.full & units_ready & (~gc.fetch_hold) & (~exception_pending);
     assign pc_id_assigned = new_mem_request | tlb.is_fault;
 
     //////////////////////////////////////////////
     //Subunit Tracking
-    assign fetch_attr_fifo.push = new_mem_request | tlb.is_fault;
-    assign fetch_attr_fifo.potential_push = new_mem_request | tlb.is_fault;
-    assign fetch_attr_fifo.pop = fetch_complete;
+    assign fetch_attr_fifo.push = pc_id_assigned;
+    assign fetch_attr_fifo.potential_push = pc_id_assigned;
+    assign fetch_attr_fifo.pop = internal_fetch_complete;
     one_hot_to_integer #(NUM_SUB_UNITS)
     hit_way_conv (
-        .one_hot    (sub_unit_address_match), 
-        .int_out    (fetch_attr_next.subunit_id)
+        .one_hot (sub_unit_address_match), 
+        .int_out (fetch_attr_next.subunit_id)
     );
     assign fetch_attr_next.is_predicted_branch_or_jump = bp.use_prediction;
     assign fetch_attr_next.is_branch = bp.use_prediction & bp.is_branch;
@@ -197,55 +201,84 @@ module fetch
 
     assign fetch_attr_fifo.data_in = fetch_attr_next;
 
-    cva5_fifo #(.DATA_WIDTH($bits(fetch_attributes_t)), .FIFO_DEPTH(NEXT_ID_DEPTH))
+    cva5_fifo #(.DATA_WIDTH($bits(fetch_attributes_t)), .FIFO_DEPTH(MAX_OUTSTANDING_REQUESTS))
     attributes_fifo (
-        .clk        (clk), 
-        .rst        (flush_or_rst), 
-        .fifo       (fetch_attr_fifo)
+        .clk (clk), 
+        .rst (rst), 
+        .fifo (fetch_attr_fifo)
     );
 
     assign fetch_attr = fetch_attr_fifo.data_out;
+
+    assign inflight_count_next = inflight_count + MAX_OUTSTANDING_REQUESTS_W'(fetch_attr_fifo.push) - MAX_OUTSTANDING_REQUESTS_W'(fetch_attr_fifo.pop);
+    always_ff @(posedge clk) begin
+        if (rst)
+            inflight_count <= 0;
+        else
+            inflight_count <=  inflight_count_next;
+    end
+
+    always_ff @(posedge clk) begin
+        if (rst)
+            flush_count <= 0;
+        else if (gc.fetch_flush)
+            flush_count <= inflight_count_next;
+        else if (|flush_count & fetch_attr_fifo.pop)
+            flush_count <= flush_count - 1;
+    end
 
     ////////////////////////////////////////////////////
     //Subunit Interfaces
     //In the case of a gc.fetch_flush, a request may already be in progress
     //for any sub unit.  That request can either be completed or aborted.
     //In either case, data_valid must NOT be asserted.
-    generate if (CONFIG.INCLUDE_ILOCAL_MEM) begin : gen_fetch_local_mem
-        assign sub_unit_address_match[BRAM_ID] = bram.address_range_check(translated_address);
-        assign unit_ready[BRAM_ID] = bram.ready;
-        assign unit_data_valid[BRAM_ID] = bram.data_valid;
-        assign bram.new_request = new_mem_request & sub_unit_address_match[BRAM_ID];
-        assign bram.stage1_addr = translated_address;
-        assign bram.stage2_addr = stage2_phys_address;
-        assign bram.flush = gc.fetch_flush;
-        assign unit_data_array[BRAM_ID] = bram.data_out;
+    generate for (i=0; i < NUM_SUB_UNITS; i++) begin : gen_fetch_sources
+        assign sub_unit[i].new_request = fetch_attr_fifo.push & sub_unit_address_match[i];
+        assign sub_unit[i].addr = translated_address;
+        assign sub_unit[i].re = 1;
+        assign sub_unit[i].we = 0;
+        assign sub_unit[i].be = '0;
+        assign sub_unit[i].data_in = '0;
 
-        ibram i_bram (
+        assign unit_ready[i] = sub_unit[i].ready;
+        assign unit_data_valid[i] = sub_unit[i].data_valid;
+        assign unit_data_array[i] = sub_unit[i].data_out;
+    end
+    endgenerate
+
+    generate if (CONFIG.INCLUDE_ILOCAL_MEM) begin : gen_fetch_local_mem
+        assign sub_unit_address_match[LOCAL_MEM_ID] = ilocal_mem_addr_utils.address_range_check(translated_address);
+        local_mem_sub_unit i_local_mem (
             .clk (clk), 
             .rst (rst),
-            .fetch_sub (bram),
-            .instruction_bram (instruction_bram)
+            .unit (sub_unit[LOCAL_MEM_ID]),
+            .local_mem (instruction_bram)
         );
     end
     endgenerate
+
+    generate if (CONFIG.INCLUDE_IBUS) begin : gen_fetch_ibus
+        assign sub_unit_address_match[BUS_ID] = ibus_addr_utils.address_range_check(translated_address);
+        wishbone_master iwishbone_bus (
+            .clk (clk),
+            .rst (rst),
+            .wishbone (iwishbone),
+            .ls (sub_unit[BUS_ID])
+        );
+    end
+    endgenerate
+
     generate if (CONFIG.INCLUDE_ICACHE) begin : gen_fetch_icache
-        assign sub_unit_address_match[ICACHE_ID] = cache.address_range_check(translated_address);
-        assign unit_ready[ICACHE_ID] = cache.ready;
-        assign unit_data_valid[ICACHE_ID] = cache.data_valid;
-        assign cache.new_request = new_mem_request & sub_unit_address_match[ICACHE_ID];
-        assign cache.stage1_addr = translated_address;
-        assign cache.stage2_addr = stage2_phys_address;
-        assign cache.flush = gc.fetch_flush;
-        assign unit_data_array[ICACHE_ID] = cache.data_out;
+        assign sub_unit_address_match[ICACHE_ID] = icache_addr_utils.address_range_check(translated_address);
         icache #(.CONFIG(CONFIG))
         i_cache (
             .clk (clk), 
             .rst (rst),
+            .gc (gc),
             .icache_on (icache_on),
             .l1_request (l1_request),
             .l1_response (l1_response),
-            .fetch_sub (cache)
+            .fetch_sub (sub_unit[ICACHE_ID])
         );
     end
     endgenerate
@@ -256,25 +289,28 @@ module fetch
     ////////////////////////////////////////////////////
     //Instruction metada updates
     logic valid_fetch_result;
-    assign valid_fetch_result = fetch_attr_fifo.valid & fetch_attr.address_valid & (~fetch_attr.mmu_fault);
+    assign valid_fetch_result = CONFIG.INCLUDE_M_MODE ? (fetch_attr_fifo.valid & fetch_attr.address_valid & (~fetch_attr.mmu_fault)) : 1;
 
     assign if_pc = pc;
     assign fetch_metadata.ok = valid_fetch_result;
     assign fetch_metadata.error_code = INST_ACCESS_FAULT;
 
     assign fetch_instruction = unit_data_array[fetch_attr.subunit_id];
-    assign fetch_complete = (fetch_attr_fifo.valid & ~valid_fetch_result) | (|unit_data_valid);//allow instruction to propagate to decode if address is invalid
+
+    assign internal_fetch_complete = fetch_attr_fifo.valid & (fetch_attr.address_valid ? |unit_data_valid : ~valid_fetch_result);//allow instruction to propagate to decode if address is invalid
+    assign fetch_complete = internal_fetch_complete & ~|flush_count;
 
     ////////////////////////////////////////////////////
-    //Branch Predictor correction
-    logic is_branch_or_jump;
-    assign is_branch_or_jump = fetch_instruction[6:2] inside {JAL_T, JALR_T, BRANCH_T};
-    assign early_branch_flush = (valid_fetch_result & (|unit_data_valid)) & fetch_attr.is_predicted_branch_or_jump & (~is_branch_or_jump);
-    assign early_branch_flush_ras_adjust = (valid_fetch_result & (|unit_data_valid)) & fetch_attr.is_branch & (~is_branch_or_jump);
-    generate if (ENABLE_TRACE_INTERFACE) begin : gen_fetch_trace
-        assign tr_early_branch_correction = early_branch_flush;
+    //Branch Predictor corruption check
+    //Needed if instruction memory is changed after any branches have been executed
+    generate if (CONFIG.INCLUDE_IFENCE | CONFIG.INCLUDE_S_MODE) begin : gen_branch_corruption_check
+        logic is_branch_or_jump;
+        assign is_branch_or_jump = fetch_instruction[6:2] inside {JAL_T, JALR_T, BRANCH_T};
+        assign early_branch_flush = (valid_fetch_result & (|unit_data_valid)) & fetch_attr.is_predicted_branch_or_jump & (~is_branch_or_jump);
+        assign early_branch_flush_ras_adjust = (valid_fetch_result & (|unit_data_valid)) & fetch_attr.is_branch & (~is_branch_or_jump);
+        if (ENABLE_TRACE_INTERFACE)
+            assign tr_early_branch_correction = early_branch_flush;
     end endgenerate
-
     ////////////////////////////////////////////////////
     //End of Implementation
     ////////////////////////////////////////////////////
