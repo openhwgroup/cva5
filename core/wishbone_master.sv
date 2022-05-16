@@ -42,7 +42,7 @@ module wishbone_master
 
     always_ff @ (posedge clk) begin
         if (ls.new_request) begin
-            wishbone.adr <= ls.addr[29:0];
+            wishbone.adr <= ls.addr[31:2];
             wishbone.sel <= ls.we ? ls.be : '1;
             wishbone.we <= ls.we;
             wishbone.dat_w <= ls.data_in;
