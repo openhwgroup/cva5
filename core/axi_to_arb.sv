@@ -166,7 +166,7 @@ module axi_to_arb
     assign axi_arprot = '0;
     assign axi_arid = 6'(l2.id);
 
-    assign axi_araddr ={l2.addr[29:$clog2(EXAMPLE_CONFIG.DCACHE.LINE_W)],  {$clog2(EXAMPLE_CONFIG.DCACHE.LINE_W){1'b0}}, 2'b00};
+    assign axi_araddr ={l2.addr, 2'b00} & {25'h1FFFFFF, ~burst_count, 2'b00};
 
     assign write_reference_burst_count = read_modify_write ? 0 : burst_count;
 
