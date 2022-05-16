@@ -391,7 +391,7 @@ generate if (CONFIG.INCLUDE_M_MODE) begin : gen_csr_m_mode
         mip_new.mtip = m_interrupt.timer;
         mip_new.meip = m_interrupt.external;
 
-        mip_new |= mip_mask;
+        mip_new &= mip_mask;
     end
     
     always_ff @(posedge clk) begin
@@ -400,7 +400,7 @@ generate if (CONFIG.INCLUDE_M_MODE) begin : gen_csr_m_mode
         else if (mwrite_en(MIP) | (|mip_new))
             mip <= (updated_csr & mip_w_mask) | mip_new;
     end
-    assign interrupt_pending = |(mip & mie);
+    assign interrupt_pending = |(mip & mie) & mstatus.mie;
 
     ////////////////////////////////////////////////////
     //MIE
@@ -420,8 +420,8 @@ generate if (CONFIG.INCLUDE_M_MODE) begin : gen_csr_m_mode
     //exception causing PC.  Lower two bits tied to zero.
     always_ff @(posedge clk) begin
         mepc[1:0] <= '0;
-        if (mwrite_en(MEPC) | exception.valid)
-            mepc[XLEN-1:2] <= exception.valid ? exception.pc[XLEN-1:2] : updated_csr[XLEN-1:2];
+        if (mwrite_en(MEPC) | exception.valid | interrupt_taken)
+            mepc[XLEN-1:2] <= (exception.valid | interrupt_taken) ? exception.pc[XLEN-1:2] : updated_csr[XLEN-1:2];
     end
     assign epc = mepc;
 
@@ -471,12 +471,12 @@ generate if (CONFIG.INCLUDE_M_MODE) begin : gen_csr_m_mode
     logic [5:0] mip_priority_vector;
     logic [2:0] mip_cause_sel;
 
-    const logic [ECODE_W-1:0] interruput_code_table [8] = '{ 0, 0, 
+    const logic [ECODE_W-1:0] interruput_code_table [7:0] = '{ 0, 0, 
         M_EXTERNAL_INTERRUPT, M_TIMER_INTERRUPT, M_SOFTWARE_INTERRUPT,
         S_EXTERNAL_INTERRUPT, S_TIMER_INTERRUPT, S_SOFTWARE_INTERRUPT
     };
-
-    assign mip_priority_vector = {mip_cause.meip, mip_cause.mtip, mip_cause.msip, mip_cause.seip, mip_cause.stip, mip_cause.ssip};
+    assign mip_cause = (mip & mie);
+    assign mip_priority_vector = '{mip_cause.meip, mip_cause.mtip, mip_cause.msip, mip_cause.seip, mip_cause.stip, mip_cause.ssip};
 
     priority_encoder #(.WIDTH(6))
     interrupt_cause_encoder (
@@ -485,7 +485,8 @@ generate if (CONFIG.INCLUDE_M_MODE) begin : gen_csr_m_mode
     );
 
     always_ff @(posedge clk) begin
-        interrupt_cause_r <= interruput_code_table[mip_cause_sel];
+        if (interrupt_pending)
+            interrupt_cause_r <= interruput_code_table[mip_cause_sel];
     end
 
     always_ff @(posedge clk) begin
