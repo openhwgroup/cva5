@@ -139,7 +139,7 @@ module fp_madd_fused_top (
     assign expo_diff_negate = (fp_madd_inputs.rs2[FLEN-2-:EXPO_WIDTH]) - (fp_madd_inputs.rs1[FLEN-2-:EXPO_WIDTH]);
   end endgenerate
   assign add_inputs.expo_diff = expo_diff[EXPO_WIDTH] ? expo_diff_negate : expo_diff;
-  assign add_inputs.swap = expo_diff[EXPO_WIDTH];
+  assign add_inputs.swap = expo_diff[EXPO_WIDTH] ? 1 : |expo_diff[EXPO_WIDTH-1:0] ? 0 : fp_madd_inputs.rs1[0+:FRAC_WIDTH] < fp_madd_inputs.rs2[0+:FRAC_WIDTH];
 
   //reduce fifo depth; change add ready signal
   assign fp_add_inputs_fifo.data_in = add_inputs;
