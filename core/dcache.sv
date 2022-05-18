@@ -46,6 +46,7 @@ module dcache
 
     localparam DCACHE_SIZE_IN_WORDS = CONFIG.DCACHE.LINES*CONFIG.DCACHE.LINE_W*CONFIG.DCACHE.WAYS;
     localparam derived_cache_config_t SCONFIG = get_derived_cache_params(CONFIG, CONFIG.DCACHE, CONFIG.DCACHE_ADDR);
+    localparam LOG2_DCACHE_WAYS = (CONFIG.DCACHE.WAYS == 1) ? 1 : $clog2(CONFIG.DCACHE.WAYS);
 
     typedef struct packed{
         logic [29:0] addr;
@@ -63,14 +64,14 @@ module dcache
     logic tag_hit;
     logic [CONFIG.DCACHE.WAYS-1:0] tag_hit_way;
 
-    logic [$clog2(CONFIG.DCACHE.WAYS)-1:0] tag_hit_way_int;
+    logic [LOG2_DCACHE_WAYS-1:0] tag_hit_way_int;
 
     logic tag_update;
     logic [CONFIG.DCACHE.WAYS-1:0] tag_update_way;
     logic [CONFIG.DCACHE.WAYS-1:0] replacement_way;
 
-    logic [$clog2(CONFIG.DCACHE.WAYS)-1:0] replacement_way_int;
-    logic [$clog2(CONFIG.DCACHE.WAYS)-1:0] tag_update_way_int;
+    logic [LOG2_DCACHE_WAYS-1:0] replacement_way_int;
+    logic [LOG2_DCACHE_WAYS-1:0] tag_update_way_int;
 
     logic [SCONFIG.SUB_LINE_ADDR_W-1:0] word_count;
     logic [SCONFIG.SUB_LINE_ADDR_W-1:0] sc_write_index;
