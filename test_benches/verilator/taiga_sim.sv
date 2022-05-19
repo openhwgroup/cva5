@@ -552,6 +552,8 @@ module taiga_sim
         logic rd_subnormal;
         logic wb_round_overflow;
         logic roundup;
+        logic overflowExp;
+        logic underflowExp;
         int in_flight_ids;
 
         logic rs1_conflict, rs2_conflict, rs3_conflict;
@@ -663,6 +665,8 @@ module taiga_sim
             rd_subnormal = cpu.fp_commit_packet[0].valid & ~(|cpu.fp_commit_packet[0].data[FLEN-2-:EXPO_WIDTH]) & |cpu.fp_commit_packet[0].data[0+:FRAC_WIDTH];
             wb_round_overflow = cpu.fpu_block.fpu_block.norm_round_inst.frac_overflow & cpu.fpu_block.fpu_block.norm_round_inst.round_packet_r.valid;
             roundup = cpu.fpu_block.fpu_block.norm_round_inst.roundup & cpu.fpu_block.fpu_block.norm_round_inst.round_packet_r.valid;
+            overflowExp = cpu.fpu_block.fpu_block.norm_round_inst.overflowExp & cpu.fpu_block.fpu_block.norm_round_inst.round_packet_r.valid;
+            underflowExp = cpu.fpu_block.fpu_block.norm_round_inst.underflowExp & cpu.fpu_block.fpu_block.norm_round_inst.round_packet_r.valid;
             in_flight_ids = cpu.id_block.inflight_count[LOG2_MAX_IDS] ? 32'(MAX_IDS) : 32'(cpu.id_block.inflight_count[LOG2_MAX_IDS-1:0]);
         end
 

@@ -413,6 +413,8 @@ package fpu_types;
        logic rd_subnormal;
        logic wb_round_overflow;
        logic roundup;
+       logic overflowExp;
+       logic underflowExp;
     } fp_taiga_trace_events_t;
 
     typedef struct packed {
