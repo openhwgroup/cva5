@@ -146,11 +146,11 @@ long double stdev(std::vector<double> vec, long double &mean) {
   return stdev;
 }
 
-std::ifstream fmul_inputs("/localhdd/yuhuig/Research/Tests/subnormal/"
+std::ifstream fmul_inputs("/localhdd/yuhuig/Research/Tests/compliance-level-data-collection/subnormal-master/"
                           "test_benches/verilator/fma_tests.txt");
 
 int main(int argc, char **argv) {
-  int test_number = 10;//165000;
+  int test_number = 10;
   int mca_iteration_max = 1;
   std::vector<std::vector<long double>> rounding_error;
   rounding_error.push_back(std::vector<long double>());
@@ -169,9 +169,6 @@ int main(int argc, char **argv) {
   Table inputs;
   inputs.add_row({"test num", "op", "rs1", "rs2", "rs3", "expected"});
 
-  int round = fegetround();
-  std::cout << "old rounding mode: " << round << std::endl;
-
   if (rm == 1) {
     std::fesetround(FE_TOWARDZERO);
   } else if (rm == 0) {
@@ -181,24 +178,21 @@ int main(int argc, char **argv) {
   } else if (rm == 2) {
     std::fesetround(FE_DOWNWARD);
   }
-  round = fegetround();
-  std::cout << "new rounding mode: " << round << std::endl;
-
 
   // for (int i = 0; i < test_number; i++) {
   std::string line;
   int i;
   while (std::getline(fmul_inputs, line) && (i < test_number)) {
     long double result = 0.0;
-    int op = FNMSUB;
-    int instruction = FMA_instruction[0]; //[rand()%3];
-    int fn7 = fadd_fn7[0];
+    int op = FMSUB;
+    int instruction = FMA_instruction[2]; //[rand()%3];
+    int fn7 = fadd_fn7[1];
     string operation;
 
     std::istringstream iss(line);
     int j = 0;
     std::vector<std::string> fmul_input_rs1_rs2;
-    // std::cout << line << "\n";
+    //std::cout << line << "\n";
     while (iss && j < 3) {
       string rs;
       if (!getline(iss, rs, ',')) {
@@ -211,7 +205,7 @@ int main(int argc, char **argv) {
     sub2 = std::stoull(fmul_input_rs1_rs2[1], NULL, 16);
     sub3 = std::stoull(fmul_input_rs1_rs2[2], NULL, 16);
     fmul_input_rs1_rs2.clear();
-    // std::cout << std::hex << sub1 << " " << sub2 << " " << sub3 << "\n";
+     //std::cout << std::hex << sub1 << " " << sub2 << " " << sub3 << "\n";
     double rs1_L = *(double *)(&sub1);
     double rs2_L = *(double *)(&sub2);
     double rs3_L = *(double *)(&sub3);

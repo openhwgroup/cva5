@@ -56,7 +56,7 @@ module fp_mul_madd_fused (
   logic [FLEN-1:0] special_case_results[1:0];
   logic output_special_case[1:0];
 
-  grs_t                          grs [1:0];
+  logic [HALF_GRS_WIDTH-1:0]                          grs [1:0];
   logic                          output_QNaN [4:0];
   logic                          invalid_operation [4:0];
   logic                          output_inf[4:0];
@@ -158,7 +158,7 @@ module fp_mul_madd_fused (
     result_sign[0] = rs1_sign[2] ^ rs2_sign[2];
     result_frac[0] = result_frac_intermediate[2*FRAC_WIDTH+2-1-:(2+FRAC_WIDTH)]; // {safe_bit, hidden_bit, fraction}
     residual_bits = result_frac_intermediate[0+:FRAC_WIDTH]; // bottom bits preserved for rounding
-    grs[0] = {residual_bits[FRAC_WIDTH-1-:(GRS_WIDTH-1)], |residual_bits[0+:FRAC_WIDTH-(GRS_WIDTH-1)]};
+    grs[0] = {residual_bits[FRAC_WIDTH-1-:(HALF_GRS_WIDTH-1)], |residual_bits[0+:FRAC_WIDTH-(HALF_GRS_WIDTH-1)]};
   end
 
   ////////////////////////////////////////////////////
@@ -209,7 +209,7 @@ module fp_mul_madd_fused (
   assign fp_wb.carry = 1'b0;
   assign fp_wb.safe = result_frac[1][FRAC_WIDTH+1];
   assign fp_wb.hidden = result_frac[1][FRAC_WIDTH];
-  assign fp_wb.grs = output_special_case[1] ? 0 : grs[1];
+  assign fp_wb.grs = output_special_case[1] ? 0 : {grs[1], {HALF_GRS_WIDTH{1'b0}}};
   assign fp_wb.rm = rm[3];
   assign fp_wb.clz = left_shift_amt;
   assign fp_wb.expo_overflow = result_expo[1][EXPO_WIDTH]&~output_special_case[1];
@@ -236,7 +236,7 @@ module fp_mul_madd_fused (
   assign fma_mul_outputs.mul_wb_rd_hidden = result_frac[0][FRAC_WIDTH+0];
   assign fma_mul_outputs.mul_wb_rd_safe = result_frac[0][FRAC_WIDTH+1];
   assign fma_mul_outputs.mul_wb = fma_mul_wb;
-  assign fma_mul_outputs.mul_grs = grs[0];
+  assign fma_mul_outputs.mul_grs = {grs[0], {HALF_GRS_WIDTH{1'b0}}};
   assign fma_mul_outputs.mul_op = opcode[2][3];
   assign fma_mul_outputs.add_op = opcode[2][2];
   assign fma_mul_outputs.rs3 = rs3[2];
@@ -347,4 +347,5 @@ module fp_mul_madd_fused (
       output_zero[4] <= output_zero[3];
     end
   end
+
 endmodule

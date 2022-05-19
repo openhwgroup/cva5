@@ -89,7 +89,7 @@ module fp_add_madd_fused (
   logic                          rs1_zero, rs2_zero;
   logic                          done [3:0];
   id_t                           id [3:0];
-  logic [EXPO_WIDTH-1:0] clz, clz_with_prepended_0s, left_shift_amt;
+  logic [EXPO_WIDTH-1:0] clz, clz_with_prepended_0s, left_shift_amt, left_shift_amt_offset;
   logic [FLEN-1:0] special_case_results[1:0];
   logic output_special_case[1:0];
 
@@ -189,6 +189,9 @@ module fp_add_madd_fused (
   (* use_dsp = "no" *) logic add_sub_carry_in;
   (* use_dsp = "no" *) grs_t                          grs_add;
   logic output_zero;
+  logic same_expo;
+  logic result_frac_all_0s, result_frac_all_0s_r;
+  logic grs_add_all_0s, grs_add_all_0s_r;
 
   //LUT adder
   assign adder_in1 = {1'b0, rs1_frac[1], rs1_grs[1]};
@@ -201,12 +204,15 @@ module fp_add_madd_fused (
   assign {result_frac[0], grs_add} = {result_frac_intermediate, grs_intermediate} ^ {(FRAC_WIDTH+GRS_WIDTH+3){~adder_carry_out & subtract[1]}};
   //subtract && adder_carry_out = 1 if subtract and in1 > in2
                               //= 0 if subtract and in1 < in2
-  assign output_zero = ~|expo_diff[1] & ~|result_frac_intermediate;
+  assign same_expo = ~|expo_diff[1] | (expo_diff[1] == 1 & rs2_frac[1][FRAC_WIDTH+1]); //asserted if input expo_diff==0; or if FMA_ADD input expo_diff==1 and rs2's safe bit==1
+  assign result_frac_all_0s = ~|result_frac[0];
+  assign grs_add_all_0s = ~|grs_add;
+  assign output_zero = same_expo & (result_frac_all_0s & grs_add_all_0s);
   assign result_sign[0] = output_zero & (subtract[1]) ? 
                           zero_result_sign[1] : 
                           (~adder_carry_out & subtract[1]) ^ rs1_sign[1]; 
   assign {result_expo_overflow[0], result_expo[0]} = output_zero ? '0 : {rs1_expo_overflow[1], rs1_expo[1]};
-  
+
   //calculate clz and write-back
   generate if (FRAC_WIDTH+2 <= 32) begin
     localparam left_shift_amt_bias = (32 - (FRAC_WIDTH + 1));
@@ -216,12 +222,15 @@ module fp_add_madd_fused (
     );
     assign left_shift_amt = (clz_with_prepended_0s & {EXPO_WIDTH{~output_special_case[1]}}) - (left_shift_amt_bias & {EXPO_WIDTH{~output_special_case[1]}});
   end else begin
-    localparam left_shift_amt_bias = (64 - (FRAC_WIDTH + 1));
+    localparam left_shift_amt_bias_if_result_frac_not_all_0s = (64 - (FRAC_WIDTH + 1));
+    localparam left_shift_amt_bias_if_result_frac_all_0s = -(FRAC_WIDTH) + left_shift_amt_bias_if_result_frac_not_all_0s;
     clz_tree frac_clz (
-      .clz_input (64'(result_frac[1])),
+      .clz_input (result_frac_all_0s_r ? 64'(grs[GRS_WIDTH-1-:HALF_GRS_WIDTH]) : 64'(result_frac[1])),
       .clz (clz_with_prepended_0s[5:0])
     );
-    assign left_shift_amt = (clz_with_prepended_0s & {EXPO_WIDTH{~output_special_case[1]}}) - (left_shift_amt_bias & {EXPO_WIDTH{~output_special_case[1]}});
+
+    assign left_shift_amt_offset = result_frac_all_0s_r ? left_shift_amt_bias_if_result_frac_all_0s : left_shift_amt_bias_if_result_frac_not_all_0s;
+    assign left_shift_amt = (clz_with_prepended_0s & {EXPO_WIDTH{~output_special_case[1]}}) - (left_shift_amt_offset & {EXPO_WIDTH{~output_special_case[1]}});
   end endgenerate
 
   assign output_special_case[0] = output_inf[1] | output_QNaN[1];
@@ -318,6 +327,8 @@ module fp_add_madd_fused (
       output_inf[2] <= output_inf[1];
       inexact[2] <= inexact[1];
       output_special_case[1] <= output_special_case[0];
+      result_frac_all_0s_r <= result_frac_all_0s;
+      grs_add_all_0s_r <= grs_add_all_0s;
     end
       
     //norm -> round1
@@ -353,4 +364,6 @@ module fp_add_madd_fused (
     end
   end
 
+  ////////////////////////////////////////////////////
+  //Assertions
 endmodule

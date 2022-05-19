@@ -102,7 +102,7 @@ interface fp_unit_writeback_interface;
         logic carry;
         logic safe;
         logic hidden;
-        logic [$bits(grs_t)-1:0] grs;
+        grs_t grs;
         fp_shift_amt_t clz;
         logic right_shift;
         logic [EXPO_WIDTH-1:0] right_shift_amt;

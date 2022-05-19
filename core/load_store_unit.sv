@@ -451,5 +451,4 @@ endgenerate
         assign tr_load_conflict_delay = tr_possible_load_conflict_delay & ready_for_issue_from_lsq;
     end
     endgenerate
-
 endmodule

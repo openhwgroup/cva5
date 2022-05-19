@@ -37,30 +37,13 @@ module fp_madd_fused_simulation_wrapper (
   output logic [4:0] fmadd_fflags
   );
 
-  //FP Writeback units
-  localparam int unsigned FLS_WB_ID = 32'd0;
-  localparam int unsigned FMADD_WB_ID = FLS_WB_ID + 1;
-  localparam int unsigned FMUL_WB_ID = FMADD_WB_ID + 1;
-  localparam int unsigned FDIV_SQRT_WB_ID = FMUL_WB_ID + 1;
-  localparam int unsigned MISC_WB2FP_WB_ID = FDIV_SQRT_WB_ID + 1;
-
-  localparam int unsigned FP_NUM_WB_UNITS = MISC_WB2FP_WB_ID + 1;
-  localparam int unsigned FP_NUM_UNITS_PER_PORT [FP_NUM_WB_GROUPS] = '{FP_NUM_WB_UNITS};
-  localparam fp_wb_id_param_t FP_WB_IDS = '{
-        FLS       : FLS_WB_ID,
-        FMADD     : FMADD_WB_ID,
-        FMUL      : FMUL_WB_ID,
-        FDIV_SQRT : FDIV_SQRT_WB_ID,
-        MISC_WB2FP: MISC_WB2FP_WB_ID 
-    };
-
+  localparam FP_NUM_NORM_ROUND_UNITS = 4;
   fp_madd_inputs_t fp_madd_inputs;
   unit_issue_interface issue();
   fp_unit_writeback_interface fp_mul_wb, fp_madd_wb; 
-  fp_unit_writeback_interface fp_unit_wb  [FP_NUM_WB_UNITS]();
+  fp_unit_writeback_interface intermediate_unit_wb [FP_NUM_NORM_ROUND_UNITS](); //units that require normalization/rounding
+  fp_unit_writeback_interface fp_unit_wb;
   fflags_writeback_t fp_unit_fflag_wb_packet;
-  fp_wb_packet_t fp_wb_packet [FP_NUM_WB_GROUPS];
-  fp_wb_packet_t fp_wb_snoop;
   logic adder_path;
   logic add;
   logic rs1_hidden_bit;
@@ -76,29 +59,34 @@ module fp_madd_fused_simulation_wrapper (
   always_ff @ (posedge clk) 
     input_counter_r <= input_counter;
 
+  localparam fp_wb_norm_round_param_t FP_NORM_ROUND_WB_IDS = '{
+        FMADD : 0,
+        FMUL: 1,
+        FDIV_SQRT: 2,
+        MISC_WB2FP : 3
+    };
+
   fp_madd_fused_top FMA (
     .clk (clk),
     .rst (rst),
     .fp_madd_inputs (fp_madd_inputs),
     .issue (issue),
-    .fp_madd_wb(fp_unit_wb[FP_WB_IDS.FMADD]), 
-    .fp_mul_wb (fp_unit_wb[FP_WB_IDS.FMUL])
+    .fp_madd_wb(intermediate_unit_wb[FP_NORM_ROUND_WB_IDS.FMADD]), 
+    .fp_mul_wb (intermediate_unit_wb[FP_NORM_ROUND_WB_IDS.FMUL]) 
   );
 
-  fp_writeback #(
-    .CONFIG (EXAMPLE_CONFIG),
-    .NUM_UNITS (FP_NUM_UNITS_PER_PORT),
-    .NUM_WB_UNITS (FP_NUM_WB_UNITS)
-  )
-  fp_writeback_block (
-    .clk (clk),
-    .rst (rst),
-    .wb_packet (fp_wb_packet),
-    .unit_wb (fp_unit_wb),
-    .fflags_wb_packet (fp_unit_fflag_wb_packet),
-    .wb_snoop (fp_wb_snoop)
+  localparam int unsigned FP_NUM_NORM_ROUND_UNITS_PER_PORT [FP_NUM_WB_GROUPS] = '{FP_NUM_NORM_ROUND_UNITS};
+  fp_normalize_rounding_top #(
+    .NUM_WB_UNITS(FP_NUM_NORM_ROUND_UNITS),
+    .NUM_UNITS(FP_NUM_NORM_ROUND_UNITS_PER_PORT)
+  ) 
+  norm_round_inst(
+    .clk(clk),
+    .rst(rst),
+    .intermediate_unit_wb(intermediate_unit_wb),
+    .unit_wb(fp_unit_wb)
   );
- 
+
   assign fp_madd_inputs.rs1 = rs1;
   assign fp_madd_inputs.rs2 = rs2;
   assign fp_madd_inputs.rs3 = rs3;
@@ -145,25 +133,25 @@ module fp_madd_fused_simulation_wrapper (
         .hidden (hidden_bit[RS3])
       );
 
-  assign ready = issue.ready;
+  assign ready =1;
   assign issue.possible_issue = possible_issue;
   assign issue.new_request = new_request;
   assign issue.new_request_r = new_request_r;
   assign issue.id = id;
 
   //control signals
-  assign adder_path = 1;
-  assign add = 0;
+  assign adder_path = 0;
+  assign add = 1;
 
-  assign mul_id = fp_wb_packet[0].id;
-  assign mul_done = fp_wb_packet[0].valid & ~adder_path; //asserted for fmul
-  assign mul_rd = fp_wb_packet[0].data;
+  assign mul_id = fp_unit_wb.id;
+  assign mul_done = fp_unit_wb.done & ~adder_path; //asserted for fmul
+  assign mul_rd = fp_unit_wb.rd;
   //assign fp_unit_wb[FP_WB_IDS.FMUL].ack = 1;// ack always asserted
 
-  assign fp_unit_wb[FP_WB_IDS.FMADD].ack = 1;// ack always asserted
-  assign madd_done = fp_wb_packet[0].valid & (adder_path & ~add);  //asserted for fmadd
-  assign madd_id = fp_wb_packet[0].id;
-  assign add_done = fp_wb_packet[0].valid & (adder_path & add); //asserted for fadd
-  assign madd_rd = fp_wb_packet[0].data;
+  assign fp_unit_wb.ack = 1;// ack always asserted
+  assign madd_done = fp_unit_wb.done & (adder_path & ~add);  //asserted for fmadd
+  assign madd_id = fp_unit_wb.id;
+  assign add_done = fp_unit_wb.done & (adder_path & add); //asserted for fadd
+  assign madd_rd = fp_unit_wb.rd;
 
 endmodule

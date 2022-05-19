@@ -37,6 +37,7 @@ package fpu_types;
     //typedef logic [$clog2(FP_NUM_WB_GROUPS)-1:0] fp_rs_wb_group_t;
     typedef logic [GRS_WIDTH-1:0] grs_t;
     typedef logic [EXPO_WIDTH-1:0] fp_shift_amt_t;
+    localparam HALF_GRS_WIDTH = GRS_WIDTH/2; // FMUL, FSQRT, FDIV
 
     //constants
     localparam BIAS = 2**(EXPO_WIDTH-1) - 1;
