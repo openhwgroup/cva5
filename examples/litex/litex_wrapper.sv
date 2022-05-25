@@ -76,13 +76,13 @@ module litex_wrapper
 
     localparam cpu_config_t MINIMAL_CONFIG = '{
         //ISA options
-        INCLUDE_M_MODE : 0,
+        INCLUDE_M_MODE : 1,
         INCLUDE_S_MODE : 0,
         INCLUDE_U_MODE : 0,
         INCLUDE_MUL : 0,
         INCLUDE_DIV : 0,
         INCLUDE_IFENCE : 0,
-        INCLUDE_CSRS : 0,
+        INCLUDE_CSRS : 1,
         INCLUDE_AMO : 0,
         //CSR constants
         CSRS : '{
@@ -94,10 +94,10 @@ module litex_wrapper
                 COUNTER_W : 33,
                 MCYCLE_WRITEABLE : 0,
                 MINSTR_WRITEABLE : 0,
-                MTVEC_WRITEABLE : 0,
+                MTVEC_WRITEABLE : 1,
                 INCLUDE_MSCRATCH : 0,
-                INCLUDE_MCAUSE : 0,
-                INCLUDE_MTVAL : 0
+                INCLUDE_MCAUSE : 1,
+                INCLUDE_MTVAL : 1
             }
         },
         //Memory Options
