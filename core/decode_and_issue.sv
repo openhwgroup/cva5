@@ -755,7 +755,7 @@ module decode_and_issue
         assign tr_unit_stall = issue_valid & ~issue.is_float & ~gc.fetch_flush & ~|issue_ready;
         assign tr_no_id_stall = (~issue.stage_valid & ~pc_id_available & ~gc.fetch_flush); //All instructions in execution pipeline
         assign tr_no_instruction_stall = (~tr_no_id_stall & ~issue.stage_valid) | gc.fetch_flush;
-        assign tr_other_stall = issue.stage_valid & ~instruction_issued & ~(tr_operand_stall | tr_unit_stall | tr_no_id_stall | tr_no_instruction_stall);
+        assign tr_other_stall = ~issue.is_float & issue.stage_valid & ~instruction_issued & ~(tr_operand_stall | tr_unit_stall | tr_no_id_stall | tr_no_instruction_stall);
         assign tr_branch_operand_stall = tr_operand_stall & unit_needed_issue_stage[UNIT_IDS.BR];
         assign tr_alu_operand_stall = tr_operand_stall & unit_needed_issue_stage[UNIT_IDS.ALU] & ~unit_needed_issue_stage[UNIT_IDS.BR];
         assign tr_ls_operand_stall = tr_operand_stall & unit_needed_issue_stage[UNIT_IDS.LS] & ~issue.is_float;

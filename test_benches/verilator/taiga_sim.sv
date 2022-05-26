@@ -611,7 +611,7 @@ module taiga_sim
             fp_no_id_stall          = (~cpu.issue.stage_valid & ~cpu.pc_id_available & ~cpu.gc.fetch_flush); //All instructions in execution pipeline
             fp_unit_stall           = cpu.decode_and_issue_block.issue_valid & cpu.issue.is_float & ~cpu.gc.fetch_flush & ~|cpu.decode_and_issue_block.issue_ready;
             fp_no_instruction_stall = (~fp_no_id_stall & ~cpu.issue.stage_valid) | cpu.gc.fetch_flush;
-            fp_other_stall          = cpu.issue.stage_valid & ~cpu.instruction_issued & ~(fp_operand_stall | fp_unit_stall  | fp_no_id_stall | fp_no_instruction_stall);
+            fp_other_stall          = cpu.issue.is_float & cpu.issue.stage_valid & ~cpu.instruction_issued & ~(fp_operand_stall | fp_unit_stall  | fp_no_id_stall | fp_no_instruction_stall);
 
             fls_operand_stall   = fp_operand_stall & cpu.decode_and_issue_block.unit_needed_issue_stage[cpu.UNIT_IDS.LS] & cpu.issue.is_float;
             fmadd_operand_stall = fp_operand_stall & cpu.decode_and_issue_block.unit_needed_issue_stage[cpu.NUM_UNITS+cpu.FMADD_UNIT_ID] & cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.is_fma;
