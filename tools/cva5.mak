@@ -91,7 +91,7 @@ $(CVA5_SIM): $(CVA5_HW_SRCS) $(CVA5_SIM_SRCS)
 		-o cva5-sim \
 		$(VERILATOR_LINT_IGNORE) $(VERILATOR_CFLAGS) \
 		$(CVA5_SIM_SRCS) \
-		$(CVA5_HW_SRCS) $(VERILATOR_DIR)/cva5_sim.sv --top-module cva5_sim
+		$(CVA5_HW_SRCS) $(CVA5_DIR)/test_benches/sim_stats.sv $(VERILATOR_DIR)/cva5_sim.sv --top-module cva5_sim
 	$(MAKE) -C $(CVA5_SIM_DIR) -f Vcva5_sim.mk
 
 .PHONY: clean-cva5-sim

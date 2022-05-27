@@ -39,13 +39,7 @@ module branch_unit
         output branch_results_t br_results,
         output logic branch_flush,
 
-        exception_interface.unit exception,
-
-        //Trace signals
-        output logic tr_branch_correct,
-        output logic tr_branch_misspredict,
-        output logic tr_return_correct,
-        output logic tr_return_misspredict
+        exception_interface.unit exception
     );
 
     logic branch_issued_r;
@@ -160,15 +154,5 @@ module branch_unit
 
     ////////////////////////////////////////////////////
     //Assertions
-
-    ////////////////////////////////////////////////////
-    //Trace Interface
-    generate if (ENABLE_TRACE_INTERFACE) begin
-        assign tr_branch_correct = instruction_is_completing & ~is_return & ~branch_flush;
-        assign tr_branch_misspredict = instruction_is_completing & ~is_return & branch_flush;
-        assign tr_return_correct = instruction_is_completing & is_return & ~branch_flush;
-        assign tr_return_misspredict = instruction_is_completing & is_return & branch_flush;
-    end
-    endgenerate
 
 endmodule

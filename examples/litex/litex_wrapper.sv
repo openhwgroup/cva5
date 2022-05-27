@@ -290,7 +290,6 @@ module litex_wrapper
     avalon_interface m_avalon();
     local_memory_interface instruction_bram();
     local_memory_interface data_bram();
-    trace_outputs_t tr;
     interrupt_t s_interrupt;
 
     //L2 to Wishbone

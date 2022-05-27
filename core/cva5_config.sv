@@ -305,12 +305,6 @@ package cva5_config;
     } exception_sources_t;
 
     ////////////////////////////////////////////////////
-    //Trace Options
-    //Trace interface is necessary for verilator simulation
-    localparam ENABLE_TRACE_INTERFACE = 1;
-
-
-    ////////////////////////////////////////////////////
     //L1 Arbiter IDs
     localparam L1_CONNECTIONS = 4;
     typedef enum bit [1:0] {

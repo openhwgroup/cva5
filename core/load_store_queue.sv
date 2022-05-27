@@ -40,9 +40,7 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
 
         //Retire release
         input id_t retire_ids [RETIRE_PORTS],
-        input logic retire_port_valid [RETIRE_PORTS],
-
-        output logic tr_possible_load_conflict_delay
+        input logic retire_port_valid [RETIRE_PORTS]
     );
 
     typedef struct packed {
@@ -68,7 +66,7 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
 
     //Can accept requests so long as store queue is not needed or is not full
     assign lsq.full = lsq.data_in.store & sq.full;
-
+    
     //Address hash for load-store collision checking
     addr_hash lsq_addr_hash (
         .clk (clk),
@@ -148,12 +146,5 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
 
     ////////////////////////////////////////////////////
     //Assertions
-
-    ////////////////////////////////////////////////////
-    //Trace Interface
-    generate if (ENABLE_TRACE_INTERFACE) begin : gen_lsq_trace
-        assign tr_possible_load_conflict_delay = lq.valid & (store_conflict | (sq.full & sq.valid));
-    end
-    endgenerate
 
 endmodule

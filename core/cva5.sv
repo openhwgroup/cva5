@@ -45,8 +45,6 @@ module cva5
         wishbone_interface.master dwishbone,
         wishbone_interface.master iwishbone,
 
-        output trace_outputs_t tr,
-
         l2_requester_interface.master l2,
 
         input interrupt_t s_interrupt,
@@ -193,41 +191,6 @@ module cva5
     //LS
     wb_packet_t wb_snoop;
 
-    //Trace Interface Signals
-    logic tr_early_branch_correction;
-    logic tr_operand_stall;
-    logic tr_unit_stall;
-    logic tr_no_id_stall;
-    logic tr_no_instruction_stall;
-    logic tr_other_stall;
-    logic tr_branch_operand_stall;
-    logic tr_alu_operand_stall;
-    logic tr_ls_operand_stall;
-    logic tr_div_operand_stall;
-
-    logic tr_alu_op;
-    logic tr_branch_or_jump_op;
-    logic tr_load_op;
-    logic tr_store_op;
-    logic tr_mul_op;
-    logic tr_div_op;
-    logic tr_misc_op;
-
-    logic tr_instruction_issued_dec;
-    logic [31:0] tr_instruction_pc_dec;
-    logic [31:0] tr_instruction_data_dec;
-
-    logic tr_branch_correct;
-    logic tr_branch_misspredict;
-    logic tr_return_correct;
-    logic tr_return_misspredict;
-
-    logic tr_load_conflict_delay;
-
-    logic tr_rs1_forwarding_needed;
-    logic tr_rs2_forwarding_needed;
-    logic tr_rs1_and_rs2_forwarding_needed;
-
     ////////////////////////////////////////////////////
     //Implementation
 
@@ -310,8 +273,7 @@ module cva5
         .tlb_on (tlb_on),
         .l1_request (l1_request[L1_ICACHE_ID]), 
         .l1_response (l1_response[L1_ICACHE_ID]), 
-        .exception (1'b0),
-        .tr_early_branch_correction (tr_early_branch_correction)
+        .exception (1'b0)
     );
 
     branch_predictor #(.CONFIG(CONFIG))
@@ -410,26 +372,7 @@ module cva5
         .unit_issue (unit_issue),
         .gc (gc),
         .current_privilege (current_privilege),
-        .exception (exception[PRE_ISSUE_EXCEPTION]),
-        .tr_operand_stall (tr_operand_stall),
-        .tr_unit_stall (tr_unit_stall),
-        .tr_no_id_stall (tr_no_id_stall),
-        .tr_no_instruction_stall (tr_no_instruction_stall),
-        .tr_other_stall (tr_other_stall),
-        .tr_branch_operand_stall (tr_branch_operand_stall),
-        .tr_alu_operand_stall (tr_alu_operand_stall),
-        .tr_ls_operand_stall (tr_ls_operand_stall),
-        .tr_div_operand_stall (tr_div_operand_stall),
-        .tr_alu_op (tr_alu_op),
-        .tr_branch_or_jump_op (tr_branch_or_jump_op),
-        .tr_load_op (tr_load_op),
-        .tr_store_op (tr_store_op),
-        .tr_mul_op (tr_mul_op),
-        .tr_div_op (tr_div_op),
-        .tr_misc_op (tr_misc_op),
-        .tr_instruction_issued_dec (tr_instruction_issued_dec),
-        .tr_instruction_pc_dec (tr_instruction_pc_dec),
-        .tr_instruction_data_dec (tr_instruction_data_dec)
+        .exception (exception[PRE_ISSUE_EXCEPTION])
     );
 
     ////////////////////////////////////////////////////
@@ -458,11 +401,7 @@ module cva5
         .branch_inputs (branch_inputs),
         .br_results (br_results),
         .branch_flush (branch_flush),
-        .exception (exception[BR_EXCEPTION]),
-        .tr_branch_correct (tr_branch_correct),
-        .tr_branch_misspredict (tr_branch_misspredict),
-        .tr_return_correct (tr_return_correct),
-        .tr_return_misspredict (tr_return_misspredict)
+        .exception (exception[BR_EXCEPTION])
     );
 
 
@@ -498,8 +437,7 @@ module cva5
         .retire_port_valid(retire_port_valid),
         .exception (exception[LS_EXCEPTION]),
         .load_store_status(load_store_status),
-        .wb (unit_wb[UNIT_IDS.LS]),
-        .tr_load_conflict_delay (tr_load_conflict_delay)
+        .wb (unit_wb[UNIT_IDS.LS])
     );
 
     generate if (CONFIG.INCLUDE_S_MODE) begin : gen_dtlb_dmmu
@@ -635,40 +573,5 @@ module cva5
     ////////////////////////////////////////////////////
     //Assertions
 
-    ////////////////////////////////////////////////////
-    //Trace Interface
-    generate if (ENABLE_TRACE_INTERFACE) begin : gen_cva5_trace
-        always_ff @(posedge clk) begin
-            tr.events.early_branch_correction <= tr_early_branch_correction;
-            tr.events.operand_stall <= tr_operand_stall;
-            tr.events.unit_stall <= tr_unit_stall;
-            tr.events.no_id_stall <= tr_no_id_stall;
-            tr.events.no_instruction_stall <= tr_no_instruction_stall;
-            tr.events.other_stall <= tr_other_stall;
-            tr.events.instruction_issued_dec <= tr_instruction_issued_dec;
-            tr.events.branch_operand_stall <= tr_branch_operand_stall;
-            tr.events.alu_operand_stall <= tr_alu_operand_stall;
-            tr.events.ls_operand_stall <= tr_ls_operand_stall;
-            tr.events.div_operand_stall <= tr_div_operand_stall;
-            tr.events.alu_op <= tr_alu_op;
-            tr.events.branch_or_jump_op <= tr_branch_or_jump_op;
-            tr.events.load_op <= tr_load_op;
-            tr.events.store_op <= tr_store_op;
-            tr.events.mul_op <= tr_mul_op;
-            tr.events.div_op <= tr_div_op;
-            tr.events.misc_op <= tr_misc_op;
-            tr.events.branch_correct <= tr_branch_correct;
-            tr.events.branch_misspredict <= tr_branch_misspredict;
-            tr.events.return_correct <= tr_return_correct;
-            tr.events.return_misspredict <= tr_return_misspredict;
-            tr.events.load_conflict_delay <= tr_load_conflict_delay;
-            tr.events.rs1_forwarding_needed <= tr_rs1_forwarding_needed;
-            tr.events.rs2_forwarding_needed <= tr_rs2_forwarding_needed;
-            tr.events.rs1_and_rs2_forwarding_needed <= tr_rs1_and_rs2_forwarding_needed;
-            tr.instruction_pc_dec <= tr_instruction_pc_dec;
-            tr.instruction_data_dec <= tr_instruction_data_dec;
-        end
-    end
-    endgenerate
 
 endmodule

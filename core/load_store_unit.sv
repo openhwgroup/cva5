@@ -63,9 +63,7 @@ module load_store_unit
 
         exception_interface.unit exception,
         output load_store_status_t load_store_status,
-        unit_writeback_interface.unit wb,
-
-        output logic tr_load_conflict_delay
+        unit_writeback_interface.unit wb
     );
 
     localparam NUM_SUB_UNITS = int'(CONFIG.INCLUDE_DLOCAL_MEM) + int'(CONFIG.INCLUDE_PERIPHERAL_BUS) + int'(CONFIG.INCLUDE_DCACHE);
@@ -130,12 +128,8 @@ module load_store_unit
     fifo_interface #(.DATA_WIDTH($bits(load_attributes_t))) load_attributes();
 
     load_store_queue_interface lsq();
-    logic tr_possible_load_conflict_delay;
-
     ////////////////////////////////////////////////////
     //Implementation
-    ////////////////////////////////////////////////////
-
 
     ////////////////////////////////////////////////////
     //Alignment Exception
@@ -232,8 +226,7 @@ module load_store_unit
         .lsq (lsq),
         .wb_snoop (wb_snoop),
         .retire_ids (retire_ids),
-        .retire_port_valid (retire_port_valid),
-        .tr_possible_load_conflict_delay (tr_possible_load_conflict_delay)
+        .retire_port_valid (retire_port_valid)
     );
     assign shared_inputs = lsq.data_out;
     assign lsq.pop = sub_unit_issue;
@@ -435,12 +428,5 @@ module load_store_unit
     //         assert property (@(posedge clk) disable iff (rst) (sub_unit_issue & ~ls_inputs.fence) |-> |sub_unit_address_match)
     //         else $error("invalid L/S address");
     // `endif
-
-    ////////////////////////////////////////////////////
-    //Trace Interface
-    generate if (ENABLE_TRACE_INTERFACE) begin : gen_ls_trace
-        assign tr_load_conflict_delay = tr_possible_load_conflict_delay & units_ready;
-    end
-    endgenerate
 
 endmodule

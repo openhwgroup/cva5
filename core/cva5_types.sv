@@ -262,57 +262,54 @@ package cva5_types;
         logic external;
     } interrupt_t;
     
-    typedef struct packed {
-        //Fetch
-        logic early_branch_correction;
+    typedef enum {
+        FETCH_EARLY_BR_CORRECTION_STAT,
+        FETCH_SUB_UNIT_STALL_STAT,
+        FETCH_ID_STALL_STAT,
+        FETCH_IC_HIT_STAT,
+        FETCH_IC_MISS_STAT,
+        FETCH_IC_ARB_STALL_STAT,
 
-        //Decode
-        logic operand_stall;
-        logic unit_stall;
-        logic no_id_stall;
-        logic no_instruction_stall;
-        logic other_stall;
-        logic instruction_issued_dec;
-        logic branch_operand_stall;
-        logic alu_operand_stall;
-        logic ls_operand_stall;
-        logic div_operand_stall;
+        FETCH_BP_BR_CORRECT_STAT,
+        FETCH_BP_BR_MISPREDICT_STAT,
+        FETCH_BP_RAS_CORRECT_STAT,
+        FETCH_BP_RAS_MISPREDICT_STAT,
 
-        //Instruction mix
-        logic alu_op;
-        logic branch_or_jump_op;
-        logic load_op;
-        logic store_op;
-        logic mul_op;
-        logic div_op;
-        logic misc_op;
+        ISSUE_NO_INSTRUCTION_STAT,
+        ISSUE_NO_ID_STAT,
+        ISSUE_FLUSH_STAT,
+        ISSUE_UNIT_BUSY_STAT,
+        ISSUE_OPERANDS_NOT_READY_STAT,
+        ISSUE_HOLD_STAT,
+        ISSUE_MULTI_SOURCE_STAT,
+        ISSUE_OPERAND_STALL_ON_LOAD_STAT,
+        ISSUE_OPERAND_STALL_ON_MULTIPLY_STAT,
+        ISSUE_OPERAND_STALL_ON_DIVIDE_STAT,
+        ISSUE_OPERAND_STALL_FOR_BRANCH_STAT,
+        ISSUE_STORE_WITH_FORWARDED_DATA_STAT,
+        ISSUE_DIVIDER_RESULT_REUSE_STAT,
 
-        //Branch Unit
-        logic branch_correct;
-        logic branch_misspredict;
-        logic return_correct;
-        logic return_misspredict;
+        LSU_LOAD_BLOCKED_BY_STORE_STAT,
+        LSU_SUB_UNIT_STALL_STAT,
+        LSU_DC_HIT_STAT,
+        LSU_DC_MISS_STAT,
+        LSU_DC_ARB_STALL_STAT
+    } stats_t;
 
-        //Load Store Unit
-        logic load_conflict_delay;
-
-        //Register File
-        logic rs1_forwarding_needed;
-        logic rs2_forwarding_needed;
-        logic rs1_and_rs2_forwarding_needed;
-
-    } cva5_trace_events_t;
+    typedef enum {
+        ALU_STAT,
+        BR_STAT,
+        MUL_STAT,
+        DIV_STAT,
+        LOAD_STAT,
+        STORE_STAT,
+        MISC_STAT
+    } instruction_mix_stats_t;
 
     typedef struct packed {
         logic [31:0] pc;
         logic [31:0] instruction;
         logic valid;
     } trace_retire_outputs_t;
-
-    typedef struct packed {
-        logic [31:0] instruction_pc_dec;
-        logic [31:0] instruction_data_dec;
-        cva5_trace_events_t events;
-    } trace_outputs_t;
 
 endpackage

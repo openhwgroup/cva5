@@ -72,31 +72,8 @@ module decode_and_issue
         input gc_outputs_t gc,
         input logic [1:0] current_privilege,
 
-        exception_interface.unit exception,
-
-        //Trace signals
-        output logic tr_operand_stall,
-        output logic tr_unit_stall,
-        output logic tr_no_id_stall,
-        output logic tr_no_instruction_stall,
-        output logic tr_other_stall,
-        output logic tr_branch_operand_stall,
-        output logic tr_alu_operand_stall,
-        output logic tr_ls_operand_stall,
-        output logic tr_div_operand_stall,
-
-        output logic tr_alu_op,
-        output logic tr_branch_or_jump_op,
-        output logic tr_load_op,
-        output logic tr_store_op,
-        output logic tr_mul_op,
-        output logic tr_div_op,
-        output logic tr_misc_op,
-
-        output logic tr_instruction_issued_dec,
-        output logic [31:0] tr_instruction_pc_dec,
-        output logic [31:0] tr_instruction_data_dec
-        );
+        exception_interface.unit exception
+    );
 
     logic [2:0] fn3;
     logic [6:0] opcode;
@@ -638,34 +615,5 @@ module decode_and_issue
 
     ////////////////////////////////////////////////////
     //Assertions
-
-    ////////////////////////////////////////////////////
-    //Trace Interface
-    generate if (ENABLE_TRACE_INTERFACE) begin : gen_decode_trace
-        assign tr_operand_stall = issue.stage_valid & ~gc.fetch_flush & ~gc.issue_hold & ~pre_issue_exception_pending & ~operands_ready & |issue_ready;
-        assign tr_unit_stall = issue_valid & ~gc.fetch_flush & ~|issue_ready;
-        assign tr_no_id_stall = (~issue.stage_valid & ~pc_id_available & ~gc.fetch_flush); //All instructions in execution pipeline
-        assign tr_no_instruction_stall = (pc_id_available & ~issue.stage_valid) | gc.fetch_flush;
-        assign tr_other_stall = issue.stage_valid & ~instruction_issued & ~(tr_operand_stall | tr_unit_stall | tr_no_id_stall | tr_no_instruction_stall);
-        assign tr_branch_operand_stall = tr_operand_stall & unit_needed_issue_stage[UNIT_IDS.BR];
-        assign tr_alu_operand_stall = tr_operand_stall & unit_needed_issue_stage[UNIT_IDS.ALU] & ~unit_needed_issue_stage[UNIT_IDS.BR];
-        assign tr_ls_operand_stall = tr_operand_stall & unit_needed_issue_stage[UNIT_IDS.LS];
-        assign tr_div_operand_stall = tr_operand_stall & unit_needed_issue_stage[UNIT_IDS.DIV];
-
-        //Instruction Mix
-        always_ff @(posedge clk) begin
-            tr_alu_op <= issue_to[UNIT_IDS.ALU];
-            tr_branch_or_jump_op <= issue_to[UNIT_IDS.BR];
-            tr_load_op <= issue_to[UNIT_IDS.LS] & is_load_r;
-            tr_store_op <= issue_to[UNIT_IDS.LS] & is_store_r;
-            tr_mul_op <= issue_to[UNIT_IDS.MUL];
-            tr_div_op <= issue_to[UNIT_IDS.DIV];
-            tr_misc_op <= issue_to[UNIT_IDS.CSR] | issue_to[UNIT_IDS.IEC];
-        end
-
-        assign tr_instruction_issued_dec = instruction_issued;
-        assign tr_instruction_pc_dec = issue.pc;
-        assign tr_instruction_data_dec = issue.instruction;
-    end endgenerate
 
 endmodule

@@ -84,7 +84,6 @@ module cva5_wrapper_xilinx
     avalon_interface m_avalon ();
     wishbone_interface dwishbone ();
     wishbone_interface iwishbone ();
-    trace_outputs_t tr;
     logic timer_interrupt;
     logic interrupt;
 
