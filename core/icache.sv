@@ -42,6 +42,7 @@ module icache
     );
 
     localparam derived_cache_config_t SCONFIG = get_derived_cache_params(CONFIG, CONFIG.ICACHE, CONFIG.ICACHE_ADDR);
+    localparam bit [SCONFIG.SUB_LINE_ADDR_W-1:0] END_OF_LINE_COUNT = SCONFIG.SUB_LINE_ADDR_W'(CONFIG.ICACHE.LINE_W-1);
 
     logic tag_hit;
     logic [CONFIG.ICACHE.WAYS-1:0] tag_hit_way;
@@ -51,20 +52,24 @@ module icache
     logic [CONFIG.ICACHE.WAYS-1:0] tag_update_way;
 
     logic [SCONFIG.SUB_LINE_ADDR_W-1:0] word_count;
+    logic [SCONFIG.SUB_LINE_ADDR_W-1:0] target_word;
     logic is_target_word;
+
     logic line_complete;
 
     logic [31:0] data_out [CONFIG.ICACHE.WAYS-1:0];
-    logic [31:0] miss_data;
 
-    logic miss_in_progress;
+    logic linefill_in_progress;
+    logic request_in_progress;
 
     logic miss_data_valid;
     logic second_cycle;
     logic [31:0] second_cycle_addr;
 
-    logic idle;
-    logic memory_complete;
+    fifo_interface #(.DATA_WIDTH(32)) input_fifo();
+
+    logic new_request;
+    logic [31:0] new_request_addr;
     ////////////////////////////////////////////////////
     //Implementation
 
@@ -72,18 +77,44 @@ module icache
     //On the second cycle of a request hit/miss determination is performed
     //On a miss, the memory request starts on the third cycle
 
+    assign new_request = (fetch_sub.new_request | input_fifo.valid) & ((~request_in_progress | tag_hit) & ~linefill_in_progress);
+
+    assign input_fifo.push = fetch_sub.new_request & (~new_request | input_fifo.valid);
+    assign input_fifo.potential_push = input_fifo.push;
+    assign input_fifo.pop = new_request & input_fifo.valid;
+    assign input_fifo.data_in = fetch_sub.addr;
+
+    assign new_request_addr = input_fifo.valid ? input_fifo.data_out : fetch_sub.addr;
+
+    cva5_fifo #(.DATA_WIDTH(32), .FIFO_DEPTH(2))
+    cache_input_fifo (
+        .clk (clk), 
+        .rst (rst), 
+        .fifo (input_fifo)
+    );
+    ////////////////////////////////////////////////////
+    //Ready determination
+    always_ff @ (posedge clk) begin
+        if (rst)
+            request_in_progress <= 0;
+        else
+            request_in_progress <= (request_in_progress & ~fetch_sub.data_valid) | new_request;
+    end
+
+    assign fetch_sub.ready = ~input_fifo.full;
+
     ////////////////////////////////////////////////////
     //General Control Logic
     always_ff @ (posedge clk) begin
         if (rst)
             second_cycle <= 0;
         else
-            second_cycle <= fetch_sub.new_request;
+            second_cycle <= new_request;
     end
 
     always_ff @(posedge clk) begin
-        if (fetch_sub.new_request)
-            second_cycle_addr <= fetch_sub.addr;
+        if (new_request)
+            second_cycle_addr <= new_request_addr;
     end
 
     //As request can be aborted on any cycle, only update tags if memory request is in progress
@@ -96,13 +127,13 @@ module icache
 
     //Replacement policy is psuedo random
     cycler #(CONFIG.ICACHE.WAYS) replacement_policy (
-        .clk        (clk), 
-        .rst        (rst), 
-        .en         (1'b1), 
-        .one_hot    (replacement_way)
+        .clk (clk), 
+        .rst (rst), 
+        .en (1'b1), 
+        .one_hot (replacement_way)
     );
     always_ff @ (posedge clk) begin
-        if (second_cycle)
+        if (second_cycle & ~linefill_in_progress)
             tag_update_way <= replacement_way;
     end
 
@@ -132,24 +163,24 @@ module icache
     //Miss state tracking
     always_ff @ (posedge clk) begin
         if (rst)
-            miss_in_progress <= 0;
+            linefill_in_progress <= 0;
         else
-            miss_in_progress <= l1_request.ack | (miss_in_progress & ~line_complete);
+            linefill_in_progress <= (linefill_in_progress & ~line_complete) | l1_request.ack;
     end
 
     ////////////////////////////////////////////////////
     //Tag banks
     itag_banks #(.CONFIG(CONFIG), .SCONFIG(SCONFIG))
     icache_tag_banks (
-            .clk(clk),
-            .rst(rst), //clears the read_hit_allowed flag
-            .stage1_addr(fetch_sub.addr),
-            .stage2_addr(second_cycle_addr),
-            .update_way(tag_update_way),
-            .update(tag_update),
-            .stage1_adv(fetch_sub.new_request & icache_on),
-            .tag_hit(tag_hit),
-            .tag_hit_way(tag_hit_way)
+        .clk(clk),
+        .rst(rst), //clears the read_hit_allowed flag
+        .stage1_addr(new_request_addr),
+        .stage2_addr(second_cycle_addr),
+        .update_way(tag_update_way),
+        .update(tag_update),
+        .stage1_adv(new_request & icache_on),
+        .tag_hit(tag_hit),
+        .tag_hit_way(tag_hit_way)
     );
 
     ////////////////////////////////////////////////////
@@ -158,9 +189,9 @@ module icache
     generate for (i=0; i < CONFIG.ICACHE.WAYS; i++) begin : idata_bank_gen
         byte_en_BRAM #(CONFIG.ICACHE.LINES*CONFIG.ICACHE.LINE_W) idata_bank (
             .clk(clk),
-            .addr_a(fetch_sub.addr[2 +: SCONFIG.LINE_ADDR_W+SCONFIG.SUB_LINE_ADDR_W]),
+            .addr_a(new_request_addr[2 +: SCONFIG.LINE_ADDR_W+SCONFIG.SUB_LINE_ADDR_W]),
             .addr_b({second_cycle_addr[(2+SCONFIG.SUB_LINE_ADDR_W) +: SCONFIG.LINE_ADDR_W], word_count}),
-            .en_a(fetch_sub.new_request),
+            .en_a(new_request),
             .en_b(tag_update_way[i] & l1_response.data_valid),
             .be_a('0),
             .be_b('1),
@@ -173,60 +204,41 @@ module icache
 
     ////////////////////////////////////////////////////
     //Miss data path
+    assign target_word = second_cycle_addr[2 +: SCONFIG.SUB_LINE_ADDR_W];
+    assign is_target_word = (target_word == word_count);
+
     always_ff @ (posedge clk) begin
         if (rst)
             word_count <= 0;
-        else if (l1_response.data_valid)
-            word_count <= word_count + 1;
-    end
-
-    assign is_target_word = (second_cycle_addr[2 +: SCONFIG.SUB_LINE_ADDR_W] == word_count);
-
-    always_ff @ (posedge clk) begin
-        if (l1_response.data_valid & is_target_word)
-            miss_data <= l1_response.data;
         else
-            miss_data <= 0;
+            word_count <= word_count + SCONFIG.SUB_LINE_ADDR_W'(l1_response.data_valid);
     end
 
-    always_ff @ (posedge clk) begin
-        if (rst)
-            miss_data_valid <= 0;
-        else
-            miss_data_valid <= miss_in_progress & l1_response.data_valid & is_target_word;
-    end
-
-    assign  line_complete = (l1_response.data_valid && (word_count == SCONFIG.SUB_LINE_ADDR_W'(CONFIG.ICACHE.LINE_W-1)));
-    always_ff @ (posedge clk) begin
-        if (rst)
-            memory_complete <= 0;
-        else
-            memory_complete <= line_complete;
-    end
+    assign miss_data_valid = request_in_progress & l1_response.data_valid & is_target_word;
+    assign line_complete = l1_response.data_valid & (word_count == END_OF_LINE_COUNT);
 
     ////////////////////////////////////////////////////
     //Output muxing
+    localparam OMUX_W = CONFIG.ICACHE.WAYS+1;
+    logic [OMUX_W-1:0] priority_vector;
+    logic [$clog2(OMUX_W)-1:0] output_sel;
+    logic [31:0] output_array [OMUX_W];
     always_comb begin
-        fetch_sub.data_out = miss_data;//zero if not a miss
+        priority_vector[0] = miss_data_valid;
+        output_array[0] = l1_response.data;
         for (int i = 0; i < CONFIG.ICACHE.WAYS; i++) begin
-            fetch_sub.data_out = fetch_sub.data_out | (data_out[i] & {32{tag_hit_way[i]}});
+            priority_vector[i+1] = tag_hit_way[i];
+            output_array[i+1] = data_out[i];
         end
     end
-
+    priority_encoder #(.WIDTH(OMUX_W))
+    arb_encoder
+    (
+        .priority_vector (priority_vector),
+        .encoded_result (output_sel)
+    );
+    assign fetch_sub.data_out = output_array[output_sel];
     assign fetch_sub.data_valid = miss_data_valid | tag_hit;
-
-    ////////////////////////////////////////////////////
-    //Ready determination
-    always_ff @ (posedge clk) begin
-        if (rst)
-            idle <= 1;
-        else if (fetch_sub.new_request)
-            idle <= 0;
-        else if (memory_complete | tag_hit) //read miss OR write through complete
-            idle <= 1;
-    end
-
-    assign fetch_sub.ready = tag_hit | memory_complete | idle;
 
     ////////////////////////////////////////////////////
     //End of Implementation
@@ -239,7 +251,7 @@ module icache
         else $error("Spurious icache ack received from arbiter!");
 
     icache_l1_arb_data_valid_assertion:
-        assert property (@(posedge clk) disable iff (rst) l1_response.data_valid |-> miss_in_progress)
+        assert property (@(posedge clk) disable iff (rst) l1_response.data_valid |-> linefill_in_progress)
         else $error("Spurious icache data received from arbiter!");
 
 endmodule

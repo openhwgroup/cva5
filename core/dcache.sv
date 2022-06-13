@@ -100,12 +100,11 @@ module dcache
 
     logic hit_allowed;
     logic read_hit_allowed;
-    logic read_hit_data_valid;
     logic read_hit;
 
     logic address_range_valid;
 
-    logic idle;
+    logic busy;
     logic read_miss_complete;
 
     logic store_complete;
@@ -136,7 +135,6 @@ module dcache
     //Signal is valid for a single cycle, RAM enables are used to hold outputs in case of pipeline stalls
     always_ff @ (posedge clk) begin
         read_hit_allowed <= ls.new_request & ls.re & dcache_on & ~(amo.is_lr | amo.is_amo) & ~uncacheable;
-        read_hit_data_valid <= read_hit_allowed;
         second_cycle <= ls.new_request;
         tag_update <= second_cycle & dcache_on & stage2.load & ~tag_hit & ~stage2.uncacheable;//Cache enabled, read miss
     end
@@ -144,14 +142,11 @@ module dcache
     assign read_hit = tag_hit & read_hit_allowed;
 
     //LR reservation, cleared on exceptions
-
     always_ff @ (posedge clk) begin
         if (rst)
             reservation <= 0;
-        else if (second_cycle)
-            reservation <= stage2.amo.is_lr;
-        else if (sc_complete | clear_reservation)
-            reservation <= 0;
+        else
+            reservation <= (reservation & ~(sc_complete | clear_reservation)) | (second_cycle & stage2.amo.is_lr);
     end
 
     ////////////////////////////////////////////////////
@@ -165,10 +160,10 @@ module dcache
     assign l1_request.amo = stage2.amo.op;
 
     always_ff @ (posedge clk) begin
-        if (rst | line_complete)
+        if (ls.new_request)
             word_count <= 0;
-        else if (l1_response.data_valid)
-            word_count <= word_count + 1;
+        else
+            word_count <= word_count + SCONFIG.SUB_LINE_ADDR_W'(l1_response.data_valid);
     end
     assign is_target_word = (stage2.addr[SCONFIG.SUB_LINE_ADDR_W-1:0] == word_count) | stage2.uncacheable;
 
@@ -176,32 +171,30 @@ module dcache
     always_ff @ (posedge clk) begin
         if (rst)
             arb_request_r  <= 0;
-        else if (second_cycle & ~l1_request.ack)
-            arb_request_r <= new_arb_request;
-        else if (l1_request.ack)
-            arb_request_r  <= 0;
+        else
+            arb_request_r  <= (arb_request_r | new_arb_request) & ~l1_request.ack;
     end
     assign l1_request.request = new_arb_request | arb_request_r;
 
     ////////////////////////////////////////////////////
     //Replacement policy (free runing one-hot cycler, i.e. pseudo random)
     cycler #(CONFIG.DCACHE.WAYS) replacement_policy (
-        .clk        (clk),
-        .rst        (rst),
-        .en         (1'b1), 
-        .one_hot    (replacement_way)
+        .clk (clk),
+        .rst (rst),
+        .en (1'b1), 
+        .one_hot (replacement_way)
     );
 
     //One-hot tag hit / update logic to binary int
     one_hot_to_integer #(CONFIG.DCACHE.WAYS)
     hit_way_conv (
-        .one_hot(tag_hit_way), 
-        .int_out(tag_hit_way_int)
+        .one_hot (tag_hit_way), 
+        .int_out (tag_hit_way_int)
     );
     one_hot_to_integer #(CONFIG.DCACHE.WAYS)
     update_way_conv (
-        .one_hot    (replacement_way), 
-        .int_out    (replacement_way_int)
+        .one_hot (replacement_way), 
+        .int_out (replacement_way_int)
     );
 
 
@@ -252,9 +245,9 @@ module dcache
     endgenerate
 
     always_comb begin
-        if (stage2.amo.is_amo & is_target_word)
+        if (CONFIG.INCLUDE_AMO & stage2.amo.is_amo & is_target_word)
             new_line_data = amo_result;
-        else if (stage2.amo.is_sc)
+        else if (CONFIG.INCLUDE_AMO & stage2.amo.is_sc)
             new_line_data = stage2.data;
         else
             new_line_data = l1_response.data;
@@ -278,28 +271,27 @@ module dcache
         assign data_bank_addr_b = {tag_update_way_int, stage2.addr[SCONFIG.LINE_ADDR_W+SCONFIG.SUB_LINE_ADDR_W-1:SCONFIG.SUB_LINE_ADDR_W], update_word_index};
     end endgenerate
 
-    ddata_bank #(.LINES(DCACHE_SIZE_IN_WORDS)) data_bank (
-            .clk(clk),
-            .addr_a(data_bank_addr_a),
-            .addr_b(data_bank_addr_b),
-            .en_a(second_cycle),
-            .en_b((l1_response.data_valid & ~stage2.uncacheable) | (sc_complete & sc_success)),
-            .be_a(write_hit_be),
-            .data_in_a(stage2.data),
-            .data_in_b(new_line_data),
-            .data_out_a(dbank_data_out)
-        );
+    ddata_bank #(.LINES(DCACHE_SIZE_IN_WORDS))
+    data_bank (
+        .clk(clk),
+        .addr_a(data_bank_addr_a),
+        .addr_b(data_bank_addr_b),
+        .en_a(second_cycle),
+        .en_b((l1_response.data_valid & ~stage2.uncacheable) | (sc_complete & sc_success)),
+        .be_a(write_hit_be),
+        .data_in_a(stage2.data),
+        .data_in_b(new_line_data),
+        .data_out_a(dbank_data_out)
+    );
 
     ////////////////////////////////////////////////////
     //Output
+    logic l1_data_valid_r;
     always_ff @ (posedge clk) begin
-        if (l1_response.data_valid & is_target_word)
-            miss_data <= l1_response.data;
-        else if (sc_complete)
-            miss_data <= {31'b0, sc_success};
+        l1_data_valid_r <= l1_response.data_valid;
+        miss_data <= sc_complete ? {31'b0, sc_success} : l1_response.data;
     end
-
-    assign ls.data_out = read_hit_data_valid ? dbank_data_out : miss_data;
+    assign ls.data_out = l1_data_valid_r ? miss_data : dbank_data_out;
 
     ////////////////////////////////////////////////////
     //Pipeline Advancement
@@ -321,15 +313,13 @@ module dcache
             ls.data_valid <= (l1_response.data_valid & is_target_word) | read_hit | sc_complete;
     end
 
-    assign ls.ready = read_hit | store_complete | read_miss_complete | idle;
+    assign ls.ready = read_hit | store_complete | read_miss_complete | ~busy;
 
     always_ff @ (posedge clk) begin
         if (rst)
-            idle <= 1;
-        else if (ls.new_request)
-            idle <= 0;
-        else if (ls.ready)
-            idle <= 1;
+            busy <= 0;
+        else
+            busy <= (busy & ~ls.ready) | ls.new_request;
     end
 
     ////////////////////////////////////////////////////

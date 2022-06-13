@@ -198,12 +198,12 @@ interface load_store_queue_interface;
     lsq_entry_t data_in;
     logic potential_push;
     logic push;
-    logic full;
+    logic pop;
 
     //LSQ outputs
     data_access_shared_inputs_t data_out;
     logic valid;
-    logic pop;
+    logic full;
 
     //LSQ status
     logic sq_empty;
@@ -228,12 +228,11 @@ interface store_queue_interface;
     //Issue inputs
     lsq_entry_t data_in;
     logic push;
-    logic full;
+    logic pop;
 
     sq_entry_t data_out;
-
     logic valid;
-    logic pop;
+    logic full;
 
     //SQ status
     logic empty;
