@@ -64,10 +64,7 @@ module branch_predictor
 
     localparam BRANCH_ADDR_W = $clog2(CONFIG.BP.ENTRIES);
     localparam BTAG_W = get_memory_width() - BRANCH_ADDR_W - 2;
-
-    function logic[BTAG_W-1:0] get_tag (input logic[31:0] pc);
-        return pc[BRANCH_ADDR_W+2 +: BTAG_W];
-    endfunction
+    cache_functions_interface #(.TAG_W(BTAG_W), .LINE_W(BRANCH_ADDR_W), .SUB_LINE_W(0)) addr_utils();
 
     typedef struct packed {
         logic valid;
@@ -101,6 +98,9 @@ module branch_predictor
     logic [$clog2(CONFIG.BP.WAYS > 1 ? CONFIG.BP.WAYS : 2)-1:0] hit_way;
     logic tag_match;
     logic use_predicted_pc;
+
+    addr_utils_interface #(CONFIG.IBUS_ADDR.L, CONFIG.IBUS_ADDR.H) ibus_addr_utils ();
+
     /////////////////////////////////////////
 
     genvar i;
@@ -108,14 +108,14 @@ module branch_predictor
     for (i=0; i<CONFIG.BP.WAYS; i++) begin : gen_branch_tag_banks
         branch_predictor_ram #(.C_DATA_WIDTH($bits(branch_table_entry_t)), .C_DEPTH(CONFIG.BP.ENTRIES))
         tag_bank (       
-            .clk            (clk),
-            .rst            (rst),
-            .write_addr     (br_results.pc[2 +: BRANCH_ADDR_W]), 
-            .write_en       (tag_update_way[i]), 
-            .write_data     (ex_entry),
-            .read_addr      (bp.next_pc[2 +: BRANCH_ADDR_W]), 
-            .read_en        (bp.new_mem_request), 
-            .read_data      (if_entry[i]));
+            .clk (clk),
+            .rst (rst),
+            .write_addr (addr_utils.getHashedLineAddr(br_results.pc, i)), 
+            .write_en (tag_update_way[i]), 
+            .write_data (ex_entry),
+            .read_addr (addr_utils.getHashedLineAddr(bp.next_pc, i)), 
+            .read_en (bp.new_mem_request), 
+            .read_data (if_entry[i]));
     end
     endgenerate
 
@@ -123,21 +123,21 @@ module branch_predictor
     for (i=0; i<CONFIG.BP.WAYS; i++) begin : gen_branch_table_banks
         branch_predictor_ram #(.C_DATA_WIDTH(32), .C_DEPTH(CONFIG.BP.ENTRIES))
         addr_table (       
-            .clk            (clk),
-            .rst            (rst),
-            .write_addr(br_results.pc[2 +: BRANCH_ADDR_W]), 
-            .write_en(target_update_way[i]), 
-            .write_data(br_results.target_pc),
-            .read_addr(bp.next_pc[2 +: BRANCH_ADDR_W]), 
-            .read_en(bp.new_mem_request), 
-            .read_data(predicted_pc[i])
+            .clk (clk),
+            .rst (rst),
+            .write_addr (addr_utils.getHashedLineAddr(br_results.pc, i)), 
+            .write_en (target_update_way[i]), 
+            .write_data (br_results.target_pc),
+            .read_addr (addr_utils.getHashedLineAddr(bp.next_pc, i)), 
+            .read_en (bp.new_mem_request), 
+            .read_data (predicted_pc[i])
         );
     end
     endgenerate
 
     generate if (CONFIG.INCLUDE_BRANCH_PREDICTOR)
     for (i=0; i<CONFIG.BP.WAYS; i++) begin : gen_branch_hit_detection
-            assign tag_matches[i] = ({if_entry[i].valid, if_entry[i].tag} == {1'b1, get_tag(bp.if_pc)});
+            assign tag_matches[i] = ({if_entry[i].valid, if_entry[i].tag} == {1'b1, addr_utils.getTag(bp.if_pc)});
     end
     endgenerate
 
@@ -185,7 +185,7 @@ module branch_predictor
     ////////////////////////////////////////////////////
     //Execution stage update
     assign ex_entry.valid = 1;
-    assign ex_entry.tag = get_tag(br_results.pc);
+    assign ex_entry.tag = addr_utils.getTag(br_results.pc);
     assign ex_entry.is_branch = br_results.is_branch;
     assign ex_entry.is_return = br_results.is_return;
     assign ex_entry.is_call = br_results.is_call;

@@ -270,6 +270,31 @@ interface writeback_store_interface;
         );
 endinterface
 
+interface cache_functions_interface #(parameter int TAG_W = 8, parameter int LINE_W = 4, parameter int SUB_LINE_W = 2);
+
+    function logic [LINE_W-1:0] xor_mask (int WAY);
+        for (int i = 0; i < LINE_W; i++)
+            xor_mask[i] = ((WAY % 2) == 0) ? 1'b1 : 1'b0;
+    endfunction
+
+    function logic [LINE_W-1:0] getHashedLineAddr (logic[31:0] addr, int WAY);
+        getHashedLineAddr = addr[2 + SUB_LINE_W +: LINE_W] ^ (addr[2 + SUB_LINE_W + LINE_W +: LINE_W] & xor_mask(WAY));
+    endfunction
+
+    function logic[TAG_W-1:0] getTag(logic[31:0] addr);
+        getTag = addr[2 + LINE_W + SUB_LINE_W +: TAG_W];
+    endfunction
+
+    function logic [LINE_W-1:0] getTagLineAddr (logic[31:0] addr);
+        getTagLineAddr = addr[2 + SUB_LINE_W +: LINE_W];
+    endfunction
+
+    function logic [LINE_W+SUB_LINE_W-1:0] getDataLineAddr (logic[31:0] addr);
+        getDataLineAddr = addr[2 +: LINE_W + SUB_LINE_W];
+    endfunction
+
+endinterface
+
 interface addr_utils_interface #(parameter bit [31:0] BASE_ADDR = 32'h00000000, parameter bit [31:0] UPPER_BOUND = 32'hFFFFFFFF);
         //Based on the lower and upper address ranges,
         //find the number of bits needed to uniquely identify this memory range.

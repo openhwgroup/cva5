@@ -44,6 +44,8 @@ module icache
     localparam derived_cache_config_t SCONFIG = get_derived_cache_params(CONFIG, CONFIG.ICACHE, CONFIG.ICACHE_ADDR);
     localparam bit [SCONFIG.SUB_LINE_ADDR_W-1:0] END_OF_LINE_COUNT = SCONFIG.SUB_LINE_ADDR_W'(CONFIG.ICACHE.LINE_W-1);
 
+    cache_functions_interface #(.TAG_W(SCONFIG.TAG_W), .LINE_W(SCONFIG.LINE_ADDR_W), .SUB_LINE_W(SCONFIG.SUB_LINE_ADDR_W)) addr_utils();
+
     logic tag_hit;
     logic [CONFIG.ICACHE.WAYS-1:0] tag_hit_way;
 
@@ -174,8 +176,9 @@ module icache
     icache_tag_banks (
         .clk(clk),
         .rst(rst), //clears the read_hit_allowed flag
-        .stage1_addr(new_request_addr),
-        .stage2_addr(second_cycle_addr),
+        .stage1_line_addr(addr_utils.getTagLineAddr(new_request_addr)),
+        .stage2_line_addr(addr_utils.getTagLineAddr(second_cycle_addr)),
+        .stage2_tag(addr_utils.getTag(second_cycle_addr)),
         .update_way(tag_update_way),
         .update(tag_update),
         .stage1_adv(new_request & icache_on),
@@ -189,8 +192,8 @@ module icache
     generate for (i=0; i < CONFIG.ICACHE.WAYS; i++) begin : idata_bank_gen
         byte_en_BRAM #(CONFIG.ICACHE.LINES*CONFIG.ICACHE.LINE_W) idata_bank (
             .clk(clk),
-            .addr_a(new_request_addr[2 +: SCONFIG.LINE_ADDR_W+SCONFIG.SUB_LINE_ADDR_W]),
-            .addr_b({second_cycle_addr[(2+SCONFIG.SUB_LINE_ADDR_W) +: SCONFIG.LINE_ADDR_W], word_count}),
+            .addr_a(addr_utils.getDataLineAddr(new_request_addr)),
+            .addr_b(addr_utils.getDataLineAddr({second_cycle_addr[31:SCONFIG.SUB_LINE_ADDR_W+2], word_count, 2'b0})),
             .en_a(new_request),
             .en_b(tag_update_way[i] & l1_response.data_valid),
             .be_a('0),

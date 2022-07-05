@@ -8,7 +8,7 @@ l2_arbiter/l2_external_interfaces.sv
 local_memory/local_memory_interface.sv 
 local_memory/local_mem.sv
 
-core/interfaces.sv  
+core/internal_interfaces.sv  
 core/external_interfaces.sv  
 
 core/lutrams/lutram_1w_1r.sv
@@ -56,7 +56,7 @@ core/store_queue.sv
 core/load_store_queue.sv
 core/load_store_unit.sv  
 
-core/itag_banks.sv  
+core/icache_tag_banks.sv  
 core/icache.sv  
 
 core/clz.sv
