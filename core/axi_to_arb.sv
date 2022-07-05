@@ -186,7 +186,7 @@ module axi_to_arb
 
 
     //Done when read request sent, or slave ack on write data
-    assign pop = (axi_arvalid & axi_arready & ~read_modify_write) | (axi_awvalid & axi_awready);
+    assign pop = (axi_arvalid & axi_arready & ~read_modify_write) | (on_last_burst & axi_wready);
     assign l2.request_pop = pop;
 
     //read channel
@@ -200,57 +200,36 @@ module axi_to_arb
     end
 
     //write channel
+    logic write_request;
+    assign write_request = l2.wr_data_valid & l2.request_valid & (~l2.rnw | amo_write_ready);
+    assign axi_awvalid = write_request & ~write_in_progress_r;
+
+    logic write_in_progress_r;
     always_ff @ (posedge clk) begin
         if (rst)
-            axi_awvalid <= 0;
-        else if (l2.wr_data_valid & l2.request_valid & (~l2.rnw | amo_write_ready) & ~write_in_progress)
-            axi_awvalid <= 1;
-        else if (axi_awready)
-            axi_awvalid <= 0;
+            write_in_progress_r <= 0;
+        else if (on_last_burst & axi_wready)
+            write_in_progress_r <= 0;
+        else if (axi_awready & write_request)
+            write_in_progress_r <= 1;
     end
-
-    always_ff @ (posedge clk) begin
-        if (rst)
-            write_in_progress <= 0;
-        else if (axi_bvalid)
-            write_in_progress <= 0;
-        else if (l2.wr_data_valid & l2.request_valid & (~l2.rnw | amo_write_ready))
-            write_in_progress <= 1;
-    end
-
+    assign write_in_progress = write_in_progress_r | (axi_awready & write_request);
 
     always_ff @ (posedge clk) begin
         if (rst)
             write_burst_count <= 0;
-        else if (axi_bvalid)
+        else if (on_last_burst & axi_wready)
             write_burst_count <= 0;
-        else if (axi_wvalid && axi_wready && write_reference_burst_count != write_burst_count)
+        else if (axi_wvalid & axi_wready)
             write_burst_count <= write_burst_count+1;
     end
 
-    always_ff @ (posedge clk) begin
-        if (rst)
-            on_last_burst <= 0;
-        else if (axi_bvalid)
-            on_last_burst <= 0;
-        else if ((~write_in_progress && write_reference_burst_count == 0) ||  (write_in_progress && write_reference_burst_count == write_burst_count))
-            on_last_burst <= 1;
-    end
+    assign on_last_burst = (write_in_progress && write_reference_burst_count == write_burst_count);
 
-    always_ff @ (posedge clk) begin
-        if (rst)
-            write_transfer_complete <= 0;
-        else if (axi_bvalid)
-            write_transfer_complete <= 0;
-        else if (axi_wlast && axi_wready)
-            write_transfer_complete <= 1;
-    end
+    assign axi_wvalid = write_in_progress & l2.wr_data_valid;
+    assign axi_wlast = on_last_burst & l2.wr_data_valid;
 
-
-    assign axi_wvalid = write_in_progress & l2.wr_data_valid & ~write_transfer_complete;
-    assign axi_wlast = on_last_burst & write_in_progress & l2.wr_data_valid & ~write_transfer_complete;
-
-    assign l2.wr_data_read = write_in_progress & axi_wready & ~write_transfer_complete;
+    assign l2.wr_data_read = write_in_progress & axi_wready;
 
 
     //read response
