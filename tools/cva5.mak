@@ -74,6 +74,7 @@ VERILATOR_LINT_IGNORE= -Wno-LITENDIAN -Wno-SYMRSVDWORD
 lint: 
 	verilator -cc $(CVA5_HW_SRCS) \
 	$(VERILATOR_DIR)/cva5_sim.sv \
+	$(CVA5_DIR)/test_benches/sim_stats.sv \
 	--top-module cva5_sim \
 	--lint-only
 
@@ -81,6 +82,7 @@ lint:
 lint-full:
 	verilator -cc $(CVA5_HW_SRCS) \
 	$(VERILATOR_DIR)/cva5_sim.sv \
+	$(CVA5_DIR)/test_benches/sim_stats.sv \
 	--top-module cva5_sim \
 	--lint-only -Wall
 

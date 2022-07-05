@@ -74,7 +74,7 @@ module load_store_unit
     localparam DCACHE_ID = int'(CONFIG.INCLUDE_DLOCAL_MEM) + int'(CONFIG.INCLUDE_PERIPHERAL_BUS);
 
     //Should be equal to pipeline depth of longest load/store subunit 
-    localparam ATTRIBUTES_DEPTH = 2;//CONFIG.INCLUDE_DCACHE ? 2 : 1;
+    localparam ATTRIBUTES_DEPTH = 1;
 
     //Subunit signals
     addr_utils_interface #(CONFIG.DLOCAL_MEM_ADDR.L, CONFIG.DLOCAL_MEM_ADDR.H) dlocal_mem_addr_utils ();
@@ -85,6 +85,8 @@ module load_store_unit
     addr_utils_interface #(CONFIG.DCACHE.NON_CACHEABLE.L, CONFIG.DCACHE.NON_CACHEABLE.H) uncacheable_utils ();
 
     logic [NUM_SUB_UNITS-1:0] sub_unit_address_match;
+    logic dcache_load_address_match;
+    logic dcache_store_address_match;
 
     data_access_shared_inputs_t shared_inputs;
     logic [31:0] unit_data_array [NUM_SUB_UNITS-1:0];
@@ -93,13 +95,17 @@ module load_store_unit
     logic [NUM_SUB_UNITS-1:0] last_unit;
     logic [NUM_SUB_UNITS-1:0] current_unit;
 
-    logic units_ready;
+    logic sub_unit_ready;
 
     logic unit_switch;
     logic unit_switch_in_progress;
     logic unit_switch_hold;
 
+    logic sel_load;
     logic sub_unit_issue;
+    logic sub_unit_load_issue;
+    logic sub_unit_store_issue;
+
     logic load_complete;
 
     logic [31:0] virtual_address;
@@ -113,10 +119,13 @@ module load_store_unit
     logic load_exception_complete;
     logic fence_hold;
 
+    logic dcache_load_request;
+    logic dcache_store_request;
+
     typedef struct packed{
-        logic is_halfword;
         logic is_signed;
         logic [1:0] byte_addr;
+        logic [1:0] sign_sel;
         logic [1:0] final_mux_sel;
         id_t id;
         logic [NUM_SUB_UNITS_W-1:0] subunit_id;
@@ -172,7 +181,7 @@ module load_store_unit
     assign load_store_status = '{
         sq_empty : lsq.sq_empty,
         no_released_stores_pending : lsq.no_released_stores_pending,
-        idle : lsq.empty & (~load_attributes.valid) & units_ready
+        idle : lsq.empty & (~load_attributes.valid) & (&unit_ready)
     };
 
     ////////////////////////////////////////////////////
@@ -228,9 +237,9 @@ module load_store_unit
         .retire_ids (retire_ids),
         .retire_port_valid (retire_port_valid)
     );
-    assign shared_inputs = lsq.data_out;
-    assign lsq.pop = sub_unit_issue;
-
+    assign shared_inputs = sel_load ? lsq.load_data_out : lsq.store_data_out;
+    assign lsq.load_pop = sub_unit_load_issue | dcache_load_request;
+    assign lsq.store_pop = sub_unit_store_issue | dcache_store_request;
 
     ////////////////////////////////////////////////////
     //Unit tracking
@@ -250,11 +259,16 @@ module load_store_unit
 
     ////////////////////////////////////////////////////
     //Primary Control Signals
-    assign units_ready = &unit_ready & (~unit_switch_hold);
+    assign sel_load = lsq.load_valid;
+
+    assign sub_unit_ready = unit_ready[subunit_id] & (~unit_switch_hold);
     assign load_complete = |unit_data_valid;
 
     assign issue.ready = (~tlb_on | tlb.ready) & (~lsq.full) & (~fence_hold) & (~exception.valid);
-    assign sub_unit_issue = lsq.valid & units_ready;
+
+    assign sub_unit_load_issue = sel_load & lsq.load_valid & sub_unit_ready;
+    assign sub_unit_store_issue = (lsq.store_valid & ~sel_load) & sub_unit_ready;
+    assign sub_unit_issue = (lsq.load_valid | lsq.store_valid) & sub_unit_ready;
 
     always_ff @ (posedge clk) begin
         if (rst)
@@ -275,7 +289,7 @@ module load_store_unit
     );
 
     always_comb begin
-        case(shared_inputs.fn3)
+        case(lsq.load_data_out.fn3)
             LS_B_fn3, L_BU_fn3 : final_mux_sel = 0;
             LS_H_fn3, L_HU_fn3 : final_mux_sel = 1;
             default : final_mux_sel = 2; //LS_W_fn3
@@ -283,16 +297,16 @@ module load_store_unit
     end
     
     assign mem_attr = '{
-        is_halfword : shared_inputs.fn3[0],
-        is_signed : ~|shared_inputs.fn3[2:1],
-        byte_addr : shared_inputs.addr[1:0],
+        is_signed : ~|lsq.load_data_out.fn3[2:1],
+        byte_addr : lsq.load_data_out.addr[1:0],
+        sign_sel : lsq.load_data_out.addr[1:0] | {1'b0, lsq.load_data_out.fn3[0]},//halfwrord
         final_mux_sel : final_mux_sel,
-        id : shared_inputs.id,
+        id : lsq.load_data_out.id,
         subunit_id : subunit_id
     };
 
     assign load_attributes.data_in = mem_attr;
-    assign load_attributes.push = sub_unit_issue & shared_inputs.load;
+    assign load_attributes.push = sub_unit_load_issue | dcache_load_request;
     assign load_attributes.potential_push = load_attributes.push;
     
     cva5_fifo #(.DATA_WIDTH($bits(load_attributes_t)), .FIFO_DEPTH(ATTRIBUTES_DEPTH))
@@ -360,9 +374,20 @@ module load_store_unit
     endgenerate
 
     generate if (CONFIG.INCLUDE_DCACHE) begin : gen_ls_dcache
-            logic uncacheable;
-            assign sub_unit_address_match[DCACHE_ID] = dcache_addr_utils.address_range_check(shared_inputs.addr);
-            assign uncacheable = uncacheable_utils.address_range_check(shared_inputs.addr);
+            logic load_ready;
+            logic store_ready;
+            logic uncacheable_load;
+            logic uncacheable_store;
+
+            assign dcache_load_address_match = dcache_addr_utils.address_range_check(lsq.load_data_out.addr);
+            assign dcache_store_address_match = dcache_addr_utils.address_range_check(lsq.store_data_out.addr);
+            assign sub_unit_address_match[DCACHE_ID] = sel_load ? dcache_load_address_match : dcache_store_address_match;
+
+            assign uncacheable_load = CONFIG.DCACHE.USE_NON_CACHEABLE & uncacheable_utils.address_range_check(lsq.load_data_out.addr);
+            assign uncacheable_store = CONFIG.DCACHE.USE_NON_CACHEABLE & uncacheable_utils.address_range_check(lsq.store_data_out.addr);
+
+            assign dcache_load_request = dcache_load_address_match & lsq.load_valid & load_ready & ~unit_switch_hold;
+            assign dcache_store_request = dcache_store_address_match & lsq.store_valid & store_ready & ~unit_switch_hold;
 
             dcache # (.CONFIG(CONFIG))
             data_cache (
@@ -375,7 +400,15 @@ module load_store_unit
                 .sc_success (sc_success),
                 .clear_reservation (clear_reservation),
                 .amo (ls_inputs.amo),
-                .uncacheable (uncacheable),
+                .uncacheable_load (uncacheable_load),
+                .uncacheable_store (uncacheable_store),
+                .is_load (sel_load),
+                .load_ready (load_ready),
+                .store_ready (store_ready),
+                .load_request (dcache_load_request),
+                .store_request (dcache_store_request),
+                .ls_load (lsq.load_data_out),
+                .ls_store (lsq.store_data_out),
                 .ls (sub_unit[DCACHE_ID])
             );
         end
@@ -384,7 +417,6 @@ module load_store_unit
     ////////////////////////////////////////////////////
     //Output Muxing
     logic sign_bit_data [4];
-    logic [1:0] sign_bit_sel;
     logic sign_bit;
     
     assign unit_muxed_load_data = unit_data_array[wb_attr.subunit_id];
@@ -395,8 +427,7 @@ module load_store_unit
     assign aligned_load_data[7:0] = unit_muxed_load_data[wb_attr.byte_addr*8 +: 8];
 
     assign sign_bit_data = '{unit_muxed_load_data[7], unit_muxed_load_data[15], unit_muxed_load_data[23], unit_muxed_load_data[31]};
-    assign sign_bit_sel = wb_attr.byte_addr | {1'b0, wb_attr.is_halfword};
-    assign sign_bit = wb_attr.is_signed & sign_bit_data[sign_bit_sel];
+    assign sign_bit = wb_attr.is_signed & sign_bit_data[wb_attr.sign_sel];
 
     //Sign extending
     always_comb begin
@@ -423,10 +454,5 @@ module load_store_unit
         assert property (@(posedge clk) disable iff (rst) load_complete |-> (load_attributes.valid && unit_data_valid[wb_attr.subunit_id]))
         else $error("Spurious load complete detected!");
 
-    // `ifdef ENABLE_SIMULATION_ASSERTIONS
-    //     invalid_ls_address_assertion:
-    //         assert property (@(posedge clk) disable iff (rst) (sub_unit_issue & ~ls_inputs.fence) |-> |sub_unit_address_match)
-    //         else $error("invalid L/S address");
-    // `endif
 
 endmodule

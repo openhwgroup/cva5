@@ -47,6 +47,7 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
         logic [31:0] addr;
         logic [2:0] fn3;
         id_t id;
+        phys_addr_t phys_addr;
         logic [CONFIG.SQ_DEPTH-1:0] potential_store_conflicts;
     } lq_entry_t;
 
@@ -54,7 +55,6 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
     logic [CONFIG.SQ_DEPTH-1:0] potential_store_conflicts;
     sq_entry_t sq_entry;
     logic store_conflict;
-    logic load_selected;
 
     lq_entry_t lq_data_in;
     lq_entry_t lq_data_out;
@@ -87,13 +87,14 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
     //FIFO control signals
     assign lq.push = lsq.push & lsq.data_in.load;
     assign lq.potential_push = lsq.potential_push;
-    assign lq.pop = lsq.pop & load_selected;
+    assign lq.pop = lsq.load_pop;
 
     //FIFO data ports
     assign lq_data_in = '{
         addr : lsq.data_in.addr,
         fn3 : lsq.data_in.fn3,
         id : lsq.data_in.id, 
+        phys_addr : lsq.data_in.phys_addr,
         potential_store_conflicts : potential_store_conflicts
     };
     assign lq.data_in = lq_data_in;
@@ -101,7 +102,7 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
     ////////////////////////////////////////////////////
     //Store Queue
     assign sq.push = lsq.push &  lsq.data_in.store;
-    assign sq.pop = lsq.pop & ~load_selected;
+    assign sq.pop = lsq.store_pop;
     assign sq.data_in = lsq.data_in;
 
     store_queue  # (.CONFIG(CONFIG)) sq_block (
@@ -123,17 +124,29 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
     //Output
     //Priority is for loads over stores.
     //A store will be selected only if either no loads are ready, OR if the store queue is full and a store is ready
-    assign load_selected = lq.valid & ~store_conflict;// & ~(sq_full & sq.valid);
+    assign lsq.load_valid = lq.valid & ~store_conflict;
+    assign lsq.store_valid = sq.valid;
 
-    assign lsq.valid = load_selected | sq.valid;
-    assign lsq.data_out = '{
-        addr : load_selected ? lq_data_out.addr : sq.data_out.addr,
-        load : load_selected,
-        store : ~load_selected,
-        be : load_selected ? '0 : sq.data_out.be,
-        fn3 : load_selected ? lq_data_out.fn3 : sq.data_out.fn3,
+    assign lsq.load_data_out = '{
+        addr : lq_data_out.addr,
+        load : 1,
+        store : 0,
+        be : '0,
+        fn3 : lq_data_out.fn3,
         data_in : sq.data_out.data,
-        id : lq_data_out.id
+        id : lq_data_out.id,
+        phys_addr : lq_data_out.phys_addr
+    };
+
+    assign lsq.store_data_out = '{
+        addr : sq.data_out.addr,
+        load : 0,
+        store : 1,
+        be : sq.data_out.be,
+        fn3 : sq.data_out.fn3,
+        data_in : sq.data_out.data,
+        id : lq_data_out.id,
+        phys_addr : lq_data_out.phys_addr
     };
 
     assign lsq.sq_empty = sq.empty;

@@ -47,8 +47,7 @@ core/wishbone_master.sv
 
 
 core/tag_bank.sv  
-core/ddata_bank.sv  
-core/dtag_banks.sv  
+core/dcache_tag_banks.sv  
 core/amo_alu.sv  
 core/dcache.sv  
 core/addr_hash.sv

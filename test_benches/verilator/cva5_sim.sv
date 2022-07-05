@@ -496,9 +496,9 @@ module cva5_sim
     end endgenerate
 
     generate if (EXAMPLE_CONFIG.INCLUDE_DCACHE) begin
-        assign dcache_hit = `DCACHE_P.read_hit;
-        assign dcache_miss = `DCACHE_P.read_miss_complete;
-        assign darb_stall = `DCACHE_P.arb_request_r;
+        assign dcache_hit = `DCACHE_P.load_hit;
+        assign dcache_miss = `DCACHE_P.line_complete;
+        assign darb_stall = cpu.l1_request[L1_DCACHE_ID].request & ~cpu.l1_request[L1_DCACHE_ID].ack;
     end endgenerate
 
     always_comb begin
@@ -551,7 +551,7 @@ module cva5_sim
 
         //LS Stats
         stats[LSU_LOAD_BLOCKED_BY_STORE_STAT] = `LSQ_P.lq.valid & `LSQ_P.store_conflict;
-        stats[LSU_SUB_UNIT_STALL_STAT] = `LS_P.lsq.valid & ~`LS_P.units_ready;
+        stats[LSU_SUB_UNIT_STALL_STAT] = (`LS_P.lsq.load_valid | `LS_P.lsq.store_valid) & ~`LS_P.sub_unit_ready;
         stats[LSU_DC_HIT_STAT] = dcache_hit;
         stats[LSU_DC_MISS_STAT] = dcache_miss;
         stats[LSU_DC_ARB_STALL_STAT] = darb_stall;
@@ -564,7 +564,7 @@ module cva5_sim
                 instruction_mix_stats[i][BR_STAT] = cpu.retire_port_valid[i] & (retire_ports_instruction[i][6:2] inside {BRANCH_T, JAL_T, JALR_T});
                 instruction_mix_stats[i][MUL_STAT] = cpu.retire_port_valid[i] & (retire_ports_instruction[i][6:2] inside {ARITH_T}) & is_mul[i];
                 instruction_mix_stats[i][DIV_STAT] = cpu.retire_port_valid[i] & (retire_ports_instruction[i][6:2] inside {ARITH_T}) & is_div[i];
-                instruction_mix_stats[i][LOAD_STAT] = cpu.retire_port_valid[i] & (retire_ports_instruction[i][6:2] inside {LOAD_T, AMO_T});
+                instruction_mix_stats[i][LOAD_STAT] = cpu.retire_port_valid[i] & (retire_ports_instruction[i][6:2] inside {LOAD_T, AMO_T});// & retire_ports_instruction[i][14:12] inside {LS_B_fn3, L_BU_fn3};
                 instruction_mix_stats[i][STORE_STAT] = cpu.retire_port_valid[i] & (retire_ports_instruction[i][6:2] inside {STORE_T, AMO_T});
                 instruction_mix_stats[i][MISC_STAT] = cpu.retire_port_valid[i] & (retire_ports_instruction[i][6:2] inside {SYSTEM_T, FENCE_T});
         end

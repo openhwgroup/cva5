@@ -1,5 +1,5 @@
 /*
- * Copyright © 2017-2020 Eric Matthews,  Lesley Shannon
+ * Copyright © 2022 Eric Matthews
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,7 +29,6 @@ module dcache
     # (
         parameter cpu_config_t CONFIG = EXAMPLE_CONFIG
     )
-
     (
         input logic clk,
         input logic rst,
@@ -40,287 +39,260 @@ module dcache
         input logic sc_success,
         input logic clear_reservation,
         input amo_details_t amo,
-        input logic uncacheable,
+        input logic uncacheable_load,
+        input logic uncacheable_store,
+        input logic is_load,
+        input logic load_request,
+        input logic store_request,
+        output logic load_ready,
+        output logic store_ready,
+        input data_access_shared_inputs_t ls_load,
+        input data_access_shared_inputs_t ls_store,
         memory_sub_unit_interface.responder ls
     );
 
-    localparam DCACHE_SIZE_IN_WORDS = CONFIG.DCACHE.LINES*CONFIG.DCACHE.LINE_W*CONFIG.DCACHE.WAYS;
     localparam derived_cache_config_t SCONFIG = get_derived_cache_params(CONFIG, CONFIG.DCACHE, CONFIG.DCACHE_ADDR);
-    localparam LOG2_DCACHE_WAYS = (CONFIG.DCACHE.WAYS == 1) ? 1 : $clog2(CONFIG.DCACHE.WAYS);
+    localparam LOG2_WAYS = (CONFIG.DCACHE.WAYS == 1) ? 1 : $clog2(CONFIG.DCACHE.WAYS);
+
+    localparam bit [SCONFIG.SUB_LINE_ADDR_W-1:0] END_OF_LINE_COUNT = SCONFIG.SUB_LINE_ADDR_W'(CONFIG.DCACHE.LINE_W-1);
+
+    cache_functions_interface # (.LINE_W(SCONFIG.LINE_ADDR_W), .SUB_LINE_W(SCONFIG.SUB_LINE_ADDR_W)) addr_utils ();
 
     typedef struct packed{
-        logic [29:0] addr;
-        logic [3:0] be;
-        logic load;
-        logic store;
-        logic [31:0] data;
-        amo_details_t amo;
+        logic [31:0] addr;
         logic uncacheable;
-    } stage2_t;
+    } load_stage2_t;
+    load_stage2_t stage2_load;
 
-    logic [$clog2(DCACHE_SIZE_IN_WORDS)-1:0] data_bank_addr_a;
-    logic [$clog2(DCACHE_SIZE_IN_WORDS)-1:0] data_bank_addr_b;
+    typedef struct packed{
+        logic [31:0] addr;
+        logic [3:0] be;
+        logic [31:0] data;
+        logic uncacheable;
+    } store_stage2_t;
+    store_stage2_t stage2_store;
 
-    logic tag_hit;
-    logic [CONFIG.DCACHE.WAYS-1:0] tag_hit_way;
+    logic [CONFIG.DCACHE.WAYS-1:0] load_tag_hit_way;
+    logic [CONFIG.DCACHE.WAYS-1:0] store_tag_hit_way;
 
-    logic [LOG2_DCACHE_WAYS-1:0] tag_hit_way_int;
-
-    logic tag_update;
-    logic [CONFIG.DCACHE.WAYS-1:0] tag_update_way;
     logic [CONFIG.DCACHE.WAYS-1:0] replacement_way;
+    logic [CONFIG.DCACHE.WAYS-1:0] replacement_way_r;
 
-    logic [LOG2_DCACHE_WAYS-1:0] replacement_way_int;
-    logic [LOG2_DCACHE_WAYS-1:0] tag_update_way_int;
-
-    logic [SCONFIG.SUB_LINE_ADDR_W-1:0] word_count;
-    logic [SCONFIG.SUB_LINE_ADDR_W-1:0] sc_write_index;
-    logic [SCONFIG.SUB_LINE_ADDR_W-1:0] update_word_index;
-
-    logic line_complete;
-    logic reservation;
-
-    stage2_t stage2;
-
-    logic [31:0] dbank_data_out;
-    logic [31:0] hit_data;
-    logic [31:0] miss_data;
-    logic [31:0] new_line_data;
-    logic [31:0] amo_result;
-    logic [31:0] amo_rs2;
-
-    logic[3:0] write_hit_be;
-
-    logic second_cycle;
-
-    logic new_arb_request;
-    logic arb_request_r;
+    logic load_tag_check;
+    logic load_hit;
+    logic store_hit;
+    logic [LOG2_WAYS-1:0] tag_hit_index;
+    logic [LOG2_WAYS-1:0] replacement_index;
+    logic [LOG2_WAYS-1:0] replacement_index_r;
+    logic [LOG2_WAYS-1:0] load_sel;
 
     logic is_target_word;
+    logic [SCONFIG.SUB_LINE_ADDR_W-1:0] word_count;
+    logic miss_data_valid;
+    logic line_complete;
 
-    logic hit_allowed;
-    logic read_hit_allowed;
-    logic read_hit;
+    logic arb_load_sel;
+    logic load_l1_arb_ack;
+    logic store_l1_arb_ack;
 
-    logic address_range_valid;
+    logic [31:0] ram_load_data [CONFIG.DCACHE.WAYS-1:0];
 
-    logic busy;
-    logic read_miss_complete;
+    typedef enum {
+        LOAD_IDLE = 0,
+        LOAD_HIT_CHECK = 1,
+        LOAD_L1_REQUEST = 2,
+        LOAD_FILL = 3
+    } load_path_enum_t;
+    logic [3:0] load_state, load_state_next;
 
-    logic store_complete;
-    amo_alu_inputs_t amo_alu_inputs;
-
-
+    typedef enum {
+        STORE_IDLE = 0,
+        STORE_L1_REQUEST = 1
+    } store_path_enum_t;
+    logic [1:0] store_state, store_state_next;
 
     ////////////////////////////////////////////////////
     //Implementation
 
     ////////////////////////////////////////////////////
-    //2nd Cycle Control Signals
+    //Load Path
     always_ff @ (posedge clk) begin
-        if (ls.new_request) begin
-            stage2.addr <= ls.addr[31:2];
-            stage2.be <= ls.be;
-            stage2.load <= ls.re;
-            stage2.store <= ls.we;
-            stage2.data <= ls.data_in;
-            stage2.amo <= amo;
-            stage2.uncacheable <= uncacheable;
+        if (rst) begin
+            load_state <= 0;
+            load_state[LOAD_IDLE] <= 1;
+        end
+        else
+            load_state <= load_state_next;
+    end
+
+    always_comb begin
+        load_state_next[LOAD_IDLE] = (load_state[LOAD_IDLE] & ~load_request) | ((load_hit & ~load_request) | line_complete);
+        load_state_next[LOAD_HIT_CHECK] = load_request;
+        load_state_next[LOAD_L1_REQUEST] = (load_state[LOAD_L1_REQUEST] & ~load_l1_arb_ack) | (load_state[LOAD_HIT_CHECK] & ~load_hit);
+        load_state_next[LOAD_FILL] = (load_state[LOAD_FILL] & ~line_complete) | (load_state[LOAD_L1_REQUEST] & load_l1_arb_ack);
+    end
+
+    assign load_ready = (load_hit | load_state[LOAD_IDLE]);
+
+    always_ff @ (posedge clk) begin
+        if (load_request) begin
+            stage2_load.addr <= ls_load.addr;
+            stage2_load.uncacheable <= uncacheable_load;
         end
     end
 
-    ////////////////////////////////////////////////////
-    //General Control Logic
-    //LR and AMO ops are forced misses (if there is a tag hit they will reuse the same way)
-    //Signal is valid for a single cycle, RAM enables are used to hold outputs in case of pipeline stalls
-    always_ff @ (posedge clk) begin
-        read_hit_allowed <= ls.new_request & ls.re & dcache_on & ~(amo.is_lr | amo.is_amo) & ~uncacheable;
-        second_cycle <= ls.new_request;
-        tag_update <= second_cycle & dcache_on & stage2.load & ~tag_hit & ~stage2.uncacheable;//Cache enabled, read miss
-    end
-
-    assign read_hit = tag_hit & read_hit_allowed;
-
-    //LR reservation, cleared on exceptions
-    always_ff @ (posedge clk) begin
-        if (rst)
-            reservation <= 0;
-        else
-            reservation <= (reservation & ~(sc_complete | clear_reservation)) | (second_cycle & stage2.amo.is_lr);
-    end
+    assign load_tag_check = load_request & dcache_on & ~uncacheable_load;
 
     ////////////////////////////////////////////////////
-    //L1 Arbiter Interface
-    assign l1_request.addr = {stage2.addr, 2'b0} ;//Memory interface aligns request to burst size (done there to support AMO line-read word-write)
-    assign l1_request.data = stage2.data;
-    assign l1_request.rnw = ~stage2.store;
-    assign l1_request.be = stage2.be;
-    assign l1_request.size = (stage2.load & ~stage2.uncacheable) ? 5'(CONFIG.DCACHE.LINE_W-1) : 0;//LR and AMO ops are included in load
-    assign l1_request.is_amo = (stage2.amo.is_amo | stage2.amo.is_lr | stage2.amo.is_sc);
-    assign l1_request.amo = stage2.amo.op;
-
+    //Load Miss
     always_ff @ (posedge clk) begin
-        if (ls.new_request)
+        if (load_request)
             word_count <= 0;
         else
             word_count <= word_count + SCONFIG.SUB_LINE_ADDR_W'(l1_response.data_valid);
     end
-    assign is_target_word = (stage2.addr[SCONFIG.SUB_LINE_ADDR_W-1:0] == word_count) | stage2.uncacheable;
+    assign is_target_word = (stage2_load.addr[2 +: SCONFIG.SUB_LINE_ADDR_W] == word_count) | stage2_load.uncacheable;
 
-    assign new_arb_request = second_cycle & (~read_hit);
-    always_ff @ (posedge clk) begin
-        if (rst)
-            arb_request_r  <= 0;
-        else
-            arb_request_r  <= (arb_request_r | new_arb_request) & ~l1_request.ack;
-    end
-    assign l1_request.request = new_arb_request | arb_request_r;
+    assign line_complete = l1_response.data_valid & ((word_count == END_OF_LINE_COUNT) | stage2_load.uncacheable);
 
     ////////////////////////////////////////////////////
-    //Replacement policy (free runing one-hot cycler, i.e. pseudo random)
-    cycler #(CONFIG.DCACHE.WAYS) replacement_policy (
-        .clk (clk),
-        .rst (rst),
-        .en (1'b1), 
-        .one_hot (replacement_way)
-    );
-
-    //One-hot tag hit / update logic to binary int
-    one_hot_to_integer #(CONFIG.DCACHE.WAYS)
-    hit_way_conv (
-        .one_hot (tag_hit_way), 
-        .int_out (tag_hit_way_int)
-    );
-    one_hot_to_integer #(CONFIG.DCACHE.WAYS)
-    update_way_conv (
-        .one_hot (replacement_way), 
-        .int_out (replacement_way_int)
-    );
-
-
-    //If atomic load (LR or AMO op) and there's a tag hit reuse same line
-    logic stage2_amo_with_load;
-    assign stage2_amo_with_load = stage2.amo.is_amo | stage2.amo.is_lr;
+    //Store Path
     always_ff @ (posedge clk) begin
-        if (second_cycle) begin
-            tag_update_way<= (stage2_amo_with_load & tag_hit) ? tag_hit_way : replacement_way;
-            tag_update_way_int <= (stage2_amo_with_load & tag_hit) ? tag_hit_way_int : replacement_way_int;
+        if (rst) begin
+            store_state <= 0;
+            store_state[STORE_IDLE] <= 1;
+        end
+        else
+            store_state <= store_state_next;
+    end
+
+    always_comb begin
+        store_state_next[STORE_IDLE] = (store_state[STORE_IDLE] & ~store_request) | (store_l1_arb_ack & ~store_request);
+        store_state_next[STORE_L1_REQUEST] = (store_state[STORE_L1_REQUEST] & ~store_l1_arb_ack) | store_request;
+    end
+    assign store_ready = (store_state[STORE_IDLE] | store_l1_arb_ack);
+
+    assign ls.ready = is_load ? load_ready : store_ready;
+
+    always_ff @ (posedge clk) begin
+        if (store_request) begin
+            stage2_store.addr <= ls_store.addr;
+            stage2_store.uncacheable <= uncacheable_store;
+            stage2_store.be <= ls_store.be;
+            stage2_store.data <= ls_store.data_in;
         end
     end
 
     ////////////////////////////////////////////////////
-    //Tag banks
-    dtag_banks #(.CONFIG(CONFIG), .SCONFIG(SCONFIG))
-    dcache_tag_banks (
-        .clk (clk),
-        .rst (rst),
-        .stage1_addr (ls.addr[31:2]),
-        .stage2_addr (stage2.addr),
-        .inv_addr (l1_response.inv_addr),
-        .update_way (tag_update_way),
-        .update (tag_update),
-        .stage1_adv (ls.new_request),
-        .stage1_inv (1'b0),//For software invalidation
-        .extern_inv (l1_response.inv_valid),
-        .extern_inv_complete (l1_response.inv_ack),
-        .tag_hit (tag_hit),
-        .tag_hit_way (tag_hit_way)
+    //L1 Arbiter Interface
+    //Priority to oldest request (load if simultaneous load and store requests)
+    assign arb_load_sel = ~store_state[STORE_L1_REQUEST];//load_state[LOAD_L1_REQUEST];
+
+    assign l1_request.addr = arb_load_sel ? stage2_load.addr : stage2_store.addr;//Memory interface aligns request to burst size (done there to support AMO line-read word-write)
+    assign l1_request.data = stage2_store.data;
+    assign l1_request.rnw = arb_load_sel;
+    assign l1_request.be = arb_load_sel ? '0 : stage2_store.be;
+    assign l1_request.size = (arb_load_sel & ~stage2_load.uncacheable) ? 5'(CONFIG.DCACHE.LINE_W-1) : 0;//LR and AMO ops are included in load
+    assign l1_request.is_amo = 0;
+    assign l1_request.amo = 0;
+
+    assign l1_request.request = load_state[LOAD_L1_REQUEST] | store_state[STORE_L1_REQUEST];
+
+    assign load_l1_arb_ack = l1_request.ack & arb_load_sel;
+    assign store_l1_arb_ack = l1_request.ack & ~arb_load_sel;
+    ////////////////////////////////////////////////////
+    //Replacement policy (free runing one-hot cycler, i.e. pseudo random)
+    cycler #(CONFIG.DCACHE.WAYS) replacement_policy (
+        .clk (clk), 
+        .rst (rst), 
+        .en (1'b1), 
+        .one_hot (replacement_way)
     );
 
     ////////////////////////////////////////////////////
-    //AMO logic
-    always_ff @ (posedge clk) begin
-        amo_rs2 <= stage2.data;
-    end
-
-    assign amo_alu_inputs.rs1_load = l1_response.data;
-    assign amo_alu_inputs.rs2 = amo_rs2;
-    assign amo_alu_inputs.op = stage2.amo.op;
-
-    generate if (CONFIG.INCLUDE_AMO)
-        amo_alu amo_unit (
-            .amo_alu_inputs (amo_alu_inputs), 
-            .result (amo_result)
-        );
-    endgenerate
-
-    always_comb begin
-        if (CONFIG.INCLUDE_AMO & stage2.amo.is_amo & is_target_word)
-            new_line_data = amo_result;
-        else if (CONFIG.INCLUDE_AMO & stage2.amo.is_sc)
-            new_line_data = stage2.data;
-        else
-            new_line_data = l1_response.data;
-    end
-
-    assign sc_write_index = stage2.addr[SCONFIG.SUB_LINE_ADDR_W-1:0];
-
+    //Tag banks
+    dcache_tag_banks #(.CONFIG(CONFIG), .SCONFIG(SCONFIG))
+    tag_banks (
+        .clk (clk),
+        .rst (rst),
+        .load_addr (ls_load.addr),
+        .load_req (load_tag_check),
+        .miss_addr (stage2_load.addr),
+        .miss_req (load_l1_arb_ack),
+        .miss_way (replacement_way),
+        .inv_addr ({l1_response.inv_addr, 2'b0}),
+        .extern_inv (l1_response.inv_valid),
+        .extern_inv_complete (l1_response.inv_ack),
+        .store_addr (ls_store.addr),
+        .store_addr_r (stage2_store.addr),
+        .store_req (store_request),
+        .load_tag_hit (load_hit),
+        .load_tag_hit_way (load_tag_hit_way),
+        .store_tag_hit (store_hit),
+        .store_tag_hit_way (store_tag_hit_way)
+    );
 
     ////////////////////////////////////////////////////
     //Data Bank(s)
-    //Tag bank selection done with upper address bits
-    //On miss, word index in line provided by: update_word_index
-    assign write_hit_be = stage2.be & {4{tag_hit}};
-    assign update_word_index = stage2.amo.is_sc ? sc_write_index : word_count;
+    logic [SCONFIG.LINE_ADDR_W+SCONFIG.SUB_LINE_ADDR_W-1:0] fill_addr;
+    logic [SCONFIG.LINE_ADDR_W+SCONFIG.SUB_LINE_ADDR_W-1:0] porta_addr;
+    logic [3:0] collision;
 
-    generate if (CONFIG.DCACHE.WAYS == 1) begin : bank_sel_gen
-        assign data_bank_addr_a = stage2.addr[SCONFIG.LINE_ADDR_W+SCONFIG.SUB_LINE_ADDR_W-1:0];
-        assign data_bank_addr_b = {stage2.addr[SCONFIG.LINE_ADDR_W+SCONFIG.SUB_LINE_ADDR_W-1:SCONFIG.SUB_LINE_ADDR_W], update_word_index};
-    end else begin
-        assign data_bank_addr_a = {tag_hit_way_int, stage2.addr[SCONFIG.LINE_ADDR_W+SCONFIG.SUB_LINE_ADDR_W-1:0]};
-        assign data_bank_addr_b = {tag_update_way_int, stage2.addr[SCONFIG.LINE_ADDR_W+SCONFIG.SUB_LINE_ADDR_W-1:SCONFIG.SUB_LINE_ADDR_W], update_word_index};
+    assign fill_addr = {addr_utils.getTagLineAddr(stage2_load.addr), word_count};
+    assign porta_addr = load_state[LOAD_FILL] ? fill_addr : addr_utils.getDataLineAddr(ls_load.addr);
+
+    logic address_collision;
+    logic [31:0] data_in;
+
+    always_comb begin
+        address_collision = (ls_load.addr[31:2] == stage2_store.addr[31:2]);
+        for (int i = 0; i < 4; i++) begin
+            collision[i] = load_tag_check & stage2_store.be[i] & address_collision;
+            data_in[i*8 +: 8] = collision[i] ? stage2_store.data[i*8 +: 8] : l1_response.data[i*8 +: 8];
+        end
+    end
+
+    generate for (genvar i=0; i < CONFIG.DCACHE.WAYS; i++) begin : data_bank_gen
+        byte_en_BRAM #(CONFIG.DCACHE.LINES*CONFIG.DCACHE.LINE_W) data_bank (
+            .clk(clk),
+            .addr_a(porta_addr),
+            .addr_b(addr_utils.getDataLineAddr(stage2_store.addr)),
+            .en_a(load_tag_check | (replacement_way_r[i] & l1_response.data_valid)),
+            .en_b(store_tag_hit_way[i]),
+            .be_a({4{(replacement_way_r[i] & l1_response.data_valid)}} | ({4{store_tag_hit_way[i]}} & collision)), 
+            .be_b(stage2_store.be),
+            .data_in_a(data_in),
+            .data_in_b(stage2_store.data),
+            .data_out_a(ram_load_data[i]),
+            .data_out_b()
+        );
     end endgenerate
-
-    ddata_bank #(.LINES(DCACHE_SIZE_IN_WORDS))
-    data_bank (
-        .clk(clk),
-        .addr_a(data_bank_addr_a),
-        .addr_b(data_bank_addr_b),
-        .en_a(second_cycle),
-        .en_b((l1_response.data_valid & ~stage2.uncacheable) | (sc_complete & sc_success)),
-        .be_a(write_hit_be),
-        .data_in_a(stage2.data),
-        .data_in_b(new_line_data),
-        .data_out_a(dbank_data_out)
-    );
 
     ////////////////////////////////////////////////////
     //Output
-    logic l1_data_valid_r;
+    //One-hot tag hit / update logic to binary int
+    one_hot_to_integer #(CONFIG.DCACHE.WAYS)
+    hit_way_conv (
+        .one_hot (load_tag_hit_way), 
+        .int_out (tag_hit_index)
+    );
+    one_hot_to_integer #(CONFIG.DCACHE.WAYS)
+    replacment_way_conv (
+        .one_hot (replacement_way), 
+        .int_out (replacement_index)
+    );
     always_ff @ (posedge clk) begin
-        l1_data_valid_r <= l1_response.data_valid;
-        miss_data <= sc_complete ? {31'b0, sc_success} : l1_response.data;
-    end
-    assign ls.data_out = l1_data_valid_r ? miss_data : dbank_data_out;
-
-    ////////////////////////////////////////////////////
-    //Pipeline Advancement
-    assign line_complete = l1_response.data_valid & ((word_count == $clog2(CONFIG.DCACHE.LINE_W)'(CONFIG.DCACHE.LINE_W-1)) | stage2.uncacheable); //covers load, LR, AMO
-    assign store_complete = l1_request.ack & stage2.store & ~stage2.amo.is_sc;
-
-    //read miss complete includes store conditional complete
-    always_ff @ (posedge clk) begin
-        if (rst)
-            read_miss_complete <= 0;
-        else
-            read_miss_complete <= line_complete | sc_complete;
+        if (load_l1_arb_ack) begin
+            replacement_way_r <= replacement_way;
+            replacement_index_r <= replacement_index;
+        end
     end
 
-    always_ff @ (posedge clk) begin
-        if (rst)
-            ls.data_valid <= 0;
-        else
-            ls.data_valid <= (l1_response.data_valid & is_target_word) | read_hit | sc_complete;
-    end
+    always_ff @ (posedge clk) miss_data_valid <= l1_response.data_valid & is_target_word;
 
-    assign ls.ready = read_hit | store_complete | read_miss_complete | ~busy;
-
-    always_ff @ (posedge clk) begin
-        if (rst)
-            busy <= 0;
-        else
-            busy <= (busy & ~ls.ready) | ls.new_request;
-    end
+    assign load_sel = load_state[LOAD_HIT_CHECK] ? tag_hit_index : replacement_index_r;
+    assign ls.data_out = ram_load_data[load_sel];
+    assign ls.data_valid = load_hit | miss_data_valid;
 
     ////////////////////////////////////////////////////
     //End of Implementation
@@ -329,7 +301,11 @@ module dcache
     ////////////////////////////////////////////////////
     //Assertions
     dcache_request_when_not_ready_assertion:
-        assert property (@(posedge clk) disable iff (rst) ls.new_request |-> ls.ready)
+        assert property (@(posedge clk) disable iff (rst) load_request |-> load_ready)
+        else $error("dcache received request when not ready");
+
+    dache_suprious_l1_ack:
+        assert property (@(posedge clk) disable iff (rst) l1_request.ack |-> (load_state[LOAD_L1_REQUEST] | store_state[STORE_L1_REQUEST]))
         else $error("dcache received request when not ready");
 
 endmodule

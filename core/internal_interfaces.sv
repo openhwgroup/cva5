@@ -198,11 +198,16 @@ interface load_store_queue_interface;
     lsq_entry_t data_in;
     logic potential_push;
     logic push;
-    logic pop;
+    logic load_pop;
+    logic store_pop;
 
     //LSQ outputs
-    data_access_shared_inputs_t data_out;
-    logic valid;
+    data_access_shared_inputs_t load_data_out;
+    data_access_shared_inputs_t store_data_out;
+
+    logic load_valid;
+    logic store_valid;
+
     logic full;
 
     //LSQ status
@@ -211,12 +216,12 @@ interface load_store_queue_interface;
     logic no_released_stores_pending;
 
     modport queue (
-        input data_in, potential_push, push, pop,
-        output full, data_out, valid, sq_empty, empty, no_released_stores_pending
+        input data_in, potential_push, push, load_pop, store_pop,
+        output full, load_data_out, store_data_out, load_valid, store_valid, sq_empty, empty, no_released_stores_pending
     );
     modport ls (
-        output data_in, potential_push, push, pop,
-        input full, data_out, valid, sq_empty, empty, no_released_stores_pending
+        output data_in, potential_push, push, load_pop, store_pop,
+        input full, load_data_out, store_data_out, load_valid, store_valid, sq_empty, empty, no_released_stores_pending
     );
 endinterface
 
