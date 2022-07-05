@@ -43,7 +43,7 @@ module register_bank
         output logic [31:0] data [NUM_READ_PORTS]
     );
 
-    (* ramstyle = "MLAB, no_rw_check" *) logic [31:0] register_file_bank [64];
+    (* ramstyle = "MLAB, no_rw_check", ram_style = "distributed" *) logic [31:0] register_file_bank [64];
     ////////////////////////////////////////////////////
     //Implementation
 

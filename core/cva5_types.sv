@@ -188,6 +188,7 @@ package cva5_types;
         logic [2:0] fn3;
         logic [31:0] data;
         id_t id;
+        phys_addr_t phys_addr;
         logic forwarded_store;
         id_t id_needed;
     } lsq_entry_t;
@@ -208,16 +209,10 @@ package cva5_types;
 
     typedef struct packed{
         id_t id;
+        phys_addr_t phys_addr;
         logic valid;
         logic [31:0] data;
     } wb_packet_t;
-
-    typedef struct packed{
-        id_t id;
-        logic valid;
-        phys_addr_t phys_addr;
-        logic [31:0] data;
-    } commit_packet_t;
 
     typedef struct packed{
         logic valid;
@@ -233,6 +228,7 @@ package cva5_types;
         logic [2:0] fn3;
         logic [31:0] data_in;
         id_t id;
+        phys_addr_t phys_addr;
     } data_access_shared_inputs_t;
 
     typedef enum  {

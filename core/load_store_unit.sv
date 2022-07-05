@@ -128,6 +128,7 @@ module load_store_unit
         logic [1:0] sign_sel;
         logic [1:0] final_mux_sel;
         id_t id;
+        phys_addr_t phys_addr;
         logic [NUM_SUB_UNITS_W-1:0] subunit_id;
     } load_attributes_t;
     load_attributes_t  mem_attr, wb_attr;
@@ -221,6 +222,7 @@ module load_store_unit
         load : ls_inputs.load,
         store : ls_inputs.store,
         id : issue.id,
+        phys_addr : issue.phys_addr,
         forwarded_store : ls_inputs.forwarded_store,
         id_needed : ls_inputs.store_forward_id
     };
@@ -302,6 +304,7 @@ module load_store_unit
         sign_sel : lsq.load_data_out.addr[1:0] | {1'b0, lsq.load_data_out.fn3[0]},//halfwrord
         final_mux_sel : final_mux_sel,
         id : lsq.load_data_out.id,
+        phys_addr : lsq.load_data_out.phys_addr,
         subunit_id : subunit_id
     };
 
@@ -443,6 +446,7 @@ module load_store_unit
     assign wb.rd = final_load_data;
     assign wb.done = load_complete | load_exception_complete;
     assign wb.id = load_exception_complete ? exception.id : wb_attr.id;
+    assign wb.phys_addr = wb_attr.phys_addr;
 
     ////////////////////////////////////////////////////
     //End of Implementation

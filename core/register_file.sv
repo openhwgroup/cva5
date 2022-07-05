@@ -46,7 +46,7 @@ module register_file
         register_file_issue_interface.register_file rf_issue,
 
         //Writeback
-        input commit_packet_t commit [CONFIG.NUM_WB_GROUPS]
+        input wb_packet_t commit [CONFIG.NUM_WB_GROUPS]
     );
     typedef logic [31:0] rs_data_set_t [REGFILE_READ_PORTS];
     rs_data_set_t rs_data_set [CONFIG.NUM_WB_GROUPS];
@@ -77,7 +77,7 @@ module register_file
         .toggle ('{
             (decode_advance & decode_uses_rd & |decode_phys_rd_addr & ~gc.fetch_flush),
             rf_issue.single_cycle_or_flush,
-            commit[1].valid
+            commit[1].valid & |commit[1].phys_addr
         }),
         .toggle_addr ('{
             decode_phys_rd_addr, 
@@ -111,7 +111,7 @@ module register_file
             .clk, .rst,
             .write_addr(commit[i].phys_addr),
             .new_data(commit[i].data),
-            .commit(commit[i].valid & ~gc.writeback_supress),
+            .commit(commit[i].valid & |commit[i].phys_addr & ~gc.writeback_supress),
             .read_addr(decode_phys_rs_addr),
             .data(rs_data_set[i])
         );
@@ -119,17 +119,32 @@ module register_file
 
     ////////////////////////////////////////////////////
     //Register File Muxing
-    logic [$clog2(CONFIG.NUM_WB_GROUPS)-1:0] rs_wb_group [REGFILE_READ_PORTS];
     logic bypass [REGFILE_READ_PORTS];
-    assign rs_wb_group = decode_advance ? decode_rs_wb_group : rf_issue.rs_wb_group;
-    assign bypass = decode_advance ? decode_inuse : decode_inuse_r;
+
+    rs_data_set_t bypass_set [CONFIG.NUM_WB_GROUPS];
+    wb_packet_t commit_r [CONFIG.NUM_WB_GROUPS][REGFILE_READ_PORTS];
+    rs_data_set_t rs_data_set_r [CONFIG.NUM_WB_GROUPS];
 
     always_ff @ (posedge clk) begin
-       for (int i = 0; i < REGFILE_READ_PORTS; i++) begin
-           if (decode_advance | rf_issue.inuse[i])
-               rf_issue.data[i] <= bypass[i] ? commit[rs_wb_group[i]].data : rs_data_set[rs_wb_group[i]][i];
-       end
+        if (decode_advance)
+            rs_data_set_r <= rs_data_set;
+        for (int i = 0; i < REGFILE_READ_PORTS; i++) begin
+            if (decode_advance | rf_issue.inuse[i]) begin
+                bypass <= decode_advance ? decode_inuse : decode_inuse_r;
+                commit_r[i] <= commit;
+            end
+        end
    end
+
+    always_comb begin
+        for (int i = 0; i < REGFILE_READ_PORTS; i++) begin
+            for (int j = 0; j < CONFIG.NUM_WB_GROUPS; j++) begin
+                bypass_set[j][i] =  bypass[i] ? commit_r[i][j].data : rs_data_set_r[j][i];
+            end
+            rf_issue.data[i] = bypass_set[rf_issue.rs_wb_group[i]][i];
+        end
+    end
+
 
     ////////////////////////////////////////////////////
     //End of Implementation
@@ -137,8 +152,5 @@ module register_file
 
     ////////////////////////////////////////////////////
     //Assertions
-    for (genvar i = 0; i < CONFIG.NUM_WB_GROUPS; i++) begin : write_to_rd_zero_assertion
-        assert property (@(posedge clk) disable iff (rst) (commit[i].valid) |-> (commit[i].phys_addr != 0)) else $error("write to register zero");
-    end
 
 endmodule

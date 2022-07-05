@@ -86,6 +86,7 @@ module alu_unit
     assign wb.rd = result;
     assign wb.done = issue.possible_issue;
     assign wb.id = issue.id;
+    assign wb.phys_addr = issue.phys_addr;
 
     ////////////////////////////////////////////////////
     //Assertions

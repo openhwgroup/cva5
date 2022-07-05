@@ -159,7 +159,6 @@ module cva5
     logic retire_port_valid [RETIRE_PORTS];
         //Writeback
     wb_packet_t wb_packet [CONFIG.NUM_WB_GROUPS];
-    commit_packet_t commit_packet [CONFIG.NUM_WB_GROUPS];
          //Exception
     logic [31:0] oldest_pc;
 
@@ -237,7 +236,6 @@ module cva5
         .instruction_issued (instruction_issued),
         .instruction_issued_with_rd (instruction_issued_with_rd),
         .wb_packet (wb_packet),
-        .commit_packet (commit_packet),
         .retire (retire),
         .retire_ids (retire_ids),
         .retire_ids_next (retire_ids_next),
@@ -388,7 +386,7 @@ module cva5
         .decode_advance (decode_advance),
         .decode_uses_rd (decode_uses_rd),
         .rf_issue (rf_issue),
-        .commit (commit_packet)
+        .commit (wb_packet)
     );
 
     ////////////////////////////////////////////////////

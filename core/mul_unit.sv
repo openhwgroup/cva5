@@ -39,6 +39,7 @@ module mul_unit
     logic mulh [2];
     logic valid [2];
     id_t id [2];
+    phys_addr_t phys_addr [2];
 
     logic rs1_is_signed, rs2_is_signed;
     logic signed [32:0] rs1_ext, rs2_ext;
@@ -75,10 +76,12 @@ module mul_unit
         if (stage1_advance) begin
             mulh[0] <= (mul_inputs.op[1:0] != MUL_fn3[1:0]);
             id[0] <= issue.id;
+            phys_addr[0] <= issue.phys_addr;
         end
         if (stage2_advance) begin
             mulh[1] <= mulh[0];
             id[1] <= id[0];
+            phys_addr[1] <= phys_addr[0];
         end
     end
 
@@ -97,6 +100,7 @@ module mul_unit
     assign wb.rd = mulh[1] ? result[63:32] : result[31:0];
     assign wb.done = valid[1];
     assign wb.id = id[1];
+    assign wb.phys_addr = phys_addr[1];
 
     ////////////////////////////////////////////////////
     //End of Implementation

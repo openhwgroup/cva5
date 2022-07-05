@@ -63,7 +63,6 @@ module instruction_metadata_and_id_management
 
         //WB
         input wb_packet_t wb_packet [CONFIG.NUM_WB_GROUPS],
-        output commit_packet_t commit_packet [CONFIG.NUM_WB_GROUPS],
 
         //Retirer
         output retire_packet_t retire,
@@ -82,7 +81,6 @@ module instruction_metadata_and_id_management
     (* ramstyle = "MLAB, no_rw_check" *) logic [31:0] instruction_table [MAX_IDS];
     (* ramstyle = "MLAB, no_rw_check" *) logic [0:0] valid_fetch_addr_table [MAX_IDS];
 
-    (* ramstyle = "MLAB, no_rw_check" *) phys_addr_t phys_addr_table [MAX_IDS];
     (* ramstyle = "MLAB, no_rw_check" *) logic [0:0] uses_rd_table [MAX_IDS];
 
     (* ramstyle = "MLAB, no_rw_check" *) logic [$bits(fetch_metadata_t)-1:0] fetch_metadata_table [MAX_IDS];
@@ -129,14 +127,6 @@ module instruction_metadata_and_id_management
     always_ff @ (posedge clk) begin
         if (fetch_complete)
             fetch_metadata_table[fetch_id] <= fetch_metadata;
-    end
-
-    ////////////////////////////////////////////////////
-    //Phys rd table
-    //Number of read ports = (NUM_WB_GROUPS - 1)  (ALU WB group uses issue_phys_rd_addr)
-    always_ff @ (posedge clk) begin
-        if (decode_advance)
-            phys_addr_table[decode_id] <= decode_phys_rd_addr;
     end
 
     ////////////////////////////////////////////////////
@@ -323,20 +313,6 @@ module instruction_metadata_and_id_management
     assign decode.pc = pc_table[decode_id];
     assign decode.instruction = instruction_table[decode_id];
     assign decode.fetch_metadata = CONFIG.INCLUDE_M_MODE ? fetch_metadata_table[decode_id] : '{ok : 1, error_code : INST_ACCESS_FAULT};
-
-    //Writeback/Commit support
-    phys_addr_t commit_phys_addr [CONFIG.NUM_WB_GROUPS];
-    assign commit_phys_addr[0] = issue.phys_rd_addr;
-     generate for (i = 1; i < CONFIG.NUM_WB_GROUPS; i++) begin : gen_commit_phys_addr
-        assign commit_phys_addr[i] = phys_addr_table[wb_packet[i].id];
-     end endgenerate
-
-     generate for (i = 0; i < CONFIG.NUM_WB_GROUPS; i++) begin : gen_commit_packet
-        assign commit_packet[i].id = wb_packet[i].id;
-        assign commit_packet[i].phys_addr = commit_phys_addr[i];        
-        assign commit_packet[i].valid = wb_packet[i].valid & |commit_phys_addr[i];
-        assign commit_packet[i].data = wb_packet[i].data;
-     end endgenerate
 
     //Exception Support
      generate if (CONFIG.INCLUDE_M_MODE) begin : gen_id_exception_support

@@ -47,6 +47,7 @@ module writeback
     logic [NUM_WB_UNITS-1:0] unit_ack [CONFIG.NUM_WB_GROUPS];
     //aliases for write-back-interface signals
     id_t [NUM_WB_UNITS-1:0] unit_instruction_id [CONFIG.NUM_WB_GROUPS];
+    phys_addr_t [NUM_WB_UNITS-1:0] unit_phys_addr [CONFIG.NUM_WB_GROUPS];
     logic [NUM_WB_UNITS-1:0] unit_done [CONFIG.NUM_WB_GROUPS];
 
     typedef logic [XLEN-1:0] unit_rd_t [NUM_WB_UNITS];
@@ -76,6 +77,7 @@ module writeback
         for (i = 0; i < CONFIG.NUM_WB_GROUPS; i++) begin : gen_wb_group_unpacking
             for (j = 0; j < NUM_UNITS[i]; j++) begin : gen_wb_unit_unpacking
                 assign unit_instruction_id[i][j] = unit_wb[CUMULATIVE_NUM_UNITS[i] + j].id;
+                assign unit_phys_addr[i][j] = unit_wb[CUMULATIVE_NUM_UNITS[i] + j].phys_addr;
                 assign unit_done[i][j] = unit_wb[CUMULATIVE_NUM_UNITS[i] + j].done;
                 assign unit_wb[CUMULATIVE_NUM_UNITS[i] + j].ack = unit_ack[i][j];
             end
@@ -107,6 +109,7 @@ module writeback
         );
         assign wb_packet[i].valid = |unit_done[i];
         assign wb_packet [i].id = unit_instruction_id[i][unit_sel[i]];
+        assign wb_packet [i].phys_addr = unit_phys_addr[i][unit_sel[i]];
         assign wb_packet[i].data = unit_rd[i][unit_sel[i]];
 
         assign unit_ack[i] = NUM_WB_UNITS'(wb_packet[i].valid) << unit_sel[i];
