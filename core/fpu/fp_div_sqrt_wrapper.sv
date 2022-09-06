@@ -40,8 +40,8 @@ module fp_div_sqrt_wrapper(
   assign sqrt_issue.possible_issue = issue.possible_issue;
 
   always_comb begin
-    div_wb.ack = wb.ack;
-    sqrt_wb.ack = wb.ack;
+    div_wb.ack = wb.ack & div_wb.done;
+    sqrt_wb.ack = wb.ack & sqrt_wb.done;
     if (div_wb.done) begin
       wb.rd = div_wb.rd;
       wb.id = div_wb.id;

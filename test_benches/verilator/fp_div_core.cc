@@ -71,10 +71,10 @@ int main(int argc, char **argv) {
   }
 
   for (int i = 0; i < 1; i++) {
-    // double rs1 = get_double2();
-    // double rs2 = get_double2();
-    double rs1 = 9.0;
-    double rs2 = 3.0;
+     double rs1 = get_double2();
+     double rs2 = get_double2();
+    //double rs1 = 9.0;
+    //double rs2 = 3.0;
     double expected_output = rs1 / rs2;
     test_queue.push(test_case_t(rs1, rs2, rm, expected_output));
     cout << i << " -- " << hex << "rs1: 0x" << *(ull *)(&rs1) << "(" << rs1
@@ -146,7 +146,7 @@ int main(int argc, char **argv) {
       //"\ttb->start :" << tb->start <<
       //"\ttb->done =" << tb->done << endl;
       tb->rst = 0;
-      if (test_queue.size() != 0) {
+      if (test_queue.size() > 0) {
         // if (cycle_count == 0 && tb->start == 0){
         //     tb->start = 1;
         // } else {

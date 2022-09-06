@@ -140,8 +140,8 @@ module fp_madd_fused_simulation_wrapper (
   assign issue.id = id;
 
   //control signals
-  assign adder_path = 0;
-  assign add = 1;
+  assign adder_path = 1;
+  assign add = 0;
 
   assign mul_id = fp_unit_wb.id;
   assign mul_done = fp_unit_wb.done & ~adder_path; //asserted for fmul

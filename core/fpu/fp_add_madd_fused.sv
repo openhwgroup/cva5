@@ -177,7 +177,7 @@ module fp_add_madd_fused (
 
   sticky_bit_logic # (.INPUT_WIDTH(FRAC_WIDTH+2)) frac_sticky (
     .shifter_input (rs2_frac[0]),
-    .shift_amount (shft_amt),
+    .shift_amount ($clog2(FRAC_WIDTH+2)'(shft_amt)),
     .sticky_bit (rs2_frac_sticky_bit)
   );
 

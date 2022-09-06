@@ -13,6 +13,7 @@ module fp_div_core (
 );
 
   unsigned_division_interface #(.DATA_WIDTH(2*FRAC_WIDTH+3)) div();
+  unsigned_division_interface #(.DATA_WIDTH(FRAC_WIDTH+3)) div_shortened();
   logic                   start_algorithm_r;
   logic                   done[1:0];
   id_t                    id_in_progress;
@@ -99,9 +100,24 @@ module fp_div_core (
   assign div.start     = start_algorithm_r & ~early_terminate;     //start div if no special cases
   assign div.divisor_is_zero = rs2_is_zero;
   //fp_div_quick_clz #(FRAC_WIDTH+2) div_mantissa (.*);  
-  fp_div_radix2 #(.DIV_WIDTH(2*FRAC_WIDTH+3)) div_mantissa (.*);  
-  assign {result_hidden, result_frac, grs[2:1]} = div.quotient[0+:FRAC_WIDTH+3];
-  assign grs[0] = |div.remainder;
+  //fp_div_radix2 #(.DIV_WIDTH(2*FRAC_WIDTH+3)) div_mantissa (.*);  
+
+  assign div_shortened.dividend  = {rs1_frac, 2'b0};
+  assign div_shortened.divisor   = {rs2_frac, 2'b0};
+  assign div_shortened.start     = start_algorithm_r & ~early_terminate;     //start div if no special cases
+  assign div_shortened.divisor_is_zero = rs2_is_zero;
+  fp_div_radix2_shortened #(.DIV_WIDTH(FRAC_WIDTH+3)) div_mantissa_shortened (.clk(clk), .rst(rst), .div(div_shortened));  
+
+  logic hidden_shortened;
+  logic [FRAC_WIDTH-1:0] frac_shortened;
+  logic [2:0] grs_shortened;
+  assign {hidden_shortened, frac_shortened, grs_shortened[2:1]} = div_shortened.quotient;
+  assign grs_shortened[0] = |div_shortened.remainder;
+
+  //assign {result_hidden, result_frac, grs[2:1]} = div.quotient[0+:FRAC_WIDTH+3];
+  //assign grs[0] = |div.remainder;
+  assign {result_hidden, result_frac, grs[2:1]} = div_shortened.quotient;
+  assign grs[0] = |div_shortened.remainder;
 
   //exponent handling
   generate if (ENABLE_SUBNORMAL) begin
@@ -155,9 +171,9 @@ module fp_div_core (
   assign fp_wb.right_shift_amt = right_shift_amt;
 
   //Registers
-  always_ff @ (posedge clk) begin 
+  always_ff @ (posedge clk) begin
     if (advance) begin 
-      done[0] <= (early_terminate & start_algorithm_r) | div.done;
+      done[0] <= (early_terminate & start_algorithm_r) | div_shortened.done;
       //pipeline
       result_sign[1] <= result_sign[0];
       result_expo_intermediate[1] <= result_expo_intermediate[0];

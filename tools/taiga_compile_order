@@ -123,6 +123,7 @@ core/fpu/fp_div_core.sv
 core/fpu/fp_special_case_detection.sv
 core/div_algorithms/fp_div_quick_clz.sv
 core/div_algorithms/fp_div_radix2.sv
+core/div_algorithms/fp_div_radix2_shortened.sv
 core/fpu/fp_illegal_instruction_checker.sv
 core/fpu/fp_decode_and_issue.sv
 core/fpu/fp_renamer.sv

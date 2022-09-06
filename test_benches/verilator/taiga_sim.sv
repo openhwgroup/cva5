@@ -586,6 +586,9 @@ module taiga_sim
 
             unit_done_r <= cpu.fpu_block.fpu_block.norm_round_inst.unit_done[0];
             unit_done_r_r <= unit_done_r;
+
+            //if (cpu.decode_and_issue_block.instruction_issued | cpu.decode_and_issue_block.fp_instruction_issued_with_rd)
+                //$display("pc: 0x%h", instruction_pc_dec);
         end
 
         always_comb begin

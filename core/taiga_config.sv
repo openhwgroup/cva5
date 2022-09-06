@@ -90,7 +90,7 @@ package taiga_config;
     //FP Options
     parameter INCLUDE_FPU = 1;
     parameter EXPO_WIDTH = 11;
-	parameter FRAC_WIDTH = 52; 
+	parameter FRAC_WIDTH = 52;
     parameter FLEN = 1 + EXPO_WIDTH + FRAC_WIDTH;
     parameter INTERFACE_EXPO_WIDTH = 11;
     parameter INTERFACE_FRAC_WIDTH = 52;
@@ -101,7 +101,7 @@ package taiga_config;
     //parameter GRS_WIDTH = 4;
     parameter FULL_GRS = (GRS_WIDTH == FRAC_WIDTH*2);
     parameter FULL_ROUNDING_MODES_ENABLE = 1;
-
+    
     typedef struct packed {
       bit INCLUDE_FPU;
       int unsigned EXPO_WIDTH;
@@ -284,25 +284,25 @@ package taiga_config;
         MISC_WB2FP  : 2,
         MISC_WB2INT : 3
     };
-
+    
     ////////////////////////////////////////////////////
     //FPU Writeback IDs
     typedef struct packed {
         int unsigned FLS;
         int unsigned FP_ARITH;
     } fp_wb_id_param_t;
-
+    
     typedef struct packed {
         int unsigned FMADD;
         int unsigned FMUL;
         int unsigned FDIV_SQRT;
         int unsigned MISC_WB2FP;
     } fp_wb_norm_round_param_t;
-
+    
     typedef struct packed {
         int unsigned MISC_WB2INT;
     } fp_wb_int_id_param_t;
-
+    
     ////////////////////////////////////////////////////
     //Bus Options
     parameter C_M_AXI_ADDR_WIDTH = 32; //Kept as parameter, due to localparam failing with scripted IP packaging

@@ -184,8 +184,8 @@ int main(int argc, char **argv) {
   int i;
   while (std::getline(fmul_inputs, line) && (i < test_number)) {
     long double result = 0.0;
-    int op = FMSUB;
-    int instruction = FMA_instruction[2]; //[rand()%3];
+    int op = FMADD;
+    int instruction = FMA_instruction[0]; //[rand()%3];
     int fn7 = fadd_fn7[1];
     string operation;
 

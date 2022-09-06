@@ -20,7 +20,7 @@ module fp_div_core_simulation_wrapper (
   );
 
   fp_div_sqrt_inputs_t fp_div_sqrt_inputs;
-  fp_unit_writeback_t fp_wb; 
+  fp_unit_writeback_interface fp_wb();
 
   fp_div_core fp_div(
     .clk               (clk),

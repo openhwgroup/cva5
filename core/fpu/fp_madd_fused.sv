@@ -148,7 +148,7 @@ module fp_madd_fused_top (
   //assign fp_add_inputs_fifo.supress_push = 0;
   assign fp_add_inputs_fifo.pop = ~fma_mul_instruction[2] & fp_add_inputs_fifo.valid & add_issue.ready;
   assign add_inputs_from_fifo = fp_add_inputs_fifo.data_out;
-  taiga_fifo #(.DATA_WIDTH($bits(add_input_struct_t)), .FIFO_DEPTH(2)) add_input_fifo (.fifo(fp_add_inputs_fifo), .*); 
+  taiga_fifo #(.DATA_WIDTH($bits(add_input_struct_t)), .FIFO_DEPTH(1)) add_input_fifo (.fifo(fp_add_inputs_fifo), .*); 
 
   ////////////////////////////////////////////////////////
   //Adder input select
