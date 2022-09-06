@@ -38,7 +38,7 @@ module fp_div_radix2_shortened
     logic [DIV_WIDTH:0] new_PR;
     logic [DIV_WIDTH:0] PR;
 
-    localparam SHIFT_COUNT_WIDTH = 53+52+4;
+    localparam SHIFT_COUNT_WIDTH = 2*FRAC_WIDTH + 5;//53+52+4;
     logic [SHIFT_COUNT_WIDTH-1:0] shift_count;
     logic negative_sub_rst;
 
