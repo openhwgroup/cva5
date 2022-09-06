@@ -46,11 +46,13 @@ module fp_normalize (
     fp_shift_amt_t left_shift_amt_adjusted;
     logic [EXPO_WIDTH:0] expo_norm_left_shift_intermediate;
 
+    logic signed [FRAC_WIDTH+3+GRS_WIDTH-1:0] left, right, shift_in, result, result_reversed;
+    logic [EXPO_WIDTH-1:0] shift_amt;
+
     ////////////////////////////////////////////////////
     //Implementation
     //Expo_overflow: FMUL, FDIV can assert
     //Expo_overflow_norm: FADD, FMUL can assert due to right shifting
-    //TODO: two shifters can be combined
     assign sign_norm = sign;
     assign grs = grs_in;//rm == 1? '0 : grs_in;
 
@@ -61,56 +63,47 @@ module fp_normalize (
       assign subnormal_expo = {expo_overflow, expo} & {(EXPO_WIDTH+1){~subnormal}};
       assign subnormal_right_shift_amt = (EXPO_WIDTH+1)'(right_shift_amt) & {(EXPO_WIDTH+1){~subnormal}};
       assign expo_norm_right_shift = subnormal_expo + subnormal_right_shift_amt;
-      assign {frac_carry_bit_norm_right_shift, frac_safe_bit_norm_right_shift, hidden_bit_norm_right_shift, frac_norm_right_shift, grs_norm_right_shift} = {frac_carry_bit, frac_safe_bit, hidden_bit, frac, grs} >> right_shift_amt;
     end else begin
       assign normal_expo = {expo_overflow, expo} & {(EXPO_WIDTH+1){~subnormal}}; //drive result expo to zero if subnormal
       assign normal_right_shift_amt = (right_shift_amt[1:0]) & {2{~subnormal}};
       assign expo_norm_right_shift = normal_expo + (EXPO_WIDTH+1)'(normal_right_shift_amt);
-      assign {frac_carry_bit_norm_right_shift, frac_safe_bit_norm_right_shift, hidden_bit_norm_right_shift, frac_norm_right_shift, grs_norm_right_shift} = {frac_carry_bit, frac_safe_bit, hidden_bit, frac, grs} >> normal_right_shift_amt;
     end endgenerate
 
     //Left Shift
     //Neededby: FSUB; FSQRT if subnormal is enabled
     //Left shift is done by first reversing the bit order and sign-shited(>>>)
     //This is needed to preserve the sticky bit
-    logic signed [FRAC_WIDTH+3+GRS_WIDTH-1:0] left, reversed_left, reversed_left_shifted, left_shifted;
-    assign left = {frac_carry_bit, frac_safe_bit, hidden_bit, frac, grs};
-    genvar i;
-    generate 
-      for (i = 0; i < (FRAC_WIDTH+3+GRS_WIDTH); i++) begin
-        assign reversed_left[i] = left[FRAC_WIDTH+3+GRS_WIDTH-1-i];
-      end
-    endgenerate
-    assign reversed_left_shifted = reversed_left >>> left_shift_amt_adjusted;
-    generate 
-      for (i = 0; i < (FRAC_WIDTH+3+GRS_WIDTH); i++) begin
-        assign left_shifted[i] = reversed_left_shifted[FRAC_WIDTH+3+GRS_WIDTH-1-i];
-      end
-    endgenerate
-
     generate if (ENABLE_SUBNORMAL) begin
       //FADD of two subnormals may result in promotion of subnormal to normal
       //This is handled by adding 1 to the expo if the hidden_bit is 1, and |expo==0
       assign {expo_less_than_left_shift_amt, expo_norm_left_shift_intermediate} = {{expo_overflow, expo} & {(EXPO_WIDTH+1){~subnormal}}} - (EXPO_WIDTH+1)'(left_shift_amt); //drive to zero if subnormal
       assign left_shift_amt_adjusted = expo_less_than_left_shift_amt ? expo : left_shift_amt;
-      assign {frac_carry_bit_norm_left_shift, frac_safe_bit_norm_left_shift, hidden_bit_norm_left_shift, frac_norm_left_shift, grs_norm_left_shift} = left_shifted;
       assign expo_norm_left_shift = (expo_norm_left_shift_intermediate & {(EXPO_WIDTH+1){~expo_less_than_left_shift_amt}}) + (EXPO_WIDTH)'({subnormal&hidden_bit}); 
     end else begin 
       assign {expo_less_than_left_shift_amt, expo_norm_left_shift_intermediate} = {{expo_overflow, expo} & {(EXPO_WIDTH+1){~subnormal}}} - (EXPO_WIDTH+1)'(left_shift_amt); //drive to zero if subnormal
       assign left_shift_amt_adjusted = expo_less_than_left_shift_amt ? expo : left_shift_amt;
-      assign {frac_carry_bit_norm_left_shift, frac_safe_bit_norm_left_shift, hidden_bit_norm_left_shift, frac_norm_left_shift, grs_norm_left_shift} = left_shifted;
       assign expo_norm_left_shift = (expo_norm_left_shift_intermediate & {(EXPO_WIDTH+1){~expo_less_than_left_shift_amt}}) + (EXPO_WIDTH)'({subnormal&hidden_bit}); 
     end endgenerate
 
     //Output Selection
     always_comb begin
-        if (right_shift) begin 
-          {expo_overflow_norm, expo_norm} = expo_norm_right_shift;
-          {frac_carry_bit_norm, frac_safe_bit_norm, hidden_bit_norm, frac_norm, grs_norm} = {frac_carry_bit_norm_right_shift, frac_safe_bit_norm_right_shift, hidden_bit_norm_right_shift, frac_norm_right_shift, grs_norm_right_shift};
-        end else begin
-          {expo_overflow_norm, expo_norm} = expo_norm_left_shift;
-          {frac_carry_bit_norm, frac_safe_bit_norm, hidden_bit_norm, frac_norm, grs_norm} = {frac_carry_bit_norm_left_shift, frac_safe_bit_norm_left_shift, hidden_bit_norm_left_shift, frac_norm_left_shift, grs_norm_left_shift};
-        end
+      {expo_overflow_norm, expo_norm} = right_shift ? expo_norm_right_shift : expo_norm_left_shift;
+      {frac_carry_bit_norm, frac_safe_bit_norm, hidden_bit_norm, frac_norm, grs_norm} = right_shift ? result : result_reversed;
       overflow_before_rounding = (expo_overflow_norm | (&expo_norm)) & |left_shift_amt;
-      end
+    end
+
+    always_comb begin
+      right = {frac_carry_bit, frac_safe_bit, hidden_bit, frac, grs};
+      left = reverse(right);;
+      shift_in = right_shift ? right : left;
+      shift_amt = right_shift ? right_shift_amt : left_shift_amt_adjusted;
+      result = shift_in >>> shift_amt;
+      result_reversed = reverse(result);
+    end
+
+    function logic [FRAC_WIDTH+3+GRS_WIDTH-1:0] reverse (input logic signed [FRAC_WIDTH+3+GRS_WIDTH-1:0] in);
+      foreach(in[i])
+        reverse[i] = in[FRAC_WIDTH+3+GRS_WIDTH-1-i];
+    endfunction
+
 endmodule : fp_normalize
