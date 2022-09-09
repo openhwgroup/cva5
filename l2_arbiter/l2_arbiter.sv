@@ -261,7 +261,7 @@ module l2_arbiter
 
     assign write_done = data_attributes.valid & ~mem_data_fifo.full & (burst_count == current_attr.burst_size);
 
-    cva5_fifo #(.DATA_WIDTH($bits($bits(l2_data_request_t))), .FIFO_DEPTH(L2_MEM_ADDR_FIFO_DEPTH))  mem_data (.*, .fifo(mem_data_fifo));
+    cva5_fifo #(.DATA_WIDTH($bits(l2_data_request_t)), .FIFO_DEPTH(L2_MEM_ADDR_FIFO_DEPTH))  mem_data (.*, .fifo(mem_data_fifo));
 
     assign mem_data_fifo.push = data_attributes.valid & ~mem_data_fifo.full & ~current_attr.abort_request;
     assign mem_data_fifo.potential_push = data_attributes.valid & ~mem_data_fifo.full & ~current_attr.abort_request;
