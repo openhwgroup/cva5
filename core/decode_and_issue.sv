@@ -81,10 +81,6 @@ module decode_and_issue
         output csr_inputs_t csr_inputs,
         output mul_inputs_t mul_inputs,
         output div_inputs_t div_inputs,
-        output fp_madd_inputs_t fp_madd_inputs,
-        output fp_div_sqrt_inputs_t fp_div_sqrt_inputs,
-        output fp_wb2fp_misc_inputs_t fp_wb2fp_misc_inputs,
-        output fp_wb2int_misc_inputs_t fp_wb2int_misc_inputs,
         output fp_pre_processing_packet_t fp_pre_processing_packet,
 
         unit_issue_interface.decode unit_issue [TOTAL_NUM_UNITS-1:0],
@@ -647,10 +643,6 @@ module decode_and_issue
             .dyn_rm (dyn_rm),
             .fp_operands_ready (fp_operands_ready),
             .fp_store_forward_id (fp_store_forward_id),
-            .fp_madd_inputs (fp_madd_inputs),
-            .fp_div_sqrt_inputs (fp_div_sqrt_inputs),
-            .fp_wb2fp_misc_inputs (fp_wb2fp_misc_inputs),
-            .fp_wb2int_misc_inputs (fp_wb2int_misc_inputs),
             .fp_pre_processing_packet (fp_pre_processing_packet),
             .gc_fetch_flush (gc.fetch_flush)
         );

@@ -36,21 +36,21 @@ module fp_add_madd_fused (
   logic                          swap;
   logic [EXPO_WIDTH:0]           expo_diff_in;
 
-  logic                          rs1_sign [1:0];
-  logic [EXPO_WIDTH-1:0]         rs1_expo [1:0];
-  logic                          rs1_expo_overflow [1:0];
+  logic                          rs1_sign [2:0];
+  logic [EXPO_WIDTH-1:0]         rs1_expo [2:0];
+  logic                          rs1_expo_overflow [2:0];
   logic [FRAC_WIDTH+1:0]         rs1_frac [1:0];
   logic                          rs2_sign [1:0];
   logic [EXPO_WIDTH-1:0]         rs2_expo [1:0];
   logic                          rs2_expo_overflow [1:0];
-  logic [FRAC_WIDTH+1:0]         rs2_frac [1:0];
+  logic [FRAC_WIDTH+1:0]         rs2_frac [2:0];
   logic                          rs1_safe_bit [1:0], rs2_safe_bit[1:0];
 
   logic [FRAC_WIDTH+GRS_WIDTH:0] rs1_frac_2s [1:0];
   logic [FRAC_WIDTH+GRS_WIDTH:0] rs2_frac_2s [1:0];  
 
   logic                          zero_result_sign[3:0];
-  logic                          subtract[1:0];
+  logic                          subtract[2:0];
   logic                          result_sign [2:0];
   logic [EXPO_WIDTH-1:0]         result_expo [1:0];
   logic                          result_expo_overflow [1:0];
@@ -59,7 +59,7 @@ module fp_add_madd_fused (
   logic [EXPO_WIDTH-1:0]         result_expo_norm [2:0];
   logic [FRAC_WIDTH:0]           result_frac_norm [2:0];
 
-  logic [EXPO_WIDTH:0]           expo_diff[1:0];
+  logic [EXPO_WIDTH:0]           expo_diff[2:0];
   logic [EXPO_WIDTH:0]           align_shift_amt;
   logic [FRAC_WIDTH+1:0]         rs2_frac_aligned[1:0];  
   grs_t                          grs_in;
@@ -182,9 +182,9 @@ module fp_add_madd_fused (
   logic [FRAC_WIDTH+GRS_WIDTH+3:0] in1, in2;
   (* use_dsp = "no" *) logic [FRAC_WIDTH+2:0] result_frac_intermediate;
   (* use_dsp = "no" *) grs_t                          grs_intermediate;
-  (* use_dsp = "no" *) logic adder_carry_out;
+  (* use_dsp = "no" *) logic adder_carry_out, r_adder_carry_out;
   (* use_dsp = "no" *) logic add_sub_carry_in;
-  (* use_dsp = "no" *) grs_t                          grs_add;
+  (* use_dsp = "no" *) grs_t                          grs_add, r_grs_add;
   logic output_zero;
   logic same_expo;
   logic result_frac_all_0s, result_frac_all_0s_r;
@@ -201,14 +201,16 @@ module fp_add_madd_fused (
   assign {result_frac[0], grs_add} = {result_frac_intermediate, grs_intermediate} ^ {(FRAC_WIDTH+GRS_WIDTH+3){~adder_carry_out & subtract[1]}};
   //subtract && adder_carry_out = 1 if subtract and in1 > in2
                               //= 0 if subtract and in1 < in2
-  assign same_expo = ~|expo_diff[1] | (expo_diff[1] == 1 & rs2_frac[1][FRAC_WIDTH+1]); //asserted if input expo_diff==0; or if FMA_ADD input expo_diff==1 and rs2's safe bit==1
-  assign result_frac_all_0s = ~|result_frac[0];
-  assign grs_add_all_0s = ~|grs_add;
+
+
+  assign same_expo = ~|expo_diff[2] | (expo_diff[2] == 1 & rs2_frac[2][FRAC_WIDTH+1]); //asserted if input expo_diff==0; or if FMA_ADD input expo_diff==1 and rs2's safe bit==1
+  assign result_frac_all_0s = ~|result_frac[1];
+  assign grs_add_all_0s = ~|grs;
   assign output_zero = same_expo & (result_frac_all_0s & grs_add_all_0s);
-  assign result_sign[0] = output_zero & (subtract[1]) ? 
-                          zero_result_sign[1] : 
-                          (~adder_carry_out & subtract[1]) ^ rs1_sign[1]; 
-  assign {result_expo_overflow[0], result_expo[0]} = output_zero ? '0 : {rs1_expo_overflow[1], rs1_expo[1]};
+  assign result_sign[1] = output_zero & (subtract[2]) ? 
+                          zero_result_sign[2] : 
+                          (~r_adder_carry_out & subtract[2]) ^ rs1_sign[2]; 
+  assign {result_expo_overflow[1], result_expo[1]} = output_zero ? '0 : {rs1_expo_overflow[2], rs1_expo[2]};
 
   //calculate clz and write-back
   generate if (FRAC_WIDTH+2 <= 32) begin
@@ -222,11 +224,11 @@ module fp_add_madd_fused (
     localparam left_shift_amt_bias_if_result_frac_not_all_0s = (64 - (FRAC_WIDTH + 1));
     localparam left_shift_amt_bias_if_result_frac_all_0s = -(FRAC_WIDTH) + left_shift_amt_bias_if_result_frac_not_all_0s;
     clz_tree frac_clz (
-      .clz_input (result_frac_all_0s_r ? 64'(grs[GRS_WIDTH-1-:HALF_GRS_WIDTH]) : 64'(result_frac[1])),
+      .clz_input (result_frac_all_0s ? 64'(grs[GRS_WIDTH-1-:HALF_GRS_WIDTH]) : 64'(result_frac[1])),
       .clz (clz_with_prepended_0s[5:0])
     );
 
-    assign left_shift_amt_offset = result_frac_all_0s_r ? left_shift_amt_bias_if_result_frac_all_0s : left_shift_amt_bias_if_result_frac_not_all_0s;
+    assign left_shift_amt_offset = result_frac_all_0s ? left_shift_amt_bias_if_result_frac_all_0s : left_shift_amt_bias_if_result_frac_not_all_0s;
     assign left_shift_amt = (clz_with_prepended_0s & {EXPO_WIDTH{~output_special_case[1]}}) - (left_shift_amt_offset & {EXPO_WIDTH{~output_special_case[1]}});
   end endgenerate
 
@@ -279,13 +281,18 @@ module fp_add_madd_fused (
       fp_add_grs_r <= fp_add_inputs.fp_add_grs;
 
       expo_diff[1] <= expo_diff[0];
+      expo_diff[2] <= expo_diff[1];
       expo_diff_larger_than_frac_width[1] <= expo_diff_larger_than_frac_width[0];
       rs2_grs_sticky_bit[1] <= rs2_grs_sticky_bit[0];
       subtract[1] <= subtract[0];
+      subtract[2] <= subtract[1];
 
       rs1_sign[1] <= rs1_sign[0];
+      rs1_sign[2] <= rs1_sign[1];
       rs1_expo[1] <= rs1_expo[0];
+      rs1_expo[2] <= rs1_expo[1];
       rs1_expo_overflow[1] <= rs1_expo_overflow[0];
+      rs1_expo_overflow[2] <= rs1_expo_overflow[1];
       rs1_frac[1] <= rs1_frac[0];
       rs1_grs[1] <= rs1_grs[0];
       rs1_safe_bit[1] <= rs1_safe_bit[0];
@@ -294,6 +301,7 @@ module fp_add_madd_fused (
       rs2_expo[1] <= rs2_expo[0];
       rs2_expo_overflow[1] <= rs2_expo_overflow[0];
       rs2_frac[1] <= rs2_frac[0];
+      rs2_frac[2] <= rs2_frac[1];
       rs2_grs[1] <= grs_in;
       rs2_safe_bit[1] <= rs2_safe_bit[0];
 
@@ -302,6 +310,7 @@ module fp_add_madd_fused (
       rs2_frac_2s[1] <= rs2_frac_2s[0];
 
       zero_result_sign[1] <= zero_result_sign[0];
+      zero_result_sign[2] <= zero_result_sign[1];
       invalid_operation[1] <= invalid_operation[0];
       output_QNaN[1] <= output_QNaN[0];
       output_inf[1] <= output_inf[0];
@@ -314,10 +323,11 @@ module fp_add_madd_fused (
       done[1] <= done[0];
       id[1] <= id[0];
       rm[2] <= rm[1];
-      result_sign[1] <= result_sign[0];
-      result_expo[1] <= result_expo[0];
-      result_expo_overflow[1] <= result_expo_overflow[0];
+      //result_sign[1] <= result_sign[0];
+      //result_expo[1] <= result_expo[0];
+      //result_expo_overflow[1] <= result_expo_overflow[0];
       result_frac[1] <= result_frac[0];
+      r_adder_carry_out <= adder_carry_out;
       grs <= grs_add;
       invalid_operation[2] <= invalid_operation[1];
       output_QNaN[2] <= output_QNaN[1];

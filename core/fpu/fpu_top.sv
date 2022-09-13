@@ -38,10 +38,6 @@ module fpu_top #(
     (
       input logic clk,
       input logic rst,
-      input fp_madd_inputs_t fp_madd_inputs,
-      input fp_div_sqrt_inputs_t fp_div_sqrt_inputs,
-      input fp_wb2fp_misc_inputs_t fp_wb2fp_misc_inputs,
-      input fp_wb2int_misc_inputs_t fp_wb2int_misc_inputs,
       input fp_pre_processing_packet_t fp_pre_processing_packet,
       unit_issue_interface.unit fp_unit_issue [FP_NUM_UNITS-1:0], 
       unit_writeback_interface.unit unit_wb [FP_WB_INT_NUM_UNITS],
