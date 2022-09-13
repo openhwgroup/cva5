@@ -271,6 +271,8 @@ module fp_normalize_rounding_top #(
     );
     assign frac_overflow = &frac_overflow_parallel_ANDs;//&{hidden_round, frac, roundup};
     assert property (@(posedge clk) (frac_overflow|frac_overflow_debug) -> (frac_overflow_debug == frac_overflow));
+    assign overflowExp = (frac_overflow & |expo) | expo_overflow_round;
+    assign expo_out = expo + EXPO_WIDTH'(frac_overflow);
 
     assign wb_valid = round_packet_r.valid;
     assign roundup = round_packet_r.roundup;
@@ -283,8 +285,8 @@ module fp_normalize_rounding_top #(
     // frac_overflow can be calculated in parallel with roundup
     assign {frac_overflow_debug, frac_round_intermediate} = {hidden_round, frac} + (FRAC_WIDTH+1)'(roundup);
     assign frac_out = frac_round_intermediate[FRAC_WIDTH-1:0] >> frac_overflow;
-    assign {overflowExp_intermediate, expo_out} = {expo_overflow_round, expo} + EXPO_WIDTH'(frac_overflow); 
-    assign overflowExp = overflowExp_intermediate | round_packet_r.overflow_before_rounding;
+    //assign {overflowExp_intermediate, expo_out} = {expo_overflow_round, expo} + EXPO_WIDTH'(frac_overflow); 
+    //assign overflowExp = overflowExp_intermediate | round_packet_r.overflow_before_rounding;
     assign underflowExp = ~(hidden_round) & |frac_out;
     assign fflags_out = fflags[4] ? fflags : fflags | {2'b0, overflowExp, underflowExp, overflowExp}; //inexact is asserted when overflow 
 
