@@ -72,43 +72,25 @@ module fp_mul_madd_fused (
 
   ////////////////////////////////////////////////////
   //Implementation
-
-  //Sort rs1 and rs2 in descending order
-  swap swap_inst(
-    .rs1 (fp_madd_inputs.rs1),
-    .rs1_hidden_bit (fp_madd_inputs.rs1_hidden_bit),
-    .rs2_hidden_bit (fp_madd_inputs.rs2_hidden_bit),
-    .rs2 (fp_madd_inputs.rs2),
-    .swapped_rs1 (rs1),
-    .swapped_rs2 (rs2),
-    .swapped_rs1_hidden_bit (rs1_hidden_bit),
-    .swapped_rs2_hidden_bit (rs2_hidden_bit)
-  );
-
-  assign rs3[0] = fp_madd_inputs.rs3;
-  assign rs3_hidden_bit[0] = fp_madd_inputs.rs3_hidden_bit;
-  assign rs3_special_case[0] = fp_madd_inputs.rs3_special_case;
   assign rm[0] = fp_madd_inputs.rm;
   assign opcode[0] = fp_madd_inputs.op;
   assign instruction[0] = fp_madd_inputs.instruction;
-  
-  //Unpacking rs1 and pre-normalization rs2 if it's denormal
+  assign rs3[0] = fp_madd_inputs.rs3;
+  assign rs3_hidden_bit[0] = fp_madd_inputs.rs3_hidden_bit;
+  assign rs3_special_case[0] = fp_madd_inputs.rs3_special_case;
   assign rs1_sign[0] = rs1[FLEN-1];
-  assign rs1_expo[0] = rs1[FLEN-2-:EXPO_WIDTH];
-  assign rs1_frac[0] = {rs1_hidden_bit, rs1[FRAC_WIDTH-1:0]};
-
-  pre_normalize pre_normalize_inst(
-    .rs2(rs2), 
-    .rs2_hidden_bit(rs2_hidden_bit), 
-    .left_shift_amt (pre_normalize_shift_amt[0]),
-    .frac_normalized(rs2_frac[0])
-  ); 
   assign rs2_sign[0] = rs2[FLEN-1];
+  assign rs1_expo[0] = rs1[FLEN-2-:EXPO_WIDTH];
   assign rs2_expo[0] = rs2[FLEN-2-:EXPO_WIDTH] + EXPO_WIDTH'(rs2_subnormal);
-
-  //special cases 
-  assign rs1_subnormal = ~rs1_hidden_bit;
-  assign rs2_subnormal = ~rs2_hidden_bit;
+  assign rs1_frac[0] = {rs1_hidden_bit, rs1[FRAC_WIDTH-1:0]};
+  assign rs2_frac[0] = {rs2_hidden_bit, rs2[FRAC_WIDTH-1:0]};
+  assign rs1 = fp_madd_inputs.rs1;
+  assign rs2 = fp_madd_inputs.rs2;
+  assign rs1_hidden_bit = fp_madd_inputs.rs1_hidden_bit;
+  assign rs2_hidden_bit = fp_madd_inputs.rs2_hidden_bit;
+  assign rs1_subnormal = fp_madd_inputs.rs1_subnormal;
+  assign rs2_subnormal = fp_madd_inputs.rs2_subnormal;
+  assign pre_normalize_shift_amt[0] = fp_madd_inputs.rs2_pre_normalize_shift_amt;
   assign rs1_zero = fp_madd_inputs.rs1_special_case[0];
   assign rs2_zero = fp_madd_inputs.rs2_special_case[0];
   assign rs1_inf = fp_madd_inputs.rs1_special_case[3];
@@ -181,13 +163,14 @@ module fp_mul_madd_fused (
   end endgenerate
 
   //Special case handling
-  //TODO: special_case_result can be pre-calculated
-  assign output_special_case[0] = output_inf[2] | output_QNaN[2];// | output_zero[2];
+  assign output_special_case[0] = output_inf[2] | output_QNaN[2] | output_zero[2];
   always_comb begin
     if(output_inf[3]) begin
       special_case_results[0] = {result_sign[1], {(EXPO_WIDTH){1'b1}}, {(FRAC_WIDTH){1'b0}}}; 
     end else if (output_QNaN[3]) begin 
       special_case_results[0] = CANONICAL_NAN;
+    end else if (output_zero[3]) begin
+      special_case_results[0] = {result_sign[1], {(FLEN-1){1'b0}}};
     end else begin
       special_case_results[0] = {result_sign[1], (FLEN-1)'(0)};
     end
@@ -213,13 +196,12 @@ module fp_mul_madd_fused (
   assign fp_wb.rm = rm[3];
   assign fp_wb.clz = left_shift_amt;
   assign fp_wb.expo_overflow = result_expo[1][EXPO_WIDTH]&~output_special_case[1];
-  assign fp_wb.rd = output_special_case[1] ? special_case_results[0] : 
-                                             {result_sign[1], result_expo[1][EXPO_WIDTH-1:0], result_frac[1][FRAC_WIDTH-1:0]};
+  assign fp_wb.rd = output_special_case[1] ? special_case_results[0] : {result_sign[1], result_expo[1][EXPO_WIDTH-1:0], result_frac[1][FRAC_WIDTH-1:0]};
   assign fp_wb.subnormal = possible_subnormal[1] & ~output_special_case[1];
   generate if (ENABLE_SUBNORMAL) begin
     assign fp_wb.right_shift = (right_shift[1] | result_frac[1][FRAC_WIDTH+1] & ~output_special_case[1]);
     // if the result is denormal, right shift frac by 1 extra position
-    assign fp_wb.right_shift_amt = possible_subnormal[1] ? result_expo[1][EXPO_WIDTH-1:0] + EXPO_WIDTH'(possible_subnormal[1]) : (EXPO_WIDTH)'(result_frac[1][FRAC_WIDTH+1]);;
+    assign fp_wb.right_shift_amt = possible_subnormal[1] & ~output_special_case[1] ? result_expo[1][EXPO_WIDTH-1:0] + EXPO_WIDTH'(possible_subnormal[1]) : (EXPO_WIDTH)'(result_frac[1][FRAC_WIDTH+1]);
   end else begin
     // always righ shift by 1
     assign fp_wb.right_shift = result_frac[1][FRAC_WIDTH+1];

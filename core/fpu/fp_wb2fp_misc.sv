@@ -32,7 +32,6 @@ module fp_wb2fp_misc (
     input logic clk,
     unit_issue_interface.unit issue,
     input fp_wb2fp_misc_inputs_t fp_wb2fp_misc_inputs,
-    input logic flt_minmax,
     fp_unit_writeback_interface.unit wb
 );
 
@@ -45,31 +44,14 @@ module fp_wb2fp_misc (
     fp_unit_writeback_interface i2f_wb();
     fp_unit_writeback_interface minmax_wb();
     fp_unit_writeback_interface sign_inj_wb();
-
-    logic done;
     logic advance;
-    id_t id;
-    logic [2:0] instruction_r;
 
     ////////////////////////////////////////////////////
     //construct inputs for each unit
-    assign fp_i2f_inputs.i2f_rs1 = fp_wb2fp_misc_inputs.int_rs1;
-    assign fp_i2f_inputs.rm = fp_wb2fp_misc_inputs.rm;
-    assign fp_i2f_inputs.is_signed = fp_wb2fp_misc_inputs.is_signed;
+    assign fp_i2f_inputs = fp_wb2fp_misc_inputs.fp_i2f_inputs;
+    assign fp_minmax_inputs = fp_wb2fp_misc_inputs.fp_minmax_inputs;
+    assign fp_sign_inject_inputs = fp_wb2fp_misc_inputs.fp_sign_inject_inputs;
     
-    assign fp_minmax_inputs.rs1 = fp_wb2fp_misc_inputs.rs1;
-    assign fp_minmax_inputs.rs2 = fp_wb2fp_misc_inputs.rs2;
-    assign fp_minmax_inputs.rs1_hidden_bit = fp_wb2fp_misc_inputs.rs1_hidden_bit;
-    assign fp_minmax_inputs.rs2_hidden_bit = fp_wb2fp_misc_inputs.rs2_hidden_bit;
-    assign fp_minmax_inputs.rs1_special_case = fp_wb2fp_misc_inputs.rs1_special_case;
-    assign fp_minmax_inputs.rs2_special_case = fp_wb2fp_misc_inputs.rs2_special_case;
-    assign fp_minmax_inputs.rm = fp_wb2fp_misc_inputs.rm;
-
-    assign fp_sign_inject_inputs.rs1 = fp_wb2fp_misc_inputs.rs1;
-    assign fp_sign_inject_inputs.rs1_hidden_bit = fp_wb2fp_misc_inputs.rs1_hidden_bit;
-    assign fp_sign_inject_inputs.rs2_sign = fp_wb2fp_misc_inputs.rs2[FLEN-1];
-    assign fp_sign_inject_inputs.rm = fp_wb2fp_misc_inputs.rm;
-
     ////////////////////////////////////////////////////
     //Issue
     always_comb begin
@@ -87,7 +69,6 @@ module fp_wb2fp_misc (
     //I2F
     fp_i2f fp_i2f_inst(
         .clk (clk),
-        .advance (advance),
         .issue (i2f_issue),
         .fp_i2f_inputs (fp_i2f_inputs),
         .wb (i2f_wb)
@@ -97,9 +78,7 @@ module fp_wb2fp_misc (
     //MinMax
     fp_minmax fp_minmax_inst(
         .clk (clk),
-        .advance (advance),
         .issue (minmax_issue),
-        .flt_minmax (flt_minmax),
         .fp_minmax_inputs (fp_minmax_inputs),
         .wb (minmax_wb)
     );
@@ -108,65 +87,53 @@ module fp_wb2fp_misc (
     //Sign Injection
     fp_sign_inj fp_sign_inj_inst(
         .clk (clk),
-        .advance (advance),
         .issue (sign_inj_issue),
         .fp_sign_inject_inputs (fp_sign_inject_inputs),
         .wb (sign_inj_wb)
     );
 
     ////////////////////////////////////////////////////
-    //Register
-    always_ff @ (posedge clk) begin
-        if (advance) begin
-            instruction_r <= fp_wb2fp_misc_inputs.instruction;
-        end
-    end
-
-    ////////////////////////////////////////////////////
     //Control Signals
     assign advance = wb.ack | ~wb.done;
     assign issue.ready = advance;
+
     ////////////////////////////////////////////////////
     //Mux Results
-    always_comb begin
-        case(instruction_r)
-            3'b100: begin
-                wb.id = i2f_wb.id;
-                wb.done = i2f_wb.done;
-                wb.rd = i2f_wb.rd;
-                wb.fflags = i2f_wb.fflags;
-                wb.rm = i2f_wb.rm;
-                wb.carry = i2f_wb.carry;
-                wb.safe = i2f_wb.safe;
-                wb.hidden = i2f_wb.hidden;
-                wb.grs = i2f_wb.grs;
-                wb.clz = i2f_wb.clz;
-            end
-            3'b010: begin
-                wb.id = minmax_wb.id;
-                wb.done = minmax_wb.done;
-                wb.rd = minmax_wb.rd;
-                wb.fflags = minmax_wb.fflags;
-                wb.rm = minmax_wb.rm;
-                wb.carry = minmax_wb.carry;
-                wb.safe = minmax_wb.safe;
-                wb.hidden = minmax_wb.hidden;
-                wb.grs = minmax_wb.grs;
-                wb.clz = minmax_wb.clz;
-            end
-            default: begin
-                wb.id = sign_inj_wb.id;
-                wb.done = sign_inj_wb.done;
-                wb.rd = sign_inj_wb.rd;
-                wb.fflags = sign_inj_wb.fflags;
-                wb.rm = sign_inj_wb.rm;
-                wb.carry = sign_inj_wb.carry;
-                wb.safe = sign_inj_wb.safe;
-                wb.hidden = sign_inj_wb.hidden;
-                wb.grs = sign_inj_wb.grs;
-                wb.clz = sign_inj_wb.clz;
-            end
-        endcase
+    always_ff @(posedge clk) begin
+        if (advance) begin
+            wb.rm <= fp_wb2fp_misc_inputs.rm; 
+            wb.done <= issue.new_request;
+            wb.id <= issue.id;
+            case(fp_wb2fp_misc_inputs.instruction)
+                3'b100: begin
+                    wb.rd <= i2f_wb.rd;
+                    wb.fflags <= i2f_wb.fflags;
+                    wb.carry <= i2f_wb.carry;
+                    wb.safe <= i2f_wb.safe;
+                    wb.hidden <= i2f_wb.hidden;
+                    wb.grs <= i2f_wb.grs;
+                    wb.clz <= i2f_wb.clz;
+                end
+                3'b010: begin
+                    wb.rd <= minmax_wb.rd;
+                    wb.fflags <= minmax_wb.fflags;
+                    wb.carry <= minmax_wb.carry;
+                    wb.safe <= minmax_wb.safe;
+                    wb.hidden <= minmax_wb.hidden;
+                    wb.grs <= minmax_wb.grs;
+                    wb.clz <= minmax_wb.clz;
+                end
+                default: begin
+                    wb.rd <= sign_inj_wb.rd;
+                    wb.fflags <= sign_inj_wb.fflags;
+                    wb.carry <= sign_inj_wb.carry;
+                    wb.safe <= sign_inj_wb.safe;
+                    wb.hidden <= sign_inj_wb.hidden;
+                    wb.grs <= sign_inj_wb.grs;
+                    wb.clz <= sign_inj_wb.clz;
+                end
+            endcase
+        end
     end
 
 endmodule

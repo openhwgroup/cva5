@@ -32,7 +32,6 @@ module fp_wb2int_misc (
     input logic clk,
     unit_issue_interface.unit issue,
     input fp_wb2int_misc_inputs_t fp_wb2int_misc_inputs,
-    output logic flt_minmax,
     unit_writeback_interface.unit wb
 );
 
@@ -50,20 +49,9 @@ module fp_wb2int_misc (
 
     ////////////////////////////////////////////////////
     //construct inputs for each unit
-    assign fp_f2i_inputs.f2i_rs1 = fp_wb2int_misc_inputs.rs1;
-    assign fp_f2i_inputs.f2i_rs1_hidden = fp_wb2int_misc_inputs.rs1_hidden_bit;
-    assign fp_f2i_inputs.f2i_rs1_special_case = fp_wb2int_misc_inputs.rs1_special_case;
-    assign fp_f2i_inputs.rm = fp_wb2int_misc_inputs.rm;
-    assign fp_f2i_inputs.is_signed = fp_wb2int_misc_inputs.is_signed;
-
-    assign fp_cmp_inputs.rs1 = fp_wb2int_misc_inputs.rs1;
-    assign fp_cmp_inputs.rs2 = fp_wb2int_misc_inputs.rs2;
-    assign fp_cmp_inputs.rs1_hidden_bit = fp_wb2int_misc_inputs.rs1_hidden_bit;
-    assign fp_cmp_inputs.rs2_hidden_bit = fp_wb2int_misc_inputs.rs2_hidden_bit;
-    assign fp_cmp_inputs.rs1_special_case = fp_wb2int_misc_inputs.rs1_special_case;
-    assign fp_cmp_inputs.rs2_special_case = fp_wb2int_misc_inputs.rs2_special_case;
-    assign fp_cmp_inputs.rm = fp_wb2int_misc_inputs.rm;
-
+    assign fp_f2i_inputs = fp_wb2int_misc_inputs.fp_f2i_inputs;
+    
+    assign fp_cmp_inputs = fp_wb2int_misc_inputs.fp_cmp_inputs;
     assign fp_class_inputs.rs1 = fp_wb2int_misc_inputs.rs1;
     assign fp_class_inputs.rs1_hidden_bit = fp_wb2int_misc_inputs.rs1_hidden_bit;
     assign fp_class_inputs.rs1_special_case = fp_wb2int_misc_inputs.rs1_special_case;
@@ -99,7 +87,6 @@ module fp_wb2int_misc (
         .advance (advance),
         .issue (cmp_issue),
         .fp_cmp_inputs (fp_cmp_inputs),
-        .flt_minmax (flt_minmax),
         .wb (cmp_wb)
     );
 
@@ -124,14 +111,13 @@ module fp_wb2int_misc (
     always_ff @ (posedge clk) begin
         if (advance) begin
             instruction <= fp_wb2int_misc_inputs.instruction;
-            instruction_r <= instruction;
         end
     end
 
     ////////////////////////////////////////////////////
     //Output
     always_comb begin
-        case(instruction_r)
+        case(instruction)
             3'b100: begin
                 wb.done = f2i_wb.done;
                 wb.id = f2i_wb.id;

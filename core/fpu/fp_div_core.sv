@@ -47,6 +47,10 @@ module fp_div_core (
         rm <= fp_div_sqrt_inputs.rm;
         rs1_hidden_bit <= fp_div_sqrt_inputs.rs1_hidden_bit;
         rs2_hidden_bit <= fp_div_sqrt_inputs.rs2_hidden_bit;
+        rs1_left_shift_amt <= fp_div_sqrt_inputs.rs1_pre_normalize_shift_amt;
+        rs2_left_shift_amt <= fp_div_sqrt_inputs.rs2_pre_normalize_shift_amt;
+        rs1_normal <= fp_div_sqrt_inputs.rs1_normal;
+        rs2_normal <= fp_div_sqrt_inputs.rs2_normal;
         id_in_progress <= fp_div_sqrt_inputs.id;
         rs1_is_inf <= fp_div_sqrt_inputs.rs1_special_case[3];
         rs1_is_SNaN <= fp_div_sqrt_inputs.rs1_special_case[2];
@@ -60,16 +64,16 @@ module fp_div_core (
   end
 
   //pre-normalize
-  pre_normalize rs1_pre_normalize (.rs2(rs1), .rs2_hidden_bit(rs1_hidden_bit), .left_shift_amt(rs1_left_shift_amt), .frac_normalized(rs1_frac));
-  pre_normalize rs2_pre_normalize (.rs2(rs2), .rs2_hidden_bit(rs2_hidden_bit), .left_shift_amt(rs2_left_shift_amt), .frac_normalized(rs2_frac));
+  //pre_normalize rs1_pre_normalize(.rs2(rs1), .rs2_hidden_bit(rs1_hidden_bit), .enable(1'b1), .left_shift_amt(rs1_left_shift_amt), .frac_normalized(rs1_frac));
+  //pre_normalize rs2_pre_normalize(.rs2(rs2), .rs2_hidden_bit(rs2_hidden_bit), .enable(1'b1), .left_shift_amt(rs2_left_shift_amt), .frac_normalized(rs2_frac));
 
   //unpack
   assign rs1_sign    = rs1[FLEN-1];
   assign rs2_sign    = rs2[FLEN-1];
-  assign rs1_expo    = rs1[FLEN-2-:EXPO_WIDTH] + EXPO_WIDTH'({~rs1_hidden_bit});
-  assign rs2_expo    = rs2[FLEN-2-:EXPO_WIDTH] + EXPO_WIDTH'({~rs2_hidden_bit});
-  assign rs1_normal  = rs1_hidden_bit;//|rs1_expo;
-  assign rs2_normal  = rs2_hidden_bit;//|rs2_expo;
+  assign rs1_expo    = rs1[FLEN-2-:EXPO_WIDTH] + EXPO_WIDTH'({~rs1_normal});
+  assign rs2_expo    = rs2[FLEN-2-:EXPO_WIDTH] + EXPO_WIDTH'({~rs2_normal});
+  assign rs1_frac    = {rs1_hidden_bit, rs1[0+:FRAC_WIDTH]};
+  assign rs2_frac    = {rs2_hidden_bit, rs2[0+:FRAC_WIDTH]};
 
   //special case handling
   assign invalid_operation = (rs1_is_zero & rs2_is_zero) | (rs1_is_inf & rs2_is_inf) | rs1_is_SNaN | rs2_is_SNaN;

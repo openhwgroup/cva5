@@ -62,6 +62,7 @@ module fp_decode_and_issue
         output fp_div_sqrt_inputs_t fp_div_sqrt_inputs,
         output fp_wb2fp_misc_inputs_t fp_wb2fp_misc_inputs,
         output fp_wb2int_misc_inputs_t fp_wb2int_misc_inputs,
+        output fp_pre_processing_packet_t fp_pre_processing_packet,
         input logic gc_fetch_flush
     );
 
@@ -82,6 +83,7 @@ module fp_decode_and_issue
     logic is_sign_inj, is_sign_inj_r;
     logic is_minmax, is_minmax_r;
     logic is_class_r, is_f2i_r, is_fcmp_r, is_i2f_r;
+    logic enable_pre_normalize;
 
     logic uses_rs1;
     logic uses_rs2;
@@ -103,6 +105,7 @@ module fp_decode_and_issue
     assign is_fcmp = opcode_trim == FOP_T & fn7 == FCMP;
     assign is_minmax = opcode_trim == FOP_T & fn7 == FMIN_MAX;
     assign is_sign_inj = opcode_trim == FOP_T & fn7 == FSIGN_INJECTION;
+    assign enable_pre_normalize = opcode_trim inside {FMADD_T, FMSUB_T, FNMSUB_T, FNMADD_T} | (opcode_trim == FOP_T & fn7 inside {FMUL, FDIV, FSQRT, FCVT_WD});
 
     ////////////////////////////////////////////////////
     //Register File Support
@@ -165,6 +168,13 @@ module fp_decode_and_issue
             issue.is_float <= decode.is_float;
             issue.wb2_float <= decode.wb2_float;
             issue.accumulating_csrs <= decode.accumulating_csrs;
+            issue.enable_pre_normalize <= enable_pre_normalize;
+            issue.is_f2i <= is_f2i;
+            issue.is_i2f <= is_i2f;
+            issue.is_class <= is_class;
+            issue.is_sign_inj <= is_sign_inj;
+            issue.is_minmax <= is_minmax;
+            issue.is_fcmp <= is_fcmp;
 
             is_f2i_r <= is_f2i;
             is_i2f_r <= is_i2f;
@@ -211,35 +221,35 @@ module fp_decode_and_issue
     logic is_zero[FP_REGFILE_READ_PORTS];
     logic hidden_bit[FP_REGFILE_READ_PORTS];
 
-    fp_special_case_detection_sandboxed #(.SANDBOX_FRAC_W(VARIABLE_FRAC_WIDTH), .SANDBOX_EXPO_W(VARIABLE_EXPO_WIDTH))
-      rs1_special_case_detection (
-        .data_in (fp_rf.data[RS1]),
-        .is_inf (is_inf[RS1]),
-        .is_SNaN (is_SNaN[RS1]),
-        .is_QNaN (is_QNaN[RS1]),
-        .is_zero (is_zero[RS1]),
-        .hidden (hidden_bit[RS1])
-      );  
+    //fp_special_case_detection_sandboxed #(.SANDBOX_FRAC_W(VARIABLE_FRAC_WIDTH), .SANDBOX_EXPO_W(VARIABLE_EXPO_WIDTH))
+      //rs1_special_case_detection (
+        //.data_in (fp_rf.data[RS1]),
+        //.is_inf (is_inf[RS1]),
+        //.is_SNaN (is_SNaN[RS1]),
+        //.is_QNaN (is_QNaN[RS1]),
+        //.is_zero (is_zero[RS1]),
+        //.hidden (hidden_bit[RS1])
+      //);  
 
-    fp_special_case_detection_sandboxed #(.SANDBOX_FRAC_W(VARIABLE_FRAC_WIDTH), .SANDBOX_EXPO_W(VARIABLE_EXPO_WIDTH))
-      rs2_special_case_detection (
-        .data_in (fp_rf.data[RS2]),
-        .is_inf (is_inf[RS2]),
-        .is_SNaN (is_SNaN[RS2]),
-        .is_QNaN (is_QNaN[RS2]),
-        .is_zero (is_zero[RS2]),
-        .hidden (hidden_bit[RS2])
-      );  
+    //fp_special_case_detection_sandboxed #(.SANDBOX_FRAC_W(VARIABLE_FRAC_WIDTH), .SANDBOX_EXPO_W(VARIABLE_EXPO_WIDTH))
+      //rs2_special_case_detection (
+        //.data_in (fp_rf.data[RS2]),
+        //.is_inf (is_inf[RS2]),
+        //.is_SNaN (is_SNaN[RS2]),
+        //.is_QNaN (is_QNaN[RS2]),
+        //.is_zero (is_zero[RS2]),
+        //.hidden (hidden_bit[RS2])
+      //);  
 
-    fp_special_case_detection_sandboxed #(.SANDBOX_FRAC_W(VARIABLE_FRAC_WIDTH), .SANDBOX_EXPO_W(VARIABLE_EXPO_WIDTH))
-      rs3_special_case_detection (
-        .data_in (fp_rf.data[RS3]),
-        .is_inf (is_inf[RS3]),
-        .is_SNaN (is_SNaN[RS3]),
-        .is_QNaN (is_QNaN[RS3]),
-        .is_zero (is_zero[RS3]),
-        .hidden (hidden_bit[RS3])
-      );
+    //fp_special_case_detection_sandboxed #(.SANDBOX_FRAC_W(VARIABLE_FRAC_WIDTH), .SANDBOX_EXPO_W(VARIABLE_EXPO_WIDTH))
+      //rs3_special_case_detection (
+        //.data_in (fp_rf.data[RS3]),
+        //.is_inf (is_inf[RS3]),
+        //.is_SNaN (is_SNaN[RS3]),
+        //.is_QNaN (is_QNaN[RS3]),
+        //.is_zero (is_zero[RS3]),
+        //.hidden (hidden_bit[RS3])
+      //);
 
     //FP store forwarding
     (* ramstyle = "MLAB, no_rw_check" *) id_t rd_to_id_table [32]; //separate table for fp id tracking to avoid overwriting
@@ -250,60 +260,68 @@ module fp_decode_and_issue
     assign fp_store_forward_id = rd_to_id_table[issue.rs_addr[RS2]];
 
     //FMADD inputs
-    logic is_fma, is_fadd, is_fmul;
-    assign is_fma = issue.opcode[6:4] == 3'b100; //Fused multiply and add instruction
-    assign is_fmul = issue.opcode[6:4] == 3'b101 & issue.fn7[3];
-    assign is_fadd = issue.opcode[6:4] == 3'b101 & ~issue.fn7[3];
-    assign fp_madd_inputs.instruction = {is_fma, is_fadd, is_fmul};
-    assign fp_madd_inputs.rs1 = fp_rf.data[RS1];
-    assign fp_madd_inputs.rs2 = fp_rf.data[RS2];
-    assign fp_madd_inputs.rs3 = fp_rf.data[RS3];
-    assign fp_madd_inputs.rs1_hidden_bit = hidden_bit[RS1];
-    assign fp_madd_inputs.rs2_hidden_bit = hidden_bit[RS2];
-    assign fp_madd_inputs.rs3_hidden_bit = hidden_bit[RS3];
-    assign fp_madd_inputs.op = issue.opcode;
-    assign fp_madd_inputs.rm = rm;
-    assign fp_madd_inputs.fn7 = issue.fn7;
-    assign fp_madd_inputs.rs1_special_case = {is_inf[RS1], is_SNaN[RS1], is_QNaN[RS1], is_zero[RS1]}; 
-    assign fp_madd_inputs.rs2_special_case = {is_inf[RS2], is_SNaN[RS2], is_QNaN[RS2], is_zero[RS2]};
-    assign fp_madd_inputs.rs3_special_case = {is_inf[RS3], is_SNaN[RS3], is_QNaN[RS3], is_zero[RS3]};
+    //logic is_fma, is_fadd, is_fmul;
+    //assign is_fma = issue.opcode[6:4] == 3'b100; //Fused multiply and add instruction
+    //assign is_fmul = issue.opcode[6:4] == 3'b101 & issue.fn7[3];
+    //assign is_fadd = issue.opcode[6:4] == 3'b101 & ~issue.fn7[3];
+    //assign fp_madd_inputs.instruction = {is_fma, is_fadd, is_fmul};
+    //assign fp_madd_inputs.rs1 = fp_rf.data[RS1];
+    //assign fp_madd_inputs.rs2 = fp_rf.data[RS2];
+    //assign fp_madd_inputs.rs3 = fp_rf.data[RS3];
+    //assign fp_madd_inputs.rs1_hidden_bit = hidden_bit[RS1];
+    //assign fp_madd_inputs.rs2_hidden_bit = hidden_bit[RS2];
+    //assign fp_madd_inputs.rs3_hidden_bit = hidden_bit[RS3];
+    //assign fp_madd_inputs.op = issue.opcode;
+    //assign fp_madd_inputs.rm = rm;
+    //assign fp_madd_inputs.fn7 = issue.fn7;
+    //assign fp_madd_inputs.add = issue.fn7 == FADD;
+    //assign fp_madd_inputs.rs1_special_case = {is_inf[RS1], is_SNaN[RS1], is_QNaN[RS1], is_zero[RS1]}; 
+    //assign fp_madd_inputs.rs2_special_case = {is_inf[RS2], is_SNaN[RS2], is_QNaN[RS2], is_zero[RS2]};
+    //assign fp_madd_inputs.rs3_special_case = {is_inf[RS3], is_SNaN[RS3], is_QNaN[RS3], is_zero[RS3]};
       
     ////////////////////////////////////////////////////
     //div_sqrt
-    assign fp_div_sqrt_inputs.rs1 = fp_rf.data[RS1];
-    assign fp_div_sqrt_inputs.rs2 = fp_rf.data[RS2];
-    assign fp_div_sqrt_inputs.rs1_hidden_bit = hidden_bit[RS1];
-    assign fp_div_sqrt_inputs.rs2_hidden_bit = hidden_bit[RS2];
-    assign fp_div_sqrt_inputs.rm = rm;
-    assign fp_div_sqrt_inputs.fn7 = issue.fn7;
-    assign fp_div_sqrt_inputs.id = issue.id;//fp_unit_issue[FP_DIV_SQRT_WB_ID].instruction_id;
-    assign fp_div_sqrt_inputs.rs1_special_case = {is_inf[RS1], is_SNaN[RS1], is_QNaN[RS1], is_zero[RS1]}; 
-    assign fp_div_sqrt_inputs.rs2_special_case = {is_inf[RS2], is_SNaN[RS2], is_QNaN[RS2], is_zero[RS2]};
-
+    //assign fp_div_sqrt_inputs.rs1 = fp_rf.data[RS1];
+    //assign fp_div_sqrt_inputs.rs2 = fp_rf.data[RS2];
+    //assign fp_div_sqrt_inputs.rs1_hidden_bit = hidden_bit[RS1];
+    //assign fp_div_sqrt_inputs.rs2_hidden_bit = hidden_bit[RS2];
+    //assign fp_div_sqrt_inputs.rm = rm;
+    //assign fp_div_sqrt_inputs.fn7 = issue.fn7;
+    //assign fp_div_sqrt_inputs.id = issue.id;//fp_unit_issue[FP_DIV_SQRT_WB_ID].instruction_id;
+    //assign fp_div_sqrt_inputs.rs1_special_case = {is_inf[RS1], is_SNaN[RS1], is_QNaN[RS1], is_zero[RS1]}; 
+    //assign fp_div_sqrt_inputs.rs2_special_case = {is_inf[RS2], is_SNaN[RS2], is_QNaN[RS2], is_zero[RS2]};
 
     ////////////////////////////////////////////////////
     //MISC_WB2FP 
-    assign fp_wb2fp_misc_inputs.instruction = {is_i2f_r, is_minmax_r, is_sign_inj_r};
-    assign fp_wb2fp_misc_inputs.rs1 = fp_rf.data[RS1];
-    assign fp_wb2fp_misc_inputs.rs2 = fp_rf.data[RS2];
-    assign fp_wb2fp_misc_inputs.int_rs1 = int_rs1_data;
-    assign fp_wb2fp_misc_inputs.rs1_hidden_bit = hidden_bit[RS1];
-    assign fp_wb2fp_misc_inputs.rs2_hidden_bit = hidden_bit[RS2];
-    assign fp_wb2fp_misc_inputs.rs1_special_case = {is_inf[RS1], is_SNaN[RS1], is_QNaN[RS1], is_zero[RS1]};
-    assign fp_wb2fp_misc_inputs.rs2_special_case = {is_inf[RS2], is_SNaN[RS2], is_QNaN[RS2], is_zero[RS2]};
-    assign fp_wb2fp_misc_inputs.rm = rm;  
-    assign fp_wb2fp_misc_inputs.is_signed = ~issue.rs_addr[RS2][0]; //rs2_addr determines if conversion is signed
+    //assign fp_wb2fp_misc_inputs.instruction = {is_i2f_r, is_minmax_r, is_sign_inj_r};
+    //assign fp_wb2fp_misc_inputs.rs1 = fp_rf.data[RS1];
+    //assign fp_wb2fp_misc_inputs.rs2 = fp_rf.data[RS2];
+    ////assign fp_wb2fp_misc_inputs.int_rs1 = int_rs1_data;
+    //assign fp_wb2fp_misc_inputs.rs1_hidden_bit = hidden_bit[RS1];
+    //assign fp_wb2fp_misc_inputs.rs2_hidden_bit = hidden_bit[RS2];
+    //assign fp_wb2fp_misc_inputs.rs1_special_case = {is_inf[RS1], is_SNaN[RS1], is_QNaN[RS1], is_zero[RS1]};
+    //assign fp_wb2fp_misc_inputs.rs2_special_case = {is_inf[RS2], is_SNaN[RS2], is_QNaN[RS2], is_zero[RS2]};
+    //assign fp_wb2fp_misc_inputs.rm = rm;  
+    //assign fp_wb2fp_misc_inputs.is_signed = ~issue.rs_addr[RS2][0]; //rs2_addr determines if conversion is signed
 
     ////////////////////////////////////////////////////
     //MISC_WB2INT 
-    assign fp_wb2int_misc_inputs.instruction = {is_f2i_r, is_fcmp_r, is_class_r};
-    assign fp_wb2int_misc_inputs.rs1 = fp_rf.data[RS1];
-    assign fp_wb2int_misc_inputs.rs2 = fp_rf.data[RS2];
-    assign fp_wb2int_misc_inputs.rs1_hidden_bit = hidden_bit[RS1];
-    assign fp_wb2int_misc_inputs.rs2_hidden_bit = hidden_bit[RS2];
-    assign fp_wb2int_misc_inputs.rs1_special_case = {is_inf[RS1], is_SNaN[RS1], is_QNaN[RS1], is_zero[RS1]};
-    assign fp_wb2int_misc_inputs.rs2_special_case = {is_inf[RS2], is_SNaN[RS2], is_QNaN[RS2], is_zero[RS2]};
-    assign fp_wb2int_misc_inputs.rm = rm;  
-    assign fp_wb2int_misc_inputs.is_signed = ~issue.rs_addr[RS2][0]; //rs2_addr determines if conversion is signed
+    //assign fp_wb2int_misc_inputs.instruction = {is_f2i_r, is_fcmp_r, is_class_r};
+    //assign fp_wb2int_misc_inputs.rs1 = fp_rf.data[RS1];
+    //assign fp_wb2int_misc_inputs.rs2 = fp_rf.data[RS2];
+    //assign fp_wb2int_misc_inputs.rs1_hidden_bit = hidden_bit[RS1];
+    //assign fp_wb2int_misc_inputs.rs2_hidden_bit = hidden_bit[RS2];
+    //assign fp_wb2int_misc_inputs.rs1_special_case = {is_inf[RS1], is_SNaN[RS1], is_QNaN[RS1], is_zero[RS1]};
+    //assign fp_wb2int_misc_inputs.rs2_special_case = {is_inf[RS2], is_SNaN[RS2], is_QNaN[RS2], is_zero[RS2]};
+    //assign fp_wb2int_misc_inputs.rm = rm;  
+    //assign fp_wb2int_misc_inputs.is_signed = ~issue.rs_addr[RS2][0]; //rs2_addr determines if conversion is signed
 
+    ////////////////////////////////////////////////////
+    //Pre processing packet
+    assign fp_pre_processing_packet.rm = rm;
+    assign fp_pre_processing_packet.issue = issue;
+    assign fp_pre_processing_packet.rs1 = fp_rf.data[RS1];
+    assign fp_pre_processing_packet.rs2 = fp_rf.data[RS2];
+    assign fp_pre_processing_packet.rs3 = fp_rf.data[RS3];
+    assign fp_pre_processing_packet.int_rs1 = int_rs1_data;
 endmodule

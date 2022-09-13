@@ -11,14 +11,9 @@ module fp_add_madd_fused (
   input logic clk,
   input logic rst,
   input logic fma_mul_invalid_operation,
-  input grs_t fp_add_grs,
-  input logic swap,
-  input logic [EXPO_WIDTH:0] expo_diff_in,
   input fp_add_inputs_t fp_add_inputs,
   unit_issue_interface.unit issue,
-  //output fp_unit_writeback_t fp_wb
   fp_unit_writeback_interface.unit fp_wb
-  //output logic [4:0] fflags
   );
   
   logic [FLEN-1:0]               rs1;
@@ -38,6 +33,8 @@ module fp_add_madd_fused (
   logic [2:0]                    rm [3:0];
   logic [6:0]                    fn7;
   logic                          add;
+  logic                          swap;
+  logic [EXPO_WIDTH:0]           expo_diff_in;
 
   logic                          rs1_sign [1:0];
   logic [EXPO_WIDTH-1:0]         rs1_expo [1:0];
@@ -96,8 +93,9 @@ module fp_add_madd_fused (
   ///////////////////////////////////
   //Implementation
   assign rm[0] = fp_add_inputs.rm;
-  assign fn7 = fp_add_inputs.fn7;
-  assign add = fn7 == FADD;
+  assign add = fp_add_inputs.add;//fn7 == FADD;
+  assign swap = fp_add_inputs.swap;
+  assign expo_diff[0] = fp_add_inputs.expo_diff;
   assign temp_rs1 = fp_add_inputs.rs1;
   assign temp_rs2 = fp_add_inputs.rs2;
   assign temp_rs1_sign = temp_rs1[FLEN-1];
@@ -120,10 +118,9 @@ module fp_add_madd_fused (
 
   assign invalid_operation[0] = fma_mul_invalid_operation || fp_add_inputs.rs1_special_case[2] || fp_add_inputs.rs2_special_case[2] ||
                                 (rs1_inf & rs2_inf & (temp_rs1_sign ^ temp_rs2_sign)); //substraction in magnitude of infinities
-  assign inexact[0] = |fp_add_grs;
+  assign inexact[0] = |fp_add_inputs.fp_add_grs;
   assign output_QNaN[0] = rs1_NaN || rs2_NaN || invalid_operation[0];
   assign output_inf[0] = (rs1_inf || rs2_inf) && !output_QNaN[0];
-  assign expo_diff[0] = expo_diff_in;
   assign zero_result_sign[0] = rm[0] == 3'b010 ? 1 : 0;
   assign subtract[0] = temp_rs1_sign ^ temp_rs2_sign;
 
@@ -135,7 +132,7 @@ module fp_add_madd_fused (
       {rs1_expo_overflow[0], rs1_expo[0]} = temp_rs1_expo;
       rs1_safe_bit[0] = temp_rs1_safe;
       rs1_frac[0] = {temp_rs1_safe, temp_rs1_hidden, temp_rs1_frac};
-      rs1_grs[0] = fp_add_grs;
+      rs1_grs[0] = fp_add_inputs.fp_add_grs;
       
       rs2_sign[0] = temp_rs2_sign;
       {rs2_expo_overflow[0], rs2_expo[0]} = temp_rs2_expo;
@@ -152,7 +149,7 @@ module fp_add_madd_fused (
       rs2_sign[0] = temp_rs1_sign;
       {rs2_expo_overflow[0], rs2_expo[0]} = temp_rs1_expo;
       rs2_frac[0] = {temp_rs1_safe,temp_rs1_hidden, temp_rs1_frac}; 
-      rs2_grs[0] = fp_add_grs;
+      rs2_grs[0] = fp_add_inputs.fp_add_grs;
       rs2_safe_bit[0] = temp_rs1_safe;
     end
   end
@@ -279,7 +276,7 @@ module fp_add_madd_fused (
       done[0] <= issue.new_request;
       id[0] <= issue.id;
       rm[1] <= rm[0];
-      fp_add_grs_r <= fp_add_grs;
+      fp_add_grs_r <= fp_add_inputs.fp_add_grs;
 
       expo_diff[1] <= expo_diff[0];
       expo_diff_larger_than_frac_width[1] <= expo_diff_larger_than_frac_width[0];

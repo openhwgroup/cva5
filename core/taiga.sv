@@ -161,8 +161,7 @@ module taiga
     fp_div_sqrt_inputs_t fp_div_sqrt_inputs;
     fp_wb2fp_misc_inputs_t fp_wb2fp_misc_inputs;
     fp_wb2int_misc_inputs_t fp_wb2int_misc_inputs;
-    fp_cmp_inputs_t fp_cmp_inputs;
-    fp_cvt_mv_inputs_t fp_cvt_mv_inputs;
+    fp_pre_processing_packet_t fp_pre_processing_packet;
 
     unit_issue_interface unit_issue [NUM_UNITS+FP_NUM_UNITS-1:0]();
 
@@ -508,8 +507,7 @@ module taiga
         .fp_div_sqrt_inputs (fp_div_sqrt_inputs),
         .fp_wb2fp_misc_inputs (fp_wb2fp_misc_inputs),
         .fp_wb2int_misc_inputs (fp_wb2int_misc_inputs),
-        //.fp_cvt_mv_inputs (fp_cvt_mv_inputs),
-        //.fp_cmp_inputs (fp_cmp_inputs),
+        .fp_pre_processing_packet (fp_pre_processing_packet),
         .unit_issue (unit_issue),
         .gc (gc),
         .current_privilege (current_privilege),
@@ -741,8 +739,7 @@ module taiga
             .fp_div_sqrt_inputs (fp_div_sqrt_inputs),
             .fp_wb2fp_misc_inputs (fp_wb2fp_misc_inputs),
             .fp_wb2int_misc_inputs (fp_wb2int_misc_inputs),
-            //.fp_cmp_inputs (fp_cmp_inputs),
-            //.fp_cvt_mv_inputs (fp_cvt_mv_inputs),
+            .fp_pre_processing_packet (fp_pre_processing_packet),
             .fp_unit_issue (unit_issue[NUM_UNITS+FP_UNIT_IDS.MISC_WB2INT:NUM_UNITS+FP_UNIT_IDS.FMADD]),
             .fp_unit_wb (fp_unit_wb), //FLS is not assigned in fpu_top;included for coding simplicity
             .unit_wb (unit_wb[NUM_WB_UNITS-1+FP_WB_INT_IDS.MISC_WB2INT:NUM_WB_UNITS-1+FP_WB_INT_IDS.MISC_WB2INT])

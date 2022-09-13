@@ -32,7 +32,6 @@ module fp_cmp_simulation_wrapper (
                 .advance      (1),
                 .issue        (issue),
                 .fp_cmp_inputs(fp_cmp_inputs),
-                .flt_minmax   (flt_minmax),
                 .wb           (wb)
                 );
 

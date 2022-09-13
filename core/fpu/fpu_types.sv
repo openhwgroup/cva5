@@ -160,6 +160,15 @@ package fpu_types;
     } fp_commit_packet_t;
 
     typedef struct packed{
+        logic [2:0] rm;
+        issue_packet_t issue;
+        logic [FLEN-1:0] rs1;
+        logic [FLEN-1:0] rs2;
+        logic [FLEN-1:0] rs3;
+        logic [XLEN-1:0] int_rs1;
+    } fp_pre_processing_packet_t;
+
+    typedef struct packed{
         logic [FLEN-1:0]    rs1;
         logic [FLEN-1:0]    rs2;
         logic [2:0]         rm;
@@ -167,47 +176,65 @@ package fpu_types;
         logic [3:0]         rs2_special_case; 
     } fp_mul_inputs_t;
 
-    typedef struct packed{
-        logic [FLEN-1:0]    rs1;
-        logic [FLEN-1:0]    rs2;
-        logic [FLEN-1:0]    rs3;
-        logic [3:0]         rs1_special_case;
-        logic [3:0]         rs2_special_case;
-        logic [3:0]         rs3_special_case;
-        logic [6:0]         op;         //only need 3rd and 4th bits (nfmadd)
-        logic [2:0]         rm;     
-        logic [2:0]         instruction;     //support fused fadd fmul and fmadd unit {fmadd, fadd, fmul}
-        logic [6:0]         fn7;
-        logic               rs1_hidden_bit; 
-        logic               rs2_hidden_bit; 
-        logic               rs3_hidden_bit; 
-    } fp_madd_inputs_t;
-
     typedef struct packed {
-        logic [FLEN-1:0]    rs1;
-        logic [FLEN-1:0]    rs2;
-        logic               rs1_hidden_bit;
-        logic               rs1_expo_overflow;
-        logic               rs2_hidden_bit;
-        logic               rs1_safe_bit;
-        logic               rs2_safe_bit;
-        logic [2:0]         rm;
-        logic [6:0]         fn7;
-        logic [3:0]         rs1_special_case; 
-        logic [3:0]         rs2_special_case; 
+        logic [FLEN-1:0]     rs1;
+        logic [FLEN-1:0]     rs2;
+        logic                rs1_hidden_bit;
+        logic                rs1_expo_overflow;
+        logic                rs2_hidden_bit;
+        logic                rs1_safe_bit;
+        logic                rs2_safe_bit;
+        logic [2:0]          rm;
+        logic [6:0]          fn7;
+        logic [3:0]          rs1_special_case; 
+        logic [3:0]          rs2_special_case; 
+        logic                swap;
+        logic                add;
+        logic [EXPO_WIDTH:0] expo_diff;
+        grs_t                fp_add_grs;
     } fp_add_inputs_t;
 
     typedef struct packed{
-        logic [FLEN-1:0]    rs1;
-        logic [FLEN-1:0]    rs2;        //not needed for sqrt
-        logic               rs1_hidden_bit;
-        logic               rs2_hidden_bit;        
-        logic [6:0]         fn7;        //only need to two 2nd bit
-        logic [2:0]         rm;
-        id_t                id;
-        logic               is_div;
-        logic [3:0]         rs1_special_case;
-        logic [3:0]         rs2_special_case;
+        logic [FLEN-1:0]       rs1;
+        logic [FLEN-1:0]       rs2;
+        logic [FLEN-1:0]       rs3;
+
+        logic [EXPO_WIDTH-1:0] rs1_pre_normalize_shift_amt;
+        logic [EXPO_WIDTH-1:0] rs2_pre_normalize_shift_amt;
+        logic [EXPO_WIDTH-1:0] rs3_pre_normalize_shift_amt;
+        logic                  rs1_subnormal;
+        logic                  rs2_subnormal;
+        logic                  rs3_subnormal;
+        logic                  rs1_hidden_bit; 
+        logic                  rs2_hidden_bit; 
+        logic                  rs3_hidden_bit; 
+
+        logic [3:0]            rs1_special_case;
+        logic [3:0]            rs2_special_case;
+        logic [3:0]            rs3_special_case;
+
+        logic [6:0]            op;         //only need 3rd and 4th bits (nfmadd)
+        logic [2:0]            rm;     
+        logic [2:0]            instruction;     //support fused fadd fmul and fmadd unit {fmadd, fadd, fmul}
+        
+        fp_add_inputs_t        fp_add_inputs;
+    } fp_madd_inputs_t;
+
+    typedef struct packed{
+        logic [FLEN-1:0]       rs1;
+        logic [FLEN-1:0]       rs2;        //not needed for sqrt
+        logic                  rs1_hidden_bit;
+        logic                  rs2_hidden_bit;        
+        logic [EXPO_WIDTH-1:0] rs1_pre_normalize_shift_amt;
+        logic [EXPO_WIDTH-1:0] rs2_pre_normalize_shift_amt;
+        logic                  rs1_normal;
+        logic                  rs2_normal;        
+        logic [6:0]            fn7;        //only need to two 2nd bit
+        logic [2:0]            rm;
+        id_t                   id;
+        logic                  is_div;
+        logic [3:0]            rs1_special_case;
+        logic [3:0]            rs2_special_case;
     } fp_div_sqrt_inputs_t;
 
     typedef struct packed{
@@ -237,60 +264,51 @@ package fpu_types;
     } fp_cvt_mv_inputs_t;
 
     typedef struct packed{
-        logic [XLEN-1:0]    i2f_rs1;
-        logic [2:0]         rm;
-        logic               is_signed;
+        logic [XLEN-1:0]    int_rs1_abs;
+        logic               int_rs1_zero;
+        logic               int_rs1_sign;
     } fp_i2f_inputs_t;
 
     typedef struct packed{
         logic [FLEN-1:0]    rs1;
-        logic [FLEN-1:0]    rs2;
-        logic               rs1_hidden_bit;
-        logic               rs2_hidden_bit;
-        logic [3:0]         rs1_special_case;
-        logic [3:0]         rs2_special_case;
-        logic [2:0]         rm;
+        logic               invalid;
     } fp_minmax_inputs_t;
 
     typedef struct packed{
         logic [FLEN-1:0]    rs1;
-        logic               rs1_hidden_bit;
-        logic               rs2_sign;
-        logic [2:0]         rm;
     } fp_sign_inject_inputs_t;
 
     typedef struct packed{
+        fp_i2f_inputs_t         fp_i2f_inputs;
+        fp_minmax_inputs_t      fp_minmax_inputs;
+        fp_sign_inject_inputs_t fp_sign_inject_inputs;
+
         logic [2:0]         instruction; //{i2f, minmax, sign_inj}
-        logic [FLEN-1:0]    rs1;
-        logic [XLEN-1:0]    int_rs1;
-        logic [FLEN-1:0]    rs2;
-        logic               rs1_hidden_bit;
-        logic               rs2_hidden_bit;
-        logic [3:0]         rs1_special_case;
-        logic [3:0]         rs2_special_case;
         logic [2:0]         rm;
-        logic               is_signed;
     } fp_wb2fp_misc_inputs_t;
 
     typedef struct packed{
-        logic [FLEN-1:0]    f2i_rs1;          //will be padded if input is integer
-        logic               f2i_rs1_hidden;
-        logic [3:0]         f2i_rs1_special_case;
-        logic [2:0]         rm;
-        logic               is_signed;
+        logic                       sign;
+        logic [EXPO_WIDTH-1:0]      expo_unbiased;
+        logic [FRAC_WIDTH:0]        frac;
+        //logic [EXPO_WIDTH-1:0]      left_shift_amt;
+        //logic [XLEN+FRAC_WIDTH:0]   f2i_int_dot_frac;
+        logic                       f2i_int_less_than_1;
+        logic [EXPO_WIDTH-1:0]      abs_expo_unbiased;
+        logic                       expo_unbiased_greater_than_31;
+        logic                       expo_unbiased_greater_than_30;
+        logic                       is_signed;
+        logic                       subtract;
+        logic [2:0]                 rm;
     } fp_f2i_inputs_t;
 
     typedef struct packed{
+        logic               swap;
         logic [FLEN-1:0]    rs1;
         logic [FLEN-1:0]    rs2;
-        logic               rs1_hidden_bit;
-        logic               rs2_hidden_bit;
-        logic [2:0]         rm;        //only need lower 2 bits
-        logic [6:0]         fn7;        //min max or cmp select
-        logic               is_sign_inj;
-        logic               is_class;
         logic [3:0]         rs1_special_case;
         logic [3:0]         rs2_special_case;
+        logic [2:0]         rm;
     } fp_cmp_inputs_t;
 
     typedef struct packed{
@@ -300,6 +318,10 @@ package fpu_types;
     } fp_class_inputs_t;
 
     typedef struct packed{
+        fp_f2i_inputs_t fp_f2i_inputs;
+        fp_cmp_inputs_t fp_cmp_inputs;
+
+
         logic [2:0]         instruction; //{f2i, cmp, class}
         logic [FLEN-1:0]    rs1;
         logic [FLEN-1:0]    rs2;

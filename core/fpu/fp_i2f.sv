@@ -27,88 +27,68 @@ import fpu_types::*;
 
 module fp_i2f (
   input logic clk,
-  input logic advance,
   unit_issue_interface.unit issue,
   input fp_i2f_inputs_t fp_i2f_inputs,
   fp_unit_writeback_interface.unit wb
 );
 
-  fp_i2f_inputs_t                  fp_i2f_inputs_r;
-  logic                            is_signed;
-  logic [XLEN-1:0]                 rs1_int;
-  logic [XLEN-1:0]                 neg_i2f_rs1;
-  logic                            rs1_zero [1:0];
-  logic [XLEN-1:0]                 rs1_int_abs [1:0];
+  logic                            int_rs1_zero ;
+  logic [XLEN-1:0]                 int_rs1_abs ;
   logic [EXPO_WIDTH-1:0]           i2f_int_width_minus_1;
-  logic [4:0]                      clz [1:0];
-  fp_shift_amt_t                   i2f_clz;
-  logic                            i2f_sign[1:0];
+  logic [4:0]                      clz ;
+  fp_shift_amt_t                   i2f_clz, r_i2f_clz;
+  logic                            int_rs1_sign;
   logic [EXPO_WIDTH-1:0]           i2f_expo;
   logic [FRAC_WIDTH-1:0]           i2f_frac;
   logic [2:0]                      i2f_grs;
-  logic [FLEN-1:0]                 i2f_rd;
-  logic                            done;
-  id_t                             id;
+  logic [FLEN-1:0]                 i2f_rd, r_i2f_rd;
+  logic                            done, r_done;
+  id_t                             id, r_id;
 
   ////////////////////////////////////////////////////
   //Implementation
-  assign is_signed = fp_i2f_inputs.is_signed;
+  //The shifting is implemented using the post-normalization shifters
+  //The integer is first placed to the right of the hidden bit, right-shifted
+  //by 53 bits so that the integer bits are in the MSBs of the float. 
+  //Then left shift the mantissa to normalize. The exponent should be initialized to 53
 
-  //Input Integer Abs()
-  assign rs1_int = fp_i2f_inputs.i2f_rs1;
-  assign neg_i2f_rs1 = -rs1_int;
-  always_comb begin
-    if (is_signed & rs1_int[XLEN-1]) begin
-      //signed integer &&  MSB == 1
-      i2f_sign[0] = 1'b1; 
-      rs1_int_abs[0] = neg_i2f_rs1;
-    end else begin 
-      i2f_sign[0] = 1'b0; 
-      rs1_int_abs[0] = rs1_int;          
-    end
-  end
-  assign rs1_zero[0] = ~|rs1_int;
+  assign int_rs1_abs = fp_i2f_inputs.int_rs1_abs;
+  assign int_rs1_sign = fp_i2f_inputs.int_rs1_sign;
+  assign int_rs1_zero = fp_i2f_inputs.int_rs1_zero;
 
-  // Find the number of valid bits (excluding leaeding 0s) in the integer minus 1
-  clz clz_inst(.clz_input(rs1_int_abs[1]), .clz(clz[1]));
-  assign i2f_int_width_minus_1 = (XLEN - 1) - EXPO_WIDTH'(clz[1]); 
+  clz clz_inst(.clz_input(int_rs1_abs), .clz(clz));
+  assign i2f_int_width_minus_1 = (XLEN - 1) - EXPO_WIDTH'(clz); 
 
   // handle reduced precision < XLEN
   generate if (FRAC_WIDTH >= XLEN) begin
-    assign i2f_frac = {{(FRAC_WIDTH-XLEN){1'b0}}, rs1_int_abs[1]};
+    assign i2f_frac = {{(FRAC_WIDTH-XLEN){1'b0}}, int_rs1_abs};
     assign i2f_grs = 0; //the entire integer will fit in mantissa field
     assign i2f_clz = FRAC_WIDTH - i2f_int_width_minus_1;
   end else begin
-    assign i2f_frac = rs1_int_abs[1][XLEN-1-:FRAC_WIDTH];
-    assign i2f_grs = {rs1_int_abs[1][XLEN-1-FRAC_WIDTH-:2], |rs1_int_abs[1][XLEN-1-FRAC_WIDTH-2:0]};
-    assign i2f_clz = $bits(fp_shift_amt_t)'(clz[1]) + 1;
-  end endgenerate
-  assign i2f_expo = (FRAC_WIDTH + BIAS) & {{EXPO_WIDTH{~rs1_zero[1]}}};
-  assign i2f_rd = {i2f_sign[1], i2f_expo, i2f_frac};
+    assign i2f_frac = int_rs1_abs[XLEN-1-:FRAC_WIDTH];
+    assign i2f_grs = {int_rs1_abs[XLEN-1-FRAC_WIDTH-:2], |int_rs1_abs[XLEN-1-FRAC_WIDTH-2:0]};
+    assign i2f_clz = $bits(fp_shift_amt_t)'(clz) + 1;
+  end 
+  endgenerate
+  assign i2f_expo = (FRAC_WIDTH + BIAS) & {{EXPO_WIDTH{~int_rs1_zero}}};
+  assign i2f_rd = {int_rs1_sign, i2f_expo, i2f_frac};
 
   ////////////////////////////////////////////////////
   //Registers
-  always_ff @ (posedge clk) begin 
-    if (advance) begin 
-      done <= issue.new_request;
-      id <= issue.id;
-      fp_i2f_inputs_r <= fp_i2f_inputs;
-      i2f_sign[1] <= i2f_sign[0];
-      rs1_zero[1] <= rs1_zero[0];
-      rs1_int_abs[1] <= rs1_int_abs[0];
-      //clz[1] <= clz[0]; 
-    end
-  end
+  //always_ff @ (posedge clk) begin
+    //if (advance) begin
+      //r_done <= done;
+      //r_id <= id;
+      //r_i2f_rd <= i2f_rd;
+      //r_i2f_clz <= i2f_clz;
+    //end
+  //end
 
   ////////////////////////////////////////////////////
   //Output
   assign wb.rd = i2f_rd;
   assign wb.clz = i2f_clz;
-  assign wb.grs = 0;//{i2f_grs, {($bits(grs_t)-3){1'b0}}};
-  assign wb.fflags = 0;
-  assign wb.hidden = 0;
-  assign wb.rm = fp_i2f_inputs_r.rm;
-  assign wb.done = done;
-  assign wb.id = id;
+  assign wb.done = issue.new_request;
+  assign wb.id = issue.id;
 endmodule
 

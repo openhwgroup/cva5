@@ -42,14 +42,72 @@ module fpu_top #(
       input fp_div_sqrt_inputs_t fp_div_sqrt_inputs,
       input fp_wb2fp_misc_inputs_t fp_wb2fp_misc_inputs,
       input fp_wb2int_misc_inputs_t fp_wb2int_misc_inputs,
+      input fp_pre_processing_packet_t fp_pre_processing_packet,
       unit_issue_interface.unit fp_unit_issue [FP_NUM_UNITS-1:0], 
       unit_writeback_interface.unit unit_wb [FP_WB_INT_NUM_UNITS],
       fp_unit_writeback_interface.unit fp_unit_wb [FP_NUM_WB_UNITS]
     );
 
-  logic flt_minmax;
+
+  /////////////////////////////////////////////////
+  //Pre-processing
+  unit_issue_interface debug_fp_unit_issue [FP_NUM_UNITS-1:0] (); 
+  fp_madd_inputs_t fp_madd_inputs_pre_processed;
+  fp_div_sqrt_inputs_t fp_div_sqrt_inputs_pre_processed;
+  fp_wb2fp_misc_inputs_t fp_wb2fp_misc_inputs_pre_processed;
+  fp_wb2int_misc_inputs_t fp_wb2int_misc_inputs_pre_processed;
+
+  fp_pre_processing #(
+    .FP_NUM_UNITS(FP_NUM_UNITS),
+    .FP_UNIT_IDS(FP_UNIT_IDS)
+  ) fp_pre_processing_inst (
+    .clk(clk),
+    .rst(rst),
+    .i_fp_unit_issue(fp_unit_issue),
+    .o_fp_unit_issue(debug_fp_unit_issue),
+    .i_fp_pre_processing_packet(fp_pre_processing_packet),
+    .o_fp_madd_inputs(fp_madd_inputs_pre_processed),
+    .o_fp_div_sqrt_inputs(fp_div_sqrt_inputs_pre_processed),
+    .o_fp_wb2fp_misc_inputs(fp_wb2fp_misc_inputs_pre_processed),
+    .o_fp_wb2int_misc_inputs(fp_wb2int_misc_inputs_pre_processed)
+  );
+
+  /////////////////////////////////////////////////
+  //Execution units
+  fp_madd_fused_top fp_madd_inst (
+    .clk (clk),
+    .rst (rst),
+    .fp_madd_inputs (fp_madd_inputs_pre_processed),
+    .issue(debug_fp_unit_issue[FP_UNIT_IDS.FMADD]), 
+    .fp_madd_wb(intermediate_unit_wb[FP_NORM_ROUND_WB_IDS.FMADD]), 
+    .fp_mul_wb (intermediate_unit_wb[FP_NORM_ROUND_WB_IDS.FMUL])
+  );
+
+  fp_div_sqrt_wrapper div_sqrt_inst (
+    .clk (clk),
+    .rst (rst),
+    .fp_div_sqrt_inputs (fp_div_sqrt_inputs_pre_processed),
+    .issue(debug_fp_unit_issue[FP_UNIT_IDS.FDIV_SQRT]), 
+    .wb(intermediate_unit_wb[FP_NORM_ROUND_WB_IDS.FDIV_SQRT]) 
+  );
+
+  fp_wb2fp_misc wb2fp_misc_inst(
+    .clk (clk),
+    .issue (debug_fp_unit_issue[FP_UNIT_IDS.MISC_WB2FP]),
+    .fp_wb2fp_misc_inputs (fp_wb2fp_misc_inputs_pre_processed),
+    .wb (intermediate_unit_wb[FP_NORM_ROUND_WB_IDS.MISC_WB2FP])
+  );
+
+  fp_wb2int_misc wb2int_misc_inst(
+    .clk (clk),
+    .issue (debug_fp_unit_issue[FP_UNIT_IDS.MISC_WB2INT]),
+    .fp_wb2int_misc_inputs (fp_wb2int_misc_inputs_pre_processed),
+    .wb (unit_wb[FP_WB_INT_IDS.MISC_WB2INT])
+  );
+
+  /////////////////////////////////////////////////
+  //Normalization and rounding
   fp_unit_writeback_interface intermediate_unit_wb [FP_NUM_NORM_ROUND_UNITS](); //units that require normalization/rounding
-  
   localparam int unsigned FP_NUM_NORM_ROUND_UNITS_PER_PORT [FP_NUM_WB_GROUPS] = '{FP_NUM_NORM_ROUND_UNITS};
   fp_normalize_rounding_top #(
     .NUM_WB_UNITS(FP_NUM_NORM_ROUND_UNITS),
@@ -62,42 +120,4 @@ module fpu_top #(
     .unit_wb(fp_unit_wb[FP_WB_IDS.FP_ARITH])
   );
 
-  fp_madd_fused_top fp_madd_inst (
-    .clk (clk),
-    .rst (rst),
-    .fp_madd_inputs (fp_madd_inputs),
-    .issue(fp_unit_issue[FP_UNIT_IDS.FMADD]), 
-    .fp_madd_wb(intermediate_unit_wb[FP_NORM_ROUND_WB_IDS.FMADD]), 
-    .fp_mul_wb (intermediate_unit_wb[FP_NORM_ROUND_WB_IDS.FMUL])
-  );
-
-  fp_div_sqrt_wrapper div_sqrt_inst (
-    .clk (clk),
-    .rst (rst),
-    .fp_div_sqrt_inputs (fp_div_sqrt_inputs),
-    .issue(fp_unit_issue[FP_UNIT_IDS.FDIV_SQRT]), 
-    .wb(intermediate_unit_wb[FP_NORM_ROUND_WB_IDS.FDIV_SQRT]) 
-  );
-
-  fp_wb2fp_misc wb2fp_misc_inst(
-    .clk (clk),
-    .issue (fp_unit_issue[FP_UNIT_IDS.MISC_WB2FP]),
-    .fp_wb2fp_misc_inputs (fp_wb2fp_misc_inputs),
-    .flt_minmax (flt_minmax),
-    .wb (intermediate_unit_wb[FP_NORM_ROUND_WB_IDS.MISC_WB2FP])
-  );
-
-  fp_wb2int_misc wb2int_misc_inst(
-    .clk (clk),
-    .issue (fp_unit_issue[FP_UNIT_IDS.MISC_WB2INT]),
-    .fp_wb2int_misc_inputs (fp_wb2int_misc_inputs),
-    .flt_minmax (flt_minmax),
-    .wb (unit_wb[FP_WB_INT_IDS.MISC_WB2INT])
-  );
-
 endmodule
-
-
-
-
-

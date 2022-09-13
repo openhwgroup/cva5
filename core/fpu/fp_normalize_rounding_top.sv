@@ -243,6 +243,7 @@ module fp_normalize_rounding_top #(
 
     ////////////////////////////////////////////////////
     //Shared rounding 
+    logic [FRAC_WIDTH+1:0]       hidden_round_frac_roundup;
     logic [FRAC_WIDTH:0]         frac_round_intermediate;
     logic                        frac_overflow, frac_overflow_placeholder;
     logic                        sign_out;
@@ -255,6 +256,7 @@ module fp_normalize_rounding_top #(
     logic                        overflowExp, overflowExp_intermediate, underflowExp;
     logic frac_overflow_debug;
     logic advance_round;
+    logic [8:0] frac_overflow_parallel_ANDs;
 
     //TODO: add clock enable 
     always_ff @ (posedge clk) begin
@@ -262,7 +264,12 @@ module fp_normalize_rounding_top #(
             round_packet_r <= round_packet;
     end
 
-    assign frac_overflow = &{hidden_round, frac, roundup};
+    assign hidden_round_frac_roundup = {hidden_round, frac, roundup};
+    parallel_AND #(.WIDTH((FRAC_WIDTH+2-1)/6+1)) parallel_AND_inst(
+        .i_data(hidden_round_frac_roundup), 
+        .o_data(frac_overflow_parallel_ANDs)
+    );
+    assign frac_overflow = &frac_overflow_parallel_ANDs;//&{hidden_round, frac, roundup};
     assert property (@(posedge clk) (frac_overflow|frac_overflow_debug) -> (frac_overflow_debug == frac_overflow));
 
     assign wb_valid = round_packet_r.valid;
@@ -274,7 +281,7 @@ module fp_normalize_rounding_top #(
     assign hidden_round = round_packet_r.hidden;
     assign fflags = round_packet_r.fflags;
     // frac_overflow can be calculated in parallel with roundup
-    assign {frac_overflow_debug, frac_round_intermediate} = {hidden_round, frac} + (FRAC_WIDTH+2)'(roundup);
+    assign {frac_overflow_debug, frac_round_intermediate} = {hidden_round, frac} + (FRAC_WIDTH+1)'(roundup);
     assign frac_out = frac_round_intermediate[FRAC_WIDTH-1:0] >> frac_overflow;
     assign {overflowExp_intermediate, expo_out} = {expo_overflow_round, expo} + EXPO_WIDTH'(frac_overflow); 
     assign overflowExp = overflowExp_intermediate | round_packet_r.overflow_before_rounding;

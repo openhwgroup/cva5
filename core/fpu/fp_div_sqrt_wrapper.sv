@@ -30,7 +30,6 @@ module fp_div_sqrt_wrapper(
     .div_wb (div_wb)
   );
 
-
   assign issue.ready = div_issue.ready & sqrt_issue.ready;
   assign div_issue.id = issue.id;
   assign sqrt_issue.id = issue.id;

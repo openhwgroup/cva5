@@ -64,15 +64,11 @@ module fp_sqrt (
   logic [FRAC_WIDTH:0] frac_normalized;
   logic [EXPO_WIDTH:0] expo_normalized;
   sqrt_fifo_inputs_t fifo_inputs;
-  pre_normalize pre_normalize_inst(
-    .rs2(fp_div_sqrt_inputs.rs1), 
-    .rs2_hidden_bit(fp_div_sqrt_inputs.rs1_hidden_bit),
-    .left_shift_amt(left_shift_amt),
-    .frac_normalized(frac_normalized)
-  );
 
   generate if (ENABLE_SUBNORMAL) begin
-    assign expo_normalized = fp_div_sqrt_inputs.rs1[FLEN-2-:EXPO_WIDTH] + EXPO_WIDTH'({~fp_div_sqrt_inputs.rs1_hidden_bit}) - left_shift_amt; //denormal expo == 1, and subtract pre-normalized shift amount
+    assign left_shift_amt = fp_div_sqrt_inputs.rs1_pre_normalize_shift_amt;
+    assign frac_normalized = {fp_div_sqrt_inputs.rs1_hidden_bit, fp_div_sqrt_inputs.rs1[0+:FRAC_WIDTH]};
+    assign expo_normalized = fp_div_sqrt_inputs.rs1[FLEN-2-:EXPO_WIDTH] + EXPO_WIDTH'({~fp_div_sqrt_inputs.rs1_normal}) - left_shift_amt; //denormal expo == 1, and subtract pre-normalized shift amount
     assign fifo_inputs.expo_overflow = expo_normalized[EXPO_WIDTH];
     assign fifo_inputs.radicand = {fp_div_sqrt_inputs.rs1[FLEN-1], expo_normalized[EXPO_WIDTH-1:0], frac_normalized[FRAC_WIDTH-1:0]}; 
     assign fifo_inputs.left_shift_amt = left_shift_amt;

@@ -1,5 +1,5 @@
 /*
- * Copyright © 2017-2020 Yuhui Gao,  Lesley Shannon
+ * Copyright © 2017, 2018, 2019 Eric Matthews,  Lesley Shannon
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,28 +17,27 @@
  * Reconfigurable Computing Lab, Simon Fraser University.
  *
  * Author(s):
- *             Yuhui Gao <yuhiug@sfu.ca>
- *             */
+ *                  Yuhui Gao <yuhuig@sfu.ca>
+ */
 
 import taiga_config::*;
 import riscv_types::*;
 import taiga_types::*;
 import fpu_types::*;
 
-module fp_sign_inj (
-  input logic clk,
-  unit_issue_interface.unit issue,
-  input fp_sign_inject_inputs_t fp_sign_inject_inputs,
-  fp_unit_writeback_interface.unit wb
+module parallel_OR #(
+    parameter WIDTH
+)(
+    input logic [I_WIDTH-1:0] i_data,
+    output logic [WIDTH-1:0] o_data
 );
+    localparam I_WIDTH = WIDTH*6;
 
-  ////////////////////////////////////////////////////
-  //Implementation
-  //See pre processing
-  
-  ////////////////////////////////////////////////////
-  //Output
-  assign wb.rd = fp_sign_inject_inputs.rs1;
-  assign wb.done = issue.new_request;
-  assign wb.id = issue.id;
+    genvar i;
+    generate 
+        for (i = 0; i < WIDTH; i++) begin
+            assign o_data[i] = |i_data[6*i+:6];
+        end
+    endgenerate  
+
 endmodule

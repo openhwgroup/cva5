@@ -587,8 +587,8 @@ module taiga_sim
             unit_done_r <= cpu.fpu_block.fpu_block.norm_round_inst.unit_done[0];
             unit_done_r_r <= unit_done_r;
 
-            //if (cpu.decode_and_issue_block.instruction_issued | cpu.decode_and_issue_block.fp_instruction_issued_with_rd)
-                //$display("pc: 0x%h", instruction_pc_dec);
+            //if (cpu.decode_and_issue_block.instruction_issued & (uses_rs1 | uses_rs2 | uses_rs3) & ~fp_store_op)
+                //$display("pc: 0x%h, rs1: 0x%h, rs2: 0x%h, rs3: 0x%h, int_rs1: 0x%h", cpu.decode_and_issue_block.issue.pc, cpu.fp_pre_processing_packet.rs1,cpu.fp_pre_processing_packet.rs2, cpu.fp_pre_processing_packet.rs3, cpu.fp_pre_processing_packet.int_rs1);
         end
 
         always_comb begin
@@ -617,9 +617,9 @@ module taiga_sim
             fp_other_stall          = cpu.issue.is_float & cpu.issue.stage_valid & ~cpu.instruction_issued & ~(fp_operand_stall | fp_unit_stall  | fp_no_id_stall | fp_no_instruction_stall);
 
             fls_operand_stall   = fp_operand_stall & cpu.decode_and_issue_block.unit_needed_issue_stage[cpu.UNIT_IDS.LS] & cpu.issue.is_float;
-            fmadd_operand_stall = fp_operand_stall & cpu.decode_and_issue_block.unit_needed_issue_stage[cpu.NUM_UNITS+cpu.FMADD_UNIT_ID] & cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.is_fma;
-            fadd_operand_stall  = fp_operand_stall & cpu.decode_and_issue_block.unit_needed_issue_stage[cpu.NUM_UNITS+cpu.FMADD_UNIT_ID] & cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.is_fadd;
-            fmul_operand_stall  = fp_operand_stall & cpu.decode_and_issue_block.unit_needed_issue_stage[cpu.NUM_UNITS+cpu.FMADD_UNIT_ID] & cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.is_fmul;
+            fmadd_operand_stall = fp_operand_stall & cpu.decode_and_issue_block.unit_needed_issue_stage[cpu.NUM_UNITS+cpu.FMADD_UNIT_ID] & cpu.fpu_block.fpu_block.fp_pre_processing_inst.is_fma;
+            fadd_operand_stall  = fp_operand_stall & cpu.decode_and_issue_block.unit_needed_issue_stage[cpu.NUM_UNITS+cpu.FMADD_UNIT_ID] & cpu.fpu_block.fpu_block.fp_pre_processing_inst.is_fadd;
+            fmul_operand_stall  = fp_operand_stall & cpu.decode_and_issue_block.unit_needed_issue_stage[cpu.NUM_UNITS+cpu.FMADD_UNIT_ID] & cpu.fpu_block.fpu_block.fp_pre_processing_inst.is_fmul;
             fdiv_operand_stall  = fp_operand_stall & cpu.decode_and_issue_block.unit_needed_issue_stage[cpu.NUM_UNITS+cpu.FDIV_SQRT_UNIT_ID] & cpu.issue.fn7 == FDIV;
             fsqrt_operand_stall = fp_operand_stall & cpu.decode_and_issue_block.unit_needed_issue_stage[cpu.NUM_UNITS+cpu.FDIV_SQRT_UNIT_ID] & cpu.issue.fn7 == FSQRT;
             fcmp_operand_stall  = fp_operand_stall & ((cpu.decode_and_issue_block.unit_needed_issue_stage[cpu.NUM_UNITS+cpu.MISC_WB2INT_UNIT_ID] & cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.is_fcmp_r) | (cpu.decode_and_issue_block.unit_needed_issue_stage[cpu.NUM_UNITS+cpu.MISC_WB2FP_UNIT_ID] & cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.is_minmax_r));
@@ -630,11 +630,11 @@ module taiga_sim
             //instruction mix
             fp_load_op  = cpu.unit_issue[cpu.UNIT_IDS.LS].new_request & cpu.issue.is_float & cpu.ls_inputs.load;
             fp_store_op = cpu.unit_issue[cpu.UNIT_IDS.LS].new_request & cpu.issue.is_float & cpu.ls_inputs.store;
-            fp_fmadd_op = cpu.fpu_block.fpu_block.fp_madd_inst.mul_issue.new_request & cpu.fp_madd_inputs.instruction[2];
+            fp_fmadd_op = cpu.fpu_block.fpu_block.fp_madd_inst.mul_issue.new_request & cpu.fpu_block.fpu_block.fp_madd_inst.fp_madd_inputs.instruction[2];
             fp_add_op   = cpu.fpu_block.fpu_block.fp_madd_inst.fp_add_inputs_fifo.push;// & cpu.fp_madd_inputs.instruction[1];
-            fp_mul_op   = cpu.fpu_block.fpu_block.fp_madd_inst.mul_issue.new_request & cpu.fp_madd_inputs.instruction[0];
-            fp_div_op   = cpu.fpu_block.fpu_block.div_sqrt_inst.div_issue.new_request & cpu.issue.fn7 == FDIV;
-            fp_sqrt_op  = cpu.fpu_block.fpu_block.div_sqrt_inst.sqrt_issue.new_request & cpu.issue.fn7 == FSQRT;
+            fp_mul_op   = cpu.fpu_block.fpu_block.fp_madd_inst.mul_issue.new_request & cpu.fpu_block.fpu_block.fp_madd_inst.fp_madd_inputs.instruction[0];
+            fp_div_op   = cpu.fpu_block.fpu_block.div_sqrt_inst.div_issue.new_request;
+            fp_sqrt_op  = cpu.fpu_block.fpu_block.div_sqrt_inst.sqrt_issue.new_request;
             fp_cvt_op   = cpu.fpu_block.fpu_block.wb2fp_misc_inst.i2f_issue.new_request | cpu.fpu_block.fpu_block.wb2int_misc_inst.f2i_issue.new_request;
             fp_cmp_op         = cpu.fpu_block.fpu_block.wb2int_misc_inst.cmp_issue.new_request;
             fp_minmax_op      = cpu.fpu_block.fpu_block.wb2fp_misc_inst.minmax_issue.new_request;

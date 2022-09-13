@@ -429,6 +429,10 @@ endgenerate
     assign fp_wb.done = (load_complete | load_exception_complete) & stage2_attr.is_float;
     assign fp_wb.id = load_exception_complete ? exception.id : stage2_attr.id;
 
+    logic [XLEN-1:0] r_addr;
+    always_ff @ (posedge clk) begin
+        r_addr <= shared_inputs.addr;
+    end
     ////////////////////////////////////////////////////
     //End of Implementation
     ////////////////////////////////////////////////////

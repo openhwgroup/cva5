@@ -110,6 +110,13 @@ package taiga_types;
         logic accumulating_csrs;
         logic wb2_float;
         logic is_float;
+        logic enable_pre_normalize;
+        logic is_i2f;
+        logic is_f2i;
+        logic is_class;
+        logic is_fcmp;
+        logic is_minmax;
+        logic is_sign_inj;
     } issue_packet_t;
 
     typedef struct packed{

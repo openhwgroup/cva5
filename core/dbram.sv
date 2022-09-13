@@ -79,6 +79,9 @@ module fp_dbram #(parameter INTERFACE_FLEN = 64) (
             ls.data_valid <= 0;
         else
             ls.data_valid <= ls.new_request & ls_inputs.load;
+
+        //if (data_bram.en & |ls_inputs.we)
+            //$display("addr:0x%h, write:0x%h", ls_inputs.addr, data_bram.data_in); 
     end
 
 endmodule

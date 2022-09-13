@@ -85,9 +85,7 @@ module decode_and_issue
         output fp_div_sqrt_inputs_t fp_div_sqrt_inputs,
         output fp_wb2fp_misc_inputs_t fp_wb2fp_misc_inputs,
         output fp_wb2int_misc_inputs_t fp_wb2int_misc_inputs,
-
-        //output fp_cmp_inputs_t fp_cmp_inputs,
-        //output fp_cvt_mv_inputs_t fp_cvt_mv_inputs,
+        output fp_pre_processing_packet_t fp_pre_processing_packet,
 
         unit_issue_interface.decode unit_issue [TOTAL_NUM_UNITS-1:0],
 
@@ -653,6 +651,7 @@ module decode_and_issue
             .fp_div_sqrt_inputs (fp_div_sqrt_inputs),
             .fp_wb2fp_misc_inputs (fp_wb2fp_misc_inputs),
             .fp_wb2int_misc_inputs (fp_wb2int_misc_inputs),
+            .fp_pre_processing_packet (fp_pre_processing_packet),
             .gc_fetch_flush (gc.fetch_flush)
         );
     end endgenerate

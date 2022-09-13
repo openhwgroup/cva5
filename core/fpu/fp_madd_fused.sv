@@ -98,6 +98,10 @@ module fp_madd_fused_top (
   assign fma_add_inputs.rs2_hidden_bit = fma_mul_outputs_r.rs3_hidden_bit;
   assign fma_add_inputs.rm = fma_mul_outputs_r.mul_rm;
   assign fma_add_inputs.fn7 = (add_op == 0) ? FADD : FSUB;
+  assign fma_add_inputs.swap = fma_mul_outputs_r.swap;
+  assign fma_add_inputs.add = add_op == 0 ? 1 : 0;
+  assign fma_add_inputs.expo_diff = fma_mul_outputs_r.expo_diff;
+  assign fma_add_inputs.fp_add_grs = fma_mul_grs;
   assign fma_mul_norm_active = fma_mul_wb.done; 
 
   ////////////////////////////////////////////////////////
@@ -107,25 +111,12 @@ module fp_madd_fused_top (
   typedef struct packed {
     fp_add_inputs_t fp_add_inputs;
     id_t id;
-    logic [EXPO_WIDTH:0] expo_diff;
-    logic swap;
   } add_input_struct_t;
   add_input_struct_t add_inputs, add_inputs_from_fifo; 
 
   fifo_interface #(.DATA_WIDTH($bits(add_input_struct_t))) fp_add_inputs_fifo();
 
-  assign add_inputs_fifo_data_in.rs1 = fp_madd_inputs.rs1;
-  assign add_inputs_fifo_data_in.rs1_special_case = fp_madd_inputs.rs1_special_case;
-  assign add_inputs_fifo_data_in.rs1_hidden_bit = fp_madd_inputs.rs1_hidden_bit;
-  assign add_inputs_fifo_data_in.rs1_safe_bit = 0;
-  assign add_inputs_fifo_data_in.rs1_expo_overflow = 0;
-  assign add_inputs_fifo_data_in.rs2 = fp_madd_inputs.rs2;
-  assign add_inputs_fifo_data_in.rs2_special_case = fp_madd_inputs.rs2_special_case;
-  assign add_inputs_fifo_data_in.rs2_hidden_bit = fp_madd_inputs.rs2_hidden_bit;
-  assign add_inputs_fifo_data_in.rs2_safe_bit = 0;
-  assign add_inputs_fifo_data_in.rm = fp_madd_inputs.rm;
-  assign add_inputs_fifo_data_in.fn7 = fp_madd_inputs.fn7;
-  assign add_inputs.fp_add_inputs = add_inputs_fifo_data_in;
+  assign add_inputs.fp_add_inputs = fp_madd_inputs.fp_add_inputs;
   assign add_inputs.id = issue.id;
   //pre calculate expo diff for FADD
   generate if (ENABLE_SUBNORMAL) begin
@@ -138,8 +129,8 @@ module fp_madd_fused_top (
     assign expo_diff = (fp_madd_inputs.rs1[FLEN-2-:EXPO_WIDTH]) - (fp_madd_inputs.rs2[FLEN-2-:EXPO_WIDTH]);
     assign expo_diff_negate = (fp_madd_inputs.rs2[FLEN-2-:EXPO_WIDTH]) - (fp_madd_inputs.rs1[FLEN-2-:EXPO_WIDTH]);
   end endgenerate
-  assign add_inputs.expo_diff = expo_diff[EXPO_WIDTH] ? expo_diff_negate : expo_diff;
-  assign add_inputs.swap = expo_diff[EXPO_WIDTH] ? 1 : |expo_diff[EXPO_WIDTH-1:0] ? 0 : fp_madd_inputs.rs1[0+:FRAC_WIDTH] < fp_madd_inputs.rs2[0+:FRAC_WIDTH];
+  assign add_inputs_fifo_data_in.expo_diff = expo_diff[EXPO_WIDTH] ? expo_diff_negate : expo_diff;
+  assign add_inputs_fifo_data_in.swap = expo_diff[EXPO_WIDTH] ? 1 : |expo_diff[EXPO_WIDTH-1:0] ? 0 : fp_madd_inputs.rs1[0+:FRAC_WIDTH] < fp_madd_inputs.rs2[0+:FRAC_WIDTH];
 
   //reduce fifo depth; change add ready signal
   assign fp_add_inputs_fifo.data_in = add_inputs;
@@ -165,17 +156,11 @@ module fp_madd_fused_top (
       add_issue.id = fma_mul_wb.id;
       add_issue.new_request = fma_mul_wb.done & add_issue.ready;
       add_invalid_operation = 0;
-      fp_add_grs = fma_mul_grs;
-      expo_diff_to_add = fma_mul_outputs_r.expo_diff;
-      swap = fma_mul_outputs_r.swap;
     end else begin
       fp_add_inputs = add_inputs_from_fifo.fp_add_inputs;
       add_issue.id = add_inputs_from_fifo.id;
       add_issue.new_request = fp_add_inputs_fifo.pop;//fp_add_inputs_fifo.valid; //issue if fifo not empty
       add_invalid_operation = fma_mul_invalid_operation; 
-      fp_add_grs = 'b0;
-      expo_diff_to_add = add_inputs_from_fifo.expo_diff;
-      swap = add_inputs_from_fifo.swap;
     end
   end 
 
@@ -184,9 +169,6 @@ module fp_madd_fused_top (
     .rst          (rst),
     .fma_mul_invalid_operation (add_invalid_operation),
     .fp_add_inputs(fp_add_inputs),
-    .swap         (swap),
-    .expo_diff_in (expo_diff_to_add),
-    .fp_add_grs   (fp_add_grs),
     .issue        (add_issue),
     .fp_wb        (fp_madd_wb)
   );
