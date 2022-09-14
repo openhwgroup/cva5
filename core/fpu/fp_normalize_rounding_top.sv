@@ -160,70 +160,63 @@ module fp_normalize_rounding_top #(
 
     ////////////////////////////////////////////////////
     //Shared normalzation
-    logic result_sign, result_sign_norm;
-    logic [EXPO_WIDTH-1:0] result_expo, result_expo_norm;
-    logic expo_overflow, expo_overflow_norm;
-    logic [FRAC_WIDTH-1:0] result_frac, result_frac_norm;
-    logic subnormal;
-    logic right_shift;
-    logic [EXPO_WIDTH-1:0] right_shift_amt;
-    fp_shift_amt_t clz;
-    logic carry;
-    logic safe;
-    logic hidden, hidden_norm;
-    grs_t grs, grs_norm;
-    logic overflow_before_rounding;
-    logic roundup;
     logic [FLEN-1:0]             result_if_overflow;
     logic advance_norm;
+    fp_normalize_pre_processing_packet_t normalize_pre_processing_packet;
 
-    //TODO: add clock enable 
+    assign advance_norm = advance_shift | ~normalize_packet_r.valid;
     always_ff @ (posedge clk) begin
         if (advance_norm)
             normalize_packet_r <= normalize_packet;
     end
     
-    //unpack
-    assign result_sign = normalize_packet_r.data[FLEN-1];
-    assign expo_overflow = normalize_packet_r.expo_overflow;
-    assign result_expo = normalize_packet_r.data[FLEN-2-:EXPO_WIDTH];
-    assign result_frac = normalize_packet_r.data[FRAC_WIDTH-1:0];
-    assign clz = normalize_packet_r.clz;
-    assign carry = normalize_packet_r.carry;
-    assign safe = normalize_packet_r.safe;
-    assign hidden = normalize_packet_r.hidden;
-    assign grs = normalize_packet_r.grs;
-    assign subnormal = normalize_packet_r.subnormal;
-    assign right_shift = normalize_packet_r.right_shift;
-    assign right_shift_amt = normalize_packet_r.right_shift_amt;
-
     //normalization
     fp_normalize normalize_inst(
-      .sign(result_sign),
-      .expo(result_expo),
-      .expo_overflow(expo_overflow),
-      .frac(result_frac),
-      .left_shift_amt(clz),
-      .subnormal(subnormal),
-      .right_shift(right_shift),
-      .right_shift_amt(right_shift_amt),
-      .hidden_bit(hidden),
-      .frac_safe_bit(safe),
-      .frac_carry_bit(carry),
-      .grs_in(grs),
-      .sign_norm(result_sign_norm),
-      .expo_norm(result_expo_norm),
-      .expo_overflow_norm(expo_overflow_norm),
-      .frac_norm(result_frac_norm),
-      .hidden_bit_norm(hidden_norm),
-      .grs_norm(grs_norm),
-      .overflow_before_rounding(overflow_before_rounding)
+      .fp_normalize_packet(normalize_packet_r),
+      .fp_normalize_pre_processing_packet(normalize_pre_processing_packet)
     );
+
+    ////////////////////////////////////////////////////
+    //Shifter
+    logic advance_shift;
+    fp_normalize_pre_processing_packet_t normalize_pre_processing_packet_r;
+    logic [EXPO_WIDTH-1:0] shift_amt;
+    logic right_shift;
+    logic signed [FRAC_WIDTH+3+GRS_WIDTH-1:0] shifter_in, result, result_reversed;
+    logic                  result_sign_norm;
+    logic [EXPO_WIDTH-1:0] result_expo_norm;
+    logic expo_overflow_norm;
+    logic [FRAC_WIDTH-1:0] result_frac_norm;
+    logic overflow_before_rounding;
+    logic carry_norm;
+    logic safe_norm;
+    logic hidden_norm;
+    grs_t grs_norm;
+
+    always_comb begin
+        right_shift = normalize_pre_processing_packet_r.right_shift;
+        shift_amt = normalize_pre_processing_packet_r.shift_amt;
+        shifter_in = normalize_pre_processing_packet_r.shifter_in;
+        result = shifter_in >>> shift_amt;
+        result_reversed = reverse(result);
+
+        {carry_norm, safe_norm, hidden_norm, result_frac_norm, grs_norm} = right_shift ? result : result_reversed;
+        result_sign_norm = normalize_pre_processing_packet_r.sign_norm;
+        result_expo_norm = normalize_pre_processing_packet_r.expo_norm;
+        expo_overflow_norm = normalize_pre_processing_packet_r.expo_overflow_norm;
+        overflow_before_rounding = normalize_pre_processing_packet_r.overflow_before_rounding;
+    end
+
+    assign advance_shift = advance_round | ~normalize_pre_processing_packet_r.valid;
+    always_ff @ (posedge clk) begin
+        if (advance_shift) 
+            normalize_pre_processing_packet_r <= normalize_pre_processing_packet;
+    end
 
     //roundup calculation
     fp_round_simplified round(
       .sign(result_sign_norm),
-      .rm(normalize_packet_r.rm),
+      .rm(normalize_pre_processing_packet_r.rm),
       .grs({grs_norm[GRS_WIDTH-1-:2], |grs_norm[0+:GRS_WIDTH-2]}), 
       .lsb(result_frac_norm[0]),
       .roundup(round_packet.roundup),
@@ -231,20 +224,21 @@ module fp_normalize_rounding_top #(
     );
 
     //prep for rounding 
-    assign round_packet.valid = normalize_packet_r.valid;
+    assign round_packet.valid = normalize_pre_processing_packet_r.valid;
     assign round_packet.data = {result_sign_norm, result_expo_norm, result_frac_norm};
     assign round_packet.expo_overflow = expo_overflow_norm;
     assign round_packet.hidden = hidden_norm;
-    assign round_packet.id = normalize_packet_r.id;
-    assign round_packet.valid = normalize_packet_r.valid;
+    assign round_packet.id = normalize_pre_processing_packet_r.id;
+    assign round_packet.valid = normalize_pre_processing_packet_r.valid;
     assign round_packet.result_if_overflow = result_if_overflow;
-    assign round_packet.fflags = {normalize_packet_r.fflags[4:1], normalize_packet_r.fflags[0] | |grs_norm};
+    assign round_packet.fflags = {normalize_pre_processing_packet_r.fflags[4:1], normalize_pre_processing_packet_r.fflags[0] | |grs_norm};
     assign round_packet.overflow_before_rounding = overflow_before_rounding;
 
     ////////////////////////////////////////////////////
     //Shared rounding 
     logic [FRAC_WIDTH+1:0]       hidden_round_frac_roundup;
     logic [FRAC_WIDTH:0]         frac_round_intermediate;
+    logic                        roundup;
     logic                        frac_overflow, frac_overflow_placeholder;
     logic                        sign_out;
     logic [EXPO_WIDTH-1:0]       expo, expo_out;
@@ -258,12 +252,13 @@ module fp_normalize_rounding_top #(
     logic advance_round;
     logic [8:0] frac_overflow_parallel_ANDs;
 
-    //TODO: add clock enable 
+    assign advance_round = unit_wb.ack | ~round_packet_r.valid;
     always_ff @ (posedge clk) begin
         if (advance_round)
             round_packet_r <= round_packet;
     end
 
+    //compute mantissa overflow due to rounding in parallel with roundup addition
     assign hidden_round_frac_roundup = {hidden_round, frac, roundup};
     parallel_AND #(.WIDTH((FRAC_WIDTH+2-1)/6+1)) parallel_AND_inst(
         .i_data(hidden_round_frac_roundup), 
@@ -271,8 +266,6 @@ module fp_normalize_rounding_top #(
     );
     assign frac_overflow = &frac_overflow_parallel_ANDs;//&{hidden_round, frac, roundup};
     assert property (@(posedge clk) (frac_overflow|frac_overflow_debug) -> (frac_overflow_debug == frac_overflow));
-    assign overflowExp = (frac_overflow & |expo) | expo_overflow_round;
-    assign expo_out = expo + EXPO_WIDTH'(frac_overflow);
 
     assign wb_valid = round_packet_r.valid;
     assign roundup = round_packet_r.roundup;
@@ -282,23 +275,23 @@ module fp_normalize_rounding_top #(
     assign frac = round_packet_r.data[FRAC_WIDTH-1:0];
     assign hidden_round = round_packet_r.hidden;
     assign fflags = round_packet_r.fflags;
-    // frac_overflow can be calculated in parallel with roundup
+
     assign {frac_overflow_debug, frac_round_intermediate} = {hidden_round, frac} + (FRAC_WIDTH+1)'(roundup);
     assign frac_out = frac_round_intermediate[FRAC_WIDTH-1:0] >> frac_overflow;
-    //assign {overflowExp_intermediate, expo_out} = {expo_overflow_round, expo} + EXPO_WIDTH'(frac_overflow); 
-    //assign overflowExp = overflowExp_intermediate | round_packet_r.overflow_before_rounding;
+    assign overflowExp = (frac_overflow & &expo[EXPO_WIDTH-1:1]) | expo_overflow_round;
+    assign expo_out = expo + EXPO_WIDTH'(frac_overflow);
     assign underflowExp = ~(hidden_round) & |frac_out;
     assign fflags_out = fflags[4] ? fflags : fflags | {2'b0, overflowExp, underflowExp, overflowExp}; //inexact is asserted when overflow 
-
-    //Pipeline Control
-    //The dummy writeback cannot advance unless the actual writeback stage allows, or either norm/round stage not valid
-    assign advance_round = unit_wb.ack | ~round_packet_r.valid;
-    assign advance_norm = advance_round | ~normalize_packet_r.valid;
 
     //Output
     assign unit_wb.id = round_packet_r.id;
     assign unit_wb.done = round_packet_r.valid;
     assign unit_wb.rd = overflowExp ? round_packet_r.result_if_overflow : {sign_out, expo_out, frac_out};
     assign unit_wb.fflags = fflags_out;
+
+    function logic [FRAC_WIDTH+3+GRS_WIDTH-1:0] reverse(input logic signed [FRAC_WIDTH+3+GRS_WIDTH-1:0] in);
+        foreach(in[i])
+          reverse[i] = in[FRAC_WIDTH+3+GRS_WIDTH-1-i];
+  endfunction
 
 endmodule

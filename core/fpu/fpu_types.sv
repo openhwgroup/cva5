@@ -108,6 +108,20 @@ package fpu_types;
         logic overflow_before_rounding;
     } fp_normalize_packet_t; 
 
+    typedef struct packed {
+        logic valid;
+        id_t   id;
+        logic [4:0] fflags;
+        logic [2:0] rm;
+        logic sign_norm;
+        logic [EXPO_WIDTH-1:0] expo_norm;
+        logic expo_overflow_norm;
+        logic right_shift;
+        logic [EXPO_WIDTH-1:0] shift_amt;
+        logic signed [FRAC_WIDTH+3+GRS_WIDTH-1:0] shifter_in;
+        logic overflow_before_rounding;
+    } fp_normalize_pre_processing_packet_t;
+
     typedef struct packed{
         id_t id;
         logic valid;
