@@ -52,9 +52,8 @@ module fp_wb2int_misc (
     assign fp_f2i_inputs = fp_wb2int_misc_inputs.fp_f2i_inputs;
     
     assign fp_cmp_inputs = fp_wb2int_misc_inputs.fp_cmp_inputs;
-    assign fp_class_inputs.rs1 = fp_wb2int_misc_inputs.rs1;
-    assign fp_class_inputs.rs1_hidden_bit = fp_wb2int_misc_inputs.rs1_hidden_bit;
-    assign fp_class_inputs.rs1_special_case = fp_wb2int_misc_inputs.rs1_special_case;
+
+    assign fp_class_inputs = fp_wb2int_misc_inputs.fp_class_inputs;
 
     ////////////////////////////////////////////////////
     //Issue Interfaces

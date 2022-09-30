@@ -250,7 +250,9 @@ module fp_normalize_rounding_top #(
     logic                        overflowExp, overflowExp_intermediate, underflowExp;
     logic frac_overflow_debug;
     logic advance_round;
-    logic [8:0] frac_overflow_parallel_ANDs;
+
+    localparam NUM_FRAC_LUTS = (FRAC_WIDTH+2-1)/6+1;
+    logic [NUM_FRAC_LUTS-1:0] frac_overflow_parallel_ANDs;
 
     assign advance_round = unit_wb.ack | ~round_packet_r.valid;
     always_ff @ (posedge clk) begin
@@ -261,7 +263,7 @@ module fp_normalize_rounding_top #(
     //compute mantissa overflow due to rounding in parallel with roundup addition
     assign hidden_round_frac_roundup = {hidden_round, frac, roundup};
     parallel_AND #(.WIDTH((FRAC_WIDTH+2-1)/6+1)) parallel_AND_inst(
-        .i_data(hidden_round_frac_roundup), 
+        .i_data( {{(NUM_FRAC_LUTS*6-(FRAC_WIDTH+2)){1'b1}}, hidden_round_frac_roundup} ), 
         .o_data(frac_overflow_parallel_ANDs)
     );
     assign frac_overflow = &frac_overflow_parallel_ANDs;//&{hidden_round, frac, roundup};

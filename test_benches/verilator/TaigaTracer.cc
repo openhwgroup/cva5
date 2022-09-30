@@ -122,7 +122,7 @@ void TaigaTracer::print_stats() {
     std::cout << "    " << LargeTraceSigsNames[i]
               << "_max: " << max_LargeTraceSigs[i] << "\n"
               << "    " << LargeTraceSigsNames[i] << "_avg: "
-              << LargeTraceSigs_accumulate[i] / LargeTraceSigs_counter[i]
+              << LargeTraceSigs_accumulate[i] / (LargeTraceSigs_counter[i]+1)
               << std::endl;
 
   std::cout
@@ -154,10 +154,10 @@ void TaigaTracer::update_UART() {
 
 void TaigaTracer::update_memory() {
   tb->instruction_bram_data_out = instruction_r;
-  if (tb->instruction_bram_en)
+  if (tb->instruction_bram_en){
     instruction_r = mem->read_instruction(tb->instruction_bram_addr);
-  // std::cout << std::hex << "pc 0x"<< tb->instruction_bram_addr << " -> inst
-  // 0x" << instruction_r << "\n";
+    //std::cout << std::hex << "pc 0x"<< tb->instruction_bram_addr << " -> inst 0x" << instruction_r << "\n";
+  }
 
   tb->data_bram_data_out = data_out_r;
   if (tb->data_bram_en) {
@@ -165,6 +165,7 @@ void TaigaTracer::update_memory() {
     mem->write(tb->data_bram_addr, tb->data_bram_data_in, tb->data_bram_be,
                tb->data_bram_we);
   }
+
 }
 
 void TaigaTracer::tick() {
@@ -228,10 +229,7 @@ TaigaTracer::TaigaTracer(std::ifstream &programFile) {
   programFile.clear();
   programFile.seekg(0, ios::beg);
   mem = new SimMem(programFile, 16384);
-  std::string mem_log_file_name =
-      "/localhdd/yuhuig/Research/Tests/taiga-project/logs/verilator/"
-      "initialized_mem.txt";
-  mem->printMem(mem_log_file_name);
+  //mem->printMem(mem_log_file_name);
 
   instruction_r = mem->read_instruction(tb->instruction_bram_addr);
   // instruction_r = mem->read(tb->instruction_bram_addr);
@@ -243,6 +241,7 @@ TaigaTracer::~TaigaTracer() {
   verilatorWaveformTracer->flush();
   verilatorWaveformTracer->close();
 #endif
+  mem->printMem(mem_log_file_name);
   delete mem;
   delete tb;
 }

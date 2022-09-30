@@ -124,19 +124,19 @@ module fp_f2i (
   );
 
   assign inexact = |grs;
-  assign greater_than_largest_unsigned_int = (~is_signed & f2i_int[XLEN-1] & largest_unsigned_int & inexact) | expo_unbiased_greater_than_31;
-  assign greater_than_largest_signed_int   = (is_signed & ~f2i_int[XLEN-1] & largest_signed_int & |grs) | expo_unbiased_greater_than_30;
-  assign smaller_than_smallest_signed_int  = (is_signed & f2i_int[XLEN-1] & (~|smallest_signed_int_OR | inexact)) | expo_unbiased_greater_than_31;
+  assign greater_than_largest_unsigned_int = (~is_signed) & ((f2i_int[XLEN-1] & largest_unsigned_int & inexact) | expo_unbiased_greater_than_31);
+  assign greater_than_largest_signed_int   = (is_signed & ~sign) & ((~f2i_int[XLEN-1] & largest_signed_int & |grs) | expo_unbiased_greater_than_30);
+  assign smaller_than_smallest_signed_int  = (is_signed & sign) & ((f2i_int[XLEN-1] & (~|smallest_signed_int_OR | inexact)) | expo_unbiased_greater_than_31);
   assign special = (~is_signed & (greater_than_largest_unsigned_int | sign)) | 
                    (is_signed & (greater_than_largest_signed_int | smaller_than_smallest_signed_int));
   
   always_comb begin
     if (r_greater_than_largest_unsigned_int) 
-      special_case_result = 2^32 - 1;
+      special_case_result = 32'hffffffff;//2^32 - 1;
     else if (r_greater_than_largest_signed_int)
-      special_case_result = 2^31 - 1;
+      special_case_result = 32'h7fffffff;//2^31 - 1;
     else if (r_smaller_than_smallest_signed_int) 
-      special_case_result = -2^31;
+      special_case_result = 32'h80000000;//-2^31;
     else
       special_case_result = 0;
   end
@@ -176,5 +176,5 @@ module fp_f2i (
   assign wb.rd = r_special ? special_case_result : f2i_int_rounded;
   assign wb.id = id;
   assign wb.done = done;
-  assign wb.fflags = 5'(r_inexact);
+  assign wb.fflags = {r_special, 3'b0, r_inexact & ~r_special};
 endmodule

@@ -433,6 +433,7 @@ module fp_pre_processing #(
   end
   assign o_fp_wb2fp_misc_inputs.fp_minmax_inputs.rs1 = r_output_swap ? rs2_pre_normalized_swapped : rs1_pre_normalized_swapped;
   assign o_fp_wb2fp_misc_inputs.fp_minmax_inputs.invalid = r_is_SNaN[RS1] | r_is_SNaN[RS2];
+  assign o_fp_wb2fp_misc_inputs.fp_minmax_inputs.hidden = r_output_swap ? rs2_hidden_bit_pre_normalized_swapped : rs1_hidden_bit_pre_normalized_swapped;
 
   //i2f
   assign o_fp_wb2fp_misc_inputs.fp_i2f_inputs.int_rs1_abs = r_abs_int_rs1;
@@ -442,10 +443,11 @@ module fp_pre_processing #(
   //sign_inj
   always_comb begin 
     case(r_rm)
-      default: o_fp_wb2fp_misc_inputs.fp_sign_inject_inputs.rs1 = {r_rs2_sign, r_rs1[FLEN-2:0]};
-      3'b001:  o_fp_wb2fp_misc_inputs.fp_sign_inject_inputs.rs1 = {~r_rs2_sign, r_rs1[FLEN-2:0]};
-      3'b010:  o_fp_wb2fp_misc_inputs.fp_sign_inject_inputs.rs1 = {r_rs2_sign ^ r_rs1[FLEN-1], r_rs1[FLEN-2:0]};
+      default: o_fp_wb2fp_misc_inputs.fp_sign_inject_inputs.rs1 = {r_rs2[FLEN-1], r_rs1[FLEN-2:0]};
+      3'b001:  o_fp_wb2fp_misc_inputs.fp_sign_inject_inputs.rs1 = {~r_rs2[FLEN-1], r_rs1[FLEN-2:0]};
+      3'b010:  o_fp_wb2fp_misc_inputs.fp_sign_inject_inputs.rs1 = {r_rs2[FLEN-1] ^ r_rs1[FLEN-1], r_rs1[FLEN-2:0]};
     endcase 
+    o_fp_wb2fp_misc_inputs.fp_sign_inject_inputs.hidden = r_rs1_hidden_bit_pre_normalized;
   end
 
   always_ff @ (posedge clk) begin
@@ -500,6 +502,11 @@ module fp_pre_processing #(
   assign o_fp_wb2int_misc_inputs.fp_cmp_inputs.rs2_special_case = {r_is_inf[RS2], r_is_SNaN[RS2], r_is_QNaN[RS2], r_is_zero[RS2]};
   assign o_fp_wb2int_misc_inputs.fp_cmp_inputs.rm = r_rm;
 
+  //Cycle 1 - FCLASS
+  assign o_fp_wb2int_misc_inputs.fp_class_inputs.rs1 = r_rs1;
+  assign o_fp_wb2int_misc_inputs.fp_class_inputs.rs1_hidden_bit = r_hidden_bit[RS1];
+  assign o_fp_wb2int_misc_inputs.fp_class_inputs.rs1_special_case = {r_is_inf[RS1], r_is_SNaN[RS1], r_is_QNaN[RS1], r_is_zero[RS1]};
+
   always_ff @ (posedge clk) begin
     //f2i
     r_rs1_expo_unbiased <= rs1_expo_unbiased;
@@ -515,7 +522,3 @@ module fp_pre_processing #(
   end
   
 endmodule
-
-//TODO debug cubic
-//disable store forwarding
-//print the pc traces. compare and see where control might deviated

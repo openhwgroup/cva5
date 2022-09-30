@@ -40,6 +40,7 @@ module fp_minmax (
     ////////////////////////////////////////////////////
     //Output
     assign wb.rd = fp_minmax_inputs.rs1;
+    assign wb.hidden = fp_minmax_inputs.hidden;
     assign wb.fflags = {fp_minmax_inputs.invalid, 4'b0};
     assign wb.done = issue.new_request;
     assign wb.id = issue.id;

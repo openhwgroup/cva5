@@ -90,7 +90,7 @@ package taiga_config;
     //FP Options
     parameter INCLUDE_FPU = 1;
     parameter EXPO_WIDTH = 11;
-	parameter FRAC_WIDTH = 52;
+	parameter FRAC_WIDTH = 52; //taiga_config_mod.py
     parameter FLEN = 1 + EXPO_WIDTH + FRAC_WIDTH;
     parameter INTERFACE_EXPO_WIDTH = 11;
     parameter INTERFACE_FRAC_WIDTH = 52;
@@ -167,9 +167,9 @@ package taiga_config;
 
     localparam cpu_config_t EXAMPLE_CONFIG = '{
         //ISA options
-        INCLUDE_M_MODE : 1,
+        INCLUDE_M_MODE : 0,
         INCLUDE_S_MODE : 0,
-        INCLUDE_U_MODE : 0,
+        INCLUDE_U_MODE : 1,
         INCLUDE_MUL : 1,
         INCLUDE_DIV : 1,
         INCLUDE_IFENCE : 1,

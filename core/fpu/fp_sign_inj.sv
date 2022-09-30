@@ -39,6 +39,7 @@ module fp_sign_inj (
   ////////////////////////////////////////////////////
   //Output
   assign wb.rd = fp_sign_inject_inputs.rs1;
+  assign wb.hidden = fp_sign_inject_inputs.hidden;
   assign wb.done = issue.new_request;
   assign wb.id = issue.id;
 endmodule

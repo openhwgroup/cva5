@@ -86,7 +86,6 @@ void SimMem::printMem(std::string logfile) {
     std::ofstream mem_log;
     mem_log.open(logfile, std::ofstream::trunc);
     for (int i =0; (i < mem_size*256); i++) {
-        //std::cout << std::hex << "0x" << std::setw(8) << std::setfill('0') << i << 
         mem_log << std::hex << "0x" << std::setw(8) << std::setfill('0') << i << 
         " " << std::setw(8) << std::setfill('0') << memory1[i] << " " <<
                std::setw(8) << std::setfill('0') << memory2[i] << std::endl;

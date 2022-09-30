@@ -171,6 +171,9 @@ private:
   uint64_t LargeTraceSigs_counter[num_LargeTraceSigs]; //count how many are accumulated
   uint64_t max_LargeTraceSigs[num_LargeTraceSigs] = {}; //holds the max sigs recorded
   unsigned long long LargeTraceSigs_accumulate[num_LargeTraceSigs]; //accumulate the sigs
+  std::string mem_log_file_name =
+      "/localhdd/yuhuig/Research/Tests/compliance-level-data-collection/subnormal-master/taiga-project/logs/verilator/"
+      "initialized_mem.txt";
 
   bool collect_stats = false;
   bool program_complete = false;

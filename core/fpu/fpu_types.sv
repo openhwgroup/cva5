@@ -286,10 +286,12 @@ package fpu_types;
     typedef struct packed{
         logic [FLEN-1:0]    rs1;
         logic               invalid;
+        logic               hidden;
     } fp_minmax_inputs_t;
 
     typedef struct packed{
         logic [FLEN-1:0]    rs1;
+        logic               hidden;
     } fp_sign_inject_inputs_t;
 
     typedef struct packed{
@@ -334,15 +336,9 @@ package fpu_types;
     typedef struct packed{
         fp_f2i_inputs_t fp_f2i_inputs;
         fp_cmp_inputs_t fp_cmp_inputs;
-
+        fp_class_inputs_t fp_class_inputs;
 
         logic [2:0]         instruction; //{f2i, cmp, class}
-        logic [FLEN-1:0]    rs1;
-        logic [FLEN-1:0]    rs2;
-        logic               rs1_hidden_bit;
-        logic               rs2_hidden_bit;
-        logic [3:0]         rs1_special_case;
-        logic [3:0]         rs2_special_case;
         logic [2:0]         rm;
         logic               is_signed;
     } fp_wb2int_misc_inputs_t;

@@ -232,8 +232,8 @@ module fp_mul_madd_fused (
 
   generate if (ENABLE_SUBNORMAL) begin
     // subnormal expo is implicitly 1 
-    assign expo_diff = result_expo[0] - ((EXPO_WIDTH+2)'(rs3_expo) + (EXPO_WIDTH+2)'({~rs3_hidden_bit[2]}));
-    assign expo_diff_negate = ((EXPO_WIDTH+2)'(rs3_expo) + (EXPO_WIDTH+2)'({~rs3_hidden_bit[2]})) - result_expo[0];
+    assign expo_diff = result_expo[0] - ((EXPO_WIDTH+2)'(rs3_expo) + (EXPO_WIDTH+2)'({~rs3_hidden_bit[2]&~rs3_special_case[2][0]}));
+    assign expo_diff_negate = ((EXPO_WIDTH+2)'(rs3_expo) + (EXPO_WIDTH+2)'({~rs3_hidden_bit[2]&~rs3_special_case[2][0]})) - result_expo[0];
     assign fma_mul_outputs.expo_diff = expo_diff[EXPO_WIDTH+1] ? expo_diff_negate[EXPO_WIDTH:0] : expo_diff[EXPO_WIDTH:0];
     assign fma_mul_outputs.swap = expo_diff[EXPO_WIDTH+1];
   end else begin
