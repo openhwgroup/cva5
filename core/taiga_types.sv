@@ -111,6 +111,7 @@ package taiga_types;
         logic wb2_float;
         logic is_float;
         logic enable_pre_normalize;
+        logic is_fld;
         logic is_i2f;
         logic is_f2i;
         logic is_class;

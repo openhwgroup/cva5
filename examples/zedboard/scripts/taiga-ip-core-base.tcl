@@ -1182,7 +1182,7 @@ move_dashboard_gadget -name {methodology_1} -row 2 -col 1
 open_bd_design "$proj_dir/${_xil_proj_name_}.srcs/sources_1/bd/design_1/design_1.bd"
 
 startgroup
-set_property -dict [list CONFIG.PCW_FPGA0_PERIPHERAL_FREQMHZ {95}] [get_bd_cells processing_system7_0]
+set_property -dict [list CONFIG.PCW_FPGA0_PERIPHERAL_FREQMHZ {110}] [get_bd_cells processing_system7_0]
 endgroup
 save_bd_design
 launch_runs impl_1 -jobs 48

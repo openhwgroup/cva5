@@ -158,6 +158,7 @@ module taiga
     gc_inputs_t gc_inputs;
     csr_inputs_t csr_inputs;
     fp_pre_processing_packet_t fp_pre_processing_packet;
+    logic issue_advance;
 
     unit_issue_interface unit_issue [NUM_UNITS+FP_NUM_UNITS-1:0]();
 
@@ -473,6 +474,7 @@ module taiga
         .pc_id_available (pc_id_available),
         .decode (decode),
         .decode_advance (decode_advance),
+        .issue_advance(issue_advance),
         .renamer (decode_rename_interface),
         .fp_renamer (fp_decode_rename_interface),
         .decode_uses_rd (decode_uses_rd),
@@ -728,6 +730,7 @@ module taiga
             .clk (clk),
             .rst (rst),
             .fp_pre_processing_packet (fp_pre_processing_packet),
+            .issue_advance(issue_advance),
             .fp_unit_issue (unit_issue[NUM_UNITS+FP_UNIT_IDS.MISC_WB2INT:NUM_UNITS+FP_UNIT_IDS.FMADD]),
             .fp_unit_wb (fp_unit_wb), //FLS is not assigned in fpu_top;included for coding simplicity
             .unit_wb (unit_wb[NUM_WB_UNITS-1+FP_WB_INT_IDS.MISC_WB2INT:NUM_WB_UNITS-1+FP_WB_INT_IDS.MISC_WB2INT])

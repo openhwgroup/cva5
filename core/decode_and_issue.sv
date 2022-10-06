@@ -46,6 +46,7 @@ module decode_and_issue
         input logic [LOG2_MAX_IDS:0] post_issue_count,
         input decode_packet_t decode,
         output logic decode_advance,
+        input logic issue_advance,
         output exception_sources_t decode_exception_unit,
 
         //Renamer
@@ -164,7 +165,7 @@ module decode_and_issue
     //Can move data into issue stage if:
     // there is no instruction currently in the issue stage, or
     // an instruction could issue (issue_flush, issue_hold and whether the instruction is valid are not needed in this check)
-    assign issue_stage_ready = (~issue.stage_valid) | (issue_valid & |issue_ready);
+    assign issue_stage_ready = (~issue.stage_valid) | (issue_valid & |issue_ready & issue_advance);
     assign decode_advance = decode.valid & issue_stage_ready;
 
     //Instruction aliases
@@ -295,7 +296,7 @@ module decode_and_issue
     assign issue_valid = issue.stage_valid & operands_ready & fp_operands_ready & ~gc.issue_hold & ~pre_issue_exception_pending;
     assign issue_to = {TOTAL_NUM_UNITS{issue_valid & ~gc.fetch_flush}} & issue_ready;
 
-    assign instruction_issued = issue_valid & ~gc.fetch_flush & |issue_ready;
+    assign instruction_issued = issue_valid & ~gc.fetch_flush & |issue_ready & issue_advance;
     assign instruction_issued_with_rd = instruction_issued & ~issue.wb2_float & issue.uses_rd;
 
     assign rf.phys_rs_addr[RS1] = issue.phys_rs_addr[RS1];
@@ -722,8 +723,14 @@ module decode_and_issue
             exception.id <= issue.id;
         end
     end
-
     end endgenerate
+
+    ////////////////////////////////////////////////////
+    //Preprocessing
+    assign fp_pre_processing_packet.unit_needed_issue_stage = unit_needed_issue_stage[TOTAL_NUM_UNITS-1-:FP_NUM_UNITS];
+    assign fp_pre_processing_packet.issue_to_issue_stage = issue_to[TOTAL_NUM_UNITS-1-:FP_NUM_UNITS];
+    assign fp_pre_processing_packet.id = issue.id;
+
     ////////////////////////////////////////////////////
     //End of Implementation
     ////////////////////////////////////////////////////

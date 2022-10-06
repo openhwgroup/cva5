@@ -39,6 +39,7 @@ module fpu_top #(
       input logic clk,
       input logic rst,
       input fp_pre_processing_packet_t fp_pre_processing_packet,
+      output logic issue_advance,
       unit_issue_interface.unit fp_unit_issue [FP_NUM_UNITS-1:0], 
       unit_writeback_interface.unit unit_wb [FP_WB_INT_NUM_UNITS],
       fp_unit_writeback_interface.unit fp_unit_wb [FP_NUM_WB_UNITS]
@@ -60,6 +61,7 @@ module fpu_top #(
     .clk(clk),
     .rst(rst),
     .i_fp_unit_issue(fp_unit_issue),
+    .issue_advance(issue_advance),
     .o_fp_unit_issue(debug_fp_unit_issue),
     .i_fp_pre_processing_packet(fp_pre_processing_packet),
     .o_fp_madd_inputs(fp_madd_inputs_pre_processed),

@@ -75,6 +75,7 @@ module fp_decode_and_issue
     logic [6:0] fn7;
     logic [4:0] opcode_trim;
 
+    logic is_fld;
     logic is_sqrt;
     logic is_sign_inj, is_sign_inj_r;
     logic is_minmax, is_minmax_r;
@@ -94,6 +95,7 @@ module fp_decode_and_issue
     assign rs3_addr = decode.instruction[31:27];
     assign rd_addr = decode.instruction[11:7];
 
+    assign is_fld = opcode_trim == FLD_T;
     assign is_i2f = opcode_trim == FOP_T & fn7 == FCVT_DW;
     assign is_f2i = opcode_trim == FOP_T & fn7 == FCVT_WD;
     assign is_class = opcode_trim == FOP_T & fn7 == FCLASS;
@@ -165,6 +167,7 @@ module fp_decode_and_issue
             issue.wb2_float <= decode.wb2_float;
             issue.accumulating_csrs <= decode.accumulating_csrs;
             issue.enable_pre_normalize <= enable_pre_normalize;
+            issue.is_fld <= is_fld;
             issue.is_f2i <= is_f2i;
             issue.is_i2f <= is_i2f;
             issue.is_class <= is_class;

@@ -136,7 +136,8 @@ module fp_madd_fused_top (
   assign fp_add_inputs_fifo.data_in = add_inputs;
   assign fp_add_inputs_fifo.potential_push = is_fadd & issue.new_request;
   assign fp_add_inputs_fifo.push = fp_add_inputs_fifo.potential_push;
-  assign fp_add_inputs_fifo.pop = ~fma_mul_instruction[2] & fp_add_inputs_fifo.valid & add_issue.ready;
+  //assign fp_add_inputs_fifo.pop = ~fma_mul_instruction[2] & fp_add_inputs_fifo.valid & add_issue.ready;
+  assign fp_add_inputs_fifo.pop = ~fma_mul_outputs_r.is_fma & fp_add_inputs_fifo.valid & add_issue.ready;
   assign add_inputs_from_fifo = fp_add_inputs_fifo.data_out;
   taiga_fifo #(.DATA_WIDTH($bits(add_input_struct_t)), .FIFO_DEPTH(1)) add_input_fifo (.fifo(fp_add_inputs_fifo), .*); 
 
@@ -174,7 +175,7 @@ module fp_madd_fused_top (
 
   ////////////////////////////////////////////////////////
   //Ready
-  assign issue.ready = mul_issue.ready & ~fp_add_inputs_fifo.full; //ready if fmul's first stage is empty and adder_fifo is not full
+  assign issue.ready = mul_issue.ready & (~fp_add_inputs_fifo.full | fp_add_inputs_fifo.pop); //ready if fmul's first stage is empty and adder_fifo is not full
 endmodule 
 
 

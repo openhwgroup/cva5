@@ -36,6 +36,9 @@ module fp_pre_processing #(
 
   //Unit Inputs
   input fp_pre_processing_packet_t  i_fp_pre_processing_packet,
+
+
+  output logic                      issue_advance,
   output fp_madd_inputs_t           o_fp_madd_inputs,
   output fp_div_sqrt_inputs_t       o_fp_div_sqrt_inputs,
   output fp_wb2fp_misc_inputs_t     o_fp_wb2fp_misc_inputs,
@@ -43,59 +46,112 @@ module fp_pre_processing #(
 );
 
   /////////////////////////////////////////////
-  //Issue interface passby
-  logic possible_issue [FP_NUM_UNITS-1:0];
-  logic new_request [FP_NUM_UNITS-1:0];
-  logic new_request_r[FP_NUM_UNITS-1:0];
-  id_t id [FP_NUM_UNITS-1:0];
-  logic ready [FP_NUM_UNITS-1:0];
+  //Control Logic
+  id_t id;
+  logic possible_issue;
+  logic pre_processing_valid;
+  logic pre_processing_stage_valid;
+  logic pre_processing_stage_ready;
+  logic [FP_NUM_UNITS-1:0] issue_ready;
+  logic [FP_NUM_UNITS-1:0] issue_to;
+  logic [FP_NUM_UNITS-1:0] r_issue_to_issue_stage;
+  logic [FP_NUM_UNITS-1:0] unit_needed_pre_processing_stage;
+  logic [FP_NUM_UNITS-1:0] pre_processing_ready;
+  logic [FP_NUM_UNITS-1:0] ready;
 
-  genvar i;
-  generate
-    for (i = 0; i < FP_NUM_UNITS; i++) begin
-      assign possible_issue[i] = i_fp_unit_issue[i].possible_issue;
-      assign new_request[i] = i_fp_unit_issue[i].new_request;
-      assign new_request_r[i] = i_fp_unit_issue[i].new_request_r;
-      assign id[i] = i_fp_unit_issue[i].id;
-      assign i_fp_unit_issue[i].ready = ready[i];
+  //preprocessing can accept new inputs if
+  //1. no inputs is currently in preprocessing stage
+  //2. data currently being preprocessed will propagate forward
+  assign pre_processing_valid = pre_processing_stage_valid & |pre_processing_ready;
+  assign pre_processing_stage_ready = ~pre_processing_stage_valid | (pre_processing_stage_valid & (~|unit_needed_pre_processing_stage | |pre_processing_ready));
+  assign issue_advance = pre_processing_stage_ready;// & issue.stage_valid;
+
+  assign pre_processing_ready = ready & unit_needed_pre_processing_stage;
+
+  assign issue_to = {FP_NUM_UNITS{pre_processing_valid}} & r_issue_to_issue_stage;
+
+  always_ff @ (posedge clk) begin
+    if (pre_processing_stage_ready) begin
+      pre_processing_stage_valid <= issue.stage_valid & issue.is_float & ~issue.is_fld;
+      unit_needed_pre_processing_stage <= i_fp_pre_processing_packet.unit_needed_issue_stage;
+      r_issue_to_issue_stage <= i_fp_pre_processing_packet.issue_to_issue_stage;
+      id <= i_fp_pre_processing_packet.id;
+      possible_issue <= i_fp_pre_processing_packet.possible_issue;
     end
-  endgenerate
+  end
+
+  /////////////////////////////////////////////
+  //Issue interface passby
+  //logic possible_issue [FP_NUM_UNITS-1:0];
+  //logic new_request [FP_NUM_UNITS-1:0];
+  //logic new_request_r[FP_NUM_UNITS-1:0];
+  //id_t id [FP_NUM_UNITS-1:0];
+
+  //genvar i;
+  //generate
+    //for (i = 0; i < FP_NUM_UNITS; i++) begin
+      //assign possible_issue[i] = i_fp_unit_issue[i].possible_issue;
+      //assign new_request[i] = i_fp_unit_issue[i].new_request;
+      //assign new_request_r[i] = i_fp_unit_issue[i].new_request_r;
+      //assign id[i] = i_fp_unit_issue[i].id;
+    //end
+  //endgenerate
 
   //FMA inputs are registered
-  always_ff @ (posedge clk) begin
-    o_fp_unit_issue[FP_UNIT_IDS.FMADD].possible_issue <= possible_issue[FP_UNIT_IDS.FMADD];
-    o_fp_unit_issue[FP_UNIT_IDS.FMADD].new_request <= new_request[FP_UNIT_IDS.FMADD];
-    o_fp_unit_issue[FP_UNIT_IDS.FMADD].new_request_r <= new_request_r[FP_UNIT_IDS.FMADD];
-    o_fp_unit_issue[FP_UNIT_IDS.FMADD].id <= id[FP_UNIT_IDS.FMADD];
-  end
+  //always_ff @ (posedge clk) begin
+    //if (pre_processing_stage_ready) begin
+      //o_fp_unit_issue[FP_UNIT_IDS.FMADD].possible_issue <= possible_issue[FP_UNIT_IDS.FMADD];
+      //o_fp_unit_issue[FP_UNIT_IDS.FMADD].new_request <= new_request[FP_UNIT_IDS.FMADD];
+      //o_fp_unit_issue[FP_UNIT_IDS.FMADD].new_request_r <= new_request_r[FP_UNIT_IDS.FMADD];
+      //o_fp_unit_issue[FP_UNIT_IDS.FMADD].id <= id[FP_UNIT_IDS.FMADD];
+    //end else begin
+      //o_fp_unit_issue[FP_UNIT_IDS.FMADD].possible_issue <= 0;
+      //o_fp_unit_issue[FP_UNIT_IDS.FMADD].new_request <= 0;
+      //o_fp_unit_issue[FP_UNIT_IDS.FMADD].new_request_r <= new_request_r[FP_UNIT_IDS.FMADD];
+      //o_fp_unit_issue[FP_UNIT_IDS.FMADD].id <= id[FP_UNIT_IDS.FMADD];
 
-  //FDIV/SQRT inputs are NOT registered
-  always_ff @ (posedge clk) begin
-    o_fp_unit_issue[FP_UNIT_IDS.FDIV_SQRT].possible_issue <= possible_issue[FP_UNIT_IDS.FDIV_SQRT];
-    o_fp_unit_issue[FP_UNIT_IDS.FDIV_SQRT].new_request <= new_request[FP_UNIT_IDS.FDIV_SQRT];
-    o_fp_unit_issue[FP_UNIT_IDS.FDIV_SQRT].new_request_r <= new_request_r[FP_UNIT_IDS.FDIV_SQRT];
-    o_fp_unit_issue[FP_UNIT_IDS.FDIV_SQRT].id <= id[FP_UNIT_IDS.FDIV_SQRT];
-  end
+    //end
+  //end
 
-  //WB2FP inputs are NOT registered
-  always_ff @ (posedge clk) begin
-    o_fp_unit_issue[FP_UNIT_IDS.MISC_WB2FP].possible_issue <= possible_issue[FP_UNIT_IDS.MISC_WB2FP];
-    o_fp_unit_issue[FP_UNIT_IDS.MISC_WB2FP].new_request <= new_request[FP_UNIT_IDS.MISC_WB2FP];
-    o_fp_unit_issue[FP_UNIT_IDS.MISC_WB2FP].new_request_r <= new_request_r[FP_UNIT_IDS.MISC_WB2FP];
-    o_fp_unit_issue[FP_UNIT_IDS.MISC_WB2FP].id <= id[FP_UNIT_IDS.MISC_WB2FP];
-  end
+  //always_ff @ (posedge clk) begin
+    //if (pre_processing_stage_ready) begin
+      //o_fp_unit_issue[FP_UNIT_IDS.FDIV_SQRT].possible_issue <= possible_issue[FP_UNIT_IDS.FDIV_SQRT];
+      //o_fp_unit_issue[FP_UNIT_IDS.FDIV_SQRT].new_request <= new_request[FP_UNIT_IDS.FDIV_SQRT];
+      //o_fp_unit_issue[FP_UNIT_IDS.FDIV_SQRT].new_request_r <= new_request_r[FP_UNIT_IDS.FDIV_SQRT];
+      //o_fp_unit_issue[FP_UNIT_IDS.FDIV_SQRT].id <= id[FP_UNIT_IDS.FDIV_SQRT];
+    //end
+  //end
 
-  //WB2INT inputs are NOT registered
-  always_ff @ (posedge clk) begin
-    o_fp_unit_issue[FP_UNIT_IDS.MISC_WB2INT].possible_issue <= possible_issue[FP_UNIT_IDS.MISC_WB2INT];
-    o_fp_unit_issue[FP_UNIT_IDS.MISC_WB2INT].new_request <= new_request[FP_UNIT_IDS.MISC_WB2INT];
-    o_fp_unit_issue[FP_UNIT_IDS.MISC_WB2INT].new_request_r <= new_request_r[FP_UNIT_IDS.MISC_WB2INT];
-    o_fp_unit_issue[FP_UNIT_IDS.MISC_WB2INT].id <= id[FP_UNIT_IDS.MISC_WB2INT];
-  end
+  //always_ff @ (posedge clk) begin
+    //if (pre_processing_stage_ready) begin
+      //o_fp_unit_issue[FP_UNIT_IDS.MISC_WB2FP].possible_issue <= possible_issue[FP_UNIT_IDS.MISC_WB2FP];
+      //o_fp_unit_issue[FP_UNIT_IDS.MISC_WB2FP].new_request <= new_request[FP_UNIT_IDS.MISC_WB2FP];
+      //o_fp_unit_issue[FP_UNIT_IDS.MISC_WB2FP].new_request_r <= new_request_r[FP_UNIT_IDS.MISC_WB2FP];
+      //o_fp_unit_issue[FP_UNIT_IDS.MISC_WB2FP].id <= id[FP_UNIT_IDS.MISC_WB2FP];
+    //end
+  //end
+
+  //always_ff @ (posedge clk) begin
+    //if (pre_processing_stage_ready) begin
+      //o_fp_unit_issue[FP_UNIT_IDS.MISC_WB2INT].possible_issue <= possible_issue[FP_UNIT_IDS.MISC_WB2INT];
+      //o_fp_unit_issue[FP_UNIT_IDS.MISC_WB2INT].new_request <= new_request[FP_UNIT_IDS.MISC_WB2INT];
+      //o_fp_unit_issue[FP_UNIT_IDS.MISC_WB2INT].new_request_r <= new_request_r[FP_UNIT_IDS.MISC_WB2INT];
+      //o_fp_unit_issue[FP_UNIT_IDS.MISC_WB2INT].id <= id[FP_UNIT_IDS.MISC_WB2INT];
+    //end
+  //end
+
+  genvar i;
+  generate for (i = 0; i < FP_NUM_UNITS; i++) begin
+      assign o_fp_unit_issue[i].possible_issue = possible_issue;
+      assign o_fp_unit_issue[i].new_request = issue_to[i];
+      assign o_fp_unit_issue[i].id = id;
+  end 
+  endgenerate
 
   //Ready signals are always combinational
   generate
     for (i = 0; i < FP_NUM_UNITS; i++) begin
+      assign i_fp_unit_issue[i].ready = ready[i]; //for issue stage
       assign ready[i] = o_fp_unit_issue[i].ready;
     end
   endgenerate
@@ -123,22 +179,24 @@ module fp_pre_processing #(
   assign issue_id = issue.id;
 
   always_ff @ (posedge clk) begin
-    r_rs1 <= rs1;
-    r_rs2 <= rs2;
-    r_rs3 <= rs3;
-    r_rm  <= rm;
-    r_opcode <= opcode;
-    r_fn7 <= fn7;
-    r_issue_id <= issue_id;
+    if (pre_processing_stage_ready) begin
+      r_rs1 <= rs1;
+      r_rs2 <= rs2;
+      r_rs3 <= rs3;
+      r_rm  <= rm;
+      r_opcode <= opcode;
+      r_fn7 <= fn7;
+      r_issue_id <= issue_id;
 
-    r_is_i2f <= issue.is_i2f;
-    r_is_f2i <= issue.is_f2i;
-    r_is_class <= issue.is_class;
-    r_is_fcmp <= issue.is_fcmp;
-    r_is_minmax <= issue.is_minmax;
-    r_is_sign_inj <= issue.is_sign_inj;
-    r_int_rs1_data <= i_fp_pre_processing_packet.int_rs1;
-    r_is_signed = ~issue.rs_addr[RS2][0];
+      r_is_i2f <= issue.is_i2f;
+      r_is_f2i <= issue.is_f2i;
+      r_is_class <= issue.is_class;
+      r_is_fcmp <= issue.is_fcmp;
+      r_is_minmax <= issue.is_minmax;
+      r_is_sign_inj <= issue.is_sign_inj;
+      r_int_rs1_data <= i_fp_pre_processing_packet.int_rs1;
+      r_is_signed = ~issue.rs_addr[RS2][0];
+    end
   end
 
   /////////////////////////////////////////////
@@ -188,12 +246,14 @@ module fp_pre_processing #(
 
   for (i = 0; i < FP_REGFILE_READ_PORTS; i++) begin
     always_ff @ (posedge clk) begin
-      r_is_inf[i] <= is_inf[i];
-      r_is_zero[i] <= is_zero[i];
-      r_is_SNaN[i] <= is_SNaN[i];
-      r_is_QNaN[i] <= is_QNaN[i];
-      r_hidden_bit[i] <= hidden_bit[i];
-      r_is_subnormal[i] <= is_subnormal[i];
+      if (pre_processing_stage_ready) begin
+        r_is_inf[i] <= is_inf[i];
+        r_is_zero[i] <= is_zero[i];
+        r_is_SNaN[i] <= is_SNaN[i];
+        r_is_QNaN[i] <= is_QNaN[i];
+        r_hidden_bit[i] <= hidden_bit[i];
+        r_is_subnormal[i] <= is_subnormal[i];
+      end
     end
   end
 
@@ -221,9 +281,11 @@ module fp_pre_processing #(
   assign expo_diff_issued = r_expo_diff[EXPO_WIDTH] ? r_expo_diff_negate : r_expo_diff;
   
   always_ff @ (posedge clk) begin
-    r_expo_diff <= expo_diff;
-    r_expo_diff_negate <= expo_diff_negate;
-    r_swap <= swap;
+    if (pre_processing_stage_ready) begin
+      r_expo_diff <= expo_diff;
+      r_expo_diff_negate <= expo_diff_negate;
+      r_swap <= swap;
+    end
   end
 
   /////////////////////////////////////////////
@@ -292,14 +354,16 @@ module fp_pre_processing #(
   end
 
   always_ff @ (posedge clk) begin
-    r_rs1_pre_normalize_shift_amt <= rs1_pre_normalize_shift_amt;
-    r_rs2_pre_normalize_shift_amt <= rs2_pre_normalize_shift_amt;
+    if (pre_processing_stage_ready) begin
+      r_rs1_pre_normalize_shift_amt <= rs1_pre_normalize_shift_amt;
+      r_rs2_pre_normalize_shift_amt <= rs2_pre_normalize_shift_amt;
 
-    r_rs1_hidden_bit_pre_normalized <= rs1_hidden_bit_pre_normalized;
-    r_rs2_hidden_bit_pre_normalized <= rs2_hidden_bit_pre_normalized;
+      r_rs1_hidden_bit_pre_normalized <= rs1_hidden_bit_pre_normalized;
+      r_rs2_hidden_bit_pre_normalized <= rs2_hidden_bit_pre_normalized;
 
-    r_rs1_frac_pre_normalized <= rs1_frac_pre_normalized;
-    r_rs2_frac_pre_normalized <= rs2_frac_pre_normalized;
+      r_rs1_frac_pre_normalized <= rs1_frac_pre_normalized;
+      r_rs2_frac_pre_normalized <= rs2_frac_pre_normalized;
+    end
   end
 
   /////////////////////////////////////////////
@@ -354,10 +418,12 @@ module fp_pre_processing #(
   assign fp_add_inputs.fp_add_grs = 0;
 
   always_ff @ (posedge clk) begin
-    r_is_fma <= is_fma;
-    r_is_fmul <= is_fmul;
-    r_is_fadd <= is_fadd;
-    r_add <= add;
+    if (pre_processing_stage_ready) begin
+      r_is_fma <= is_fma;
+      r_is_fmul <= is_fmul;
+      r_is_fadd <= is_fadd;
+      r_add <= add;
+    end
   end
 
   /////////////////////////////////////////////
@@ -451,9 +517,11 @@ module fp_pre_processing #(
   end
 
   always_ff @ (posedge clk) begin
-    r_abs_int_rs1 <= abs_int_rs1;
-    r_int_rs1_sign <= int_rs1_sign;
-    r_int_rs1_zero <= int_rs1_zero;
+    if (pre_processing_stage_ready) begin
+      r_abs_int_rs1 <= abs_int_rs1;
+      r_int_rs1_sign <= int_rs1_sign;
+      r_int_rs1_zero <= int_rs1_zero;
+    end
   end
 
   /////////////////////////////////////////////
@@ -508,17 +576,15 @@ module fp_pre_processing #(
   assign o_fp_wb2int_misc_inputs.fp_class_inputs.rs1_special_case = {r_is_inf[RS1], r_is_SNaN[RS1], r_is_QNaN[RS1], r_is_zero[RS1]};
 
   always_ff @ (posedge clk) begin
-    //f2i
-    r_rs1_expo_unbiased <= rs1_expo_unbiased;
-    r_f2i_int_dot_frac <= f2i_int_dot_frac;
-    r_f2i_int_less_than_1 <= f2i_int_less_than_1;
-    r_abs_rs1_expo_unbiased <= abs_rs1_expo_unbiased;
-    r_rs1_expo_unbiased_greater_than_31 <= rs1_expo_unbiased_greater_than_31;
-    r_rs1_expo_unbiased_greater_than_30 <= rs1_expo_unbiased_greater_than_30;
-    r_f2i_is_signed <= f2i_is_signed;
-    //fcmp
-    //r_expo_equ <= expo_equ;
-    //r_frac_equ <= frac_equ;
+    if (pre_processing_stage_ready) begin
+      r_rs1_expo_unbiased <= rs1_expo_unbiased;
+      r_f2i_int_dot_frac <= f2i_int_dot_frac;
+      r_f2i_int_less_than_1 <= f2i_int_less_than_1;
+      r_abs_rs1_expo_unbiased <= abs_rs1_expo_unbiased;
+      r_rs1_expo_unbiased_greater_than_31 <= rs1_expo_unbiased_greater_than_31;
+      r_rs1_expo_unbiased_greater_than_30 <= rs1_expo_unbiased_greater_than_30;
+      r_f2i_is_signed <= f2i_is_signed;
+    end
   end
   
 endmodule

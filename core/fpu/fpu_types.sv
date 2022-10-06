@@ -47,6 +47,8 @@ package fpu_types;
 
     localparam [FLEN-1:0] SNAN = {1'b0, {EXPO_WIDTH{1'b1}}, 2'b01, {(FRAC_WIDTH-2){1'b0}}}; //signaling NaN
     localparam [FLEN-2:0] UNDERFLOW_DEFAULT_RESULT = {(FLEN-1){1'b0}};
+
+    localparam FP_NUM_UNITS = 4;
    
     typedef struct packed{
         id_t id;
@@ -180,6 +182,11 @@ package fpu_types;
         logic [FLEN-1:0] rs2;
         logic [FLEN-1:0] rs3;
         logic [XLEN-1:0] int_rs1;
+
+        logic [FP_NUM_UNITS-1:0] unit_needed_issue_stage;
+        logic [FP_NUM_UNITS-1:0] issue_to_issue_stage;
+        id_t  id;
+        logic possible_issue;
     } fp_pre_processing_packet_t;
 
     typedef struct packed{

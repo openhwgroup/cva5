@@ -162,6 +162,3 @@ interface unsigned_sqrt_interface #(parameter DATA_WIDTH = 32);
     modport requester (input remainder, quotient, done, output radicand, start, early_terminate);
     modport sqrt (output remainder, quotient, done, input radicand, start, early_terminate);
 endinterface
-
-
-

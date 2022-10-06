@@ -90,7 +90,7 @@ package taiga_config;
     //FP Options
     parameter INCLUDE_FPU = 1;
     parameter EXPO_WIDTH = 11;
-	parameter FRAC_WIDTH = 52; //taiga_config_mod.py
+	parameter FRAC_WIDTH = 52;
     parameter FLEN = 1 + EXPO_WIDTH + FRAC_WIDTH;
     parameter INTERFACE_EXPO_WIDTH = 11;
     parameter INTERFACE_FRAC_WIDTH = 52;
