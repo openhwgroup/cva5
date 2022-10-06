@@ -82,64 +82,6 @@ module fp_pre_processing #(
 
   /////////////////////////////////////////////
   //Issue interface passby
-  //logic possible_issue [FP_NUM_UNITS-1:0];
-  //logic new_request [FP_NUM_UNITS-1:0];
-  //logic new_request_r[FP_NUM_UNITS-1:0];
-  //id_t id [FP_NUM_UNITS-1:0];
-
-  //genvar i;
-  //generate
-    //for (i = 0; i < FP_NUM_UNITS; i++) begin
-      //assign possible_issue[i] = i_fp_unit_issue[i].possible_issue;
-      //assign new_request[i] = i_fp_unit_issue[i].new_request;
-      //assign new_request_r[i] = i_fp_unit_issue[i].new_request_r;
-      //assign id[i] = i_fp_unit_issue[i].id;
-    //end
-  //endgenerate
-
-  //FMA inputs are registered
-  //always_ff @ (posedge clk) begin
-    //if (pre_processing_stage_ready) begin
-      //o_fp_unit_issue[FP_UNIT_IDS.FMADD].possible_issue <= possible_issue[FP_UNIT_IDS.FMADD];
-      //o_fp_unit_issue[FP_UNIT_IDS.FMADD].new_request <= new_request[FP_UNIT_IDS.FMADD];
-      //o_fp_unit_issue[FP_UNIT_IDS.FMADD].new_request_r <= new_request_r[FP_UNIT_IDS.FMADD];
-      //o_fp_unit_issue[FP_UNIT_IDS.FMADD].id <= id[FP_UNIT_IDS.FMADD];
-    //end else begin
-      //o_fp_unit_issue[FP_UNIT_IDS.FMADD].possible_issue <= 0;
-      //o_fp_unit_issue[FP_UNIT_IDS.FMADD].new_request <= 0;
-      //o_fp_unit_issue[FP_UNIT_IDS.FMADD].new_request_r <= new_request_r[FP_UNIT_IDS.FMADD];
-      //o_fp_unit_issue[FP_UNIT_IDS.FMADD].id <= id[FP_UNIT_IDS.FMADD];
-
-    //end
-  //end
-
-  //always_ff @ (posedge clk) begin
-    //if (pre_processing_stage_ready) begin
-      //o_fp_unit_issue[FP_UNIT_IDS.FDIV_SQRT].possible_issue <= possible_issue[FP_UNIT_IDS.FDIV_SQRT];
-      //o_fp_unit_issue[FP_UNIT_IDS.FDIV_SQRT].new_request <= new_request[FP_UNIT_IDS.FDIV_SQRT];
-      //o_fp_unit_issue[FP_UNIT_IDS.FDIV_SQRT].new_request_r <= new_request_r[FP_UNIT_IDS.FDIV_SQRT];
-      //o_fp_unit_issue[FP_UNIT_IDS.FDIV_SQRT].id <= id[FP_UNIT_IDS.FDIV_SQRT];
-    //end
-  //end
-
-  //always_ff @ (posedge clk) begin
-    //if (pre_processing_stage_ready) begin
-      //o_fp_unit_issue[FP_UNIT_IDS.MISC_WB2FP].possible_issue <= possible_issue[FP_UNIT_IDS.MISC_WB2FP];
-      //o_fp_unit_issue[FP_UNIT_IDS.MISC_WB2FP].new_request <= new_request[FP_UNIT_IDS.MISC_WB2FP];
-      //o_fp_unit_issue[FP_UNIT_IDS.MISC_WB2FP].new_request_r <= new_request_r[FP_UNIT_IDS.MISC_WB2FP];
-      //o_fp_unit_issue[FP_UNIT_IDS.MISC_WB2FP].id <= id[FP_UNIT_IDS.MISC_WB2FP];
-    //end
-  //end
-
-  //always_ff @ (posedge clk) begin
-    //if (pre_processing_stage_ready) begin
-      //o_fp_unit_issue[FP_UNIT_IDS.MISC_WB2INT].possible_issue <= possible_issue[FP_UNIT_IDS.MISC_WB2INT];
-      //o_fp_unit_issue[FP_UNIT_IDS.MISC_WB2INT].new_request <= new_request[FP_UNIT_IDS.MISC_WB2INT];
-      //o_fp_unit_issue[FP_UNIT_IDS.MISC_WB2INT].new_request_r <= new_request_r[FP_UNIT_IDS.MISC_WB2INT];
-      //o_fp_unit_issue[FP_UNIT_IDS.MISC_WB2INT].id <= id[FP_UNIT_IDS.MISC_WB2INT];
-    //end
-  //end
-
   genvar i;
   generate for (i = 0; i < FP_NUM_UNITS; i++) begin
       assign o_fp_unit_issue[i].possible_issue = possible_issue;

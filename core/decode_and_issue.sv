@@ -280,8 +280,14 @@ module decode_and_issue
 
     ////////////////////////////////////////////////////
     //Unit ready
-    generate for (i=0; i<TOTAL_NUM_UNITS; i++) begin
+    //generate for (i=0; i<TOTAL_NUM_UNITS; i++) begin
+    generate for (i=0; i<NUM_UNITS; i++) begin
         assign unit_ready[i] = unit_issue[i].ready;
+    end endgenerate
+    
+    //FP instructions are alwasy issued upon fp_operand_ready; the unit status is checked in the pre-processing stage
+    generate for (i=0; i<FP_NUM_UNITS; i++) begin
+        assign unit_ready[i+NUM_UNITS] = 1;
     end endgenerate
 
     ////////////////////////////////////////////////////
