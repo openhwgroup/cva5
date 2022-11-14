@@ -316,6 +316,7 @@ interface addr_utils_interface #(parameter bit [31:0] BASE_ADDR = 32'h00000000, 
 
         localparam int unsigned BIT_RANGE = bit_range();
 
+        /* verilator lint_off SELRANGE */
         function address_range_check (input logic[31:0] addr);
             return (BIT_RANGE == 0) ? 1 : (addr[31:32-BIT_RANGE] == BASE_ADDR[31:32-BIT_RANGE]);
         endfunction
