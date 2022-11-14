@@ -132,7 +132,7 @@ void CVA5Tracer::tick() {
         update_UART();
         update_memory();
 
-	#ifdef TRACE_ON
+	#ifdef PC_TRACE_ON
         for (int i =0; i < tb->NUM_RETIRE_PORTS; i++) {
             if (logPC && tb->retire_ports_valid[i]) {
             	*pcFile << std::hex << tb->retire_ports_pc[i] << std::endl;
@@ -145,7 +145,7 @@ void CVA5Tracer::tick() {
 
 void CVA5Tracer::start_tracer(const char *trace_file) {
 	#ifdef TRACE_ON
-		verilatorWaveformTracer = new VerilatedVcdC;
+		verilatorWaveformTracer = new VerilatedFstC;
 		tb->trace(verilatorWaveformTracer, 99);
 		verilatorWaveformTracer->open(trace_file);
 	#endif

@@ -26,7 +26,7 @@
 #include <iostream>
 #include <iterator>
 #include "verilated.h"
-#include "verilated_vcd_c.h"
+#include "verilated_fst_c.h"
 #include "Vcva5_sim.h"
 #include "SimMem.h"
 #include "AXI_DDR_simulation/axi_ddr_sim.h"
@@ -62,7 +62,7 @@ private:
   axi_ddr_sim * axi_ddr;
   SimMem *mem;
 #ifdef TRACE_ON
-		VerilatedVcdC	*verilatorWaveformTracer;
+		VerilatedFstC	*verilatorWaveformTracer;
 #endif
   std::ofstream* logFile;
   std::ofstream* pcFile;

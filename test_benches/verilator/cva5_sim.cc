@@ -2,7 +2,7 @@
 #include <iostream>
 #include <fstream>
 #include "verilated.h"
-#include "verilated_vcd_c.h"
+#include "verilated_fst_c.h"
 #include "svdpi.h"
 #include "Vcva5_sim__Dpi.h"
 #include "Vcva5_sim.h"
