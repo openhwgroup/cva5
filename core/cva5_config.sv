@@ -309,8 +309,8 @@ package cva5_config;
     localparam L1_CONNECTIONS = 4;
     typedef enum bit [1:0] {
         L1_DCACHE_ID = 0,
-        L1_DMMU_ID = 1,
-        L1_ICACHE_ID = 2,
+        L1_ICACHE_ID = 1,
+        L1_DMMU_ID = 2,
         L1_IMMU_ID = 3
     } l1_id_t;
 

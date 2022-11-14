@@ -76,7 +76,7 @@ module l1_arbiter
 
     ////////////////////////////////////////////////////
     //Dcache Specific
-    assign l2.wr_data_push = CONFIG.INCLUDE_DCACHE & (l1_request[L1_DCACHE_ID].request & ~l1_request[L1_DCACHE_ID].rnw & ~fifos_full); //Assumes data cache has highest priority
+    assign l2.wr_data_push = l2.request_push & ~l2.rnw;
     assign l2.wr_data = l1_request[L1_DCACHE_ID].data;
 
     assign l2.inv_ack = CONFIG.DCACHE.USE_EXTERNAL_INVALIDATIONS ? l1_response[L1_DCACHE_ID].inv_ack : l2.inv_valid;
@@ -98,12 +98,25 @@ module l1_arbiter
 
     ////////////////////////////////////////////////////
     //Arbitration
-    priority_encoder #(.WIDTH(L1_CONNECTIONS))
-    arb_encoder
-    (
-        .priority_vector (requests),
-        .encoded_result (arb_sel)
-    );
+    logic [$clog2(L1_CONNECTIONS)-1:0] state;
+    logic [$clog2(L1_CONNECTIONS)-1:0] muxes [L1_CONNECTIONS-1:0];
+
+    always_ff @(posedge clk) begin
+        if (rst)
+            state <= 0;
+        else if (l2.request_push)
+            state <= arb_sel;
+    end
+    always_comb begin
+        for (int i = 0; i < L1_CONNECTIONS; i++) begin
+            muxes[i] = $clog2(L1_CONNECTIONS)'(i);
+            for (int j = 0; j < L1_CONNECTIONS; j++) begin
+                if (requests[(i + j) % L1_CONNECTIONS])
+                    muxes[i] = $clog2(L1_CONNECTIONS)'((i + j) % L1_CONNECTIONS);
+            end
+        end
+    end
+    assign arb_sel = muxes[state];
 
     assign acks = L1_CONNECTIONS'(l2.request_push) << arb_sel;
 
