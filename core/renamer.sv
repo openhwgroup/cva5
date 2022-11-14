@@ -168,7 +168,10 @@ module renamer
     assign spec_table_next = spec_table_next_mux[spec_table_sel];
 
     assign spec_table_read_addr[0] = spec_table_write_index;
-    assign spec_table_read_addr[1:REGFILE_READ_PORTS] = '{decode.rs_addr[RS1], decode.rs_addr[RS2]};
+    always_comb begin
+        for (int i = 0; i < REGFILE_READ_PORTS; i++)
+            spec_table_read_addr[i+1] = decode.rs_addr[i];
+    end
 
     lutram_1w_mr #(
         .WIDTH($bits(spec_table_t)),

@@ -54,7 +54,8 @@ module register_file
     logic decode_inuse [REGFILE_READ_PORTS];
     logic decode_inuse_r [REGFILE_READ_PORTS];
 
-    genvar i;
+    phys_addr_t inuse_read_addr [REGFILE_READ_PORTS*2];
+    logic inuse [REGFILE_READ_PORTS*2];
     ////////////////////////////////////////////////////
     //Implementation
 
@@ -62,7 +63,14 @@ module register_file
     //Phys register inuse
     //toggle ports: decode advance, single-cycle/fetch_flush, multi-cycle commit
     //read ports: rs-decode, rs-issue
-
+    always_comb begin
+        for (int i = 0; i < REGFILE_READ_PORTS; i++) begin
+            inuse_read_addr[i] = decode_phys_rs_addr[i];
+            inuse_read_addr[i+REGFILE_READ_PORTS] = rf_issue.phys_rs_addr[i];
+            decode_inuse[i] = inuse[i];
+            rf_issue.inuse[i] = inuse[i+REGFILE_READ_PORTS];
+        end
+    end
     toggle_memory_set # (
         .DEPTH (64),
         .NUM_WRITE_PORTS (3),
@@ -84,18 +92,8 @@ module register_file
             rf_issue.phys_rd_addr, 
             commit[1].phys_addr
         }),
-        .read_addr ('{
-            decode_phys_rs_addr[RS1], 
-            decode_phys_rs_addr[RS2], 
-            rf_issue.phys_rs_addr[RS1], 
-            rf_issue.phys_rs_addr[RS2]
-        }),
-        .in_use ('{
-            decode_inuse[RS1],
-            decode_inuse[RS2],
-            rf_issue.inuse[RS1],
-            rf_issue.inuse[RS2]
-        })
+        .read_addr (inuse_read_addr),
+        .in_use (inuse)
     );
     always_ff @ (posedge clk) begin
         if (decode_advance)
@@ -105,7 +103,7 @@ module register_file
     //Register Banks
     //Implemented in seperate module as there is not universal tool support for inferring
     //arrays of memory blocks.
-    generate for (i = 0; i < CONFIG.NUM_WB_GROUPS; i++) begin : register_file_gen
+    generate for (genvar i = 0; i < CONFIG.NUM_WB_GROUPS; i++) begin : register_file_gen
         register_bank #(.NUM_READ_PORTS(REGFILE_READ_PORTS))
         reg_group (
             .clk, .rst,
