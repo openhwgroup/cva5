@@ -132,7 +132,7 @@ module dcache
         load_state_next[LOAD_FILL] = (load_state[LOAD_FILL] & ~line_complete) | (load_state[LOAD_L1_REQUEST] & load_l1_arb_ack);
     end
 
-    assign load_ready = (load_hit | load_state[LOAD_IDLE]);
+    assign load_ready = (load_state[LOAD_IDLE] | load_hit) & (store_state[STORE_IDLE]);
 
     always_ff @ (posedge clk) begin
         if (load_request) begin
@@ -170,7 +170,7 @@ module dcache
         store_state_next[STORE_IDLE] = (store_state[STORE_IDLE] & ~store_request) | (store_l1_arb_ack & ~store_request);
         store_state_next[STORE_L1_REQUEST] = (store_state[STORE_L1_REQUEST] & ~store_l1_arb_ack) | store_request;
     end
-    assign store_ready = (store_state[STORE_IDLE] | store_l1_arb_ack);
+    assign store_ready = (store_state[STORE_IDLE] | store_l1_arb_ack) & (load_state[LOAD_IDLE] | load_hit);
 
     assign ls.ready = is_load ? load_ready : store_ready;
 
@@ -185,13 +185,28 @@ module dcache
 
     ////////////////////////////////////////////////////
     //L1 Arbiter Interface
-    //Priority to oldest request (load if simultaneous load and store requests)
-    assign arb_load_sel = ~store_state[STORE_L1_REQUEST];//load_state[LOAD_L1_REQUEST];
+    //Priority to oldest request
+    fifo_interface #(.DATA_WIDTH(1)) request_order();
 
+    assign request_order.data_in = load_request;
+    assign request_order.push = load_request | store_request;
+    assign request_order.potential_push = request_order.push;
+
+    assign request_order.pop = l1_request.ack | load_hit;
+
+    cva5_fifo #(.DATA_WIDTH(1), .FIFO_DEPTH(2))
+    request_order_fifo (
+        .clk (clk),
+        .rst (rst), 
+        .fifo (request_order)
+    );
+
+    assign arb_load_sel = request_order.data_out;
+    
     assign l1_request.addr = arb_load_sel ? stage2_load.addr : stage2_store.addr;//Memory interface aligns request to burst size (done there to support AMO line-read word-write)
     assign l1_request.data = stage2_store.data;
     assign l1_request.rnw = arb_load_sel;
-    assign l1_request.be = arb_load_sel ? '0 : stage2_store.be;
+    assign l1_request.be = stage2_store.be;
     assign l1_request.size = (arb_load_sel & ~stage2_load.uncacheable) ? 5'(CONFIG.DCACHE.LINE_W-1) : 0;//LR and AMO ops are included in load
     assign l1_request.is_amo = 0;
     assign l1_request.amo = 0;
@@ -234,34 +249,19 @@ module dcache
 
     ////////////////////////////////////////////////////
     //Data Bank(s)
-    logic [SCONFIG.LINE_ADDR_W+SCONFIG.SUB_LINE_ADDR_W-1:0] fill_addr;
-    logic [SCONFIG.LINE_ADDR_W+SCONFIG.SUB_LINE_ADDR_W-1:0] porta_addr;
-    logic [3:0] collision;
-
-    assign fill_addr = {addr_utils.getTagLineAddr(stage2_load.addr), word_count};
-    assign porta_addr = load_state[LOAD_FILL] ? fill_addr : addr_utils.getDataLineAddr(ls_load.addr);
-
-    logic address_collision;
-    logic [31:0] data_in;
-
-    always_comb begin
-        address_collision = (ls_load.addr[31:2] == stage2_store.addr[31:2]);
-        for (int i = 0; i < 4; i++) begin
-            collision[i] = load_tag_check & stage2_store.be[i] & address_collision;
-            data_in[i*8 +: 8] = collision[i] ? stage2_store.data[i*8 +: 8] : l1_response.data[i*8 +: 8];
-        end
-    end
+    logic [SCONFIG.LINE_ADDR_W+SCONFIG.SUB_LINE_ADDR_W-1:0] data_read_addr;
+    assign data_read_addr = load_state[LOAD_FILL] ? {addr_utils.getTagLineAddr(stage2_load.addr), word_count} : addr_utils.getDataLineAddr(ls_load.addr);
 
     generate for (genvar i=0; i < CONFIG.DCACHE.WAYS; i++) begin : data_bank_gen
         byte_en_BRAM #(CONFIG.DCACHE.LINES*CONFIG.DCACHE.LINE_W) data_bank (
             .clk(clk),
-            .addr_a(porta_addr),
+            .addr_a(data_read_addr),
             .addr_b(addr_utils.getDataLineAddr(stage2_store.addr)),
             .en_a(load_tag_check | (replacement_way_r[i] & l1_response.data_valid)),
             .en_b(store_tag_hit_way[i]),
-            .be_a({4{(replacement_way_r[i] & l1_response.data_valid)}} | ({4{store_tag_hit_way[i]}} & collision)), 
+            .be_a({4{(replacement_way_r[i] & l1_response.data_valid)}}),
             .be_b(stage2_store.be),
-            .data_in_a(data_in),
+            .data_in_a(l1_response.data),
             .data_in_b(stage2_store.data),
             .data_out_a(ram_load_data[i]),
             .data_out_b()
@@ -304,8 +304,8 @@ module dcache
         assert property (@(posedge clk) disable iff (rst) load_request |-> load_ready)
         else $error("dcache received request when not ready");
 
-    dache_suprious_l1_ack:
+    dache_suprious_l1_ack_assertion:
         assert property (@(posedge clk) disable iff (rst) l1_request.ack |-> (load_state[LOAD_L1_REQUEST] | store_state[STORE_L1_REQUEST]))
-        else $error("dcache received request when not ready");
+        else $error("dcache received ack without a request");
 
 endmodule

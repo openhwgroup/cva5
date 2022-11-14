@@ -85,17 +85,15 @@ module load_store_unit
     addr_utils_interface #(CONFIG.DCACHE.NON_CACHEABLE.L, CONFIG.DCACHE.NON_CACHEABLE.H) uncacheable_utils ();
 
     logic [NUM_SUB_UNITS-1:0] sub_unit_address_match;
-    logic dcache_load_address_match;
-    logic dcache_store_address_match;
 
     data_access_shared_inputs_t shared_inputs;
     logic [31:0] unit_data_array [NUM_SUB_UNITS-1:0];
     logic [NUM_SUB_UNITS-1:0] unit_ready;
     logic [NUM_SUB_UNITS-1:0] unit_data_valid;
     logic [NUM_SUB_UNITS-1:0] last_unit;
-    logic [NUM_SUB_UNITS-1:0] current_unit;
 
     logic sub_unit_ready;
+    logic [NUM_SUB_UNITS_W-1:0] subunit_id;
 
     logic unit_switch;
     logic unit_switch_in_progress;
@@ -114,13 +112,9 @@ module load_store_unit
     logic [31:0] aligned_load_data;
     logic [31:0] final_load_data;
 
-
     logic unaligned_addr;
     logic load_exception_complete;
     logic fence_hold;
-
-    logic dcache_load_request;
-    logic dcache_store_request;
 
     typedef struct packed{
         logic is_signed;
@@ -240,20 +234,18 @@ module load_store_unit
         .retire_port_valid (retire_port_valid)
     );
     assign shared_inputs = sel_load ? lsq.load_data_out : lsq.store_data_out;
-    assign lsq.load_pop = sub_unit_load_issue | dcache_load_request;
-    assign lsq.store_pop = sub_unit_store_issue | dcache_store_request;
+    assign lsq.load_pop = sub_unit_load_issue;
+    assign lsq.store_pop = sub_unit_store_issue;
 
     ////////////////////////////////////////////////////
     //Unit tracking
-    assign current_unit = sub_unit_address_match;
-
     always_ff @ (posedge clk) begin
         if (load_attributes.push)
             last_unit <= sub_unit_address_match;
     end
 
     //When switching units, ensure no outstanding loads so that there can be no timing collisions with results
-    assign unit_switch = (current_unit != last_unit) & load_attributes.valid;
+    assign unit_switch = lsq.load_valid & (sub_unit_address_match != last_unit) & load_attributes.valid;
     always_ff @ (posedge clk) begin
         unit_switch_in_progress <= (unit_switch_in_progress | unit_switch) & ~load_attributes.valid;
     end
@@ -268,9 +260,9 @@ module load_store_unit
 
     assign issue.ready = (~tlb_on | tlb.ready) & (~lsq.full) & (~fence_hold) & (~exception.valid);
 
-    assign sub_unit_load_issue = sel_load & lsq.load_valid & sub_unit_ready;
-    assign sub_unit_store_issue = (lsq.store_valid & ~sel_load) & sub_unit_ready;
-    assign sub_unit_issue = (lsq.load_valid | lsq.store_valid) & sub_unit_ready;
+    assign sub_unit_load_issue = sel_load & lsq.load_valid & sub_unit_ready & sub_unit_address_match[subunit_id];
+    assign sub_unit_store_issue = (lsq.store_valid & ~sel_load) & sub_unit_ready & sub_unit_address_match[subunit_id];
+    assign sub_unit_issue = (lsq.load_valid | lsq.store_valid) & sub_unit_ready & sub_unit_address_match[subunit_id];
 
     always_ff @ (posedge clk) begin
         if (rst)
@@ -282,7 +274,6 @@ module load_store_unit
     ////////////////////////////////////////////////////
     //Load attributes FIFO
     logic [1:0] final_mux_sel;
-    logic [NUM_SUB_UNITS_W-1:0] subunit_id;
 
     one_hot_to_integer #(NUM_SUB_UNITS)
     sub_unit_select (
@@ -309,7 +300,7 @@ module load_store_unit
     };
 
     assign load_attributes.data_in = mem_attr;
-    assign load_attributes.push = sub_unit_load_issue | dcache_load_request;
+    assign load_attributes.push = sub_unit_load_issue;
     assign load_attributes.potential_push = load_attributes.push;
     
     cva5_fifo #(.DATA_WIDTH($bits(load_attributes_t)), .FIFO_DEPTH(ATTRIBUTES_DEPTH))
@@ -381,16 +372,16 @@ module load_store_unit
             logic store_ready;
             logic uncacheable_load;
             logic uncacheable_store;
+            logic dcache_load_request;
+            logic dcache_store_request;
 
-            assign dcache_load_address_match = dcache_addr_utils.address_range_check(lsq.load_data_out.addr);
-            assign dcache_store_address_match = dcache_addr_utils.address_range_check(lsq.store_data_out.addr);
-            assign sub_unit_address_match[DCACHE_ID] = sel_load ? dcache_load_address_match : dcache_store_address_match;
+            assign sub_unit_address_match[DCACHE_ID] = dcache_addr_utils.address_range_check(shared_inputs.addr);
 
-            assign uncacheable_load = CONFIG.DCACHE.USE_NON_CACHEABLE & uncacheable_utils.address_range_check(lsq.load_data_out.addr);
-            assign uncacheable_store = CONFIG.DCACHE.USE_NON_CACHEABLE & uncacheable_utils.address_range_check(lsq.store_data_out.addr);
+            assign uncacheable_load = CONFIG.DCACHE.USE_NON_CACHEABLE & uncacheable_utils.address_range_check(shared_inputs.addr);
+            assign uncacheable_store = CONFIG.DCACHE.USE_NON_CACHEABLE & uncacheable_utils.address_range_check(shared_inputs.addr);
 
-            assign dcache_load_request = dcache_load_address_match & lsq.load_valid & load_ready & ~unit_switch_hold;
-            assign dcache_store_request = dcache_store_address_match & lsq.store_valid & store_ready & ~unit_switch_hold;
+            assign dcache_load_request = sub_unit_load_issue & sub_unit_address_match[DCACHE_ID];
+            assign dcache_store_request = sub_unit_store_issue & sub_unit_address_match[DCACHE_ID];
 
             dcache # (.CONFIG(CONFIG))
             data_cache (
