@@ -53,13 +53,12 @@ module renamer
         phys_addr_t previous_phys_addr;
         logic [$clog2(CONFIG.NUM_WB_GROUPS)-1:0] previous_wb_group;
     } renamer_metadata_t;
-    renamer_metadata_t inuse_list_input;
-    renamer_metadata_t inuse_list_output;
+    renamer_metadata_t inuse_table_input;
+    renamer_metadata_t inuse_table_output;
 
     logic [5:0] clear_index;
 
     fifo_interface #(.DATA_WIDTH($bits(phys_addr_t))) free_list ();
-    fifo_interface #(.DATA_WIDTH($bits(renamer_metadata_t))) inuse_list ();
 
     logic rename_valid;
     logic rollback;
@@ -95,28 +94,27 @@ module renamer
     assign free_list.potential_push = (gc.init_clear & ~clear_index[5]) | (retire.valid);
     assign free_list.push = free_list.potential_push;
 
-    assign free_list.data_in = gc.init_clear ? {1'b1, clear_index[4:0]} : (gc.writeback_supress ? inuse_list_output.spec_phys_addr : inuse_list_output.previous_phys_addr);
+    assign free_list.data_in = gc.init_clear ? {1'b1, clear_index[4:0]} : (gc.writeback_supress ? inuse_table_output.spec_phys_addr : inuse_table_output.previous_phys_addr);
     assign free_list.pop = rename_valid;
 
     ////////////////////////////////////////////////////
-    //Inuse list FIFO
-    cva5_fifo #(.DATA_WIDTH($bits(renamer_metadata_t)), .FIFO_DEPTH(32)) inuse_list_fifo (
+    //Inuse table
+    assign inuse_table_input = '{
+        rd_addr : issue.rd_addr,
+        spec_phys_addr : issue.phys_rd_addr,
+        previous_phys_addr : spec_table_previous_r.phys_addr,
+        previous_wb_group : spec_table_previous_r.wb_group
+    };
+
+    lutram_1w_1r #(.WIDTH($bits(renamer_metadata_t)), .DEPTH(MAX_IDS))
+    inuse_table (
         .clk (clk),
-        .rst (rst),
-        .fifo (inuse_list)
+        .waddr (issue.id),
+        .raddr (retire.phys_id),
+        .ram_write (instruction_issued_with_rd),
+        .new_ram_data (inuse_table_input),
+        .ram_data_out (inuse_table_output)
     );
-
-    assign inuse_list.potential_push = instruction_issued_with_rd & |issue.rd_addr;
-    assign inuse_list.push = inuse_list.potential_push;
-
-    assign inuse_list_input.rd_addr = issue.rd_addr;
-    assign inuse_list_input.spec_phys_addr = issue.phys_rd_addr;
-    assign inuse_list_input.previous_phys_addr = spec_table_previous_r.phys_addr;
-    assign inuse_list_input.previous_wb_group = spec_table_previous_r.wb_group;
-    assign inuse_list.data_in = inuse_list_input;
-
-    assign inuse_list_output = inuse_list.data_out;
-    assign inuse_list.pop = retire.valid;
 
     ////////////////////////////////////////////////////
     //Speculative rd-to-phys Table
@@ -131,7 +129,6 @@ module renamer
 
     spec_table_t spec_table_next;
     spec_table_t spec_table_next_mux [4];
-    spec_table_t spec_table_previous;
     spec_table_t spec_table_previous_r;
 
     logic spec_table_update;
@@ -152,9 +149,9 @@ module renamer
     assign spec_table_next_mux[0].phys_addr = free_list.data_out;
     assign spec_table_next_mux[0].wb_group = decode.rd_wb_group;
     //gc.writeback_supress
-    assign spec_table_write_index_mux[1] = inuse_list_output.rd_addr;
-    assign spec_table_next_mux[1].phys_addr = inuse_list_output.previous_phys_addr;
-    assign spec_table_next_mux[1].wb_group = inuse_list_output.previous_wb_group;
+    assign spec_table_write_index_mux[1] = inuse_table_output.rd_addr;
+    assign spec_table_next_mux[1].phys_addr = inuse_table_output.previous_phys_addr;
+    assign spec_table_next_mux[1].wb_group = inuse_table_output.previous_wb_group;
     //rollback
     assign spec_table_write_index_mux[2] = issue.rd_addr;
     assign spec_table_next_mux[2].phys_addr = spec_table_previous_r.phys_addr;
@@ -168,10 +165,7 @@ module renamer
     assign spec_table_next = spec_table_next_mux[spec_table_sel];
 
     assign spec_table_read_addr[0] = spec_table_write_index;
-    always_comb begin
-        for (int i = 0; i < REGFILE_READ_PORTS; i++)
-            spec_table_read_addr[i+1] = decode.rs_addr[i];
-    end
+    assign spec_table_read_addr[1+:REGFILE_READ_PORTS] = decode.rs_addr;
 
     lutram_1w_mr #(
         .WIDTH($bits(spec_table_t)),
@@ -186,24 +180,20 @@ module renamer
         .new_ram_data(spec_table_next),
         .ram_data_out(spec_table_read_data)
     );
-    assign spec_table_previous = spec_table_read_data[0];
 
     always_ff @ (posedge clk) begin
-        if (spec_table_update) begin
-            spec_table_previous_r <= spec_table_previous;
-        end
+        if (spec_table_update)
+            spec_table_previous_r <= spec_table_read_data[0];
     end
 
     ////////////////////////////////////////////////////
     //Renamed Outputs
-    spec_table_t [REGFILE_READ_PORTS-1:0] spec_table_decode;
     generate for (genvar i = 0; i < REGFILE_READ_PORTS; i++) begin : gen_renamed_addrs
-        assign spec_table_decode[i] = spec_table_read_data[i+1];
-        assign decode.phys_rs_addr[i] = spec_table_decode[i].phys_addr;
-        assign decode.rs_wb_group[i] = spec_table_decode[i].wb_group;
+        assign decode.phys_rs_addr[i] = spec_table_read_data[i+1].phys_addr;
+        assign decode.rs_wb_group[i] = spec_table_read_data[i+1].wb_group;
     end endgenerate
-
     assign decode.phys_rd_addr = |decode.rd_addr ? free_list.data_out : '0;
+
     ////////////////////////////////////////////////////
     //End of Implementation
     ////////////////////////////////////////////////////
