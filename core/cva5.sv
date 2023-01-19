@@ -83,8 +83,13 @@ module cva5
     //Writeback Port Assignment
     //
     localparam int unsigned NUM_WB_UNITS_GROUP_1 = 1;//ALU
+    localparam int unsigned ALU_UNIT_WB1_ID = 32'd0;
+
     localparam int unsigned NUM_WB_UNITS_GROUP_2 = 1 + int'(CONFIG.INCLUDE_CSRS) + int'(CONFIG.INCLUDE_MUL) + int'(CONFIG.INCLUDE_DIV);//LS
-    localparam int unsigned NUM_WB_UNITS = NUM_WB_UNITS_GROUP_1 + NUM_WB_UNITS_GROUP_2;
+    localparam int unsigned LS_UNIT_WB2_ID = 32'd0;
+    localparam int unsigned CSR_UNIT_WB2_ID = LS_UNIT_WB2_ID + int'(CONFIG.INCLUDE_CSRS);
+    localparam int unsigned MUL_UNIT_WB2_ID = CSR_UNIT_WB2_ID + int'(CONFIG.INCLUDE_MUL);
+    localparam int unsigned DIV_UNIT_WB2_ID = MUL_UNIT_WB2_ID + int'(CONFIG.INCLUDE_DIV);
 
     ////////////////////////////////////////////////////
     //Connecting Signals
@@ -119,7 +124,8 @@ module cva5
     exception_packet_t  ls_exception;
     logic ls_exception_is_store;
 
-    unit_writeback_interface unit_wb  [NUM_WB_UNITS]();
+    unit_writeback_interface unit_wb1  [NUM_WB_UNITS_GROUP_1]();
+    unit_writeback_interface unit_wb2  [NUM_WB_UNITS_GROUP_2]();
 
     mmu_interface immu();
     mmu_interface dmmu();
@@ -408,7 +414,7 @@ module cva5
         .rst (rst),
         .alu_inputs (alu_inputs),
         .issue (unit_issue[UNIT_IDS.ALU]), 
-        .wb (unit_wb[UNIT_IDS.ALU])
+        .wb (unit_wb1[ALU_UNIT_WB1_ID])
     );
 
     load_store_unit #(.CONFIG(CONFIG))
@@ -435,7 +441,7 @@ module cva5
         .retire_port_valid(retire_port_valid),
         .exception (exception[LS_EXCEPTION]),
         .load_store_status(load_store_status),
-        .wb (unit_wb[UNIT_IDS.LS])
+        .wb (unit_wb2[LS_UNIT_WB2_ID])
     );
 
     generate if (CONFIG.INCLUDE_S_MODE) begin : gen_dtlb_dmmu
@@ -473,7 +479,7 @@ module cva5
             .rst(rst),
             .csr_inputs (csr_inputs),
             .issue (unit_issue[UNIT_IDS.CSR]), 
-            .wb (unit_wb[UNIT_IDS.CSR]),
+            .wb (unit_wb2[CSR_UNIT_WB2_ID]),
             .current_privilege(current_privilege),
             .interrupt_taken(interrupt_taken),
             .interrupt_pending(interrupt_pending),
@@ -525,7 +531,7 @@ module cva5
             .rst (rst),
             .mul_inputs (mul_inputs),
             .issue (unit_issue[UNIT_IDS.MUL]),
-            .wb (unit_wb[UNIT_IDS.MUL])
+            .wb (unit_wb2[MUL_UNIT_WB2_ID])
         );
     end endgenerate
 
@@ -535,7 +541,7 @@ module cva5
             .rst (rst),
             .div_inputs (div_inputs),
             .issue (unit_issue[UNIT_IDS.DIV]), 
-            .wb (unit_wb[UNIT_IDS.DIV])
+            .wb (unit_wb2[DIV_UNIT_WB2_ID])
         );
     end endgenerate
 
@@ -543,19 +549,44 @@ module cva5
     //Writeback
     //First writeback port: ALU
     //Second writeback port: LS, CSR, [MUL], [DIV]
-    localparam int unsigned NUM_UNITS_PER_PORT [CONFIG.NUM_WB_GROUPS] = '{NUM_WB_UNITS_GROUP_1, NUM_WB_UNITS_GROUP_2};
     writeback #(
         .CONFIG (CONFIG),
-        .NUM_UNITS (NUM_UNITS_PER_PORT),
-        .NUM_WB_UNITS (NUM_WB_UNITS)
+        .NUM_WB_UNITS (NUM_WB_UNITS_GROUP_1)
     )
-    writeback_block (
+    writeback_block1 (
         .clk (clk),
         .rst (rst),
-        .wb_packet (wb_packet),
-        .unit_wb (unit_wb),
-        .wb_snoop (wb_snoop)
+        .wb_packet (wb_packet[0]),
+        .unit_wb (unit_wb1)
     );
+    writeback #(
+        .CONFIG (CONFIG),
+        .NUM_WB_UNITS (NUM_WB_UNITS_GROUP_2)
+    )
+    writeback_block2 (
+        .clk (clk),
+        .rst (rst),
+        .wb_packet (wb_packet[1]),
+        .unit_wb (unit_wb2)
+    );
+
+
+    ////////////////////////////////////////////////////
+    //Store Forwarding Support
+    //TODO: support additional writeback groups
+    //currently limited to one writeback group with the
+    //assumption that writeback group zero has single-cycle
+    //operation
+    always_ff @ (posedge clk) begin
+        if (rst)
+            wb_snoop.valid <= 0;
+        else
+            wb_snoop.valid <= wb_packet[1].valid;
+    end
+    always_ff @ (posedge clk) begin
+        wb_snoop.data <= wb_packet[1].data;
+        wb_snoop.id <= wb_packet[1].id;
+    end
 
     ////////////////////////////////////////////////////
     //End of Implementation
