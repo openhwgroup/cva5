@@ -229,7 +229,6 @@ module fp_normalize_rounding_top #(
     assign round_packet.expo_overflow = expo_overflow_norm;
     assign round_packet.hidden = hidden_norm;
     assign round_packet.id = normalize_pre_processing_packet_r.id;
-    assign round_packet.valid = normalize_pre_processing_packet_r.valid;
     assign round_packet.result_if_overflow = result_if_overflow;
     assign round_packet.fflags = {normalize_pre_processing_packet_r.fflags[4:1], normalize_pre_processing_packet_r.fflags[0] | |grs_norm};
     assign round_packet.overflow_before_rounding = overflow_before_rounding;

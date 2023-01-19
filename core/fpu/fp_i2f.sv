@@ -59,18 +59,21 @@ module fp_i2f (
   clz clz_inst(.clz_input(int_rs1_abs), .clz(clz));
   assign i2f_int_width_minus_1 = (XLEN - 1) - EXPO_WIDTH'(clz); 
 
-  // handle reduced precision < XLEN
+  // reduced precision >= XLEN can be handled using main shifter
   generate if (FRAC_WIDTH >= XLEN) begin
     assign i2f_frac = {{(FRAC_WIDTH-XLEN){1'b0}}, int_rs1_abs};
     assign i2f_grs = 0; //the entire integer will fit in mantissa field
     assign i2f_clz = FRAC_WIDTH - i2f_int_width_minus_1;
-  end else begin
-    assign i2f_frac = int_rs1_abs[XLEN-1-:FRAC_WIDTH];
-    assign i2f_grs = {int_rs1_abs[XLEN-1-FRAC_WIDTH-:2], |int_rs1_abs[XLEN-1-FRAC_WIDTH-2:0]};
-    assign i2f_clz = $bits(fp_shift_amt_t)'(clz) + 1;
+    assign i2f_expo = (FRAC_WIDTH + BIAS) & {{EXPO_WIDTH{~int_rs1_zero}}};
+  end else begin // reduced precision < XLEN won't fit in main shifter, so is handled here
+    logic[XLEN+2:0] wide;
+    assign wide = {int_rs1_abs << (clz+1), 3'b0};
+    assign i2f_frac = wide[XLEN+2-:FRAC_WIDTH]; //Will contain everything after the leading 1
+    assign i2f_grs = {wide[XLEN+2-FRAC_WIDTH-:2], |wide[XLEN+2-FRAC_WIDTH-2:0]};
+    assign i2f_clz = '0; //Bypass main shifter
+    assign i2f_expo = int_rs1_zero ? '0 : BIAS-1 + (XLEN-{6'b0, clz});
   end 
   endgenerate
-  assign i2f_expo = (FRAC_WIDTH + BIAS) & {{EXPO_WIDTH{~int_rs1_zero}}};
   assign i2f_rd = {int_rs1_sign, i2f_expo, i2f_frac};
 
   ////////////////////////////////////////////////////
