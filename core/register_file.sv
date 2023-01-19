@@ -109,8 +109,9 @@ module register_file
             .clk, .rst,
             .write_addr(commit[i].phys_addr),
             .new_data(commit[i].data),
-            .commit(commit[i].valid & |commit[i].phys_addr & ~gc.writeback_supress),
+            .commit(commit[i].valid & ~gc.writeback_supress),
             .read_addr(decode_phys_rs_addr),
+            .read_en(decode_advance),
             .data(rs_data_set[i])
         );
     end endgenerate
@@ -121,11 +122,8 @@ module register_file
 
     rs_data_set_t bypass_set [CONFIG.NUM_WB_GROUPS];
     wb_packet_t commit_r [CONFIG.NUM_WB_GROUPS][REGFILE_READ_PORTS];
-    rs_data_set_t rs_data_set_r [CONFIG.NUM_WB_GROUPS];
 
     always_ff @ (posedge clk) begin
-        if (decode_advance)
-            rs_data_set_r <= rs_data_set;
         for (int i = 0; i < REGFILE_READ_PORTS; i++) begin
             if (decode_advance | rf_issue.inuse[i]) begin
                 bypass <= decode_advance ? decode_inuse : decode_inuse_r;
@@ -137,7 +135,7 @@ module register_file
     always_comb begin
         for (int i = 0; i < REGFILE_READ_PORTS; i++) begin
             for (int j = 0; j < CONFIG.NUM_WB_GROUPS; j++) begin
-                bypass_set[j][i] =  bypass[i] ? commit_r[i][j].data : rs_data_set_r[j][i];
+                bypass_set[j][i] =  bypass[i] ? commit_r[i][j].data : rs_data_set[j][i];
             end
             rf_issue.data[i] = bypass_set[rf_issue.rs_wb_group[i]][i];
         end

@@ -40,6 +40,7 @@ module register_bank
 
         //Issue
         input phys_addr_t read_addr [NUM_READ_PORTS],
+        input logic read_en,
         output logic [31:0] data [NUM_READ_PORTS]
     );
 
@@ -57,13 +58,18 @@ module register_bank
     end
     
     generate for (genvar i = 0; i < NUM_READ_PORTS; i++)
-        assign data[i] = register_file_bank[read_addr[i]];
+        always_ff @ (posedge clk) begin
+            if (rst | (~|read_addr[i] & read_en))
+                data[i] <= 0;
+            else if (read_en)
+                data[i] <= register_file_bank[read_addr[i]];
+        end
     endgenerate
 
     ////////////////////////////////////////////////////
     //Assertions
-    write_to_zero_reg_assertion:
-        assert property (@(posedge clk) disable iff (rst) !(commit & write_addr == 0))
-        else $error("Write to zero reg occured!");
+    //write_to_zero_reg_assertion:
+    //    assert property (@(posedge clk) disable iff (rst) !(commit & write_addr == 0))
+    //    else $error("Write to zero reg occured!");
 
 endmodule
