@@ -80,15 +80,6 @@ module writeback
                 assign unit_phys_addr[i][j] = unit_wb[CUMULATIVE_NUM_UNITS[i] + j].phys_addr;
                 assign unit_done[i][j] = unit_wb[CUMULATIVE_NUM_UNITS[i] + j].done;
                 assign unit_wb[CUMULATIVE_NUM_UNITS[i] + j].ack = unit_ack[i][j];
-            end
-        end
-    endgenerate
-
-    //As units are selected for commit ports based on their unit ID,
-    //for each additional commit port one unit can be skipped for the commit mux
-    generate
-        for (i = 0; i < CONFIG.NUM_WB_GROUPS; i++) begin : gen_wb_port_grouping
-            for (j = 0; j < NUM_UNITS[i]; j++) begin : gen_wb_unit_grouping
                 assign unit_rd[i][j] = unit_wb[CUMULATIVE_NUM_UNITS[i] + j].rd;
             end
         end
