@@ -249,7 +249,7 @@ package cva5_config;
             RAS_ENTRIES : 8
         },
         //Writeback Options
-        NUM_WB_GROUPS : 2
+        NUM_WB_GROUPS : 3
     };
 
     ////////////////////////////////////////////////////
@@ -282,7 +282,7 @@ package cva5_config;
     ////////////////////////////////////////////////////
     //ID limit
     //MAX_IDS restricted to a power of 2
-    localparam MAX_IDS = 8; //8 sufficient for rv32im configs
+    localparam MAX_IDS = 16; //8 sufficient for rv32im configs
 
     ////////////////////////////////////////////////////
     //Number of commit ports

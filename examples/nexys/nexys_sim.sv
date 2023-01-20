@@ -198,7 +198,7 @@ module cva5_sim
             RAS_ENTRIES : 8
         },
         //Writeback Options
-        NUM_WB_GROUPS : 2
+        NUM_WB_GROUPS : 3
     };
 
     parameter SCRATCH_MEM_KB = 128;

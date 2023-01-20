@@ -164,10 +164,19 @@ module decode_and_issue
 
     ////////////////////////////////////////////////////
     //Renamer Support
+    logic [$clog2(CONFIG.NUM_WB_GROUPS)-1:0] renamer_wb_group;
+    always_comb begin
+        renamer_wb_group = 2;
+        if (unit_needed[UNIT_IDS.ALU])
+            renamer_wb_group = 0;
+        else if (unit_needed[UNIT_IDS.LS] )
+            renamer_wb_group = 1;
+    end
     assign renamer.rd_addr = rd_addr;
     assign renamer.rs_addr = rs_addr;
     assign renamer.uses_rd = uses_rd;
-    assign renamer.rd_wb_group = ~unit_needed[UNIT_IDS.ALU];//TODO: automate generation of wb group logic
+
+    assign renamer.rd_wb_group = renamer_wb_group;
     assign renamer.id = decode.id;
 
     ////////////////////////////////////////////////////

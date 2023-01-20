@@ -271,7 +271,7 @@ module litex_wrapper
             RAS_ENTRIES : 8
         },
         //Writeback Options
-        NUM_WB_GROUPS : 2
+        NUM_WB_GROUPS : 3
     };
 
     function cpu_config_t config_select (input integer variant);

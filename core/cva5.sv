@@ -85,11 +85,13 @@ module cva5
     localparam int unsigned NUM_WB_UNITS_GROUP_1 = 1;//ALU
     localparam int unsigned ALU_UNIT_WB1_ID = 32'd0;
 
-    localparam int unsigned NUM_WB_UNITS_GROUP_2 = 1 + int'(CONFIG.INCLUDE_CSRS) + int'(CONFIG.INCLUDE_MUL) + int'(CONFIG.INCLUDE_DIV);//LS
+    localparam int unsigned NUM_WB_UNITS_GROUP_2 = 1;//LS
     localparam int unsigned LS_UNIT_WB2_ID = 32'd0;
-    localparam int unsigned CSR_UNIT_WB2_ID = LS_UNIT_WB2_ID + int'(CONFIG.INCLUDE_CSRS);
-    localparam int unsigned MUL_UNIT_WB2_ID = CSR_UNIT_WB2_ID + int'(CONFIG.INCLUDE_MUL);
-    localparam int unsigned DIV_UNIT_WB2_ID = MUL_UNIT_WB2_ID + int'(CONFIG.INCLUDE_DIV);
+
+    localparam int unsigned NUM_WB_UNITS_GROUP_3 = int'(CONFIG.INCLUDE_CSRS) + int'(CONFIG.INCLUDE_MUL) + int'(CONFIG.INCLUDE_DIV);
+    localparam int unsigned DIV_UNIT_WB3_ID = 32'd0;
+    localparam int unsigned MUL_UNIT_WB3_ID = 32'd0 +  int'(CONFIG.INCLUDE_DIV);
+    localparam int unsigned CSR_UNIT_WB3_ID = 32'd0 + int'(CONFIG.INCLUDE_MUL)+ int'(CONFIG.INCLUDE_DIV);
 
     ////////////////////////////////////////////////////
     //Connecting Signals
@@ -124,8 +126,9 @@ module cva5
     exception_packet_t  ls_exception;
     logic ls_exception_is_store;
 
-    unit_writeback_interface unit_wb1  [NUM_WB_UNITS_GROUP_1]();
-    unit_writeback_interface unit_wb2  [NUM_WB_UNITS_GROUP_2]();
+    unit_writeback_interface unit_wb1 [NUM_WB_UNITS_GROUP_1]();
+    unit_writeback_interface unit_wb2 [NUM_WB_UNITS_GROUP_2]();
+    unit_writeback_interface unit_wb3 [NUM_WB_UNITS_GROUP_3]();
 
     mmu_interface immu();
     mmu_interface dmmu();
@@ -192,9 +195,6 @@ module cva5
     logic illegal_instruction;
     logic instruction_issued;
     logic instruction_issued_with_rd;
-
-    //LS
-    wb_packet_t wb_snoop;
 
     ////////////////////////////////////////////////////
     //Implementation
@@ -436,7 +436,7 @@ module cva5
         .m_avalon (m_avalon),
         .dwishbone (dwishbone),                                       
         .data_bram (data_bram),
-        .wb_snoop (wb_snoop),
+        .wb_packet (wb_packet),
         .retire_ids (retire_ids),
         .retire_port_valid(retire_port_valid),
         .exception (exception[LS_EXCEPTION]),
@@ -479,7 +479,7 @@ module cva5
             .rst(rst),
             .csr_inputs (csr_inputs),
             .issue (unit_issue[UNIT_IDS.CSR]), 
-            .wb (unit_wb2[CSR_UNIT_WB2_ID]),
+            .wb (unit_wb3[CSR_UNIT_WB3_ID]),
             .current_privilege(current_privilege),
             .interrupt_taken(interrupt_taken),
             .interrupt_pending(interrupt_pending),
@@ -531,7 +531,7 @@ module cva5
             .rst (rst),
             .mul_inputs (mul_inputs),
             .issue (unit_issue[UNIT_IDS.MUL]),
-            .wb (unit_wb2[MUL_UNIT_WB2_ID])
+            .wb (unit_wb3[MUL_UNIT_WB3_ID])
         );
     end endgenerate
 
@@ -541,7 +541,7 @@ module cva5
             .rst (rst),
             .div_inputs (div_inputs),
             .issue (unit_issue[UNIT_IDS.DIV]), 
-            .wb (unit_wb2[DIV_UNIT_WB2_ID])
+            .wb (unit_wb3[DIV_UNIT_WB3_ID])
         );
     end endgenerate
 
@@ -570,24 +570,18 @@ module cva5
         .unit_wb (unit_wb2)
     );
 
-
-    ////////////////////////////////////////////////////
-    //Store Forwarding Support
-    //TODO: support additional writeback groups
-    //currently limited to one writeback group with the
-    //assumption that writeback group zero has single-cycle
-    //operation
-    always_ff @ (posedge clk) begin
-        if (rst)
-            wb_snoop.valid <= 0;
-        else
-            wb_snoop.valid <= wb_packet[1].valid;
-    end
-    always_ff @ (posedge clk) begin
-        wb_snoop.data <= wb_packet[1].data;
-        wb_snoop.id <= wb_packet[1].id;
-    end
-
+    generate if (NUM_WB_UNITS_GROUP_3 > 0) begin : gen_wb3
+        writeback #(
+            .CONFIG (CONFIG),
+            .NUM_WB_UNITS (NUM_WB_UNITS_GROUP_3)
+        )
+        writeback_block3 (
+            .clk (clk),
+            .rst (rst),
+            .wb_packet (wb_packet[2]),
+            .unit_wb (unit_wb3)
+        );
+    end endgenerate
     ////////////////////////////////////////////////////
     //End of Implementation
     ////////////////////////////////////////////////////

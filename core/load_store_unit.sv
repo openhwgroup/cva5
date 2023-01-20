@@ -55,7 +55,7 @@ module load_store_unit
         local_memory_interface.master data_bram,
 
         //Writeback-Store Interface
-        input wb_packet_t wb_snoop,
+        input wb_packet_t wb_packet [CONFIG.NUM_WB_GROUPS],
 
         //Retire release
         input id_t retire_ids [RETIRE_PORTS],
@@ -229,7 +229,7 @@ module load_store_unit
         .rst (rst),
         .gc (gc),
         .lsq (lsq),
-        .wb_snoop (wb_snoop),
+        .wb_packet (wb_packet),
         .retire_ids (retire_ids),
         .retire_port_valid (retire_port_valid)
     );

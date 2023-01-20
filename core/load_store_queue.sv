@@ -36,7 +36,7 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
 
         load_store_queue_interface.queue lsq,
         //Writeback snooping
-        input wb_packet_t wb_snoop,
+        input wb_packet_t wb_packet [CONFIG.NUM_WB_GROUPS],
 
         //Retire release
         input id_t retire_ids [RETIRE_PORTS],
@@ -56,8 +56,6 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
     sq_entry_t sq_entry;
     logic store_conflict;
 
-    logic write_forwarded;
-
     lq_entry_t lq_data_in;
     lq_entry_t lq_data_out;
 
@@ -66,8 +64,8 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
     ////////////////////////////////////////////////////
     //Implementation
 
-    //Can accept requests so long as store queue is not needed or is not full
-    assign lsq.full = lsq.data_in.store & (sq.full | (~lsq.data_in.forwarded_store & write_forwarded));
+    //Can accept requests so long as store queue is not full
+    assign lsq.full = lsq.data_in.store & sq.full;
     
     //Address hash for load-store collision checking
     addr_hash lsq_addr_hash (
@@ -117,8 +115,7 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
         .potential_store_conflicts (potential_store_conflicts),
         .prev_store_conflicts (lq_data_out.potential_store_conflicts),
         .store_conflict (store_conflict),
-        .wb_snoop (wb_snoop),
-        .write_forwarded (write_forwarded),
+        .wb_packet (wb_packet),
         .retire_ids (retire_ids),
         .retire_port_valid (retire_port_valid)
     );

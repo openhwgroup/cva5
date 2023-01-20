@@ -73,7 +73,7 @@ module register_file
     end
     toggle_memory_set # (
         .DEPTH (64),
-        .NUM_WRITE_PORTS (3),
+        .NUM_WRITE_PORTS (4),
         .NUM_READ_PORTS (REGFILE_READ_PORTS*2),
         .WRITE_INDEX_FOR_RESET (0),
         .READ_INDEX_FOR_RESET (0)
@@ -85,12 +85,14 @@ module register_file
         .toggle ('{
             (decode_advance & decode_uses_rd & |decode_phys_rd_addr & ~gc.fetch_flush),
             rf_issue.single_cycle_or_flush,
-            commit[1].valid & |commit[1].phys_addr
+            commit[1].valid & |commit[1].phys_addr,
+            commit[2].valid & |commit[2].phys_addr
         }),
         .toggle_addr ('{
             decode_phys_rd_addr, 
             rf_issue.phys_rd_addr, 
-            commit[1].phys_addr
+            commit[1].phys_addr,
+            commit[2].phys_addr
         }),
         .read_addr (inuse_read_addr),
         .in_use (inuse)
@@ -121,7 +123,7 @@ module register_file
     logic bypass [REGFILE_READ_PORTS];
 
     rs_data_set_t bypass_set [CONFIG.NUM_WB_GROUPS];
-    wb_packet_t commit_r [CONFIG.NUM_WB_GROUPS][REGFILE_READ_PORTS];
+    wb_packet_t commit_r [REGFILE_READ_PORTS][CONFIG.NUM_WB_GROUPS];
 
     always_ff @ (posedge clk) begin
         for (int i = 0; i < REGFILE_READ_PORTS; i++) begin

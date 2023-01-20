@@ -46,8 +46,7 @@ module store_queue
         output logic store_conflict,
 
         //Writeback snooping
-        input wb_packet_t wb_snoop,
-        output logic write_forwarded,
+        input wb_packet_t wb_packet [CONFIG.NUM_WB_GROUPS],
 
         //Retire
         input id_t retire_ids [RETIRE_PORTS],
@@ -57,8 +56,8 @@ module store_queue
     localparam LOG2_SQ_DEPTH = $clog2(CONFIG.SQ_DEPTH);
     typedef logic [LOG2_MAX_IDS:0] load_check_count_t;
 
-
-    wb_packet_t wb_snoop_r;
+    wb_packet_t wb_snoop [CONFIG.NUM_WB_GROUPS];
+    wb_packet_t wb_snoop_r [CONFIG.NUM_WB_GROUPS];
 
     //Register-based memory blocks
     logic [CONFIG.SQ_DEPTH-1:0] valid;
@@ -195,30 +194,34 @@ module store_queue
 
     ////////////////////////////////////////////////////
     //Forwarding and Store Data
-    logic [CONFIG.SQ_DEPTH-1:0] write_forward;
+    //Need to support forwarding from any multi-cycle writeback port
+    //Currently this is the LS port [1] and the MUL/DIV/CSR port [2]
+
     always_ff @ (posedge clk) begin
+        wb_snoop <= wb_packet;
         wb_snoop_r <= wb_snoop;
     end
 
+    logic [CONFIG.SQ_DEPTH-1:0] write_forward [2];
     always_comb begin
-        for (int i = 0; i < CONFIG.SQ_DEPTH; i++)
-            write_forward[i] = {1'b1, wb_snoop_r.valid, wb_snoop_r.id} == {data_needed[i], 1'b1, id_needed[i]};
+        for (int i = 0; i < CONFIG.SQ_DEPTH; i++) begin
+            write_forward[0][i] = {1'b1, wb_snoop_r[1].valid, wb_snoop_r[1].id} == {data_needed[i], 1'b1, id_needed[i]};
+            write_forward[1][i] = {1'b1, wb_snoop_r[2].valid, wb_snoop_r[2].id} == {data_needed[i], 1'b1, id_needed[i]};
+        end
     end
-    assign write_forwarded = |write_forward;
 
     always_ff @ (posedge clk) begin
         if (rst)
             data_needed <= 0;
         else
-            data_needed <= (data_needed | (new_request_one_hot & {CONFIG.SQ_DEPTH{sq.data_in.forwarded_store}})) & ~write_forward;
+            data_needed <= (data_needed | (new_request_one_hot & {CONFIG.SQ_DEPTH{sq.data_in.forwarded_store}})) & ~(write_forward[0] | write_forward[1]);
     end
 
-    logic [31:0] data_in;
-    assign data_in = (sq.push & ~sq.data_in.forwarded_store) ? sq.data_in.data : wb_snoop_r.data;
+
     always_ff @ (posedge clk) begin
         for (int i = 0; i < CONFIG.SQ_DEPTH; i++) begin
-            if (write_forward[i] | new_request_one_hot[i])
-                store_data[i] <= data_in;
+            if (write_forward[0][i] | write_forward[1][i] | new_request_one_hot[i])
+                store_data[i] <= write_forward[0][i] ? wb_snoop_r[1].data : (write_forward[1][i] ? wb_snoop_r[2].data : sq.data_in.data);
         end
     end
     ////////////////////////////////////////////////////

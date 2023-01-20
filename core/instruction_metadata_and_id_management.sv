@@ -230,7 +230,7 @@ module instruction_metadata_and_id_management
     //exception after that point
     toggle_memory_set # (
         .DEPTH (MAX_IDS),
-        .NUM_WRITE_PORTS (2),
+        .NUM_WRITE_PORTS (3),
         .NUM_READ_PORTS (RETIRE_PORTS),
         .WRITE_INDEX_FOR_RESET (0),
         .READ_INDEX_FOR_RESET (0)
@@ -239,8 +239,8 @@ module instruction_metadata_and_id_management
         .clk (clk),
         .rst (rst),
         .init_clear (gc.init_clear),
-        .toggle ('{(instruction_issued_with_rd & issue.is_multicycle), wb_packet[1].valid}),
-        .toggle_addr ('{issue.id, wb_packet[1].id}),
+        .toggle ('{(instruction_issued_with_rd & issue.is_multicycle), wb_packet[1].valid, wb_packet[2].valid}),
+        .toggle_addr ('{issue.id, wb_packet[1].id, wb_packet[2].id}),
         .read_addr (retire_ids_next),
         .in_use (id_waiting_for_writeback)
     );
