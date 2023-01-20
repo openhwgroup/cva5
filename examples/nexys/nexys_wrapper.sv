@@ -109,8 +109,8 @@ module nexys_wrapper
             H : 32'h87FFFFFF
         },
         ICACHE : '{
-            LINES : 512,
-            LINE_W : 4,
+            LINES : 256,
+            LINE_W : 8,
             WAYS : 2,
             USE_EXTERNAL_INVALIDATIONS : 0,
             USE_NON_CACHEABLE : 0,
@@ -129,9 +129,9 @@ module nexys_wrapper
             H : 32'h8FFFFFFF
         },
         DCACHE : '{
-            LINES : 1024,
-            LINE_W : 4,
-            WAYS : 1,
+            LINES : 256,
+            LINE_W : 8,
+            WAYS : 2,
             USE_EXTERNAL_INVALIDATIONS : 0,
             USE_NON_CACHEABLE : 1,
             NON_CACHEABLE : '{

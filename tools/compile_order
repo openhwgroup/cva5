@@ -77,7 +77,6 @@ core/decode_and_issue.sv
 
 core/register_free_list.sv
 core/renamer.sv
-core/register_bank.sv
 core/register_file.sv
 core/writeback.sv
 

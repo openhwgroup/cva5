@@ -48,11 +48,13 @@ module register_file
         //Writeback
         input wb_packet_t commit [CONFIG.NUM_WB_GROUPS]
     );
-    typedef logic [31:0] rs_data_set_t [REGFILE_READ_PORTS];
-    rs_data_set_t rs_data_set [CONFIG.NUM_WB_GROUPS];
+    typedef logic [31:0] rs_data_t [REGFILE_READ_PORTS];
+    rs_data_t regfile_rs_data [CONFIG.NUM_WB_GROUPS];
+    rs_data_t regfile_rs_data_r;
+    rs_data_t commit_rs_data [CONFIG.NUM_WB_GROUPS];
+    logic bypass [REGFILE_READ_PORTS];
 
     logic decode_inuse [REGFILE_READ_PORTS];
-    logic decode_inuse_r [REGFILE_READ_PORTS];
 
     phys_addr_t inuse_read_addr [REGFILE_READ_PORTS*2];
     logic inuse [REGFILE_READ_PORTS*2];
@@ -97,52 +99,69 @@ module register_file
         .read_addr (inuse_read_addr),
         .in_use (inuse)
     );
-    always_ff @ (posedge clk) begin
-        if (decode_advance)
-            decode_inuse_r <= decode_inuse;
-    end
+
     ////////////////////////////////////////////////////
     //Register Banks
-    //Implemented in seperate module as there is not universal tool support for inferring
-    //arrays of memory blocks.
+    //LUTRAM implementation
+    //Read in decode stage, writeback groups muxed and output registered per regfile read port
     generate for (genvar i = 0; i < CONFIG.NUM_WB_GROUPS; i++) begin : register_file_gen
-        register_bank #(.NUM_READ_PORTS(REGFILE_READ_PORTS))
-        reg_group (
-            .clk, .rst,
-            .write_addr(commit[i].phys_addr),
-            .new_data(commit[i].data),
-            .commit(commit[i].valid & ~gc.writeback_supress),
-            .read_addr(decode_phys_rs_addr),
-            .read_en(decode_advance),
-            .data(rs_data_set[i])
-        );
+        lutram_1w_mr #(.WIDTH(32), .DEPTH(64), .NUM_READ_PORTS(REGFILE_READ_PORTS))
+        register_file_bank (
+            .clk,
+            .waddr(commit[i].phys_addr),
+            .raddr(decode_phys_rs_addr),
+            .ram_write(commit[i].valid & ~gc.writeback_supress),
+            .new_ram_data(commit[i].data),
+            .ram_data_out(regfile_rs_data[i])
+    );
+    end endgenerate
+
+    generate for (genvar i = 0; i < REGFILE_READ_PORTS; i++) begin : register_file_ff_gen
+        always_ff @ (posedge clk) begin
+            if ((~|decode_phys_rs_addr[i] & decode_advance))
+                regfile_rs_data_r[i] <= '0;
+            else if (decode_advance)
+                regfile_rs_data_r[i] <= regfile_rs_data[decode_rs_wb_group[i]][i];
+        end
     end endgenerate
 
     ////////////////////////////////////////////////////
-    //Register File Muxing
-    logic bypass [REGFILE_READ_PORTS];
-
-    rs_data_set_t bypass_set [CONFIG.NUM_WB_GROUPS];
-    wb_packet_t commit_r [REGFILE_READ_PORTS][CONFIG.NUM_WB_GROUPS];
-
+    //Bypass registers
+    //(per wb group and per read port)
     always_ff @ (posedge clk) begin
-        for (int i = 0; i < REGFILE_READ_PORTS; i++) begin
-            if (decode_advance | rf_issue.inuse[i]) begin
-                bypass <= decode_advance ? decode_inuse : decode_inuse_r;
-                commit_r[i] <= commit;
-            end
-        end
+        for (int i = 0; i < CONFIG.NUM_WB_GROUPS; i++)
+            for (int j = 0; j < REGFILE_READ_PORTS; j++)
+                if (decode_advance | rf_issue.inuse[j])
+                    commit_rs_data[i][j] <= commit[i].data;
+   end
+
+    ////////////////////////////////////////////////////
+    //Register File Muxing
+    //Output mux per read port: bypass wb_group registers with registerfile data a
+    localparam MUX_W = $clog2(CONFIG.NUM_WB_GROUPS+1);
+
+    typedef logic [31:0] issue_data_mux_t [2**MUX_W];
+    issue_data_mux_t issue_data_mux [REGFILE_READ_PORTS];
+    logic [MUX_W-1:0] issue_sel [REGFILE_READ_PORTS];
+    
+    always_ff @ (posedge clk) begin
+        for (int i = 0; i < REGFILE_READ_PORTS; i++)
+            if (decode_advance)
+                issue_sel[i] <= decode_inuse[i] ? decode_rs_wb_group[i] : (MUX_W)'(2**MUX_W-1);
    end
 
     always_comb begin
         for (int i = 0; i < REGFILE_READ_PORTS; i++) begin
+            issue_data_mux[i] = '{default: 'x};
+            issue_data_mux[i][2**MUX_W-1] = regfile_rs_data_r[i];
             for (int j = 0; j < CONFIG.NUM_WB_GROUPS; j++) begin
-                bypass_set[j][i] =  bypass[i] ? commit_r[i][j].data : rs_data_set[j][i];
+                issue_data_mux[i][j] = commit_rs_data[j][i];
             end
-            rf_issue.data[i] = bypass_set[rf_issue.rs_wb_group[i]][i];
         end
     end
 
+    always_comb for (int i = 0; i < REGFILE_READ_PORTS; i++)
+        rf_issue.data[i] = issue_data_mux[i][issue_sel[i]];
 
     ////////////////////////////////////////////////////
     //End of Implementation

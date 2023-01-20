@@ -135,8 +135,8 @@ module cva5_sim
             H : 32'h87FFFFFF
         },
         ICACHE : '{
-            LINES : 512,
-            LINE_W : 4,
+            LINES : 256,
+            LINE_W : 8,
             WAYS : 2,
             USE_EXTERNAL_INVALIDATIONS : 0,
             USE_NON_CACHEABLE : 0,
@@ -155,9 +155,9 @@ module cva5_sim
             H : 32'h8FFFFFFF
         },
         DCACHE : '{
-            LINES : 1024,
-            LINE_W : 4,
-            WAYS : 1,
+            LINES : 256,
+            LINE_W : 8,
+            WAYS : 2,
             USE_EXTERNAL_INVALIDATIONS : 0,
             USE_NON_CACHEABLE : 1,
             NON_CACHEABLE : '{
@@ -458,13 +458,15 @@ module cva5_sim
     genvar i, j;
     generate  for (i = 0; i < 32; i++) begin : gen_reg_file_sim
         for (j = 0; j < NEXYS_CONFIG.NUM_WB_GROUPS; j++) begin
-            if (FPGA_VENDOR == XILINX)
+            if (FPGA_VENDOR == XILINX) begin
                 assign translation[i] = cpu.renamer_block.spec_table_ram.xilinx_gen.ram[i];
-            else if (FPGA_VENDOR == INTEL)
+                assign sim_registers_unamed_groups[j][i] = 
+                cpu.register_file_block.register_file_gen[j].register_file_bank.xilinx_gen.ram[translation[i].phys_addr];
+            end else if (FPGA_VENDOR == INTEL) begin
                 assign translation[i] = cpu.renamer_block.spec_table_ram.intel_gen.lutrams[0].write_port.ram[i];
-
-            assign sim_registers_unamed_groups[j][i] = 
-            cpu.register_file_block.register_file_gen[j].reg_group.register_file_bank[translation[i].phys_addr];
+                assign sim_registers_unamed_groups[j][i] = 
+                cpu.register_file_block.register_file_gen[j].register_file_bank.intel_gen.lutrams[0].write_port.ram[translation[i].phys_addr];
+            end
         end
         assign sim_registers_unamed[31-i] = sim_registers_unamed_groups[translation[i].wb_group][i];
     end
