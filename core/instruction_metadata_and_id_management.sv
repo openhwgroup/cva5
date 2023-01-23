@@ -228,9 +228,21 @@ module instruction_metadata_and_id_management
     //Non-writeback instructions not included as current instruction set
     //complete in their first cycle of the execute stage, or do not cause an
     //exception after that point
+
+    logic id_waiting_toggle [CONFIG.NUM_WB_GROUPS];
+    id_t id_waiting_toggle_addr [CONFIG.NUM_WB_GROUPS];
+    always_comb begin
+        id_waiting_toggle[0] = instruction_issued_with_rd & issue.is_multicycle;
+        id_waiting_toggle_addr[0] = issue.id;
+        for (int i = 1; i < CONFIG.NUM_WB_GROUPS; i++) begin
+            id_waiting_toggle[i] = wb_packet[i].valid;
+            id_waiting_toggle_addr[i] = wb_packet[i].id;
+        end
+    end
+
     toggle_memory_set # (
         .DEPTH (MAX_IDS),
-        .NUM_WRITE_PORTS (3),
+        .NUM_WRITE_PORTS (CONFIG.NUM_WB_GROUPS),
         .NUM_READ_PORTS (RETIRE_PORTS),
         .WRITE_INDEX_FOR_RESET (0),
         .READ_INDEX_FOR_RESET (0)
@@ -239,8 +251,8 @@ module instruction_metadata_and_id_management
         .clk (clk),
         .rst (rst),
         .init_clear (gc.init_clear),
-        .toggle ('{(instruction_issued_with_rd & issue.is_multicycle), wb_packet[1].valid, wb_packet[2].valid}),
-        .toggle_addr ('{issue.id, wb_packet[1].id, wb_packet[2].id}),
+        .toggle (id_waiting_toggle),
+        .toggle_addr (id_waiting_toggle_addr),
         .read_addr (retire_ids_next),
         .in_use (id_waiting_for_writeback)
     );

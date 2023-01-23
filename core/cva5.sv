@@ -128,7 +128,7 @@ module cva5
 
     unit_writeback_interface unit_wb1 [NUM_WB_UNITS_GROUP_1]();
     unit_writeback_interface unit_wb2 [NUM_WB_UNITS_GROUP_2]();
-    unit_writeback_interface unit_wb3 [NUM_WB_UNITS_GROUP_3]();
+    unit_writeback_interface unit_wb3 [NUM_WB_UNITS_GROUP_3 == 0 ? 1 : NUM_WB_UNITS_GROUP_3]();
 
     mmu_interface immu();
     mmu_interface dmmu();
@@ -391,6 +391,7 @@ module cva5
         .decode_rs_wb_group (decode_rs_wb_group),
         .decode_advance (decode_advance),
         .decode_uses_rd (decode_uses_rd),
+        .decode_rd_addr (decode_rd_addr),
         .rf_issue (rf_issue),
         .commit (wb_packet)
     );

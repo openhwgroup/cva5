@@ -41,6 +41,7 @@ module register_file
         input phys_addr_t decode_phys_rd_addr,
         input logic decode_advance,
         input logic decode_uses_rd,
+        input rs_addr_t decode_rd_addr,
 
         //Issue interface
         register_file_issue_interface.register_file rf_issue,
@@ -58,6 +59,8 @@ module register_file
 
     phys_addr_t inuse_read_addr [REGFILE_READ_PORTS*2];
     logic inuse [REGFILE_READ_PORTS*2];
+    logic toggle [1+CONFIG.NUM_WB_GROUPS];
+    phys_addr_t toggle_addr [1+CONFIG.NUM_WB_GROUPS];
     ////////////////////////////////////////////////////
     //Implementation
 
@@ -72,10 +75,19 @@ module register_file
             decode_inuse[i] = inuse[i];
             rf_issue.inuse[i] = inuse[i+REGFILE_READ_PORTS];
         end
+        
+        toggle[0] = decode_advance & decode_uses_rd & |decode_rd_addr & ~gc.fetch_flush;
+        toggle_addr[0] = decode_phys_rd_addr;
+        toggle[1] = rf_issue.single_cycle_or_flush;
+        toggle_addr[1] = rf_issue.phys_rd_addr;
+        for (int i = 1; i < CONFIG.NUM_WB_GROUPS; i++) begin
+            toggle[i+1] = commit[i].valid & |commit[i].phys_addr;
+            toggle_addr[i+1] = commit[i].phys_addr;
+        end
     end
     toggle_memory_set # (
         .DEPTH (64),
-        .NUM_WRITE_PORTS (4),
+        .NUM_WRITE_PORTS (1+CONFIG.NUM_WB_GROUPS),
         .NUM_READ_PORTS (REGFILE_READ_PORTS*2),
         .WRITE_INDEX_FOR_RESET (0),
         .READ_INDEX_FOR_RESET (0)
@@ -84,18 +96,8 @@ module register_file
         .clk (clk),
         .rst (rst),
         .init_clear (gc.init_clear),
-        .toggle ('{
-            (decode_advance & decode_uses_rd & |decode_phys_rd_addr & ~gc.fetch_flush),
-            rf_issue.single_cycle_or_flush,
-            commit[1].valid & |commit[1].phys_addr,
-            commit[2].valid & |commit[2].phys_addr
-        }),
-        .toggle_addr ('{
-            decode_phys_rd_addr, 
-            rf_issue.phys_rd_addr, 
-            commit[1].phys_addr,
-            commit[2].phys_addr
-        }),
+        .toggle (toggle),
+        .toggle_addr (toggle_addr),
         .read_addr (inuse_read_addr),
         .in_use (inuse)
     );
