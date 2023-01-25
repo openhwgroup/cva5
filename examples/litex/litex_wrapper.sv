@@ -84,6 +84,7 @@ module litex_wrapper
         INCLUDE_IFENCE : 0,
         INCLUDE_CSRS : 1,
         INCLUDE_AMO : 0,
+        INCLUDE_CUSTOM : 0,
         //CSR constants
         CSRS : '{
             MACHINE_IMPLEMENTATION_ID : 0,
@@ -184,6 +185,7 @@ module litex_wrapper
         INCLUDE_IFENCE : 0,
         INCLUDE_CSRS : 1,
         INCLUDE_AMO : 0,
+        INCLUDE_CUSTOM : 0,
         //CSR constants
         CSRS : '{
             MACHINE_IMPLEMENTATION_ID : 0,

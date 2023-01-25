@@ -67,6 +67,8 @@ core/mmu.sv
 
 core/mul_unit.sv  
 
+core/custom_unit.sv  
+
 core/ras.sv  
 core/branch_predictor_ram.sv
 core/branch_predictor.sv  

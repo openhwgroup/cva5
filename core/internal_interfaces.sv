@@ -51,6 +51,21 @@ interface branch_predictor_interface;
 
 endinterface
 
+interface unit_decode_interface;
+    import cva5_types::*;
+    import cva5_config::*;
+
+    logic [31:0] instruction;
+    logic issue_stage_ready;
+
+    logic unit_needed;
+    logic uses_rs [REGFILE_READ_PORTS];
+    logic uses_rd;
+
+    modport decode (input unit_needed, uses_rs, uses_rd, output instruction, issue_stage_ready);
+    modport unit (output unit_needed, uses_rs, uses_rd, input instruction, issue_stage_ready);
+endinterface
+
 interface unit_issue_interface;
     import cva5_types::*;
 

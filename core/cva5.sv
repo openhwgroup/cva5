@@ -62,8 +62,9 @@ module cva5
     localparam int unsigned CSR_UNIT_ID = LS_UNIT_ID + int'(CONFIG.INCLUDE_CSRS);
     localparam int unsigned MUL_UNIT_ID = CSR_UNIT_ID + int'(CONFIG.INCLUDE_MUL);
     localparam int unsigned DIV_UNIT_ID = MUL_UNIT_ID + int'(CONFIG.INCLUDE_DIV);
+    localparam int unsigned CUSTOM_UNIT_ID = DIV_UNIT_ID + int'(CONFIG.INCLUDE_CUSTOM);
     //Non-writeback units
-    localparam int unsigned BRANCH_UNIT_ID = DIV_UNIT_ID + 1;
+    localparam int unsigned BRANCH_UNIT_ID = CUSTOM_UNIT_ID + 1;
     localparam int unsigned IEC_UNIT_ID = BRANCH_UNIT_ID + 1;
 
     //Total number of units
@@ -75,6 +76,7 @@ module cva5
         CSR : CSR_UNIT_ID,
         MUL : MUL_UNIT_ID,
         DIV : DIV_UNIT_ID,
+        CUSTOM : CUSTOM_UNIT_ID,
         BR : BRANCH_UNIT_ID,
         IEC : IEC_UNIT_ID
     };
@@ -88,10 +90,11 @@ module cva5
     localparam int unsigned NUM_WB_UNITS_GROUP_2 = 1;//LS
     localparam int unsigned LS_UNIT_WB2_ID = 32'd0;
 
-    localparam int unsigned NUM_WB_UNITS_GROUP_3 = int'(CONFIG.INCLUDE_CSRS) + int'(CONFIG.INCLUDE_MUL) + int'(CONFIG.INCLUDE_DIV);
+    localparam int unsigned NUM_WB_UNITS_GROUP_3 = int'(CONFIG.INCLUDE_CSRS) + int'(CONFIG.INCLUDE_MUL) + int'(CONFIG.INCLUDE_DIV) + int'(CONFIG.INCLUDE_CUSTOM);
     localparam int unsigned DIV_UNIT_WB3_ID = 32'd0;
-    localparam int unsigned MUL_UNIT_WB3_ID = 32'd0 +  int'(CONFIG.INCLUDE_DIV);
+    localparam int unsigned MUL_UNIT_WB3_ID = 32'd0 + int'(CONFIG.INCLUDE_DIV);
     localparam int unsigned CSR_UNIT_WB3_ID = 32'd0 + int'(CONFIG.INCLUDE_MUL)+ int'(CONFIG.INCLUDE_DIV);
+    localparam int unsigned CUSTOM_UNIT_WB3_ID = 32'd0 + int'(CONFIG.INCLUDE_MUL)+ int'(CONFIG.INCLUDE_DIV) + int'(CONFIG.INCLUDE_CSRS);
 
     ////////////////////////////////////////////////////
     //Connecting Signals
@@ -112,6 +115,8 @@ module cva5
     issue_packet_t issue;
     register_file_issue_interface #(.NUM_WB_GROUPS(CONFIG.NUM_WB_GROUPS)) rf_issue();
 
+
+    unit_decode_interface custom_unit_decode ();
 
     alu_inputs_t alu_inputs;
     load_store_inputs_t ls_inputs;
@@ -356,6 +361,7 @@ module cva5
         .decode (decode),
         .decode_advance (decode_advance),
         .renamer (decode_rename_interface),
+        .custom_unit_decode (custom_unit_decode),
         .decode_uses_rd (decode_uses_rd),
         .decode_rd_addr (decode_rd_addr),
         .decode_exception_unit (decode_exception_unit),
@@ -543,6 +549,18 @@ module cva5
             .div_inputs (div_inputs),
             .issue (unit_issue[UNIT_IDS.DIV]), 
             .wb (unit_wb3[DIV_UNIT_WB3_ID])
+        );
+    end endgenerate
+
+
+    generate if (CONFIG.INCLUDE_CUSTOM) begin : gen_custom
+        custom_unit custom_unit_block (
+            .clk (clk),
+            .rst (rst),
+            .decode (custom_unit_decode),
+            .issue (unit_issue[UNIT_IDS.CUSTOM]), 
+            .rf (rf_issue.data),
+            .wb (unit_wb3[CUSTOM_UNIT_WB3_ID])
         );
     end endgenerate
 

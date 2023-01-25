@@ -77,7 +77,7 @@ module nexys_wrapper
 
     localparam cpu_config_t NEXYS_CONFIG = '{
         //ISA options
-        INCLUDE_M_MODE : 1,
+        INCLUDE_M_MODE : 0,
         INCLUDE_S_MODE : 0,
         INCLUDE_U_MODE : 0,
         INCLUDE_MUL : 1,
@@ -85,6 +85,7 @@ module nexys_wrapper
         INCLUDE_IFENCE : 0,
         INCLUDE_CSRS : 1,
         INCLUDE_AMO : 0,
+        INCLUDE_CUSTOM : 0,
         //CSR constants
         CSRS : '{
             MACHINE_IMPLEMENTATION_ID : 0,
@@ -129,9 +130,9 @@ module nexys_wrapper
             H : 32'h8FFFFFFF
         },
         DCACHE : '{
-            LINES : 256,
+            LINES : 512,
             LINE_W : 8,
-            WAYS : 2,
+            WAYS : 1,
             USE_EXTERNAL_INVALIDATIONS : 0,
             USE_NON_CACHEABLE : 1,
             NON_CACHEABLE : '{

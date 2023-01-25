@@ -46,6 +46,8 @@ module decode_and_issue
         //Renamer
         renamer_interface.decode renamer,
 
+        unit_decode_interface.decode custom_unit_decode,
+
         output logic decode_uses_rd,
         output rs_addr_t decode_rd_addr,
         output phys_addr_t decode_phys_rd_addr,
@@ -139,9 +141,9 @@ module decode_and_issue
 
     ////////////////////////////////////////////////////
     //Register File Support
-    assign uses_rs[RS1] = opcode_trim inside {JALR_T, BRANCH_T, LOAD_T, STORE_T, ARITH_IMM_T, ARITH_T, AMO_T} | is_csr;
-    assign uses_rs[RS2] = opcode_trim inside {BRANCH_T, ARITH_T, AMO_T};//Stores are exempted due to store forwarding
-    assign uses_rd = opcode_trim inside {LUI_T, AUIPC_T, JAL_T, JALR_T, LOAD_T, ARITH_IMM_T, ARITH_T} | is_csr;
+    assign uses_rs[RS1] = opcode_trim inside {JALR_T, BRANCH_T, LOAD_T, STORE_T, ARITH_IMM_T, ARITH_T, AMO_T} | is_csr | custom_unit_decode.uses_rs[RS1];
+    assign uses_rs[RS2] = opcode_trim inside {BRANCH_T, ARITH_T, AMO_T} | custom_unit_decode.uses_rs[RS2];//Stores are exempted due to store forwarding
+    assign uses_rd = opcode_trim inside {LUI_T, AUIPC_T, JAL_T, JALR_T, LOAD_T, ARITH_IMM_T, ARITH_T} | is_csr | custom_unit_decode.uses_rd;
 
     ////////////////////////////////////////////////////
     //Unit Determination
@@ -162,6 +164,9 @@ module decode_and_issue
         assign unit_needed[UNIT_IDS.DIV] = mult_div_op && fn3[2];
     endgenerate
 
+    generate if (CONFIG.INCLUDE_CUSTOM)
+        assign unit_needed[UNIT_IDS.CUSTOM] = custom_unit_decode.unit_needed;
+    endgenerate
     ////////////////////////////////////////////////////
     //Renamer Support
     logic [$clog2(CONFIG.NUM_WB_GROUPS)-1:0] renamer_wb_group;
@@ -178,6 +183,11 @@ module decode_and_issue
 
     assign renamer.rd_wb_group = renamer_wb_group;
     assign renamer.id = decode.id;
+
+    ////////////////////////////////////////////////////
+    //Custom Unit Interface
+    assign custom_unit_decode.instruction = decode.instruction;
+    assign custom_unit_decode.issue_stage_ready = issue_stage_ready;
 
     ////////////////////////////////////////////////////
     //Decode ID Support

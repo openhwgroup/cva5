@@ -111,6 +111,7 @@ module cva5_sim
         INCLUDE_IFENCE : 0,
         INCLUDE_CSRS : 1,
         INCLUDE_AMO : 0,
+        INCLUDE_CUSTOM : 0,
         //CSR constants
         CSRS : '{
             MACHINE_IMPLEMENTATION_ID : 0,
@@ -155,9 +156,9 @@ module cva5_sim
             H : 32'h8FFFFFFF
         },
         DCACHE : '{
-            LINES : 256,
+            LINES : 512,
             LINE_W : 8,
-            WAYS : 2,
+            WAYS : 1,
             USE_EXTERNAL_INVALIDATIONS : 0,
             USE_NON_CACHEABLE : 1,
             NON_CACHEABLE : '{

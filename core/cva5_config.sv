@@ -109,6 +109,7 @@ package cva5_config;
         bit INCLUDE_IFENCE; //local mem operations only
         bit INCLUDE_CSRS;
         bit INCLUDE_AMO; //cache operations only
+        bit INCLUDE_CUSTOM;
         //CSR constants
         csr_config_t CSRS;
         //Memory Options
@@ -162,6 +163,7 @@ package cva5_config;
         INCLUDE_IFENCE : 1,
         INCLUDE_CSRS : 1,
         INCLUDE_AMO : 0,
+        INCLUDE_CUSTOM : 0,
         //CSR constants
         CSRS : '{
             MACHINE_IMPLEMENTATION_ID : 0,
@@ -260,6 +262,7 @@ package cva5_config;
         int unsigned CSR;
         int unsigned MUL;
         int unsigned DIV;
+        int unsigned CUSTOM;
         int unsigned BR;
         int unsigned IEC;
     } unit_id_param_t;
@@ -270,8 +273,9 @@ package cva5_config;
         CSR : 2,
         MUL : 3,
         DIV : 4,
-        BR : 5,
-        IEC : 6
+        CUSTOM : 5,
+        BR : 6,
+        IEC : 7
     };
 
     ////////////////////////////////////////////////////
