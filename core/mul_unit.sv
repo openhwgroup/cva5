@@ -25,16 +25,25 @@ module mul_unit
     import cva5_config::*;
     import riscv_types::*;
     import cva5_types::*;
+    import opcodes::*;
 
     (
         input logic clk,
         input logic rst,
 
+        input decode_packet_t decode_stage,
+        output logic unit_needed,
+
+        input issue_packet_t issue_stage,
+        input logic issue_stage_ready,
+        input logic [31:0] rf [REGFILE_READ_PORTS],
+
         input mul_inputs_t mul_inputs,
         unit_issue_interface.unit issue,
         unit_writeback_interface.unit wb
     );
-
+    common_instruction_t instruction;//rs1_addr, rs2_addr, fn3, fn7, rd_addr, upper/lower opcode
+    
     logic signed [63:0] result;
     logic mulh [2];
     logic valid [2];
@@ -49,6 +58,16 @@ module mul_unit
     logic stage2_advance;
     ////////////////////////////////////////////////////
     //Implementation
+
+    ////////////////////////////////////////////////////
+    //Decode
+    assign unit_needed = decode_stage.instruction inside {
+        MUL, MULH, MULHSU, MULHU
+    };
+
+    ////////////////////////////////////////////////////
+    //Issue
+
     assign rs1_is_signed = mul_inputs.op[1:0] inside {MULH_fn3[1:0], MULHSU_fn3[1:0]};//MUL doesn't matter
     assign rs2_is_signed = mul_inputs.op[1:0] inside {MUL_fn3[1:0], MULH_fn3[1:0]};//MUL doesn't matter
 

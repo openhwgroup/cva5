@@ -25,15 +25,25 @@ module div_unit
     import cva5_config::*;
     import riscv_types::*;
     import cva5_types::*;
+    import opcodes::*;
 
     (
         input logic clk,
         input logic rst,
 
+        input decode_packet_t decode_stage,
+        output logic unit_needed,
+
+        input issue_packet_t issue_stage,
+        input logic issue_stage_ready,
+        input logic [31:0] rf [REGFILE_READ_PORTS],
+
         input div_inputs_t div_inputs,
         unit_issue_interface.unit issue,
         unit_writeback_interface.unit wb
     );
+    common_instruction_t instruction;//rs1_addr, rs2_addr, fn3, fn7, rd_addr, upper/lower opcode
+    logic mult_div_op;
 
     logic signed_divop;
     logic negate_quotient;
@@ -77,11 +87,21 @@ module div_unit
 
     fifo_interface #(.DATA_WIDTH($bits(div_fifo_inputs_t))) input_fifo();
     fifo_interface #(.DATA_WIDTH(XLEN)) wb_fifo();
-    ////////////////////////////////////////////////////
-    //Implementation
+
     function logic [31:0] negate_if  (input logic [31:0] a, logic b);
         return ({32{b}} ^ a) + 32'(b);
     endfunction
+    ////////////////////////////////////////////////////
+    //Implementation
+
+    ////////////////////////////////////////////////////
+    //Decode
+    assign unit_needed = decode_stage.instruction inside {
+        DIV, DIVU, REM, REMU
+    };
+
+    ////////////////////////////////////////////////////
+    //Issue
 
     ////////////////////////////////////////////////////
     //Input and output sign determination

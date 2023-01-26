@@ -25,14 +25,24 @@ module alu_unit
     import cva5_config::*;
     import riscv_types::*;
     import cva5_types::*;
+    import opcodes::*;
 
     (
         input logic clk,
         input logic rst,
+
+        input decode_packet_t decode_stage,
+        output unit_needed,
+
+        input issue_packet_t issue_stage,
+        input logic issue_stage_ready,
+        input logic [31:0] rf [REGFILE_READ_PORTS],
+
         unit_issue_interface.unit issue,
         input alu_inputs_t alu_inputs,
         unit_writeback_interface.unit wb
     );
+    common_instruction_t instruction;//rs1_addr, rs2_addr, fn3, fn7, rd_addr, upper/lower opcode
 
     logic[XLEN:0] add_sub_result;
     logic add_sub_carry_in;
@@ -40,9 +50,18 @@ module alu_unit
     logic[XLEN:0] adder_in2;
     logic[XLEN-1:0] shift_result;
     logic[XLEN-1:0] result;
-    //implementation
     ////////////////////////////////////////////////////
+    //Implementation
 
+    ////////////////////////////////////////////////////
+    //Decode
+    assign unit_needed = decode_stage.instruction inside {
+        JALR, JAL, LUI, AUIPC, ADDI, SLLI, SLTI, SLTIU, XORI, SRLI, SRAI, ORI, ANDI,
+        ADD, SUB, SLL, SLT, SLTU, XOR, SRL, SRA, OR, AND
+    };
+
+    ////////////////////////////////////////////////////
+    //Issue
     //Logic ops put through the adder carry chain to reduce resources
     always_comb begin
         case (alu_inputs.logic_op)

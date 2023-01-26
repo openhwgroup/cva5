@@ -26,6 +26,7 @@ module gc_unit
     import riscv_types::*;
     import cva5_types::*;
     import csr_types::*;
+    import opcodes::*;
 
     # (
         parameter cpu_config_t CONFIG = EXAMPLE_CONFIG
@@ -36,6 +37,13 @@ module gc_unit
         input logic rst,
 
         //Decode
+        input decode_packet_t decode_stage,
+        output logic unit_needed,
+
+        input issue_packet_t issue_stage,
+        input logic issue_stage_ready,
+        input logic [31:0] rf [REGFILE_READ_PORTS],
+
         unit_issue_interface.unit issue,
         input gc_inputs_t gc_inputs,
 
@@ -137,6 +145,16 @@ module gc_unit
 
     ////////////////////////////////////////////////////
     //Implementation
+
+    ////////////////////////////////////////////////////
+    //Decode
+    assign unit_needed = decode_stage.instruction inside {
+        ECALL, EBREAK, SRET, MRET, FENCE_I, SFENCE_VMA
+    };
+
+    ////////////////////////////////////////////////////
+    //Issue
+
     //Input registering
     always_ff @(posedge clk) begin
         if (issue.new_request)

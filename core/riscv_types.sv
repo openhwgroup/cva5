@@ -35,7 +35,8 @@ package riscv_types;
         logic [4:0] rs1_addr;
         logic [2:0] fn3;
         logic [4:0] rd_addr;
-        logic [6:0] opcode;
+        logic [6:2] upper_opcode;
+        logic [1:0] lower_opcode;
     } common_instruction_t;
 
     typedef enum logic [4:0] {

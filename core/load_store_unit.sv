@@ -25,6 +25,7 @@ module load_store_unit
     import cva5_config::*;
     import riscv_types::*;
     import cva5_types::*;
+    import opcodes::*;
 
     # (
         parameter cpu_config_t CONFIG = EXAMPLE_CONFIG
@@ -34,6 +35,13 @@ module load_store_unit
         input logic clk,
         input logic rst,
         input gc_outputs_t gc,
+
+        input decode_packet_t decode_stage,
+        output logic unit_needed,
+
+        input issue_packet_t issue_stage,
+        input logic issue_stage_ready,
+        input logic [31:0] rf [REGFILE_READ_PORTS],
 
         input load_store_inputs_t ls_inputs,
         unit_issue_interface.unit issue,
@@ -134,6 +142,12 @@ module load_store_unit
     load_store_queue_interface lsq();
     ////////////////////////////////////////////////////
     //Implementation
+
+    ////////////////////////////////////////////////////
+    //Decode
+    assign unit_needed = decode_stage.instruction inside {
+        LB, LH, LW, LBU, LHU, SB, SH, SW, FENCE
+    };
 
     ////////////////////////////////////////////////////
     //Alignment Exception

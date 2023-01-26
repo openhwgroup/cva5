@@ -25,17 +25,22 @@ module custom_unit
     import cva5_config::*;
     import riscv_types::*;
     import cva5_types::*;
+    import opcodes::*;
 
     (
         input logic clk,
         input logic rst,
-        unit_decode_interface.unit decode,
-        unit_issue_interface.unit issue,
+
+        input decode_packet_t decode_stage,
+        output logic unit_needed,
+        input issue_packet_t issue_stage,
+        input logic issue_stage_ready,
         input logic [31:0] rf [REGFILE_READ_PORTS],
+
+        unit_issue_interface.unit issue,
         unit_writeback_interface.unit wb
     );
-
-    logic [4:0] opcode_trim;
+    common_instruction_t instruction;//rs1_addr, rs2_addr, fn3, fn7, rd_addr, upper/lower opcode
     logic [31:0] result;
     logic done;
     id_t id;
@@ -47,14 +52,11 @@ module custom_unit
 
     ////////////////////////////////////////////////////
     //Decode
-    assign opcode_trim = decode.instruction[6:2];
+    assign instruction = decode_stage.instruction;
 
     //The following signals should be asserted when the decoded instruction
     //is handled by this execution unit.
-    assign decode.unit_needed = opcode_trim inside {CUSTOM_T};
-    assign decode.uses_rs[RS1] = decode.unit_needed;
-    assign decode.uses_rs[RS2] = decode.unit_needed;
-    assign decode.uses_rd = decode.unit_needed;
+    assign unit_needed = instruction.upper_opcode inside {CUSTOM_T};
 
     ////////////////////////////////////////////////////
     //Issue

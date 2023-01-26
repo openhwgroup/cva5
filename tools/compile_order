@@ -2,6 +2,8 @@ core/cva5_config.sv
 core/riscv_types.sv
 core/csr_types.sv  
 core/cva5_types.sv  
+core/opcodes.sv  
+
 l2_arbiter/l2_config_and_types.sv 
 l2_arbiter/l2_interfaces.sv
 l2_arbiter/l2_external_interfaces.sv

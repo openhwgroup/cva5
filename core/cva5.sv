@@ -115,8 +115,7 @@ module cva5
     issue_packet_t issue;
     register_file_issue_interface #(.NUM_WB_GROUPS(CONFIG.NUM_WB_GROUPS)) rf_issue();
 
-
-    unit_decode_interface custom_unit_decode ();
+    logic [NUM_UNITS-1:0] unit_needed;
 
     alu_inputs_t alu_inputs;
     load_store_inputs_t ls_inputs;
@@ -197,6 +196,7 @@ module cva5
     logic processing_csr;
 
     //Decode Unit and Fetch Unit
+    logic issue_stage_ready;
     logic illegal_instruction;
     logic instruction_issued;
     logic instruction_issued_with_rd;
@@ -360,8 +360,8 @@ module cva5
         .pc_id_available (pc_id_available),
         .decode (decode),
         .decode_advance (decode_advance),
+        .unit_needed (unit_needed),
         .renamer (decode_rename_interface),
-        .custom_unit_decode (custom_unit_decode),
         .decode_uses_rd (decode_uses_rd),
         .decode_rd_addr (decode_rd_addr),
         .decode_exception_unit (decode_exception_unit),
@@ -371,6 +371,7 @@ module cva5
         .instruction_issued (instruction_issued),
         .instruction_issued_with_rd (instruction_issued_with_rd),
         .issue (issue),
+        .issue_stage_ready (issue_stage_ready),
         .rf (rf_issue),
         .alu_inputs (alu_inputs),
         .ls_inputs (ls_inputs),
@@ -407,7 +408,12 @@ module cva5
     branch_unit #(.CONFIG(CONFIG))
     branch_unit_block ( 
         .clk (clk),
-        .rst (rst),                                    
+        .rst (rst),
+        .decode_stage (decode),
+        .issue_stage (issue),
+        .issue_stage_ready (issue_stage_ready),
+        .unit_needed (unit_needed[UNIT_IDS.BR]),
+        .rf (rf_issue.data),                            
         .issue (unit_issue[UNIT_IDS.BR]),
         .branch_inputs (branch_inputs),
         .br_results (br_results),
@@ -419,6 +425,11 @@ module cva5
     alu_unit alu_unit_block (
         .clk (clk),
         .rst (rst),
+        .decode_stage (decode),
+        .issue_stage (issue),
+        .issue_stage_ready (issue_stage_ready),
+        .unit_needed (unit_needed[UNIT_IDS.ALU]),
+        .rf (rf_issue.data),
         .alu_inputs (alu_inputs),
         .issue (unit_issue[UNIT_IDS.ALU]), 
         .wb (unit_wb1[ALU_UNIT_WB1_ID])
@@ -429,6 +440,11 @@ module cva5
         .clk (clk),
         .rst (rst),
         .gc (gc),
+        .decode_stage (decode),
+        .issue_stage (issue),
+        .issue_stage_ready (issue_stage_ready),
+        .unit_needed (unit_needed[UNIT_IDS.LS]),
+        .rf (rf_issue.data),
         .ls_inputs (ls_inputs),
         .issue (unit_issue[UNIT_IDS.LS]),
         .dcache_on (1'b1), 
@@ -484,6 +500,11 @@ module cva5
         csr_unit_block (
             .clk(clk),
             .rst(rst),
+            .decode_stage (decode),
+            .issue_stage (issue),
+            .issue_stage_ready (issue_stage_ready),
+            .unit_needed (unit_needed[UNIT_IDS.CSR]),
+            .rf (rf_issue.data),
             .csr_inputs (csr_inputs),
             .issue (unit_issue[UNIT_IDS.CSR]), 
             .wb (unit_wb3[CSR_UNIT_WB3_ID]),
@@ -511,6 +532,11 @@ module cva5
     gc_unit_block (
         .clk (clk),
         .rst (rst),
+        .decode_stage (decode),
+        .issue_stage (issue),
+        .issue_stage_ready (issue_stage_ready),
+        .unit_needed (unit_needed[UNIT_IDS.IEC]),
+        .rf (rf_issue.data),
         .issue (unit_issue[UNIT_IDS.IEC]),
         .gc_inputs (gc_inputs),
         .branch_flush (branch_flush),
@@ -536,6 +562,11 @@ module cva5
         mul_unit mul_unit_block (
             .clk (clk),
             .rst (rst),
+            .decode_stage (decode),
+            .issue_stage (issue),
+            .issue_stage_ready (issue_stage_ready),
+            .unit_needed (unit_needed[UNIT_IDS.MUL]),
+            .rf (rf_issue.data),
             .mul_inputs (mul_inputs),
             .issue (unit_issue[UNIT_IDS.MUL]),
             .wb (unit_wb3[MUL_UNIT_WB3_ID])
@@ -546,6 +577,11 @@ module cva5
         div_unit div_unit_block (
             .clk (clk),
             .rst (rst),
+            .decode_stage (decode),
+            .issue_stage (issue),
+            .issue_stage_ready (issue_stage_ready),
+            .unit_needed (unit_needed[UNIT_IDS.DIV]),
+            .rf (rf_issue.data),
             .div_inputs (div_inputs),
             .issue (unit_issue[UNIT_IDS.DIV]), 
             .wb (unit_wb3[DIV_UNIT_WB3_ID])
@@ -557,9 +593,12 @@ module cva5
         custom_unit custom_unit_block (
             .clk (clk),
             .rst (rst),
-            .decode (custom_unit_decode),
-            .issue (unit_issue[UNIT_IDS.CUSTOM]), 
+            .decode_stage (decode),
+            .unit_needed (unit_needed[UNIT_IDS.CUSTOM]),
+            .issue_stage (issue),
+            .issue_stage_ready (issue_stage_ready),
             .rf (rf_issue.data),
+            .issue (unit_issue[UNIT_IDS.CUSTOM]), 
             .wb (unit_wb3[CUSTOM_UNIT_WB3_ID])
         );
     end endgenerate

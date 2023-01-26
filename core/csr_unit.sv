@@ -26,6 +26,7 @@ module csr_unit
     import riscv_types::*;
     import cva5_types::*;
     import csr_types::*;
+    import opcodes::*;
 
     # (
         parameter cpu_config_t CONFIG = EXAMPLE_CONFIG
@@ -34,6 +35,13 @@ module csr_unit
     (
         input logic clk,
         input logic rst,
+
+        input decode_packet_t decode_stage,
+        output logic unit_needed,
+
+        input issue_packet_t issue_stage,
+        input logic issue_stage_ready,
+        input logic [31:0] rf [REGFILE_READ_PORTS],
 
         //Unit Interfaces
         unit_issue_interface.unit issue,
@@ -103,6 +111,15 @@ module csr_unit
     endfunction
     ////////////////////////////////////////////////////
     //Implementation
+
+    ////////////////////////////////////////////////////
+    //Decode
+    assign unit_needed = decode_stage.instruction inside {
+        CSRRW, CSRRS, CSRRC, CSRRWI, CSRRSI, CSRRCI
+    };
+
+    ////////////////////////////////////////////////////
+    //Issue
     assign processing_csr = busy | issue.new_request;
     
     assign issue.ready = ~busy;

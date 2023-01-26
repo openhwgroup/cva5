@@ -25,6 +25,7 @@ module branch_unit
     import cva5_config::*;
     import riscv_types::*;
     import cva5_types::*;
+    import opcodes::*;
 
     # (
         parameter cpu_config_t CONFIG = EXAMPLE_CONFIG
@@ -33,6 +34,13 @@ module branch_unit
     (
         input logic clk,
         input logic rst,
+
+        input decode_packet_t decode_stage,
+        output logic unit_needed,
+
+        input issue_packet_t issue_stage,
+        input logic issue_stage_ready,
+        input logic [31:0] rf [REGFILE_READ_PORTS],
 
         unit_issue_interface.unit issue,
         input branch_inputs_t branch_inputs,
@@ -61,6 +69,16 @@ module branch_unit
     logic jal_jalr_ex;
     ////////////////////////////////////////////////////
     //Implementation
+
+    ////////////////////////////////////////////////////
+    //Decode
+    assign unit_needed = decode_stage.instruction inside {
+        BEQ, BNE, BLT, BGE, BLTU, BGEU, JALR, JAL
+    };
+
+    ////////////////////////////////////////////////////
+    //Issue
+
     //Only stall condition is if the following instruction is not valid for pc comparisons.
     //If the next instruction isn't valid, no instruction can be issued anyways, so it
     //is safe to hardcode this to one.

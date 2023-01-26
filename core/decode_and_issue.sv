@@ -46,7 +46,7 @@ module decode_and_issue
         //Renamer
         renamer_interface.decode renamer,
 
-        unit_decode_interface.decode custom_unit_decode,
+        input logic [NUM_UNITS-1:0] unit_needed,
 
         output logic decode_uses_rd,
         output rs_addr_t decode_rd_addr,
@@ -57,6 +57,7 @@ module decode_and_issue
         output logic instruction_issued,
         output logic instruction_issued_with_rd,
         output issue_packet_t issue,
+        output logic issue_stage_ready,
 
         //Register File
         register_file_issue_interface.issue rf,
@@ -97,7 +98,6 @@ module decode_and_issue
     logic operands_ready;
     logic mult_div_op;
 
-    logic [NUM_UNITS-1:0] unit_needed;
     logic [NUM_UNITS-1:0] unit_needed_issue_stage;
     logic [NUM_UNITS-1:0] unit_ready;
     logic [NUM_UNITS-1:0] issue_ready;
@@ -111,14 +111,12 @@ module decode_and_issue
     logic pre_issue_exception_pending;
     logic illegal_instruction_pattern;
 
-    logic issue_stage_ready;
-
     logic [REGFILE_READ_PORTS-1:0] rs_conflict;
 
     genvar i;
     ////////////////////////////////////////////////////
     //Implementation
-    
+
     //Can move data into issue stage if:
     // there is no instruction currently in the issue stage, or
     // an instruction could issue (issue_flush, issue_hold and whether the instruction is valid are not needed in this check)
@@ -141,32 +139,10 @@ module decode_and_issue
 
     ////////////////////////////////////////////////////
     //Register File Support
-    assign uses_rs[RS1] = opcode_trim inside {JALR_T, BRANCH_T, LOAD_T, STORE_T, ARITH_IMM_T, ARITH_T, AMO_T} | is_csr | custom_unit_decode.uses_rs[RS1];
-    assign uses_rs[RS2] = opcode_trim inside {BRANCH_T, ARITH_T, AMO_T} | custom_unit_decode.uses_rs[RS2];//Stores are exempted due to store forwarding
-    assign uses_rd = opcode_trim inside {LUI_T, AUIPC_T, JAL_T, JALR_T, LOAD_T, ARITH_IMM_T, ARITH_T} | is_csr | custom_unit_decode.uses_rd;
-
-    ////////////////////////////////////////////////////
-    //Unit Determination
-    assign unit_needed[UNIT_IDS.BR] = opcode_trim inside {BRANCH_T, JAL_T, JALR_T};
-    assign unit_needed[UNIT_IDS.ALU] = (opcode_trim inside {ARITH_T, ARITH_IMM_T, AUIPC_T, LUI_T, JAL_T, JALR_T}) & ~mult_div_op;
-    assign unit_needed[UNIT_IDS.LS] = opcode_trim inside {LOAD_T, STORE_T, AMO_T} | is_fence;
-    generate if (CONFIG.INCLUDE_CSRS)
-        assign unit_needed[UNIT_IDS.CSR] = is_csr;
-    endgenerate
-    assign unit_needed[UNIT_IDS.IEC] = (opcode_trim inside {SYSTEM_T} & ~is_csr & CONFIG.INCLUDE_M_MODE) | is_ifence;
-
-    assign mult_div_op = (opcode_trim == ARITH_T) && decode.instruction[25];
-    generate if (CONFIG.INCLUDE_MUL)
-        assign unit_needed[UNIT_IDS.MUL] = mult_div_op && ~fn3[2];
-    endgenerate
-
-    generate if (CONFIG.INCLUDE_DIV)
-        assign unit_needed[UNIT_IDS.DIV] = mult_div_op && fn3[2];
-    endgenerate
-
-    generate if (CONFIG.INCLUDE_CUSTOM)
-        assign unit_needed[UNIT_IDS.CUSTOM] = custom_unit_decode.unit_needed;
-    endgenerate
+    assign uses_rs[RS1] = opcode_trim inside {JALR_T, BRANCH_T, LOAD_T, STORE_T, ARITH_IMM_T, ARITH_T, AMO_T} | is_csr;
+    assign uses_rs[RS2] = opcode_trim inside {BRANCH_T, ARITH_T, AMO_T};//Stores are exempted due to store forwarding
+    assign uses_rd = opcode_trim inside {LUI_T, AUIPC_T, JAL_T, JALR_T, LOAD_T, ARITH_IMM_T, ARITH_T} | is_csr;
+    
     ////////////////////////////////////////////////////
     //Renamer Support
     logic [$clog2(CONFIG.NUM_WB_GROUPS)-1:0] renamer_wb_group;
@@ -183,11 +159,6 @@ module decode_and_issue
 
     assign renamer.rd_wb_group = renamer_wb_group;
     assign renamer.id = decode.id;
-
-    ////////////////////////////////////////////////////
-    //Custom Unit Interface
-    assign custom_unit_decode.instruction = decode.instruction;
-    assign custom_unit_decode.issue_stage_ready = issue_stage_ready;
 
     ////////////////////////////////////////////////////
     //Decode ID Support
