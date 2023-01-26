@@ -59,12 +59,8 @@ module fp_f2i
     logic                       roundup;
     logic [FLEN-1:0]            result_if_overflow;
 
-    logic [NUM_INT_LUTS-1:0]    largest_unsigned_int_AND;//check if f2i_int == FFFFFFFF
-    logic [NUM_INT_LUTS-1:0]    largest_signed_int_AND;  //check if f2i_int == 7fffffff
-    logic [NUM_INT_LUTS-1:0]    smallest_signed_int_OR; //check if f2i_int == 80000000
-    logic                       largest_unsigned_int;
-    logic                       largest_signed_int;
-    logic                       smallest_signed_int;
+    logic                       all_frac;
+    logic                       any_frac;
     logic                       greater_than_largest_unsigned_int, r_greater_than_largest_unsigned_int;
     logic                       greater_than_largest_signed_int, r_greater_than_largest_signed_int;
     logic                       smaller_than_smallest_signed_int, r_smaller_than_smallest_signed_int;
@@ -104,12 +100,7 @@ module fp_f2i
     end
 
     //calculate rounding bit and -roundup or +roundup
-    parallel_OR #(.WIDTH(NUM_STICKY_LUTS)) f2i_frac_sticky(
-        .i_data((NUM_STICKY_LUTS*6)'(f2i_frac[FRAC_WIDTH-2:0])),
-        .o_data(f2i_frac_sticky_OR)
-    );
-
-    assign sticky = |f2i_frac_sticky_OR;
+    assign sticky = |f2i_frac[FRAC_WIDTH-2:0];
     always_comb begin
         if (f2i_int_less_than_1) begin
             if (abs_expo_unbiased == 1)
@@ -136,20 +127,11 @@ module fp_f2i
     assign in1 = subtract ? -(XLEN'(roundup)) : XLEN'(roundup);
 
     //Special case handling
-    parallel_AND #(.WIDTH(NUM_INT_LUTS)) largest_signed_int_AND_inst(
-        .i_data( {{(NUM_INT_LUTS*6-XLEN+1){1'b1}}, f2i_int[XLEN-2:0]} ),
-        .o_data(largest_signed_int_AND)
-    );
-
-    parallel_OR #(.WIDTH(NUM_INT_LUTS)) smallest_unsigned_int_AND_inst(
-        .i_data((NUM_INT_LUTS*6)'(f2i_int[XLEN-2:0])),
-        .o_data(smallest_signed_int_OR)
-    );
-
     assign inexact = |grs;
-    assign greater_than_largest_unsigned_int = (~is_signed) & ((f2i_int[XLEN-1] & largest_unsigned_int & inexact) | expo_unbiased_greater_than_31);
-    assign greater_than_largest_signed_int   = (is_signed & ~sign) & ((~f2i_int[XLEN-1] & largest_signed_int & |grs) | expo_unbiased_greater_than_30);
-    assign smaller_than_smallest_signed_int  = (is_signed & sign) & ((f2i_int[XLEN-1] & (~|smallest_signed_int_OR | inexact)) | expo_unbiased_greater_than_31);
+    assign all_frac = &f2i_int[XLEN-2:0];
+    assign greater_than_largest_unsigned_int = (~is_signed) & ((f2i_int[XLEN-1] & all_frac & inexact) | expo_unbiased_greater_than_31);
+    assign greater_than_largest_signed_int   = (is_signed & ~sign) & ((~f2i_int[XLEN-1] & all_frac & inexact) | expo_unbiased_greater_than_30);
+    assign smaller_than_smallest_signed_int  = (is_signed & sign) & ((f2i_int[XLEN-1] & (any_frac | inexact)) | expo_unbiased_greater_than_31);
     assign special = (~is_signed & (greater_than_largest_unsigned_int | sign)) |
                     (is_signed & (greater_than_largest_signed_int | smaller_than_smallest_signed_int));
 
