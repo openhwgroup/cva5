@@ -1,5 +1,5 @@
 /*
- * Copyright © 2017-2020 Yuhui Gao,  Lesley Shannon
+ * Copyright © 2019-2023 Yuhui Gao, Lesley Shannon
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,16 +17,16 @@
  * Reconfigurable Computing Lab, Simon Fraser University.
  *
  * Author(s):
- *             Yuhui Gao <yuhiug@sfu.ca>
- *             */
+ *             Yuhui Gao <yuhuig@sfu.ca>
+ */
 
+module fp_cmp
+    import taiga_config::*;
+    import riscv_types::*;
+    import taiga_types::*;
+    import fpu_types::*;
 
-import taiga_config::*;
-import riscv_types::*;
-import taiga_types::*;
-import fpu_types::*;
-
-module fp_cmp (
+(
     input logic clk,
     input logic advance,
     unit_issue_interface.unit issue,
@@ -34,110 +34,105 @@ module fp_cmp (
     unit_writeback_interface.unit wb
 );
 
-  logic [FLEN-1:0]        rs1;
-  logic [FLEN-1:0]        rs2;
-  logic [2:0]             fn3;        
+    logic [2:0]             fn3;
 
-  logic                   swap;
-  logic                   rs1_sign;
-  logic [EXPO_WIDTH-1:0]  rs1_expo;
-  logic [FRAC_WIDTH-1:0]  rs1_frac;
-  logic                   rs1_NaN;
-  logic                   rs1_SNaN;
-  logic                   rs1_zero;
-  logic                   rs2_sign;
-  logic [EXPO_WIDTH-1:0]  rs2_expo;
-  logic [FRAC_WIDTH-1:0]  rs2_frac;
-  logic                   rs2_NaN;
-  logic                   rs2_SNaN;
-  logic                   rs2_zero;
-  logic                   invalid_cmp, r_invalid_cmp;
-  logic                   unordered, unordered_r;
-  logic                   flt_intermediate;
-  logic                   flt, feq, fle;
-  logic                   result, r_result;
-  logic                   done, done_r;
-  id_t                    id, id_r;
+    logic                   swap;
+    logic                   rs1_sign;
+    logic [EXPO_WIDTH-1:0]  rs1_expo;
+    logic [FRAC_WIDTH-1:0]  rs1_frac;
+    logic                   rs1_NaN;
+    logic                   rs1_SNaN;
+    logic                   rs1_zero;
+    logic                   rs2_sign;
+    logic [EXPO_WIDTH-1:0]  rs2_expo;
+    logic [FRAC_WIDTH-1:0]  rs2_frac;
+    logic                   rs2_NaN;
+    logic                   rs2_SNaN;
+    logic                   rs2_zero;
+    logic                   invalid_cmp, r_invalid_cmp;
+    logic                   unordered;
+    logic                   flt, feq, fle;
+    logic                   result, r_result;
+    logic                   done;
+    id_t                    id;
 
-  ////////////////////////////////////////////////////
-  //Implementation
-  //unpack
-  assign rs1_NaN = |fp_cmp_inputs.rs1_special_case[2:1];
-  assign rs2_NaN = |fp_cmp_inputs.rs2_special_case[2:1];
-  assign rs1_SNaN = fp_cmp_inputs.rs1_special_case[2];
-  assign rs2_SNaN = fp_cmp_inputs.rs2_special_case[2];
-  assign rs1_zero = fp_cmp_inputs.rs1_special_case[0];
-  assign rs2_zero = fp_cmp_inputs.rs2_special_case[0];
-  assign fn3 = fp_cmp_inputs.rm;
-  assign swap = fp_cmp_inputs.swap;
+    ////////////////////////////////////////////////////
+    //Implementation
+    //unpack
+    assign rs1_NaN = |fp_cmp_inputs.rs1_special_case[2:1];
+    assign rs2_NaN = |fp_cmp_inputs.rs2_special_case[2:1];
+    assign rs1_SNaN = fp_cmp_inputs.rs1_special_case[2];
+    assign rs2_SNaN = fp_cmp_inputs.rs2_special_case[2];
+    assign rs1_zero = fp_cmp_inputs.rs1_special_case[0];
+    assign rs2_zero = fp_cmp_inputs.rs2_special_case[0];
+    assign fn3 = fp_cmp_inputs.rm;
+    assign swap = fp_cmp_inputs.swap;
 
-  assign rs1_sign = fp_cmp_inputs.rs1[FLEN-1];
-  assign rs2_sign = fp_cmp_inputs.rs2[FLEN-1];
-  assign rs1_expo = fp_cmp_inputs.rs1[FLEN-2-:EXPO_WIDTH];
-  assign rs2_expo = fp_cmp_inputs.rs2[FLEN-2-:EXPO_WIDTH];
-  assign rs1_frac = fp_cmp_inputs.rs1[0+:FRAC_WIDTH];
-  assign rs2_frac = fp_cmp_inputs.rs2[0+:FRAC_WIDTH];
+    assign rs1_sign = fp_cmp_inputs.rs1[FLEN-1];
+    assign rs2_sign = fp_cmp_inputs.rs2[FLEN-1];
+    assign rs1_expo = fp_cmp_inputs.rs1[FLEN-2-:EXPO_WIDTH];
+    assign rs2_expo = fp_cmp_inputs.rs2[FLEN-2-:EXPO_WIDTH];
+    assign rs1_frac = fp_cmp_inputs.rs1[0+:FRAC_WIDTH];
+    assign rs2_frac = fp_cmp_inputs.rs2[0+:FRAC_WIDTH];
 
-  //special case handling
+    //special case handling
 
-  assign invalid_cmp = ((fn3 != 3'b010) & (rs1_NaN | rs2_NaN)) |  // FLT FLE signaling comparison                  
-                       ((fn3 == 3'b010) & (rs1_SNaN | rs2_SNaN)); // FEQ quiet comparison
-  assign unordered = rs1_NaN | rs2_NaN;
+    assign invalid_cmp = ((fn3 != 3'b010) & (rs1_NaN | rs2_NaN)) |  // FLT FLE signaling comparison
+                        ((fn3 == 3'b010) & (rs1_SNaN | rs2_SNaN)); // FEQ quiet comparison
+    assign unordered = rs1_NaN | rs2_NaN;
 
-  //FEQ
-  logic sign_equ, expo_equ, frac_equ;
+    //FEQ
+    logic sign_equ, expo_equ, frac_equ;
 
-  assign sign_equ = ~(rs1_sign ^ rs2_sign);
-  assign expo_equ = ~|(rs1_expo ^ rs2_expo);
-  assign frac_equ = ~|(rs1_frac ^ rs2_frac);
+    assign sign_equ = ~(rs1_sign ^ rs2_sign);
+    assign expo_equ = ~|(rs1_expo ^ rs2_expo);
+    assign frac_equ = ~|(rs1_frac ^ rs2_frac);
 
-  assign feq = (rs1_zero & rs2_zero) | (sign_equ & expo_equ & frac_equ);
-  
-  ////////////////////////////////////////////////////
-  //FLT 
-  always_comb begin
-    if (sign_equ) 
-      flt = (swap ^ rs1_sign) & ~feq;
-    else 
-      flt = rs1_sign & ~(rs1_zero & rs1_zero);
-  end
-  
-  ////////////////////////////////////////////////////
-  //FLE
-  assign fle = flt || feq;
+    assign feq = (rs1_zero & rs2_zero) | (sign_equ & expo_equ & frac_equ);
 
-  ////////////////////////////////////////////////////
-  //Register
-  always_ff @ (posedge clk) begin
-    if (advance) begin
-      done <= issue.new_request;
-      id <= issue.id;
-      r_result <= result;
-      r_invalid_cmp <= invalid_cmp;
+    ////////////////////////////////////////////////////
+    //FLT
+    always_comb begin
+        if (sign_equ)
+            flt = (swap ^ rs1_sign) & ~feq;
+        else
+            flt = rs1_sign & ~(rs1_zero & rs1_zero);
     end
-  end
 
-  ////////////////////////////////////////////////////
-  //Output
-  always_comb begin
-    case(fn3)
-      default: begin
-        result = fle & ~unordered;
-      end
-      3'b001: begin
-        result = flt & ~unordered;
-      end
-      3'b010: begin
-        result = feq & ~unordered; 
-      end
-    endcase 
-  end
+    ////////////////////////////////////////////////////
+    //FLE
+    assign fle = flt || feq;
 
-  assign wb.rd = XLEN'(r_result);
-  assign wb.done = done;
-  assign wb.id = id;
-  assign wb.fflags = {r_invalid_cmp, 4'b0};
+    ////////////////////////////////////////////////////
+    //Register
+    always_ff @ (posedge clk) begin
+        if (advance) begin
+            done <= issue.new_request;
+            id <= issue.id;
+            r_result <= result;
+            r_invalid_cmp <= invalid_cmp;
+        end
+    end
+
+    ////////////////////////////////////////////////////
+    //Output
+    always_comb begin
+        case(fn3)
+        default: begin
+            result = fle & ~unordered;
+        end
+        3'b001: begin
+            result = flt & ~unordered;
+        end
+        3'b010: begin
+            result = feq & ~unordered;
+        end
+        endcase
+    end
+
+    assign wb.rd = XLEN'(r_result);
+    assign wb.done = done;
+    assign wb.id = id;
+    assign wb.fflags = {r_invalid_cmp, 4'b0};
 
 endmodule
-
-

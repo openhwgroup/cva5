@@ -1,5 +1,5 @@
 /*
- * Copyright © 2017, 2018, 2019 Yuhui Gao,  Lesley Shannon
+ * Copyright © 2019-2023 Yuhui Gao, Lesley Shannon
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,15 +17,15 @@
  * Reconfigurable Computing Lab, Simon Fraser University.
  *
  * Author(s):
- *                  Yuhui Gao <yuhuig@sfu.ca>
+ *             Yuhui Gao <yuhuig@sfu.ca>
  */
 
-import taiga_config::*;
-import riscv_types::*;
-import taiga_types::*;
-import fpu_types::*;
-
-module fp_class (
+module fp_class
+    import taiga_config::*;
+    import riscv_types::*;
+    import taiga_types::*;
+    import fpu_types::*;
+(
     input logic clk,
     input logic advance,
     unit_issue_interface.unit issue,
@@ -41,9 +41,6 @@ module fp_class (
     logic [3:0]             rs1_special_case;
 
     logic                   rs1_sign;
-    logic [EXPO_WIDTH-1:0]  rs1_expo;
-    logic [FRAC_WIDTH-1:0]  rs1_frac;
-    logic                   rs1_NaN;
     logic                   rs1_inf;
     logic                   rs1_subnormal;
     logic                   rs1_zero;
@@ -70,11 +67,8 @@ module fp_class (
     assign rs1_special_case = fp_class_inputs_rr.rs1_special_case;
 
     assign rs1_sign = rs1[FLEN-1];
-    assign rs1_expo = rs1[FLEN-2:FRAC_WIDTH];
-    assign rs1_frac = rs1[FRAC_WIDTH-1:0];
     assign rs1_subnormal = ~rs1_hidden_bit;
     assign rs1_inf = rs1_special_case[3];
-    assign rs1_NaN = |rs1_special_case[2:1];
     assign rs1_zero = rs1_special_case[0];
 
     assign neg_inf = rs1_sign && rs1_inf;
@@ -85,8 +79,8 @@ module fp_class (
     assign pos_subnormal = !rs1_sign && rs1_subnormal && !rs1_zero;
     assign pos_normal = !rs1_sign && !rs1_subnormal;
     assign pos_inf = !rs1_sign && rs1_inf;
-    assign sNaN = rs1_special_case[2];//(rs1 == SNAN);               
-    assign qNaN = rs1_special_case[1];//(rs1 == CANONICAL_NAN);  
+    assign sNaN = rs1_special_case[2];//(rs1 == SNAN);
+    assign qNaN = rs1_special_case[1];//(rs1 == CANONICAL_NAN);
 
     ////////////////////////////////////////////////////
     //Registers
@@ -107,6 +101,4 @@ module fp_class (
     assign wb.done = done_r;
     assign wb.id = id_r;
 
-endmodule 
-
-
+endmodule

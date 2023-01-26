@@ -1,5 +1,5 @@
 /*
- * Copyright © 2017-2019 Yuhui Gao, Eric Matthews, Lesley Shannon
+ * Copyright © 2019-2023 Yuhui Gao, Lesley Shannon
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,47 +20,46 @@
  *             Yuhui Gao <yuhuig@sfu.ca>
  */
 
-module fp_decode_and_issue 
-        import taiga_config::*;
-        import riscv_types::*;
-        import taiga_types::*;
-        import fpu_types::*;
-        import fpu_types::*;
-    #(
+module fp_decode_and_issue
+    import taiga_config::*;
+    import riscv_types::*;
+    import taiga_types::*;
+    import fpu_types::*;
+    import fpu_types::*;
+#(
         parameter cpu_config_t CONFIG = EXAMPLE_CONFIG,
         parameter FP_NUM_UNITS = 4,
         parameter fp_unit_id_param_t FP_UNIT_IDS = FP_EXAMPLE_UNIT_IDS
-    )
-    (
-        input logic clk,
-        input logic rst,
+)(
+    input logic clk,
+    input logic rst,
 
-        input decode_packet_t decode,
-        fp_renamer_interface.decode fp_renamer,
-        output logic fp_decode_uses_rd,
-        output phys_addr_t fp_decode_phys_rd_addr,
-        output phys_addr_t fp_decode_phys_rs_addr [FP_REGFILE_READ_PORTS],
-        //output logic [$clog2(CONFIG.FP.FP_NUM_WB_GROUPS)-1:0] fp_decode_rs_wb_group [FP_REGFILE_READ_PORTS],
-        output logic fp_decode_rs_wb_group [FP_REGFILE_READ_PORTS],
-        output logic [FP_NUM_UNITS-1:0] unit_needed,
-        output logic is_i2f,
-        output logic is_f2i,
-        output logic is_class,
-        output logic is_fcmp,
+    input decode_packet_t decode,
+    fp_renamer_interface.decode fp_renamer,
+    output logic fp_decode_uses_rd,
+    output phys_addr_t fp_decode_phys_rd_addr,
+    output phys_addr_t fp_decode_phys_rs_addr [FP_REGFILE_READ_PORTS],
+    //output logic [$clog2(CONFIG.FP.FP_NUM_WB_GROUPS)-1:0] fp_decode_rs_wb_group [FP_REGFILE_READ_PORTS],
+    output logic fp_decode_rs_wb_group [FP_REGFILE_READ_PORTS],
+    output logic [FP_NUM_UNITS-1:0] unit_needed,
+    output logic is_i2f,
+    output logic is_f2i,
+    output logic is_class,
+    output logic is_fcmp,
 
-        output issue_packet_t issue,
-        input logic issue_stage_ready,
-        input logic instruction_issued,
-        output logic fp_instruction_issued_with_rd,
-        input logic [31:0] int_rs1_data,
-        fp_register_file_issue_interface.issue fp_rf,
-        output logic fp_operands_ready,
-        input logic [2:0] dyn_rm,
-        output fp_pre_processing_packet_t fp_pre_processing_packet,
+    output issue_packet_t issue,
+    input logic issue_stage_ready,
+    input logic instruction_issued,
+    output logic fp_instruction_issued_with_rd,
+    input logic [31:0] int_rs1_data,
+    fp_register_file_issue_interface.issue fp_rf,
+    output logic fp_operands_ready,
+    input logic [2:0] dyn_rm,
+    output fp_pre_processing_packet_t fp_pre_processing_packet,
 
-        output id_t fp_store_forward_id,
-        input logic gc_fetch_flush
-    );
+    output id_t fp_store_forward_id,
+    input logic gc_fetch_flush
+);
 
     ////////////////////////////////////////////////////
     //Implementation
@@ -200,7 +199,7 @@ module fp_decode_and_issue
     assign fp_rf.rs_wb_group[RS1] = fp_issue_rs_wb_group[RS1];
     assign fp_rf.rs_wb_group[RS2] = fp_issue_rs_wb_group[RS2];
     assign fp_rf.rs_wb_group[RS3] = fp_issue_rs_wb_group[RS3];
-    
+
     assign fp_rf.single_cycle_or_flush = (issue.stage_valid & issue.fp_uses_rd & gc_fetch_flush);
 
     assign fp_instruction_issued_with_rd = instruction_issued & issue.wb2_float;

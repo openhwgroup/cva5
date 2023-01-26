@@ -1,5 +1,5 @@
 /*
- * Copyright © 2017, 2018, 2019 Eric Matthews,  Lesley Shannon
+ * Copyright © 2017-2023 Eric Matthews, Yuhui Gao, Lesley Shannon
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,17 +17,15 @@
  * Reconfigurable Computing Lab, Simon Fraser University.
  *
  * Author(s):
- *             Eric Matthews <ematthew@sfu.ca>
+ *             Eric Matthews <ematthews@sfu.ca>
  *             Yuhui Gao <yuhuig@sfu.ca>
  */
 
-import taiga_config::*;
-import riscv_types::*;
-import taiga_types::*;
-import l2_config_and_types::*;
-import fpu_types::*;
-
 interface fp_renamer_interface #(parameter NUM_WB_GROUPS = 1);
+    import taiga_config::*;
+    import riscv_types::*;
+    import taiga_types::*;
+
     rs_addr_t rd_addr;
     rs_addr_t [FP_REGFILE_READ_PORTS-1:0] rs_addr;
     //logic [$clog2(NUM_WB_GROUPS)-1:0] rd_wb_group;
@@ -90,35 +88,43 @@ interface fp_unit_issue_interface;
 endinterface
 
 interface fp_unit_writeback_interface;
-        logic ack;
+    import taiga_config::*;
+    import riscv_types::*;
+    import taiga_types::*;
+    import fpu_types::*;
 
-        id_t id;
-        logic done;
-        logic [FLEN-1:0] rd;
-        logic expo_overflow;
-        logic [4:0] fflags;
-        logic [2:0] rm;
-        // shared with normalization
-        logic carry;
-        logic safe;
-        logic hidden;
-        grs_t grs;
-        fp_shift_amt_t clz;
-        logic right_shift;
-        logic [EXPO_WIDTH-1:0] right_shift_amt;
-        logic subnormal;
+    logic ack;
 
-        modport unit (
-            input ack,
-            output id, done, rd, expo_overflow, fflags, rm, carry, hidden, grs, clz, safe, subnormal, right_shift, right_shift_amt
-        );
-        modport wb (
-            output ack,
-            input id, done, rd, expo_overflow, fflags, rm, carry, hidden, grs, clz, safe, subnormal, right_shift, right_shift_amt
-        );
+    id_t id;
+    logic done;
+    logic [FLEN-1:0] rd;
+    logic expo_overflow;
+    logic [4:0] fflags;
+    logic [2:0] rm;
+    // shared with normalization
+    logic carry;
+    logic safe;
+    logic hidden;
+    grs_t grs;
+    fp_shift_amt_t clz;
+    logic right_shift;
+    logic [EXPO_WIDTH-1:0] right_shift_amt;
+    logic subnormal;
+
+    modport unit (
+        input ack,
+        output id, done, rd, expo_overflow, fflags, rm, carry, hidden, grs, clz, safe, subnormal, right_shift, right_shift_amt
+    );
+    modport wb (
+        output ack,
+        input id, done, rd, expo_overflow, fflags, rm, carry, hidden, grs, clz, safe, subnormal, right_shift, right_shift_amt
+    );
 endinterface
 
 interface fp_load_store_queue_interface;
+    import taiga_config::*;
+    import taiga_types::*;
+    import fpu_types::*;
 
     logic [FLEN-1:0] data_in;
     logic forwarded_store;
@@ -133,6 +139,10 @@ interface fp_load_store_queue_interface;
 endinterface
 
 interface shared_decode_interface;
+    import taiga_config::*;
+    import taiga_types::*;
+    import riscv_types::*;
+
     logic float_need_int_rs1;
     logic int_rs1_conflict;
     rs_addr_t int_rs1_addr;

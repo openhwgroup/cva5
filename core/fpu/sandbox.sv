@@ -1,5 +1,5 @@
 /*
- * Copyright © 2020 Eric Matthews,  Lesley Shannon
+ * Copyright © 2019-2023 Yuhui Gao, Lesley Shannon
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,15 +20,15 @@
  *             Yuhui Gao <yuhuig@sfu.ca>
  */
 
-import taiga_config::*;
-import riscv_types::*;
-import taiga_types::*;
-import fpu_types::*;
-
-module sandbox #(parameter SANDBOX_FRAC_W=52, SANDBOX_EXPO_W=11) (
-      input logic [FLEN-1:0] data_in,
-      output logic [FLEN-1:0] data_out
-    );
+module sandbox
+    import taiga_config::*;
+#(
+    parameter SANDBOX_FRAC_W=52,
+    parameter SANDBOX_EXPO_W=11
+)(
+    input logic [FLEN-1:0] data_in,
+    output logic [FLEN-1:0] data_out
+);
 
     logic sign_in;
     logic [EXPO_WIDTH-1:0] expo_in;
@@ -41,9 +41,9 @@ module sandbox #(parameter SANDBOX_FRAC_W=52, SANDBOX_EXPO_W=11) (
     assign {sign_in, expo_in, frac_in} = data_in;
 
     //sandbox
-    generate if (SANDBOX_EXPO_W < EXPO_WIDTH) 
+    generate if (SANDBOX_EXPO_W < EXPO_WIDTH)
         assign expo_sandboxed = expo_in[SANDBOX_EXPO_W-1:0] | {SANDBOX_EXPO_W{(|expo_in[EXPO_WIDTH-1:SANDBOX_EXPO_W])}}; // detect overflow/NaN
-    else 
+    else
         assign expo_sandboxed = expo_in[SANDBOX_EXPO_W-1:0];
     endgenerate
 
@@ -54,6 +54,3 @@ module sandbox #(parameter SANDBOX_FRAC_W=52, SANDBOX_EXPO_W=11) (
     assign data_out = {sign_sandboxed, EXPO_WIDTH'(expo_sandboxed), {frac_sandboxed, {(FRAC_WIDTH-SANDBOX_FRAC_W){1'b0}}}};
 
 endmodule
-
-
-

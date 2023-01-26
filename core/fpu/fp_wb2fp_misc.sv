@@ -1,5 +1,5 @@
 /*
- * Copyright © 2017-2020 Yuhui Gao,  Lesley Shannon
+ * Copyright © 2019-2023 Yuhui Gao, Lesley Shannon
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,18 +17,19 @@
  * Reconfigurable Computing Lab, Simon Fraser University.
  *
  * Author(s):
- *             Yuhui Gao <yuhiug@sfu.ca>
- *             */
-
-import taiga_config::*;
-import riscv_types::*;
-import taiga_types::*;
-import fpu_types::*;
+ *             Yuhui Gao <yuhuig@sfu.ca>
+ */
 
 //Misc. floating-point units that write-back to floating-point register file
 //Sharing 1 write-back port
 //FMINMAX, FSIGN_INJ, FCVT_D_W(U)
-module fp_wb2fp_misc (
+module fp_wb2fp_misc
+    import taiga_config::*;
+    import riscv_types::*;
+    import taiga_types::*;
+    import fpu_types::*;
+
+(
     input logic clk,
     unit_issue_interface.unit issue,
     input fp_wb2fp_misc_inputs_t fp_wb2fp_misc_inputs,
@@ -51,12 +52,12 @@ module fp_wb2fp_misc (
     assign fp_i2f_inputs = fp_wb2fp_misc_inputs.fp_i2f_inputs;
     assign fp_minmax_inputs = fp_wb2fp_misc_inputs.fp_minmax_inputs;
     assign fp_sign_inject_inputs = fp_wb2fp_misc_inputs.fp_sign_inject_inputs;
-    
+
     ////////////////////////////////////////////////////
     //Issue
     always_comb begin
         i2f_issue.new_request = issue.new_request & fp_wb2fp_misc_inputs.instruction[2];
-        i2f_issue.id = issue.id; 
+        i2f_issue.id = issue.id;
 
         minmax_issue.new_request = issue.new_request & fp_wb2fp_misc_inputs.instruction[1];
         minmax_issue.id = issue.id;
@@ -101,7 +102,7 @@ module fp_wb2fp_misc (
     //Mux Results
     always_ff @(posedge clk) begin
         if (advance) begin
-            wb.rm <= fp_wb2fp_misc_inputs.rm; 
+            wb.rm <= fp_wb2fp_misc_inputs.rm;
             wb.done <= issue.new_request;
             wb.id <= issue.id;
             case(fp_wb2fp_misc_inputs.instruction)
@@ -137,4 +138,3 @@ module fp_wb2fp_misc (
     end
 
 endmodule
-

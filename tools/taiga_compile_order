@@ -102,7 +102,7 @@ core/writeback.sv
 
 core/fpu/parallel_AND.sv
 core/fpu/parallel_OR.sv
-core/fpu/pre-normalize.sv
+core/fpu/pre_normalize.sv
 core/fpu/swap.sv
 core/fpu/unsigned_multiplier.sv
 core/fpu/fp_mul_madd_fused.sv
@@ -118,7 +118,7 @@ core/fpu/fp_i2f.sv
 core/fpu/fp_minmax.sv
 core/fpu/fp_DS.sv
 core/fpu/fp_normalize.sv
-core/fpu/fp_rounding_simplified.sv
+core/fpu/fp_round_simplified.sv
 core/fpu/fp_sign_inj.sv
 core/fpu/fp_div.sv
 core/fpu/fp_div_core.sv
@@ -135,7 +135,7 @@ core/fpu/fp_writeback.sv
 core/fpu/sqrt_mantissa.sv
 core/fpu/fp_sqrt.sv
 core/fpu/fp_div_sqrt_wrapper.sv
-core/fpu/fflags_mux.sv
+core/fpu/fflag_mux.sv
 core/fpu/sandbox.sv
 core/fpu/fpu_top.sv
 core/fpu/fp_pre_processing.sv

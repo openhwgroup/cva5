@@ -1,5 +1,5 @@
 /*
- * Copyright © 2020 Eric Matthews,  Lesley Shannon
+ * Copyright © 2019-2023 Yuhui Gao, Lesley Shannon
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,21 +17,21 @@
  * Reconfigurable Computing Lab, Simon Fraser University.
  *
  * Author(s):
- *             Eric Matthews <ematthew@sfu.ca>
  *             Yuhui Gao <yuhuig@sfu.ca>
  */
 
 module  fp_illegal_instruction_checker
     import taiga_config::*;
-    (
-        input logic [31:0] instruction,
-        output logic need_int_data,
-        output logic write_int_data,
-        output logic need_float_data,
-        output logic write_float_data,
-        output logic float_instruction,
-        output logic accumulating_csrs
-    );
+    import riscv_types::*;
+(
+    input logic [31:0] instruction,
+    output logic need_int_data,
+    output logic write_int_data,
+    output logic need_float_data,
+    output logic write_float_data,
+    output logic float_instruction,
+    output logic accumulating_csrs
+);
 
     ////////////////////////////////////////////////////
     //FP instructions
@@ -107,20 +107,20 @@ module  fp_illegal_instruction_checker
     assign sp_legal = instruction inside {
         FLW, FSW, FMADD_S, FMSUB_S, FNMSUB_S, FNMADD_S, FADD_S, FSUB_S, FMUL_S,
         FDIV_S, FSQRT_S, FSGNJ_S, FSGNJN_S, FSGNJX_S, FMIN_S, FMAX_S, FCVT_W_S,
-        FCVT_WU_S, FCVT_S_W, FCVT_S_WU, FMV_W_X, FMV_X_W, FEQ_S, FLT_S, FLE_S, FLASS_S  
+        FCVT_WU_S, FCVT_S_W, FCVT_S_WU, FMV_W_X, FMV_X_W, FEQ_S, FLT_S, FLE_S, FLASS_S
     };
-    
+
     assign db_legal = instruction inside {
         FLD, FSD, FMADD_D, FMSUB_D, FNMSUB_D, FNMADD_D, FADD_D, FSUB_D, FMUL_D,
         FDIV_D, FSQRT_D, FSGNJ_D, FSGNJN_D, FSGNJX_D, FMIN_D, FMAX_D, FCVT_W_D,
-        FCVT_WU_D, FCVT_D_W, FCVT_D_WU, FEQ_D, FLT_D, FLE_D, FLASS_D, FCVT_S_D, FCVT_D_S  
+        FCVT_WU_D, FCVT_D_W, FCVT_D_WU, FEQ_D, FLT_D, FLE_D, FLASS_D, FCVT_S_D, FCVT_D_S
     };
 
     //need to read from integer reg file
     assign need_int_data = instruction inside {
-        FLW, FSW, FCVT_S_W, FCVT_S_WU, FMV_X_W, 
+        FLW, FSW, FCVT_S_W, FCVT_S_WU, FMV_X_W,
 
-        FLD, FSD, FCVT_D_W, FCVT_D_WU 
+        FLD, FSD, FCVT_D_W, FCVT_D_WU
     };
 
     assign need_float_data = instruction inside {
@@ -130,24 +130,24 @@ module  fp_illegal_instruction_checker
 
         FSD, FMADD_D, FMSUB_D, FNMSUB_D, FNMADD_D, FADD_D, FSUB_D, FMUL_D,
         FDIV_D, FSQRT_D, FSGNJ_D, FSGNJN_D, FSGNJX_D, FMIN_D, FMAX_D, FCVT_W_D,
-        FCVT_WU_D, FEQ_D, FLT_D, FLE_D, FLASS_D  
+        FCVT_WU_D, FEQ_D, FLT_D, FLE_D, FLASS_D
     };
 
     //write back to integer reg file
     //assign write_int_data = instruction inside {
         //FCVT_W_S, FCVT_WU_S, FMV_X_W, FEQ_S, FLT_S, FLE_S, FLASS_S,
 
-        //FCVT_W_D, FCVT_WU_D, FEQ_D, FLT_D, FLE_D, FLASS_D  
+        //FCVT_W_D, FCVT_WU_D, FEQ_D, FLT_D, FLE_D, FLASS_D
     //};
 
     //assign write_float_data = instruction inside {
         //FLW, FMADD_S, FMSUB_S, FNMSUB_S, FNMADD_S, FADD_S, FSUB_S, FMUL_S,
-        //FDIV_S, FSQRT_S, FSGNJ_S, FSGNJN_S, FSGNJX_S, FMIN_S, FMAX_S, FCVT_S_W, FCVT_S_WU, FMV_X_W,  
-    
+        //FDIV_S, FSQRT_S, FSGNJ_S, FSGNJN_S, FSGNJX_S, FMIN_S, FMAX_S, FCVT_S_W, FCVT_S_WU, FMV_X_W,
+
         //FLD, FMADD_D, FMSUB_D, FNMSUB_D, FNMADD_D, FADD_D, FSUB_D, FMUL_D,
-        //FDIV_D, FSQRT_D, FSGNJ_D, FSGNJN_D, FSGNJX_D, FMIN_D, FMAX_D, FCVT_D_W, FCVT_D_WU, FCVT_D_S, FCVT_S_D  
+        //FDIV_D, FSQRT_D, FSGNJ_D, FSGNJN_D, FSGNJX_D, FMIN_D, FMAX_D, FCVT_D_W, FCVT_D_WU, FCVT_D_S, FCVT_S_D
     //};
-    
+
     assign opcode = instruction[6:0];
     assign opcode_trim = opcode[6:2];
     assign fn7 = instruction[31:25];

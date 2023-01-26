@@ -1,5 +1,5 @@
 /*
- * Copyright © 2017-2020 Yuhui Gao,  Lesley Shannon
+ * Copyright © 2019-2023 Yuhui Gao, Lesley Shannon
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,26 +17,23 @@
  * Reconfigurable Computing Lab, Simon Fraser University.
  *
  * Author(s):
- *             Yuhui Gao <yuhiug@sfu.ca>
- *             */
+ *             Yuhui Gao <yuhuig@sfu.ca>
+ */
 
-import taiga_config::*;
-import riscv_types::*;
-import taiga_types::*;
-import fpu_types::*;
-
-module fp_minmax (
+module fp_minmax
+    import fpu_types::*;
+(
     input logic clk,
     unit_issue_interface.unit issue,
     input fp_minmax_inputs_t fp_minmax_inputs,
     fp_unit_writeback_interface.unit wb
 );
-  
+
     ////////////////////////////////////////////////////
     //Implementation
     //See fp_preprocessing
-    
-    
+
+
     ////////////////////////////////////////////////////
     //Output
     assign wb.rd = fp_minmax_inputs.rs1;
@@ -44,4 +41,4 @@ module fp_minmax (
     assign wb.fflags = {fp_minmax_inputs.invalid, 4'b0};
     assign wb.done = issue.new_request;
     assign wb.id = issue.id;
-endmodule 
+endmodule

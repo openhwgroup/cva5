@@ -1,5 +1,5 @@
 /*
- * Copyright © 2017-2020 Eric Matthews,  Lesley Shannon
+ * Copyright © 2019-2023 Yuhui Gao, Lesley Shannon
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,8 +17,8 @@
  * Reconfigurable Computing Lab, Simon Fraser University.
  *
  * Author(s):
- *             Yuhui Gao <yuhiug@sfu.ca>
- *             */
+ *             Yuhui Gao <yuhuig@sfu.ca>
+ */
 
 
 package fpu_types;
@@ -49,7 +49,7 @@ package fpu_types;
     localparam [FLEN-2:0] UNDERFLOW_DEFAULT_RESULT = {(FLEN-1){1'b0}};
 
     localparam FP_NUM_UNITS = 4;
-   
+
     typedef struct packed{
         id_t id;
         logic [31:0] pc;
@@ -108,7 +108,7 @@ package fpu_types;
         logic right_shift;
         logic[EXPO_WIDTH-1:0] right_shift_amt;
         logic overflow_before_rounding;
-    } fp_normalize_packet_t; 
+    } fp_normalize_packet_t;
 
     typedef struct packed {
         logic valid;
@@ -135,14 +135,14 @@ package fpu_types;
         logic overflow_before_rounding;
         logic [FLEN-1:0] result_if_overflow;
         //logic [2:0] rm;
-    } fp_round_packet_t; 
+    } fp_round_packet_t;
 
     typedef struct packed{
         id_t id;
         logic valid;
         logic [FLEN-1:0] data;
     } fp_wb_packet_t;
-        
+
     typedef struct packed{
         id_t id;
         logic done;
@@ -193,8 +193,8 @@ package fpu_types;
         logic [FLEN-1:0]    rs1;
         logic [FLEN-1:0]    rs2;
         logic [2:0]         rm;
-        logic [3:0]         rs1_special_case; 
-        logic [3:0]         rs2_special_case; 
+        logic [3:0]         rs1_special_case;
+        logic [3:0]         rs2_special_case;
     } fp_mul_inputs_t;
 
     typedef struct packed {
@@ -207,8 +207,8 @@ package fpu_types;
         logic                rs2_safe_bit;
         logic [2:0]          rm;
         logic [6:0]          fn7;
-        logic [3:0]          rs1_special_case; 
-        logic [3:0]          rs2_special_case; 
+        logic [3:0]          rs1_special_case;
+        logic [3:0]          rs2_special_case;
         logic                swap;
         logic                add;
         logic [EXPO_WIDTH:0] expo_diff;
@@ -226,18 +226,18 @@ package fpu_types;
         logic                  rs1_subnormal;
         logic                  rs2_subnormal;
         logic                  rs3_subnormal;
-        logic                  rs1_hidden_bit; 
-        logic                  rs2_hidden_bit; 
-        logic                  rs3_hidden_bit; 
+        logic                  rs1_hidden_bit;
+        logic                  rs2_hidden_bit;
+        logic                  rs3_hidden_bit;
 
         logic [3:0]            rs1_special_case;
         logic [3:0]            rs2_special_case;
         logic [3:0]            rs3_special_case;
 
         logic [6:0]            op;         //only need 3rd and 4th bits (nfmadd)
-        logic [2:0]            rm;     
+        logic [2:0]            rm;
         logic [2:0]            instruction;     //support fused fadd fmul and fmadd unit {fmadd, fadd, fmul}
-        
+
         fp_add_inputs_t        fp_add_inputs;
     } fp_madd_inputs_t;
 
@@ -245,11 +245,11 @@ package fpu_types;
         logic [FLEN-1:0]       rs1;
         logic [FLEN-1:0]       rs2;        //not needed for sqrt
         logic                  rs1_hidden_bit;
-        logic                  rs2_hidden_bit;        
+        logic                  rs2_hidden_bit;
         logic [EXPO_WIDTH-1:0] rs1_pre_normalize_shift_amt;
         logic [EXPO_WIDTH-1:0] rs2_pre_normalize_shift_amt;
         logic                  rs1_normal;
-        logic                  rs2_normal;        
+        logic                  rs2_normal;
         logic [6:0]            fn7;        //only need to two 2nd bit
         logic [2:0]            rm;
         id_t                   id;
@@ -277,7 +277,7 @@ package fpu_types;
         logic [3:0]         f2i_rs1_special_case;
         logic [XLEN-1:0]    i2f_rs1;
         logic [2:0]         rm;
-        logic               is_mv;             //RV32 does not support FMV.D 
+        logic               is_mv;             //RV32 does not support FMV.D
         logic               is_signed;
         logic               is_float;
         logic               is_f2f;             //single <-> double
@@ -352,22 +352,22 @@ package fpu_types;
 
     //intermediate outputs from FMUL for FMADD instructions
     typedef struct packed {
-      logic is_fma;
-      fp_unit_writeback_t mul_wb;
-      logic mul_wb_rd_expo_overflow;
-      logic mul_wb_rd_hidden;
-      logic mul_wb_rd_safe;
-      grs_t mul_grs;
-      logic mul_op, add_op;
-      logic [FLEN-1:0] rs3;
-      logic rs3_hidden_bit;
-      logic [2:0] mul_rm;
-      logic [2:0] instruction;
-      logic invalid_operation;
-      logic [3:0] rs1_special_case;
-      logic [3:0] rs2_special_case;
-      logic [EXPO_WIDTH:0] expo_diff;
-      logic swap;
+        logic is_fma;
+        fp_unit_writeback_t mul_wb;
+        logic mul_wb_rd_expo_overflow;
+        logic mul_wb_rd_hidden;
+        logic mul_wb_rd_safe;
+        grs_t mul_grs;
+        logic mul_op, add_op;
+        logic [FLEN-1:0] rs3;
+        logic rs3_hidden_bit;
+        logic [2:0] mul_rm;
+        logic [2:0] instruction;
+        logic invalid_operation;
+        logic [3:0] rs1_special_case;
+        logic [3:0] rs2_special_case;
+        logic [EXPO_WIDTH:0] expo_diff;
+        logic swap;
     } fma_mul_outputs_t;
 
     //additional inputs to support FP LS
@@ -377,13 +377,13 @@ package fpu_types;
         id_t store_forward_id;
         logic is_float;
     } fp_load_store_inputs_t;
-    
+
     typedef struct packed {
         //id_t id;
         logic is_float;
         logic we;
     } fp_lq_entry_t;
-        
+
     typedef struct packed {
         //id_t id;
         logic forwarded_store;
@@ -424,7 +424,7 @@ package fpu_types;
        logic fp_class_op;
        logic fp_sign_inject_op;
 
-       //unit stall 
+       //unit stall
        logic operand_stall_due_to_fls;
        logic operand_stall_due_to_fmadd;
        logic operand_stall_due_to_fdiv_sqrt;
@@ -444,7 +444,7 @@ package fpu_types;
        logic fadd_operand_stall_rs2;
        logic fmul_operand_stall_rs1;
        logic fmul_operand_stall_rs2;
-       logic fadd_stall_due_to_fmadd; 
+       logic fadd_stall_due_to_fmadd;
 
        logic rs1_subnormal;
        logic rs2_subnormal;
@@ -457,19 +457,17 @@ package fpu_types;
     } fp_taiga_trace_events_t;
 
     typedef struct packed {
-      int in_flight_ids;
+        int in_flight_ids;
     } LargeSigTrace_t;
 
     typedef struct packed {
-      fp_taiga_trace_events_t events;
-      LargeSigTrace_t sigs;
+        fp_taiga_trace_events_t events;
+        LargeSigTrace_t sigs;
     } fp_trace_outputs_t;
 
     //fflag tracking for FP units that writeback to integer reg
     typedef struct packed {
-      logic [4:0] fflags;
-      //id_t id;
+        logic [4:0] fflags;
+        //id_t id;
     } unit_fflags_wb_t;
 endpackage
-
-

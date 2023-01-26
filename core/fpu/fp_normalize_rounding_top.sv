@@ -1,5 +1,5 @@
 /*
- * Copyright © 2017, 2018, 2019 Eric Matthews,  Lesley Shannon
+ * Copyright © 2019-2023 Yuhui Gao, Lesley Shannon
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,24 +17,24 @@
  * Reconfigurable Computing Lab, Simon Fraser University.
  *
  * Author(s):
- *                  Yuhui Gao <yuhuig@sfu.ca>
+ *             Yuhui Gao <yuhuig@sfu.ca>
  */
 
-import taiga_config::*;
-import riscv_types::*;
-import taiga_types::*;
-import fpu_types::*;
+module fp_normalize_rounding_top
+    import taiga_config::*;
+    import riscv_types::*;
+    import taiga_types::*;
+    import fpu_types::*;
 
-module fp_normalize_rounding_top #(
-        parameter int unsigned NUM_WB_UNITS = 3,
-        parameter int unsigned NUM_UNITS [FP_NUM_WB_GROUPS] = '{3}
-    )
-    (
-        input logic clk,
-        input logic rst,
-        fp_unit_writeback_interface.wb intermediate_unit_wb[NUM_WB_UNITS],
-        fp_unit_writeback_interface.unit unit_wb
-    );
+#(
+    parameter int unsigned NUM_WB_UNITS = 3,
+    parameter int unsigned NUM_UNITS [FP_NUM_WB_GROUPS] = '{3}
+)(
+    input logic clk,
+    input logic rst,
+    fp_unit_writeback_interface.wb intermediate_unit_wb[NUM_WB_UNITS],
+    fp_unit_writeback_interface.unit unit_wb
+);
 
     //Writeback
     //aliases for write-back-interface signals
@@ -77,24 +77,23 @@ module fp_normalize_rounding_top #(
 
     typedef int unsigned unit_count_t [FP_NUM_WB_GROUPS];
     function unit_count_t get_cumulative_unit_count();
-    unit_count_t counts;
-    int unsigned cumulative_count = 0;
-    for (int i = 0; i < FP_NUM_WB_GROUPS; i++) begin
-        counts[i] = cumulative_count;
-        cumulative_count += NUM_UNITS[i];
-    end
-    return counts;
+        unit_count_t counts;
+        int unsigned cumulative_count = 0;
+        for (int i = 0; i < FP_NUM_WB_GROUPS; i++) begin
+            counts[i] = cumulative_count;
+            cumulative_count += NUM_UNITS[i];
+        end
+        return counts;
     endfunction
-    
+
     localparam unit_count_t CUMULATIVE_NUM_UNITS = get_cumulative_unit_count();
-  
-    genvar i, j, k;
+
     ////////////////////////////////////////////////////
     //Implementation
     //Re-assigning interface inputs to array types so that they can be dynamically indexed
     generate
-        for (i = 0; i < FP_NUM_WB_GROUPS; i++) begin
-            for (j = 0; j < NUM_UNITS[i]; j++) begin
+        for (genvar i = 0; i < FP_NUM_WB_GROUPS; i++) begin
+            for (genvar j = 0; j < NUM_UNITS[i]; j++) begin
                 assign unit_instruction_id[i][j] = intermediate_unit_wb[CUMULATIVE_NUM_UNITS[i] + j].id;
                 assign unit_done[i][j] = intermediate_unit_wb[CUMULATIVE_NUM_UNITS[i] + j].done;
                 assign unit_rm[i][j] = intermediate_unit_wb[CUMULATIVE_NUM_UNITS[i] + j].rm;
@@ -114,8 +113,8 @@ module fp_normalize_rounding_top #(
     //As units are selected for commit ports based on their unit ID,
     //for each additional commit port one unit can be skipped for the commit mux
     generate
-        for (i = 0; i < FP_NUM_WB_GROUPS; i++) begin
-            for (j = 0; j < NUM_UNITS[i]; j++) begin
+        for (genvar i = 0; i < FP_NUM_WB_GROUPS; i++) begin
+            for (genvar j = 0; j < NUM_UNITS[i]; j++) begin
                 assign unit_rd[i][j] = intermediate_unit_wb[CUMULATIVE_NUM_UNITS[i] + j].rd;
                 assign unit_expo_overflow[i][j] = intermediate_unit_wb[CUMULATIVE_NUM_UNITS[i] + j].expo_overflow;
                 assign unit_fflags[i][j] = intermediate_unit_wb[CUMULATIVE_NUM_UNITS[i] + j].fflags;
@@ -125,7 +124,7 @@ module fp_normalize_rounding_top #(
 
     ////////////////////////////////////////////////////
     //Unit select for normalization module
-    generate for (i = 0; i < FP_NUM_WB_GROUPS; i++) begin
+    generate for (genvar i = 0; i < FP_NUM_WB_GROUPS; i++) begin
         priority_encoder
             #(.WIDTH(NUM_UNITS[i]))
         unit_done_encoder
@@ -155,7 +154,7 @@ module fp_normalize_rounding_top #(
             //Unit Ack
             unit_ack[i] = '0;
             unit_ack[i][unit_sel[i]] = advance_norm & normalize_packet.valid; //writeback not valid until the normalization stage is ready
-        end    
+        end
     end
 
     ////////////////////////////////////////////////////
@@ -169,11 +168,11 @@ module fp_normalize_rounding_top #(
         if (advance_norm)
             normalize_packet_r <= normalize_packet;
     end
-    
+
     //normalization
     fp_normalize normalize_inst(
-      .fp_normalize_packet(normalize_packet_r),
-      .fp_normalize_pre_processing_packet(normalize_pre_processing_packet)
+        .fp_normalize_packet(normalize_packet_r),
+        .fp_normalize_pre_processing_packet(normalize_pre_processing_packet)
     );
 
     ////////////////////////////////////////////////////
@@ -209,21 +208,21 @@ module fp_normalize_rounding_top #(
 
     assign advance_shift = advance_round | ~normalize_pre_processing_packet_r.valid;
     always_ff @ (posedge clk) begin
-        if (advance_shift) 
+        if (advance_shift)
             normalize_pre_processing_packet_r <= normalize_pre_processing_packet;
     end
 
     //roundup calculation
     fp_round_simplified round(
-      .sign(result_sign_norm),
-      .rm(normalize_pre_processing_packet_r.rm),
-      .grs({grs_norm[GRS_WIDTH-1-:2], |grs_norm[0+:GRS_WIDTH-2]}), 
-      .lsb(result_frac_norm[0]),
-      .roundup(round_packet.roundup),
-      .result_if_overflow(result_if_overflow)
+        .sign(result_sign_norm),
+        .rm(normalize_pre_processing_packet_r.rm),
+        .grs({grs_norm[GRS_WIDTH-1-:2], |grs_norm[0+:GRS_WIDTH-2]}),
+        .lsb(result_frac_norm[0]),
+        .roundup(round_packet.roundup),
+        .result_if_overflow(result_if_overflow)
     );
 
-    //prep for rounding 
+    //prep for rounding
     assign round_packet.valid = normalize_pre_processing_packet_r.valid;
     assign round_packet.data = {result_sign_norm, result_expo_norm, result_frac_norm};
     assign round_packet.expo_overflow = expo_overflow_norm;
@@ -234,19 +233,18 @@ module fp_normalize_rounding_top #(
     assign round_packet.overflow_before_rounding = overflow_before_rounding;
 
     ////////////////////////////////////////////////////
-    //Shared rounding 
+    //Shared rounding
     logic [FRAC_WIDTH+1:0]       hidden_round_frac_roundup;
     logic [FRAC_WIDTH:0]         frac_round_intermediate;
     logic                        roundup;
-    logic                        frac_overflow, frac_overflow_placeholder;
+    logic                        frac_overflow;
     logic                        sign_out;
     logic [EXPO_WIDTH-1:0]       expo, expo_out;
     logic                        expo_overflow_round;
     logic [FRAC_WIDTH-1:0]       frac, frac_out;
     logic                        hidden_round;
     logic [4:0]                  fflags, fflags_out;
-    logic                        wb_valid;
-    logic                        overflowExp, overflowExp_intermediate, underflowExp;
+    logic                        overflowExp, underflowExp;
     logic frac_overflow_debug;
     logic advance_round;
 
@@ -262,13 +260,12 @@ module fp_normalize_rounding_top #(
     //compute mantissa overflow due to rounding in parallel with roundup addition
     assign hidden_round_frac_roundup = {hidden_round, frac, roundup};
     parallel_AND #(.WIDTH((FRAC_WIDTH+2-1)/6+1)) parallel_AND_inst(
-        .i_data( {{(NUM_FRAC_LUTS*6-(FRAC_WIDTH+2)){1'b1}}, hidden_round_frac_roundup} ), 
+        .i_data( {{(NUM_FRAC_LUTS*6-(FRAC_WIDTH+2)){1'b1}}, hidden_round_frac_roundup} ),
         .o_data(frac_overflow_parallel_ANDs)
     );
     assign frac_overflow = &frac_overflow_parallel_ANDs;//&{hidden_round, frac, roundup};
     assert property (@(posedge clk) (frac_overflow|frac_overflow_debug) -> (frac_overflow_debug == frac_overflow));
 
-    assign wb_valid = round_packet_r.valid;
     assign roundup = round_packet_r.roundup;
     assign sign_out = round_packet_r.data[FLEN-1];
     assign expo = round_packet_r.data[FLEN-2-:EXPO_WIDTH];
@@ -282,7 +279,7 @@ module fp_normalize_rounding_top #(
     assign overflowExp = (frac_overflow & &expo[EXPO_WIDTH-1:1]) | expo_overflow_round;
     assign expo_out = expo + EXPO_WIDTH'(frac_overflow);
     assign underflowExp = ~(hidden_round) & |frac_out;
-    assign fflags_out = fflags[4] ? fflags : fflags | {2'b0, overflowExp, underflowExp, overflowExp}; //inexact is asserted when overflow 
+    assign fflags_out = fflags[4] ? fflags : fflags | {2'b0, overflowExp, underflowExp, overflowExp}; //inexact is asserted when overflow
 
     //Output
     assign unit_wb.id = round_packet_r.id;
@@ -292,7 +289,7 @@ module fp_normalize_rounding_top #(
 
     function logic [FRAC_WIDTH+3+GRS_WIDTH-1:0] reverse(input logic signed [FRAC_WIDTH+3+GRS_WIDTH-1:0] in);
         foreach(in[i])
-          reverse[i] = in[FRAC_WIDTH+3+GRS_WIDTH-1-i];
-  endfunction
+            reverse[i] = in[FRAC_WIDTH+3+GRS_WIDTH-1-i];
+    endfunction
 
 endmodule

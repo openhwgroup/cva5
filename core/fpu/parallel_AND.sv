@@ -1,5 +1,5 @@
 /*
- * Copyright © 2017, 2018, 2019 Eric Matthews,  Lesley Shannon
+ * Copyright © 2019-2023 Yuhui Gao, Lesley Shannon
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,15 +17,11 @@
  * Reconfigurable Computing Lab, Simon Fraser University.
  *
  * Author(s):
- *                  Yuhui Gao <yuhuig@sfu.ca>
+ *             Yuhui Gao <yuhuig@sfu.ca>
  */
 
-import taiga_config::*;
-import riscv_types::*;
-import taiga_types::*;
-import fpu_types::*;
-
-module parallel_AND #(
+module parallel_AND
+#(
     parameter WIDTH
 )(
     input logic [I_WIDTH-1:0] i_data,
@@ -34,10 +30,10 @@ module parallel_AND #(
     localparam I_WIDTH = WIDTH*6;
 
     genvar i;
-    generate 
+    generate
         for (i = 0; i < WIDTH; i++) begin
             assign o_data[i] = &i_data[6*i+:6];
         end
-    endgenerate  
+    endgenerate
 
 endmodule

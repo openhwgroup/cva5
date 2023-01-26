@@ -1,5 +1,5 @@
 /*
- * Copyright © 2017-2020 Yuhui Gao,  Lesley Shannon
+ * Copyright © 2019-2023 Yuhui Gao, Lesley Shannon
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,18 +17,19 @@
  * Reconfigurable Computing Lab, Simon Fraser University.
  *
  * Author(s):
- *             Yuhui Gao <yuhiug@sfu.ca>
- *             */
-
-import taiga_config::*;
-import riscv_types::*;
-import taiga_types::*;
-import fpu_types::*;
+ *             Yuhui Gao <yuhuig@sfu.ca>
+ */
 
 //Misc. floating-point units that write-back to integer register file
 //Sharing 1 write-back port
 //FCMP, FCLASS, F2I
-module fp_wb2int_misc (
+module fp_wb2int_misc
+    import taiga_config::*;
+    import riscv_types::*;
+    import taiga_types::*;
+    import fpu_types::*;
+
+(
     input logic clk,
     unit_issue_interface.unit issue,
     input fp_wb2int_misc_inputs_t fp_wb2int_misc_inputs,
@@ -44,13 +45,13 @@ module fp_wb2int_misc (
     unit_writeback_interface f2i_wb();
     unit_writeback_interface cmp_wb();
     unit_writeback_interface class_wb();
-    logic [2:0] instruction, instruction_r, instruction_rr;
+    logic [2:0] instruction;
     logic advance;
 
     ////////////////////////////////////////////////////
     //construct inputs for each unit
     assign fp_f2i_inputs = fp_wb2int_misc_inputs.fp_f2i_inputs;
-    
+
     assign fp_cmp_inputs = fp_wb2int_misc_inputs.fp_cmp_inputs;
 
     assign fp_class_inputs = fp_wb2int_misc_inputs.fp_class_inputs;
@@ -137,5 +138,4 @@ module fp_wb2int_misc (
             end
         endcase
     end
-endmodule   
-
+endmodule
