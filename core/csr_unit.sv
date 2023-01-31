@@ -38,14 +38,16 @@ module csr_unit
 
         input decode_packet_t decode_stage,
         output logic unit_needed,
+        output logic [REGFILE_READ_PORTS-1:0] uses_rs,
+        output logic uses_rd,
 
         input issue_packet_t issue_stage,
         input logic issue_stage_ready,
+        input rs_addr_t issue_rs_addr [REGFILE_READ_PORTS],
         input logic [31:0] rf [REGFILE_READ_PORTS],
 
         //Unit Interfaces
         unit_issue_interface.unit issue,
-        input csr_inputs_t csr_inputs,
         unit_writeback_interface.unit wb,
 
         //Privilege
@@ -82,10 +84,19 @@ module csr_unit
         input interrupt_t m_interrupt
         );
 
+    typedef struct packed{
+        csr_addr_t addr;
+        logic[1:0] op;
+        logic reads;
+        logic writes;
+        logic [XLEN-1:0] data;
+    } csr_inputs_t;
+
     logic busy;
     logic commit;
     logic commit_in_progress;
 
+    csr_inputs_t csr_inputs;
     csr_inputs_t csr_inputs_r;
 
     privilege_t privilege_level;
@@ -114,12 +125,20 @@ module csr_unit
 
     ////////////////////////////////////////////////////
     //Decode
-    assign unit_needed = decode_stage.instruction inside {
-        CSRRW, CSRRS, CSRRC, CSRRWI, CSRRSI, CSRRCI
-    };
-
+    assign unit_needed = decode_stage.instruction inside {CSRRW, CSRRS, CSRRC, CSRRWI, CSRRSI, CSRRCI};
+    always_comb begin
+        uses_rs = '0;
+        uses_rs[RS1] = decode_stage.instruction inside {CSRRW, CSRRS, CSRRC};
+        uses_rd = unit_needed;
+    end
     ////////////////////////////////////////////////////
     //Issue
+    assign csr_inputs.addr = issue_stage.instruction[31:20];
+    assign csr_inputs.op = issue_stage.fn3[1:0];
+    assign csr_inputs.data = issue_stage.fn3[2] ? {27'b0, issue_rs_addr[RS1]} : rf[RS1];
+    assign csr_inputs.reads = ~((issue_stage.fn3[1:0] == CSR_RW) && (issue_stage.rd_addr == 0));
+    assign csr_inputs.writes = ~((issue_stage.fn3[1:0] == CSR_RC) && (issue_rs_addr[RS1] == 0));
+
     assign processing_csr = busy | issue.new_request;
     
     assign issue.ready = ~busy;

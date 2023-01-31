@@ -312,6 +312,7 @@ module cva5_sim
     `define RENAME_P cpu.renamer_block
     `define METADATA_P cpu.id_block
     `define LS_P cpu.load_store_unit_block
+    `define DIV_P cpu.gen_div.div_unit_block
     `define LSQ_P cpu.load_store_unit_block.lsq_block
     `define DCACHE_P cpu.load_store_unit_block.gen_ls_dcache.data_cache
 
@@ -376,10 +377,10 @@ module cva5_sim
         stats[FETCH_IC_ARB_STALL_STAT] = iarb_stall;
 
         //Branch predictor
-        stats[FETCH_BP_BR_CORRECT_STAT] = `BRANCH_P.instruction_is_completing & ~`BRANCH_P.is_return & ~`BRANCH_P.branch_flush;
-        stats[FETCH_BP_BR_MISPREDICT_STAT] = `BRANCH_P.instruction_is_completing & ~`BRANCH_P.is_return & `BRANCH_P.branch_flush;
-        stats[FETCH_BP_RAS_CORRECT_STAT] = `BRANCH_P.instruction_is_completing & `BRANCH_P.is_return & ~`BRANCH_P.branch_flush;
-        stats[FETCH_BP_RAS_MISPREDICT_STAT] = `BRANCH_P.instruction_is_completing & `BRANCH_P.is_return & `BRANCH_P.branch_flush;
+        stats[FETCH_BP_BR_CORRECT_STAT] = `BRANCH_P.instruction_is_completing & ~`BRANCH_P.is_return_ex & ~`BRANCH_P.branch_flush;
+        stats[FETCH_BP_BR_MISPREDICT_STAT] = `BRANCH_P.instruction_is_completing & ~`BRANCH_P.is_return_ex & `BRANCH_P.branch_flush;
+        stats[FETCH_BP_RAS_CORRECT_STAT] = `BRANCH_P.instruction_is_completing & `BRANCH_P.is_return_ex & ~`BRANCH_P.branch_flush;
+        stats[FETCH_BP_RAS_MISPREDICT_STAT] = `BRANCH_P.instruction_is_completing & `BRANCH_P.is_return_ex & `BRANCH_P.branch_flush;
 
         //Issue stalls
         base_no_instruction_stall = ~`ISSUE_P.issue.stage_valid | cpu.gc.fetch_flush;
@@ -403,8 +404,8 @@ module cva5_sim
 
         //Misc Issue stats
         stats[ISSUE_OPERAND_STALL_FOR_BRANCH_STAT] = stats[ISSUE_OPERANDS_NOT_READY_STAT] & `ISSUE_P.unit_needed_issue_stage[`ISSUE_P.UNIT_IDS.BR];
-        stats[ISSUE_STORE_WITH_FORWARDED_DATA_STAT] = `ISSUE_P.issue_to[`ISSUE_P.UNIT_IDS.LS] & `ISSUE_P.is_store_r & `ISSUE_P.ls_inputs.forwarded_store;
-        stats[ISSUE_DIVIDER_RESULT_REUSE_STAT] = `ISSUE_P.issue_to[`ISSUE_P.UNIT_IDS.DIV] & `ISSUE_P.gen_decode_div_inputs.div_op_reuse;
+        stats[ISSUE_STORE_WITH_FORWARDED_DATA_STAT] = `ISSUE_P.issue_to[`ISSUE_P.UNIT_IDS.LS] & `LS_P.is_store_r & `LS_P.rs2_inuse;
+        stats[ISSUE_DIVIDER_RESULT_REUSE_STAT] = `ISSUE_P.issue_to[`ISSUE_P.UNIT_IDS.DIV] & `DIV_P.div_op_reuse;
 
         //Issue Stall Source
         for (int i = 0; i < REGFILE_READ_PORTS; i++) begin

@@ -37,18 +37,21 @@ module branch_unit
 
         input decode_packet_t decode_stage,
         output logic unit_needed,
-
+        output logic [REGFILE_READ_PORTS-1:0] uses_rs,
+        output logic uses_rd,
+        
         input issue_packet_t issue_stage,
         input logic issue_stage_ready,
+        input logic [31:0] constant_alu,
         input logic [31:0] rf [REGFILE_READ_PORTS],
 
         unit_issue_interface.unit issue,
-        input branch_inputs_t branch_inputs,
         output branch_results_t br_results,
         output logic branch_flush,
 
         exception_interface.unit exception
     );
+    common_instruction_t instruction;//rs1_addr, rs2_addr, fn3, fn7, rd_addr, upper/lower opcode
 
     logic branch_issued_r;
     logic result;
@@ -66,15 +69,87 @@ module branch_unit
     logic instruction_is_completing;
 
     logic branch_complete;
-    logic jal_jalr_ex;
+    logic jal_or_jalr_ex;
+
+    logic [32:0] rs1;
+    logic [32:0] rs2;
     ////////////////////////////////////////////////////
     //Implementation
 
     ////////////////////////////////////////////////////
     //Decode
+    assign instruction = decode_stage.instruction;
+
     assign unit_needed = decode_stage.instruction inside {
         BEQ, BNE, BLT, BGE, BLTU, BGEU, JALR, JAL
     };
+    always_comb begin
+        uses_rs = '0;
+        uses_rs[RS1] = decode_stage.instruction inside {
+            BEQ, BNE, BLT, BGE, BLTU, BGEU, JALR
+        };
+        uses_rs[RS2] = decode_stage.instruction inside {
+            BEQ, BNE, BLT, BGE, BLTU, BGEU
+        };
+        uses_rd = 0;//JALR/JAL writeback handled by ALU
+    end
+
+    ////////////////////////////////////////////////////
+    //RAS Support
+    logic rs1_link;
+    logic rd_link;
+    logic rs1_eq_rd;
+    logic is_return;
+    logic is_call;
+
+    assign rs1_link = instruction.rs1_addr inside {1,5};
+    assign rd_link = instruction.rd_addr inside {1,5};
+    assign rs1_eq_rd = (instruction.rs1_addr == instruction.rd_addr);
+
+    always_ff @(posedge clk) begin
+        if (issue_stage_ready) begin
+            is_return <= (instruction.upper_opcode inside {JALR_T}) & ((rs1_link & ~rd_link) | (rs1_link & rd_link & ~rs1_eq_rd));
+            is_call <= (instruction.upper_opcode inside {JAL_T, JALR_T}) & rd_link;
+        end
+    end
+
+    ////////////////////////////////////////////////////
+    //PC Offset
+    logic[19:0] jal_imm;
+    logic[11:0] jalr_imm;
+    logic[11:0] br_imm;
+
+    logic [20:0] pc_offset;
+    logic [20:0] pc_offset_r;
+    assign jal_imm = {decode_stage.instruction[31], decode_stage.instruction[19:12], decode_stage.instruction[20], decode_stage.instruction[30:21]};
+    assign jalr_imm = decode_stage.instruction[31:20];
+    assign br_imm = {decode_stage.instruction[31], decode_stage.instruction[7], decode_stage.instruction[30:25], decode_stage.instruction[11:8]};
+
+    always_comb begin
+        case (decode_stage.instruction[3:2])
+            2'b11 : pc_offset = 21'(signed'({jal_imm, 1'b0}));
+            2'b01 : pc_offset = 21'(signed'(jalr_imm));
+            default : pc_offset = 21'(signed'({br_imm, 1'b0}));
+        endcase
+    end
+    always_ff @(posedge clk) begin
+        if (issue_stage_ready)
+            pc_offset_r <= pc_offset;
+    end
+    ////////////////////////////////////////////////////
+
+    logic jal;
+    logic jalr;
+    logic jal_or_jalr;
+    logic br_use_signed;
+    always_ff @(posedge clk) begin
+        if (issue_stage_ready) begin
+            jal <= decode_stage.instruction[3];
+            jalr <= (~decode_stage.instruction[3] & decode_stage.instruction[2]);
+            jal_or_jalr <= decode_stage.instruction[2];
+            br_use_signed <= !(instruction.fn3 inside {BLTU_fn3, BGEU_fn3});
+        end
+    end
 
     ////////////////////////////////////////////////////
     //Issue
@@ -88,36 +163,40 @@ module branch_unit
     set_clr_reg_with_rst #(.SET_OVER_CLR(1), .WIDTH(1), .RST_VALUE(0)) branch_issued_m (
       .clk, .rst,
       .set(issue.new_request),
-      .clr(branch_inputs.issue_pc_valid | exception.valid),
+      .clr(issue_stage.stage_valid | exception.valid),
       .result(branch_issued_r)
     );
 
     //To determine if the branch was predicted correctly we need to wait until the
     //subsequent instruction has reached the issue stage
-    assign instruction_is_completing = branch_issued_r & branch_inputs.issue_pc_valid;
+    assign instruction_is_completing = branch_issued_r & issue_stage.stage_valid;
+
+    //Sign extend
+    assign rs1 = {(rf[RS1][31] & br_use_signed), rf[RS1]};
+    assign rs2 = {(rf[RS2][31] & br_use_signed), rf[RS2]};
 
     ////////////////////////////////////////////////////
     //Branch/Jump target determination
     //Branch comparison and final address calculation
     //are performed in the issue stage
     branch_comparator bc (
-        .less_than(branch_inputs.fn3[2]),
-        .a(branch_inputs.rs1),
-        .b(branch_inputs.rs2),
-        .xor_result(branch_inputs.fn3[0]),
+        .less_than(issue_stage.fn3[2]),
+        .a(rs1),
+        .b(rs2),
+        .xor_result(issue_stage.fn3[0]),
         .result(result)
     );
-    assign branch_taken = result | branch_inputs.jal_jalr;
+    assign branch_taken = result | jal_or_jalr;
 
-    assign jump_pc = (branch_inputs.jalr ? branch_inputs.rs1[31:0] : branch_inputs.issue_pc) + 32'(signed'(branch_inputs.pc_offset));
-    assign new_pc = branch_taken ? jump_pc : branch_inputs.pc_p4;
+    assign jump_pc = (jalr ? rs1[31:0] : issue_stage.pc) + 32'(signed'(pc_offset_r));
+    assign new_pc = branch_taken ? jump_pc : constant_alu;
 
     always_ff @(posedge clk) begin
         if (issue.new_request) begin
             branch_taken_ex <= branch_taken;
-            new_pc_ex <= {new_pc[31:1], new_pc[0]  & ~branch_inputs.jalr};
+            new_pc_ex <= {new_pc[31:1], new_pc[0]  & ~jalr};
             id_ex <= issue.id;
-            jal_jalr_ex <= branch_inputs.jal_jalr;
+            jal_or_jalr_ex <= jal_or_jalr;
         end
     end
 
@@ -145,13 +224,13 @@ module branch_unit
 
     ////////////////////////////////////////////////////
     //Predictor support
-    logic is_return;
-    logic is_call;
+    logic is_return_ex;
+    logic is_call_ex;
     always_ff @(posedge clk) begin
         if (issue.possible_issue) begin
-            is_return <= branch_inputs.is_return;
-            is_call <= branch_inputs.is_call;
-            pc_ex <= branch_inputs.issue_pc;
+            is_return_ex <= is_return;
+            is_call_ex <= is_call;
+            pc_ex <= issue_stage.pc;
         end
     end
 
@@ -160,11 +239,11 @@ module branch_unit
     assign br_results.pc = pc_ex;
     assign br_results.target_pc = new_pc_ex;
     assign br_results.branch_taken = branch_taken_ex;
-    assign br_results.is_branch = ~jal_jalr_ex;
-    assign br_results.is_return = is_return;
-    assign br_results.is_call = is_call;
+    assign br_results.is_branch = ~jal_or_jalr_ex;
+    assign br_results.is_return = is_return_ex;
+    assign br_results.is_call = is_call_ex;
 
-    assign branch_flush = instruction_is_completing && (branch_inputs.issue_pc[31:1] != new_pc_ex[31:1]);
+    assign branch_flush = instruction_is_completing & (issue_stage.pc[31:1] != new_pc_ex[31:1]);
 
     ////////////////////////////////////////////////////
     //End of Implementation

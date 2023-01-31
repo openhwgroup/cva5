@@ -33,6 +33,9 @@ module custom_unit
 
         input decode_packet_t decode_stage,
         output logic unit_needed,
+        output logic [REGFILE_READ_PORTS-1:0] uses_rs,
+        output logic uses_rd,
+
         input issue_packet_t issue_stage,
         input logic issue_stage_ready,
         input logic [31:0] rf [REGFILE_READ_PORTS],
@@ -56,8 +59,13 @@ module custom_unit
 
     //The following signals should be asserted when the decoded instruction
     //is handled by this execution unit.
-    assign unit_needed = instruction.upper_opcode inside {CUSTOM_T};
-
+    assign unit_needed = decode_stage.instruction inside {CUSTOM};
+    always_comb begin
+        uses_rs = '0;
+        uses_rs[RS1] = decode_stage.instruction inside {CUSTOM};
+        uses_rs[RS2] = decode_stage.instruction inside {CUSTOM};
+        uses_rd = decode_stage.instruction inside {CUSTOM};
+    end
     ////////////////////////////////////////////////////
     //Issue
     assign issue.ready = ~wb.done;

@@ -41,13 +41,6 @@ package cva5_types;
         ALU_SHIFT = 2'b11
     } alu_op_t;
 
-    typedef enum logic [1:0] {
-        ALU_LOGIC_XOR = 2'b00,
-        ALU_LOGIC_OR = 2'b01,
-        ALU_LOGIC_AND = 2'b10,
-        ALU_LOGIC_ADD = 2'b11
-    } alu_logic_op_t;
-
     typedef struct packed{
         logic valid;
         exception_code_t code;
@@ -86,34 +79,6 @@ package cva5_types;
         fetch_metadata_t fetch_metadata;
     } issue_packet_t;
 
-    typedef struct packed{
-        logic [XLEN:0] in1;//contains sign padding bit for slt operation
-        logic [XLEN:0] in2;//contains sign padding bit for slt operation
-        logic [XLEN-1:0] shifter_in;
-        logic [31:0] constant_adder;
-        alu_op_t alu_op;
-        alu_logic_op_t logic_op;
-        logic [4:0] shift_amount;
-        logic subtract;
-        logic arith;//contains sign padding bit for arithmetic shift right operation
-        logic lshift;
-    } alu_inputs_t;
-
-    typedef struct packed {
-        logic [XLEN:0] rs1;
-        logic [XLEN:0] rs2;
-        logic [31:0] pc_p4;
-        logic [2:0] fn3;
-        logic [31:0] issue_pc;
-        logic issue_pc_valid;
-        logic jal;
-        logic jalr;
-        logic jal_jalr;
-        logic is_call;
-        logic is_return;
-        logic [20:0] pc_offset;
-    } branch_inputs_t;
-
     typedef struct packed {
         id_t id;
         logic valid;
@@ -137,48 +102,6 @@ package cva5_types;
         logic is_amo;
         logic [4:0] op;
     } amo_details_t;
-
-    typedef struct packed{
-        logic [XLEN-1:0] rs1;
-        logic [XLEN-1:0] rs2;
-        logic [11:0] offset;
-        logic [2:0] fn3;
-        logic load;
-        logic store;
-        logic fence;
-        logic forwarded_store;
-        id_t store_forward_id;
-        //amo support
-        amo_details_t amo;
-    } load_store_inputs_t;
-
-    typedef struct packed{
-        logic [XLEN-1:0] rs1;
-        logic [XLEN-1:0] rs2;
-        logic [1:0] op;
-    } mul_inputs_t;
-
-    typedef struct packed{
-        logic [XLEN-1:0] rs1;
-        logic [XLEN-1:0] rs2;
-        logic [1:0] op;
-        logic reuse_result;
-    } div_inputs_t;
-
-    typedef struct packed{
-        csr_addr_t addr;
-        logic[1:0] op;
-        logic reads;
-        logic writes;
-        logic [XLEN-1:0] data;
-    } csr_inputs_t;
-
-    typedef struct packed{
-        logic [31:0] pc_p4;
-        logic is_ifence;
-        logic is_mret;
-        logic is_sret;
-    } gc_inputs_t;
 
     typedef struct packed {
         logic [31:0] addr;

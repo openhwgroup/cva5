@@ -39,13 +39,15 @@ module gc_unit
         //Decode
         input decode_packet_t decode_stage,
         output logic unit_needed,
+        output logic [REGFILE_READ_PORTS-1:0] uses_rs,
+        output logic uses_rd,
 
         input issue_packet_t issue_stage,
         input logic issue_stage_ready,
+        input logic [31:0] constant_alu,
         input logic [31:0] rf [REGFILE_READ_PORTS],
 
         unit_issue_interface.unit issue,
-        input gc_inputs_t gc_inputs,
 
         //Branch miss predict
         input logic branch_flush,
@@ -118,6 +120,7 @@ module gc_unit
 
     //LS exceptions (miss-aligned, TLB and MMU) (issue stage)
     //fetch flush, take exception. If execute or later exception occurs first, exception is overridden
+    common_instruction_t instruction;//rs1_addr, rs2_addr, fn3, fn7, rd_addr, upper/lower opcode
 
     typedef enum {RST_STATE, PRE_CLEAR_STATE, INIT_CLEAR_STATE, IDLE_STATE, TLB_CLEAR_STATE, POST_ISSUE_DRAIN, PRE_ISSUE_FLUSH, POST_ISSUE_DISCARD} gc_state;
     gc_state state;
@@ -126,7 +129,6 @@ module gc_unit
     logic init_clear_done;
     logic tlb_clear_done;
 
-    gc_inputs_t gc_inputs_r;
     logic post_issue_idle;
     logic ifence_in_progress;
     logic ret_in_progress;
@@ -143,14 +145,48 @@ module gc_unit
     logic gc_pc_override;
     logic [31:0] gc_pc;
 
+    typedef struct packed{
+        logic [31:0] pc_p4;
+        logic is_ifence;
+        logic is_mret;
+        logic is_sret;
+    } gc_inputs_t;
+
+    gc_inputs_t gc_inputs;
+    gc_inputs_t gc_inputs_r;
     ////////////////////////////////////////////////////
     //Implementation
 
     ////////////////////////////////////////////////////
     //Decode
-    assign unit_needed = decode_stage.instruction inside {
-        ECALL, EBREAK, SRET, MRET, FENCE_I, SFENCE_VMA
-    };
+    logic is_ifence;
+    logic is_mret;
+    logic is_sret;
+
+    assign instruction = decode_stage.instruction;
+
+    assign unit_needed =
+        (CONFIG.INCLUDE_M_MODE & decode_stage.instruction inside {ECALL, EBREAK, MRET}) |
+        (CONFIG.INCLUDE_S_MODE & decode_stage.instruction inside {SRET, SFENCE_VMA}) |
+        (CONFIG.INCLUDE_IFENCE & decode_stage.instruction inside {FENCE_I});
+    always_comb begin
+        uses_rs = '0;
+        uses_rs[RS1] = CONFIG.INCLUDE_S_MODE & decode_stage.instruction inside {SFENCE_VMA};
+        uses_rd = 0;
+    end
+
+    always_ff @(posedge clk) begin
+        if (issue_stage_ready) begin
+            is_ifence = (instruction.upper_opcode == FENCE_T) & CONFIG.INCLUDE_IFENCE;
+            is_mret = (instruction.upper_opcode == SYSTEM_T) & (decode_stage.instruction[31:20] == MRET_imm) & CONFIG.INCLUDE_M_MODE;
+            is_sret = (instruction.upper_opcode == SYSTEM_T) & (decode_stage.instruction[31:20] == SRET_imm) & CONFIG.INCLUDE_S_MODE;
+        end
+    end
+
+    assign gc_inputs.pc_p4 = constant_alu;
+    assign gc_inputs.is_ifence = is_ifence;
+    assign gc_inputs.is_mret = is_mret;
+    assign gc_inputs.is_sret = is_sret;
 
     ////////////////////////////////////////////////////
     //Issue

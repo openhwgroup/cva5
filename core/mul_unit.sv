@@ -33,12 +33,13 @@ module mul_unit
 
         input decode_packet_t decode_stage,
         output logic unit_needed,
+        output logic [REGFILE_READ_PORTS-1:0] uses_rs,
+        output logic uses_rd,
 
         input issue_packet_t issue_stage,
         input logic issue_stage_ready,
         input logic [31:0] rf [REGFILE_READ_PORTS],
 
-        input mul_inputs_t mul_inputs,
         unit_issue_interface.unit issue,
         unit_writeback_interface.unit wb
     );
@@ -61,18 +62,21 @@ module mul_unit
 
     ////////////////////////////////////////////////////
     //Decode
-    assign unit_needed = decode_stage.instruction inside {
-        MUL, MULH, MULHSU, MULHU
-    };
-
+    assign unit_needed = decode_stage.instruction inside {MUL, MULH, MULHSU, MULHU};
+    always_comb begin
+        uses_rs = '0;
+        uses_rs[RS1] = unit_needed;
+        uses_rs[RS2] = unit_needed;
+        uses_rd = unit_needed;
+    end
     ////////////////////////////////////////////////////
     //Issue
 
-    assign rs1_is_signed = mul_inputs.op[1:0] inside {MULH_fn3[1:0], MULHSU_fn3[1:0]};//MUL doesn't matter
-    assign rs2_is_signed = mul_inputs.op[1:0] inside {MUL_fn3[1:0], MULH_fn3[1:0]};//MUL doesn't matter
+    assign rs1_is_signed = issue_stage.fn3[1:0] inside {MULH_fn3[1:0], MULHSU_fn3[1:0]};//MUL doesn't matter
+    assign rs2_is_signed = issue_stage.fn3[1:0] inside {MUL_fn3[1:0], MULH_fn3[1:0]};//MUL doesn't matter
 
-    assign rs1_ext = signed'({mul_inputs.rs1[31] & rs1_is_signed, mul_inputs.rs1});
-    assign rs2_ext = signed'({mul_inputs.rs2[31] & rs2_is_signed, mul_inputs.rs2});
+    assign rs1_ext = signed'({rf[RS1][31] & rs1_is_signed, rf[RS1]});
+    assign rs2_ext = signed'({rf[RS2][31] & rs2_is_signed, rf[RS2]});
 
     //Pipeline advancement control signals
     assign issue.ready = stage1_advance;
@@ -93,7 +97,7 @@ module mul_unit
     //Attribute Pipeline
     always_ff @ (posedge clk) begin
         if (stage1_advance) begin
-            mulh[0] <= (mul_inputs.op[1:0] != MUL_fn3[1:0]);
+            mulh[0] <= (issue_stage.fn3[1:0] != MUL_fn3[1:0]);
             id[0] <= issue.id;
             phys_addr[0] <= issue.phys_addr;
         end

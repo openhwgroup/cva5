@@ -116,14 +116,10 @@ module cva5
     register_file_issue_interface #(.NUM_WB_GROUPS(CONFIG.NUM_WB_GROUPS)) rf_issue();
 
     logic [NUM_UNITS-1:0] unit_needed;
+    logic [NUM_UNITS-1:0][REGFILE_READ_PORTS-1:0] unit_uses_rs;
+    logic [NUM_UNITS-1:0] unit_uses_rd;
 
-    alu_inputs_t alu_inputs;
-    load_store_inputs_t ls_inputs;
-    branch_inputs_t branch_inputs;
-    mul_inputs_t mul_inputs;
-    div_inputs_t div_inputs;
-    gc_inputs_t gc_inputs;
-    csr_inputs_t csr_inputs;
+    logic [31:0] constant_alu;
 
     unit_issue_interface unit_issue [NUM_UNITS-1:0]();
 
@@ -197,6 +193,8 @@ module cva5
 
     //Decode Unit and Fetch Unit
     logic issue_stage_ready;
+    phys_addr_t issue_phys_rs_addr [REGFILE_READ_PORTS];
+    rs_addr_t issue_rs_addr [REGFILE_READ_PORTS];
     logic illegal_instruction;
     logic instruction_issued;
     logic instruction_issued_with_rd;
@@ -361,6 +359,8 @@ module cva5
         .decode (decode),
         .decode_advance (decode_advance),
         .unit_needed (unit_needed),
+        .unit_uses_rs (unit_uses_rs),
+        .unit_uses_rd (unit_uses_rd),
         .renamer (decode_rename_interface),
         .decode_uses_rd (decode_uses_rd),
         .decode_rd_addr (decode_rd_addr),
@@ -372,14 +372,10 @@ module cva5
         .instruction_issued_with_rd (instruction_issued_with_rd),
         .issue (issue),
         .issue_stage_ready (issue_stage_ready),
+        .issue_phys_rs_addr (issue_phys_rs_addr),
+        .issue_rs_addr (issue_rs_addr),
         .rf (rf_issue),
-        .alu_inputs (alu_inputs),
-        .ls_inputs (ls_inputs),
-        .branch_inputs (branch_inputs),
-        .gc_inputs (gc_inputs),
-        .csr_inputs (csr_inputs),
-        .mul_inputs (mul_inputs),
-        .div_inputs (div_inputs),
+        .constant_alu (constant_alu),
         .unit_issue (unit_issue),
         .gc (gc),
         .current_privilege (current_privilege),
@@ -413,9 +409,11 @@ module cva5
         .issue_stage (issue),
         .issue_stage_ready (issue_stage_ready),
         .unit_needed (unit_needed[UNIT_IDS.BR]),
-        .rf (rf_issue.data),                            
+        .uses_rs (unit_uses_rs[UNIT_IDS.BR]),
+        .uses_rd (unit_uses_rd[UNIT_IDS.BR]),
+        .rf (rf_issue.data),
+        .constant_alu (constant_alu),
         .issue (unit_issue[UNIT_IDS.BR]),
-        .branch_inputs (branch_inputs),
         .br_results (br_results),
         .branch_flush (branch_flush),
         .exception (exception[BR_EXCEPTION])
@@ -429,8 +427,11 @@ module cva5
         .issue_stage (issue),
         .issue_stage_ready (issue_stage_ready),
         .unit_needed (unit_needed[UNIT_IDS.ALU]),
+        .uses_rs (unit_uses_rs[UNIT_IDS.ALU]),
+        .uses_rd (unit_uses_rd[UNIT_IDS.ALU]),
         .rf (rf_issue.data),
-        .alu_inputs (alu_inputs),
+        .constant_alu (constant_alu),
+        .issue_rs_addr (issue_rs_addr),
         .issue (unit_issue[UNIT_IDS.ALU]), 
         .wb (unit_wb1[ALU_UNIT_WB1_ID])
     );
@@ -444,8 +445,12 @@ module cva5
         .issue_stage (issue),
         .issue_stage_ready (issue_stage_ready),
         .unit_needed (unit_needed[UNIT_IDS.LS]),
+        .uses_rs (unit_uses_rs[UNIT_IDS.LS]),
+        .uses_rd (unit_uses_rd[UNIT_IDS.LS]),
+        .instruction_issued_with_rd (instruction_issued_with_rd),
+        .issue_rs_addr (issue_rs_addr),
+        .rs2_inuse (rf_issue.inuse[RS2]),
         .rf (rf_issue.data),
-        .ls_inputs (ls_inputs),
         .issue (unit_issue[UNIT_IDS.LS]),
         .dcache_on (1'b1), 
         .clear_reservation (1'b0), 
@@ -503,9 +508,11 @@ module cva5
             .decode_stage (decode),
             .issue_stage (issue),
             .issue_stage_ready (issue_stage_ready),
+            .issue_rs_addr (issue_rs_addr),
             .unit_needed (unit_needed[UNIT_IDS.CSR]),
+            .uses_rs (unit_uses_rs[UNIT_IDS.CSR]),
+            .uses_rd (unit_uses_rd[UNIT_IDS.CSR]),
             .rf (rf_issue.data),
-            .csr_inputs (csr_inputs),
             .issue (unit_issue[UNIT_IDS.CSR]), 
             .wb (unit_wb3[CSR_UNIT_WB3_ID]),
             .current_privilege(current_privilege),
@@ -536,9 +543,11 @@ module cva5
         .issue_stage (issue),
         .issue_stage_ready (issue_stage_ready),
         .unit_needed (unit_needed[UNIT_IDS.IEC]),
+        .uses_rs (unit_uses_rs[UNIT_IDS.IEC]),
+        .uses_rd (unit_uses_rd[UNIT_IDS.IEC]),
+        .constant_alu (constant_alu),
         .rf (rf_issue.data),
         .issue (unit_issue[UNIT_IDS.IEC]),
-        .gc_inputs (gc_inputs),
         .branch_flush (branch_flush),
         .exception (exception),
         .exception_target_pc (exception_target_pc),
@@ -566,8 +575,9 @@ module cva5
             .issue_stage (issue),
             .issue_stage_ready (issue_stage_ready),
             .unit_needed (unit_needed[UNIT_IDS.MUL]),
+            .uses_rs (unit_uses_rs[UNIT_IDS.MUL]),
+            .uses_rd (unit_uses_rd[UNIT_IDS.MUL]),
             .rf (rf_issue.data),
-            .mul_inputs (mul_inputs),
             .issue (unit_issue[UNIT_IDS.MUL]),
             .wb (unit_wb3[MUL_UNIT_WB3_ID])
         );
@@ -577,12 +587,16 @@ module cva5
         div_unit div_unit_block (
             .clk (clk),
             .rst (rst),
+            .gc (gc),
+            .instruction_issued_with_rd (instruction_issued_with_rd),
             .decode_stage (decode),
             .issue_stage (issue),
             .issue_stage_ready (issue_stage_ready),
+            .issue_phys_rs_addr (issue_phys_rs_addr),
             .unit_needed (unit_needed[UNIT_IDS.DIV]),
+            .uses_rs (unit_uses_rs[UNIT_IDS.DIV]),
+            .uses_rd (unit_uses_rd[UNIT_IDS.DIV]),
             .rf (rf_issue.data),
-            .div_inputs (div_inputs),
             .issue (unit_issue[UNIT_IDS.DIV]), 
             .wb (unit_wb3[DIV_UNIT_WB3_ID])
         );
@@ -595,6 +609,8 @@ module cva5
             .rst (rst),
             .decode_stage (decode),
             .unit_needed (unit_needed[UNIT_IDS.CUSTOM]),
+            .uses_rs (unit_uses_rs[UNIT_IDS.CUSTOM]),
+            .uses_rd (unit_uses_rd[UNIT_IDS.CUSTOM]),
             .issue_stage (issue),
             .issue_stage_ready (issue_stage_ready),
             .rf (rf_issue.data),
