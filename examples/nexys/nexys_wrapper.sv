@@ -77,7 +77,7 @@ module nexys_wrapper
 
     localparam cpu_config_t NEXYS_CONFIG = '{
         //ISA options
-        INCLUDE_M_MODE : 0,
+        INCLUDE_M_MODE : 1,
         INCLUDE_S_MODE : 0,
         INCLUDE_U_MODE : 0,
         INCLUDE_MUL : 1,
@@ -104,6 +104,7 @@ module nexys_wrapper
         },
         //Memory Options
         SQ_DEPTH : 4,
+        INCLUDE_FORWARDING_TO_STORES : 1,
         INCLUDE_ICACHE : 1,
         ICACHE_ADDR : '{
             L : 32'h80000000, 

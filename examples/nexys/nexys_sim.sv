@@ -130,6 +130,7 @@ module cva5_sim
         },
         //Memory Options
         SQ_DEPTH : 4,
+        INCLUDE_FORWARDING_TO_STORES : 1,
         INCLUDE_ICACHE : 1,
         ICACHE_ADDR : '{
             L : 32'h80000000, 

@@ -114,6 +114,7 @@ package cva5_config;
         csr_config_t CSRS;
         //Memory Options
         int unsigned SQ_DEPTH;//CAM-based reasonable max of 4
+        bit INCLUDE_FORWARDING_TO_STORES;
         //Caches
         bit INCLUDE_ICACHE;
         cache_config_t ICACHE;
@@ -182,6 +183,7 @@ package cva5_config;
         },
         //Memory Options
         SQ_DEPTH : 4,
+        INCLUDE_FORWARDING_TO_STORES : 1,
         INCLUDE_ICACHE : 0,
         ICACHE_ADDR : '{
             L: 32'h80000000,

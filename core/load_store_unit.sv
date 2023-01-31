@@ -157,7 +157,7 @@ module load_store_unit
     always_comb begin
         uses_rs = '0;
         uses_rs[RS1] = decode_stage.instruction inside {LB, LH, LW, LBU, LHU, SB, SH, SW};
-        uses_rs[RS2] = 0;//Store forwarding support //decode_stage.instruction inside {SB, SH, SW};
+        uses_rs[RS2] = CONFIG.INCLUDE_FORWARDING_TO_STORES ? 0 : decode_stage.instruction inside {SB, SH, SW};
         uses_rd = decode_stage.instruction inside {LB, LH, LW, LBU, LHU};
     end
 

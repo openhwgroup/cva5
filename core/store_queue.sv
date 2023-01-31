@@ -205,8 +205,8 @@ module store_queue
     logic [CONFIG.SQ_DEPTH-1:0] write_forward [2];
     always_comb begin
         for (int i = 0; i < CONFIG.SQ_DEPTH; i++) begin
-            write_forward[0][i] = {1'b1, wb_snoop_r[1].valid, wb_snoop_r[1].id} == {data_needed[i], 1'b1, id_needed[i]};
-            write_forward[1][i] = {1'b1, wb_snoop_r[2].valid, wb_snoop_r[2].id} == {data_needed[i], 1'b1, id_needed[i]};
+            write_forward[0][i] = CONFIG.INCLUDE_FORWARDING_TO_STORES & {1'b1, wb_snoop_r[1].valid, wb_snoop_r[1].id} == {data_needed[i], 1'b1, id_needed[i]};
+            write_forward[1][i] = CONFIG.INCLUDE_FORWARDING_TO_STORES & {1'b1, wb_snoop_r[2].valid, wb_snoop_r[2].id} == {data_needed[i], 1'b1, id_needed[i]};
         end
     end
 

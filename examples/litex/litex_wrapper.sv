@@ -103,6 +103,7 @@ module litex_wrapper
         },
         //Memory Options
         SQ_DEPTH : 2,
+        INCLUDE_FORWARDING_TO_STORES : 0,
         INCLUDE_ICACHE : 0,
         ICACHE_ADDR : '{
             L: 32'h40000000,
@@ -204,6 +205,7 @@ module litex_wrapper
         },
         //Memory Options
         SQ_DEPTH : 4,
+        INCLUDE_FORWARDING_TO_STORES : 1,
         INCLUDE_ICACHE : 1,
         ICACHE_ADDR : '{
             L : 32'h00000000, 
