@@ -47,20 +47,20 @@ module alu_unit
     );
     common_instruction_t instruction;//rs1_addr, rs2_addr, fn3, fn7, rd_addr, upper/lower opcode
 
-    logic [31:0] alu_rs2_data;
-    logic [32:0] alu_data1;
-    logic [32:0] alu_data2;
+    logic [31:0] rs2_data;
     logic imm_type;
     alu_op_t alu_op;
     alu_op_t alu_op_r;
     logic subtract;
 
-    logic[XLEN:0] add_sub_result;
+    logic[32:0] add_sub_result;
     logic add_sub_carry_in;
-    logic[XLEN:0] adder_in1;
-    logic[XLEN:0] adder_in2;
-    logic[XLEN-1:0] shift_result;
-    logic[XLEN-1:0] result;
+    logic[31:0] pre_adder1;
+    logic[31:0] pre_adder2;
+    logic[32:0] sign_ext_adder1;
+    logic[32:0] sign_ext_adder2;
+    logic[31:0] shift_result;
+    logic[31:0] result;
     ////////////////////////////////////////////////////
     //Implementation
 
@@ -114,31 +114,31 @@ module alu_unit
         end
     end
 
-    //logic and adder
-    assign alu_data1 = {(rf[RS1][31] & ~issue_stage.fn3[0]), rf[RS1]};//(fn3[0]  is SLTU_fn3);
-    assign alu_rs2_data = imm_type ? 32'(signed'(issue_stage.instruction[31:20])) : rf[RS2];
-    assign alu_data2 = {(alu_rs2_data[31] & ~issue_stage.fn3[0]), alu_rs2_data};
-
     ////////////////////////////////////////////////////
     //Issue
     //Logic ops put through the adder carry chain to reduce resources
+    //TODO: explore moving this mux into the regfile bypass mux
+    assign rs2_data = imm_type ? 32'(signed'(issue_stage.instruction[31:20])) : rf[RS2];
     always_comb begin
         case (issue_stage.fn3)
-            XOR_fn3 : adder_in1 = alu_data1 ^ alu_data2;
-            OR_fn3 : adder_in1 = alu_data1 | alu_data2;
-            AND_fn3 : adder_in1 = alu_data1 & alu_data2;
-            default : adder_in1 = alu_data1; //ADD/SUB/SLT/SLTU
+            XOR_fn3 : pre_adder1 = rf[RS1] ^ rs2_data;
+            OR_fn3 : pre_adder1 = rf[RS1] | rs2_data;
+            AND_fn3 : pre_adder1 = rf[RS1] & rs2_data;
+            default : pre_adder1 = rf[RS1]; //ADD/SUB/SLT/SLTU
         endcase
         case (issue_stage.fn3)
             XOR_fn3,
             OR_fn3,
-            AND_fn3 : adder_in2 = 0;
-            default : adder_in2 = alu_data2 ^ {33{subtract}};
+            AND_fn3 : pre_adder2 = 0;
+            default : pre_adder2 = rs2_data ^ {32{subtract}};
         endcase
     end
 
     //Add/Sub ops
-    assign {add_sub_result, add_sub_carry_in} = {adder_in1, 1'b1} + {adder_in2, subtract};
+    assign sign_ext_adder1 = {(rf[RS1][31] & ~issue_stage.fn3[0]), pre_adder1};
+    assign sign_ext_adder2 = {(rs2_data[31] & ~issue_stage.fn3[0]) ^ subtract, pre_adder2};
+
+    assign {add_sub_result, add_sub_carry_in} = {sign_ext_adder1, 1'b1} + {sign_ext_adder2, subtract};
     
     //Shift ops
     barrel_shifter shifter (

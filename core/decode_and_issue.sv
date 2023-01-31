@@ -133,7 +133,7 @@ module decode_and_issue
     //Renamer Support
     logic [$clog2(CONFIG.NUM_WB_GROUPS)-1:0] renamer_wb_group;
     always_comb begin
-        renamer_wb_group = (CONFIG.NUM_WB_GROUPS - 1);
+        renamer_wb_group = $clog2(CONFIG.NUM_WB_GROUPS)'(CONFIG.NUM_WB_GROUPS - 1);
         if (unit_needed[UNIT_IDS.ALU])
             renamer_wb_group = 0;
         else if (unit_needed[UNIT_IDS.LS] )
