@@ -138,8 +138,6 @@ module fp_pre_processing
 
     /////////////////////////////////////////////
     //Special Case Detection
-    localparam VARIABLE_EXPO_WIDTH = EXPO_WIDTH;
-    localparam VARIABLE_FRAC_WIDTH = FRAC_WIDTH;
     logic is_inf[FP_REGFILE_READ_PORTS], r_is_inf[FP_REGFILE_READ_PORTS], is_inf_swapped[FP_REGFILE_READ_PORTS];
     logic is_SNaN[FP_REGFILE_READ_PORTS], r_is_SNaN[FP_REGFILE_READ_PORTS],is_SNaN_swapped[FP_REGFILE_READ_PORTS] ;
     logic is_QNaN[FP_REGFILE_READ_PORTS], r_is_QNaN[FP_REGFILE_READ_PORTS], is_QNaN_swapped[FP_REGFILE_READ_PORTS];
@@ -147,7 +145,7 @@ module fp_pre_processing
     logic hidden_bit[FP_REGFILE_READ_PORTS], r_hidden_bit[FP_REGFILE_READ_PORTS];
     logic is_subnormal[FP_REGFILE_READ_PORTS], r_is_subnormal[FP_REGFILE_READ_PORTS], is_subnormal_swapped[FP_REGFILE_READ_PORTS];;
 
-    fp_special_case_detection_sandboxed #(.SANDBOX_FRAC_W(VARIABLE_FRAC_WIDTH), .SANDBOX_EXPO_W(VARIABLE_EXPO_WIDTH))
+    fp_special_case_detection #(.FRAC_W(FRAC_WIDTH), .EXPO_W(EXPO_WIDTH))
         rs1_special_case_detection (
         .data_in (rs1),
         .is_inf (is_inf[RS1]),
@@ -157,7 +155,7 @@ module fp_pre_processing
         .hidden (hidden_bit[RS1])
     );
 
-    fp_special_case_detection_sandboxed #(.SANDBOX_FRAC_W(VARIABLE_FRAC_WIDTH), .SANDBOX_EXPO_W(VARIABLE_EXPO_WIDTH))
+    fp_special_case_detection #(.FRAC_W(FRAC_WIDTH), .EXPO_W(EXPO_WIDTH))
         rs2_special_case_detection (
         .data_in (rs2),
         .is_inf (is_inf[RS2]),
@@ -167,7 +165,7 @@ module fp_pre_processing
         .hidden (hidden_bit[RS2])
     );
 
-    fp_special_case_detection_sandboxed #(.SANDBOX_FRAC_W(VARIABLE_FRAC_WIDTH), .SANDBOX_EXPO_W(VARIABLE_EXPO_WIDTH))
+    fp_special_case_detection #(.FRAC_W(FRAC_WIDTH), .EXPO_W(EXPO_WIDTH))
         rs3_special_case_detection (
         .data_in (rs3),
         .is_inf (is_inf[RS3]),

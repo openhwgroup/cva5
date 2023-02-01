@@ -43,14 +43,14 @@ module fp_special_case_detection_mp
 
 endmodule
 
-module fp_special_case_detection_sandboxed
+module fp_special_case_detection
     import taiga_config::*;
 
 #(
-    parameter SANDBOX_FRAC_W=52,
-    parameter SANDBOX_EXPO_W=11
+    parameter FRAC_W=52,
+    parameter EXPO_W=11
 )(
-    input logic [FLEN-1:0] data_in,
+    input logic [FRAC_W+EXPO_W:0] data_in,
     output logic is_inf,
     output logic is_SNaN,
     output logic is_QNaN,
@@ -58,34 +58,28 @@ module fp_special_case_detection_sandboxed
     output logic hidden
 );
 
-    logic sign_in;
-    logic [EXPO_WIDTH-1:0] expo_in;
-    logic [FRAC_WIDTH-1:0] frac_in;
-    logic [SANDBOX_EXPO_W-1:0] expo_sandboxed;
-    logic [SANDBOX_FRAC_W-1:0] frac_sandboxed;
-
     //unpack
-    assign {sign_in, expo_in, frac_in} = data_in;
-    assign expo_sandboxed = expo_in[SANDBOX_EXPO_W-1:0];
-    assign frac_sandboxed = frac_in[FRAC_WIDTH-1-:SANDBOX_FRAC_W];
-    generate if (ENABLE_SUBNORMAL)
-        assign hidden = |expo_sandboxed;
-    else
-        assign hidden = |expo_sandboxed;
-    endgenerate
+    logic [EXPO_W-1:0] expo;
+    assign expo = data_in[FRAC_W+EXPO_W-1 : FRAC_W];
+    logic [FRAC_W-1:0] frac;
+    assign frac = data_in[FRAC_W-1:0];
 
     //process
-    logic expo_all_1s = &expo_sandboxed;
-    logic frac_lower_all_0s = ~(|frac_sandboxed[SANDBOX_FRAC_W-3:0]);
+    assign hidden = |expo;
 
-    assign is_inf = expo_all_1s & ~(|frac_sandboxed);
-    assign is_SNaN = expo_all_1s & ~frac_sandboxed[SANDBOX_FRAC_W-1] & frac_sandboxed[SANDBOX_FRAC_W-2] & frac_lower_all_0s;
-    assign is_QNaN = expo_all_1s & frac_sandboxed[SANDBOX_FRAC_W-1] & ~frac_sandboxed[SANDBOX_FRAC_W-2] & frac_lower_all_0s;
+    logic expo_all_1s;
+    assign expo_all_1s = &expo;
+    logic frac_lower_0s;
+    assign frac_lower_0s = ~|frac[FRAC_W-2:0];
+
+    assign is_inf = expo_all_1s & ~frac[FRAC_W-1] & frac_lower_0s; //Fully 0
+    assign is_SNaN = expo_all_1s & ~frac[FRAC_W-1] & ~frac_lower_0s; //Leading 0 but not fully 0
+    assign is_QNaN = expo_all_1s & frac[FRAC_W-1]; //Leading 1
     generate if (ENABLE_SUBNORMAL)
-        assign is_zero = ~(|expo_sandboxed) & ~frac_sandboxed[SANDBOX_FRAC_W-1] & ~frac_sandboxed[SANDBOX_FRAC_W-2] & frac_lower_all_0s;
+        assign is_zero = ~hidden & ~frac[FRAC_W-1] & frac_lower_0s;
     else
         //flush to zero
-        assign is_zero = ~|expo_sandboxed;
+        assign is_zero = ~hidden;
     endgenerate
 
 endmodule
