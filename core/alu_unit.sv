@@ -45,18 +45,27 @@ module alu_unit
         unit_issue_interface.unit issue,
         unit_writeback_interface.unit wb
     );
+    typedef enum logic [1:0] {
+        LOGIC_XOR = 2'b00,
+        LOGIC_OR = 2'b01,
+        LOGIC_AND = 2'b10,
+        LOGIC_OTHER = 2'b11
+    } logic_op_t;
+
     common_instruction_t instruction;//rs1_addr, rs2_addr, fn3, fn7, rd_addr, upper/lower opcode
 
     logic [31:0] rs2_data;
     logic imm_type;
     alu_op_t alu_op;
     alu_op_t alu_op_r;
+    logic_op_t logic_op;
+    logic_op_t logic_op_r;
     logic subtract;
+    logic is_slt;
 
     logic[32:0] add_sub_result;
     logic add_sub_carry_in;
-    logic[31:0] pre_adder1;
-    logic[31:0] pre_adder2;
+    logic[31:0] logic_and_upper_slt;
     logic[32:0] sign_ext_adder1;
     logic[32:0] sign_ext_adder2;
     logic[31:0] shift_result;
@@ -95,13 +104,21 @@ module alu_unit
             LUI_T, AUIPC_T, JAL_T, JALR_T : alu_op = ALU_CONSTANT;
             default : 
             case (instruction.fn3) inside
-                SLTU_fn3, SLT_fn3 : alu_op = ALU_SLT;
+                XOR_fn3, OR_fn3, AND_fn3, SLTU_fn3, SLT_fn3 : alu_op = ALU_SLT;
                 SLL_fn3, SRA_fn3 : alu_op = ALU_SHIFT;
                 default : alu_op = ALU_ADD_SUB;
             endcase
         endcase
     end
 
+    always_comb begin
+        case (instruction.fn3) inside
+            XOR_fn3 : logic_op = LOGIC_XOR;
+            OR_fn3 : logic_op = LOGIC_OR;
+            AND_fn3 : logic_op = LOGIC_AND;
+            default : logic_op = LOGIC_OTHER;
+        endcase
+    end
 
     //Constant ALU:
     //  provides LUI, AUIPC, JAL, JALR results for ALU
@@ -110,7 +127,9 @@ module alu_unit
         if (issue_stage_ready) begin
             imm_type <= instruction.upper_opcode inside {ARITH_IMM_T};
             alu_op_r <= alu_op;
+            logic_op_r <= logic_op;
             subtract <= decode_stage.instruction inside {SUB, SLTI, SLTIU, SLT, SLTU};
+            is_slt <= instruction.fn3 inside {SLT_fn3, SLTU_fn3};
         end
     end
 
@@ -120,23 +139,17 @@ module alu_unit
     //TODO: explore moving this mux into the regfile bypass mux
     assign rs2_data = imm_type ? 32'(signed'(issue_stage.instruction[31:20])) : rf[RS2];
     always_comb begin
-        case (issue_stage.fn3)
-            XOR_fn3 : pre_adder1 = rf[RS1] ^ rs2_data;
-            OR_fn3 : pre_adder1 = rf[RS1] | rs2_data;
-            AND_fn3 : pre_adder1 = rf[RS1] & rs2_data;
-            default : pre_adder1 = rf[RS1]; //ADD/SUB/SLT/SLTU
-        endcase
-        case (issue_stage.fn3)
-            XOR_fn3,
-            OR_fn3,
-            AND_fn3 : pre_adder2 = 0;
-            default : pre_adder2 = rs2_data ^ {32{subtract}};
+        case (logic_op_r)
+            LOGIC_XOR : logic_and_upper_slt = rf[RS1] ^ rs2_data;
+            LOGIC_OR : logic_and_upper_slt = rf[RS1] | rs2_data;
+            LOGIC_AND : logic_and_upper_slt = rf[RS1] & rs2_data;
+            default : logic_and_upper_slt = 0; //ADD/SUB/SLT/SLTU
         endcase
     end
 
     //Add/Sub ops
-    assign sign_ext_adder1 = {(rf[RS1][31] & ~issue_stage.fn3[0]), pre_adder1};
-    assign sign_ext_adder2 = {(rs2_data[31] & ~issue_stage.fn3[0]) ^ subtract, pre_adder2};
+    assign sign_ext_adder1 = {(rf[RS1][31] & ~issue_stage.fn3[0]), rf[RS1]};
+    assign sign_ext_adder2 = {(rs2_data[31] & ~issue_stage.fn3[0]) ^ subtract, rs2_data ^ {32{subtract}}};
 
     assign {add_sub_result, add_sub_carry_in} = {sign_ext_adder1, 1'b1} + {sign_ext_adder2, subtract};
     
@@ -153,7 +166,7 @@ module alu_unit
         case (alu_op_r)
             ALU_CONSTANT : result = constant_alu;//LUI, AUIPC, JAL, JALR
             ALU_ADD_SUB : result = add_sub_result[31:0];
-            ALU_SLT : result = {31'b0, add_sub_result[32]};
+            ALU_SLT : result = {logic_and_upper_slt[31:1], is_slt ? add_sub_result[32] : logic_and_upper_slt[0]};
             default : result = shift_result; //ALU_SHIFT
         endcase
     end
