@@ -416,7 +416,7 @@ module cva5_sim
         end
 
         //LS Stats
-        stats[LSU_LOAD_BLOCKED_BY_STORE_STAT] = `LSQ_P.lq.valid & `LSQ_P.store_conflict;
+        stats[LSU_LOAD_BLOCKED_BY_STORE_STAT] = `LSQ_P.lq.valid & `LSQ_P.load_blocked;
         stats[LSU_SUB_UNIT_STALL_STAT] = (`LS_P.lsq.load_valid | `LS_P.lsq.store_valid) & ~`LS_P.sub_unit_ready;
         stats[LSU_DC_HIT_STAT] = dcache_hit;
         stats[LSU_DC_MISS_STAT] = dcache_miss;

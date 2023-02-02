@@ -157,12 +157,14 @@ module cva5
     logic decode_uses_rd;
     rs_addr_t decode_rd_addr;
     exception_sources_t decode_exception_unit;
+    logic decode_is_store;
     phys_addr_t decode_phys_rd_addr;
     phys_addr_t decode_phys_rs_addr [REGFILE_READ_PORTS];
     logic [$clog2(CONFIG.NUM_WB_GROUPS)-1:0] decode_rs_wb_group [REGFILE_READ_PORTS];
 
         //ID freeing
     retire_packet_t retire;
+    retire_packet_t store_retire;
     id_t retire_ids [RETIRE_PORTS];
     id_t retire_ids_next [RETIRE_PORTS];
     logic retire_port_valid [RETIRE_PORTS];
@@ -195,6 +197,7 @@ module cva5
     logic issue_stage_ready;
     phys_addr_t issue_phys_rs_addr [REGFILE_READ_PORTS];
     rs_addr_t issue_rs_addr [REGFILE_READ_PORTS];
+    logic [$clog2(CONFIG.NUM_WB_GROUPS)-1:0] issue_rd_wb_group;
     logic illegal_instruction;
     logic instruction_issued;
     logic instruction_issued_with_rd;
@@ -241,11 +244,13 @@ module cva5
         .decode_rd_addr (decode_rd_addr),
         .decode_phys_rd_addr (decode_phys_rd_addr),
         .decode_exception_unit (decode_exception_unit),
+        .decode_is_store (decode_is_store),
         .issue (issue),
         .instruction_issued (instruction_issued),
         .instruction_issued_with_rd (instruction_issued_with_rd),
         .wb_packet (wb_packet),
         .retire (retire),
+        .store_retire (store_retire),
         .retire_ids (retire_ids),
         .retire_ids_next (retire_ids_next),
         .retire_port_valid(retire_port_valid),
@@ -371,9 +376,10 @@ module cva5
         .instruction_issued (instruction_issued),
         .instruction_issued_with_rd (instruction_issued_with_rd),
         .issue (issue),
+        .issue_rs_addr (issue_rs_addr),
         .issue_stage_ready (issue_stage_ready),
         .issue_phys_rs_addr (issue_phys_rs_addr),
-        .issue_rs_addr (issue_rs_addr),
+        .issue_rd_wb_group (issue_rd_wb_group),
         .rf (rf_issue),
         .constant_alu (constant_alu),
         .unit_issue (unit_issue),
@@ -447,8 +453,10 @@ module cva5
         .unit_needed (unit_needed[UNIT_IDS.LS]),
         .uses_rs (unit_uses_rs[UNIT_IDS.LS]),
         .uses_rd (unit_uses_rd[UNIT_IDS.LS]),
+        .decode_is_store (decode_is_store),
         .instruction_issued_with_rd (instruction_issued_with_rd),
         .issue_rs_addr (issue_rs_addr),
+        .issue_rd_wb_group (issue_rd_wb_group),
         .rs2_inuse (rf_issue.inuse[RS2]),
         .rf (rf_issue.data),
         .issue (unit_issue[UNIT_IDS.LS]),
@@ -465,8 +473,7 @@ module cva5
         .dwishbone (dwishbone),                                       
         .data_bram (data_bram),
         .wb_packet (wb_packet),
-        .retire_ids (retire_ids),
-        .retire_port_valid(retire_port_valid),
+        .store_retire (store_retire),
         .exception (exception[LS_EXCEPTION]),
         .load_store_status(load_store_status),
         .wb (unit_wb2[LS_UNIT_WB2_ID])

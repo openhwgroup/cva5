@@ -53,6 +53,7 @@ module instruction_metadata_and_id_management
         input logic decode_uses_rd,
         input rs_addr_t decode_rd_addr,
         input exception_sources_t decode_exception_unit,
+        input logic decode_is_store,
         //renamer
         input phys_addr_t decode_phys_rd_addr,
 
@@ -66,6 +67,7 @@ module instruction_metadata_and_id_management
 
         //Retirer
         output retire_packet_t retire,
+        output retire_packet_t store_retire,
         output id_t retire_ids [RETIRE_PORTS],
         output id_t retire_ids_next [RETIRE_PORTS],
         output logic retire_port_valid [RETIRE_PORTS],
@@ -82,6 +84,7 @@ module instruction_metadata_and_id_management
     (* ramstyle = "MLAB, no_rw_check" *) logic [0:0] valid_fetch_addr_table [MAX_IDS];
 
     (* ramstyle = "MLAB, no_rw_check" *) logic [0:0] uses_rd_table [MAX_IDS];
+    (* ramstyle = "MLAB, no_rw_check" *) logic [0:0] is_store_table [MAX_IDS];
 
     (* ramstyle = "MLAB, no_rw_check" *) logic [$bits(fetch_metadata_t)-1:0] fetch_metadata_table [MAX_IDS];
 
@@ -98,6 +101,8 @@ module instruction_metadata_and_id_management
     logic [LOG2_MAX_IDS:0] inflight_count;
 
     retire_packet_t retire_next;
+    retire_packet_t store_retire_next;
+
     logic retire_port_valid_next [RETIRE_PORTS];
 
     genvar i;
@@ -136,6 +141,15 @@ module instruction_metadata_and_id_management
         if (decode_advance)
             uses_rd_table[decode_id] <= decode_uses_rd & |decode_rd_addr;
     end
+
+    ////////////////////////////////////////////////////
+    //Is store table
+    //Number of read ports = RETIRE_PORTS
+    always_ff @ (posedge clk) begin
+        if (decode_advance)
+            is_store_table[decode_id] <= decode_is_store;
+    end
+
 
     ////////////////////////////////////////////////////
     //Exception unit table
@@ -184,7 +198,6 @@ module instruction_metadata_and_id_management
             if (~gc.retire_hold)
                 retire_ids[i] <= retire_ids_next[i];
         end
-        
     end endgenerate
 
     //Represented as a negative value so that the MSB indicates that the decode stage is valid
@@ -262,12 +275,15 @@ module instruction_metadata_and_id_management
     logic contiguous_retire;
     logic id_is_post_issue [RETIRE_PORTS];
     logic id_ready_to_retire [RETIRE_PORTS];
-    logic [LOG2_RETIRE_PORTS-1:0] phys_id_sel;
+    logic [LOG2_RETIRE_PORTS-1:0] retire_with_rd_sel;
+    logic [LOG2_RETIRE_PORTS-1:0] retire_with_store_sel;
     logic [RETIRE_PORTS-1:0] retire_id_uses_rd;
+    logic [RETIRE_PORTS-1:0] retire_id_is_store;
     logic [RETIRE_PORTS-1:0] retire_id_waiting_for_writeback;
 
      generate for (i = 0; i < RETIRE_PORTS; i++) begin : gen_retire_writeback
         assign retire_id_uses_rd[i] = uses_rd_table[retire_ids_next[i]];
+        assign retire_id_is_store[i] = is_store_table[retire_ids_next[i]];
         assign retire_id_waiting_for_writeback[i] = id_waiting_for_writeback[i];
      end endgenerate
 
@@ -277,29 +293,34 @@ module instruction_metadata_and_id_management
     //If an exception is pending, only retire a single intrustuction per cycle.  As such, the pending
     //exception will have to become the oldest instruction retire_ids[0] before it can retire.
     logic retire_with_rd_found;
+    logic retire_with_store_found;
     always_comb begin
         contiguous_retire = ~gc.retire_hold;
         retire_with_rd_found = 0;
+        retire_with_store_found = 0;
         for (int i = 0; i < RETIRE_PORTS; i++) begin
             id_is_post_issue[i] = post_issue_count > ID_COUNTER_W'(i);
 
             id_ready_to_retire[i] = (id_is_post_issue[i] & contiguous_retire & ~id_waiting_for_writeback[i]);
-            retire_port_valid_next[i] = id_ready_to_retire[i] & ~(retire_id_uses_rd[i] & retire_with_rd_found);
+            retire_port_valid_next[i] = id_ready_to_retire[i] & ~((retire_id_uses_rd[i] & retire_with_rd_found) | (retire_id_is_store[i] & retire_with_store_found));
      
             retire_with_rd_found |= retire_port_valid_next[i] & retire_id_uses_rd[i];
+            retire_with_store_found |= retire_port_valid_next[i] & retire_id_is_store[i];
+
             contiguous_retire &= retire_port_valid_next[i] & ~gc.exception_pending;
         end
     end
 
     //retire_next packet
     priority_encoder #(.WIDTH(RETIRE_PORTS))
-    phys_id_sel_encoder (
+    retire_with_rd_sel_encoder (
         .priority_vector (retire_id_uses_rd),
-        .encoded_result (phys_id_sel)
+        .encoded_result (retire_with_rd_sel)
     );
-    assign retire_next.phys_id = retire_ids_next[phys_id_sel];
-    assign retire_next.valid = retire_with_rd_found;
 
+    assign retire_next.phys_id = retire_ids_next[retire_with_rd_sel];
+    assign retire_next.valid = retire_with_rd_found;
+    
     always_comb begin
         retire_next.count = 0;
         for (int i = 0; i < RETIRE_PORTS; i++) begin
@@ -315,6 +336,19 @@ module instruction_metadata_and_id_management
             retire_port_valid[i] <= retire_port_valid_next[i] & ~gc.writeback_supress;
     end
 
+    priority_encoder #(.WIDTH(RETIRE_PORTS))
+    retire_with_store_sel_encoder (
+        .priority_vector (retire_id_is_store),
+        .encoded_result (retire_with_store_sel)
+    );
+
+    assign store_retire_next.phys_id = retire_ids_next[retire_with_store_sel];
+    assign store_retire_next.valid = retire_with_store_found;
+    assign store_retire_next.count = 1;
+
+    always_ff @ (posedge clk) begin
+        store_retire <= store_retire_next;
+    end
     ////////////////////////////////////////////////////
     //Outputs
     assign pc_id_available = ~inflight_count[LOG2_MAX_IDS];

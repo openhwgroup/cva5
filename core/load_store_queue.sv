@@ -35,26 +35,30 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
         input gc_outputs_t gc,
 
         load_store_queue_interface.queue lsq,
+        input logic [$clog2(CONFIG.NUM_WB_GROUPS)-1:0] store_forward_wb_group,
         //Writeback snooping
         input wb_packet_t wb_packet [CONFIG.NUM_WB_GROUPS],
 
         //Retire release
-        input id_t retire_ids [RETIRE_PORTS],
-        input logic retire_port_valid [RETIRE_PORTS]
+        input retire_packet_t store_retire
     );
+    localparam LOG2_SQ_DEPTH = $clog2(CONFIG.SQ_DEPTH);
 
     typedef struct packed {
         logic [31:0] addr;
         logic [2:0] fn3;
         id_t id;
         phys_addr_t phys_addr;
-        logic [CONFIG.SQ_DEPTH-1:0] potential_store_conflicts;
+        logic store_collision;
+        logic [LOG2_SQ_DEPTH-1:0] sq_index;
     } lq_entry_t;
 
+
+    logic [LOG2_SQ_DEPTH-1:0] sq_index;
+    logic [LOG2_SQ_DEPTH-1:0] sq_oldest;
     addr_hash_t addr_hash;
-    logic [CONFIG.SQ_DEPTH-1:0] potential_store_conflicts;
+    logic potential_store_conflict;
     sq_entry_t sq_entry;
-    logic store_conflict;
 
     lq_entry_t lq_data_in;
     lq_entry_t lq_data_out;
@@ -95,7 +99,8 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
         fn3 : lsq.data_in.fn3,
         id : lsq.data_in.id, 
         phys_addr : lsq.data_in.phys_addr,
-        potential_store_conflicts : potential_store_conflicts
+        store_collision : potential_store_conflict,
+        sq_index : sq_index
     };
     assign lq.data_in = lq_data_in;
     assign lq_data_out = lq.data_out;
@@ -111,20 +116,23 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
         .lq_push (lq.push),
         .lq_pop (lq.pop),
         .sq (sq),
+        .store_forward_wb_group (store_forward_wb_group),
         .addr_hash (addr_hash),
-        .potential_store_conflicts (potential_store_conflicts),
-        .prev_store_conflicts (lq_data_out.potential_store_conflicts),
-        .store_conflict (store_conflict),
+        .potential_store_conflict (potential_store_conflict),
+        .sq_index (sq_index),
+        .sq_oldest (sq_oldest),
         .wb_packet (wb_packet),
-        .retire_ids (retire_ids),
-        .retire_port_valid (retire_port_valid)
+        .store_retire (store_retire)
     );
 
     ////////////////////////////////////////////////////
     //Output
     //Priority is for loads over stores.
-    //A store will be selected only if either no loads are ready, OR if the store queue is full and a store is ready
-    assign lsq.load_valid = lq.valid & ~store_conflict;
+    //A store will be selected only if no loads are ready
+    logic load_blocked;
+    assign load_blocked = (lq_data_out.store_collision & (lq_data_out.sq_index != sq_oldest));
+
+    assign lsq.load_valid = lq.valid & ~load_blocked;
     assign lsq.store_valid = sq.valid;
 
     assign lsq.load_data_out = '{

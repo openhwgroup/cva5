@@ -40,12 +40,14 @@ module load_store_unit
         output logic unit_needed,
         output logic [REGFILE_READ_PORTS-1:0] uses_rs,
         output logic uses_rd,
-        
+        output logic decode_is_store,
+
         input issue_packet_t issue_stage,
         input logic issue_stage_ready,
         input logic instruction_issued_with_rd,
         input logic rs2_inuse,
         input rs_addr_t issue_rs_addr [REGFILE_READ_PORTS],
+        input logic [$clog2(CONFIG.NUM_WB_GROUPS)-1:0] issue_rd_wb_group,
         input logic [31:0] rf [REGFILE_READ_PORTS],
 
         unit_issue_interface.unit issue,
@@ -70,8 +72,7 @@ module load_store_unit
         input wb_packet_t wb_packet [CONFIG.NUM_WB_GROUPS],
 
         //Retire release
-        input id_t retire_ids [RETIRE_PORTS],
-        input logic retire_port_valid [RETIRE_PORTS],
+        input retire_packet_t store_retire,
 
         exception_interface.unit exception,
         output load_store_status_t load_store_status,
@@ -178,7 +179,7 @@ module load_store_unit
 
     assign is_load = (instruction.upper_opcode inside {LOAD_T, AMO_T}) & !(amo.is_amo & amo.is_sc); //LR and AMO_ops perform a read operation as well
     assign is_store = (instruction.upper_opcode == STORE_T) | (amo.is_amo & amo.is_sc);//Used for LS unit and for ID tracking
-
+    assign decode_is_store = is_store;
 
     always_ff @(posedge clk) begin
         if (issue_stage_ready) begin
@@ -192,12 +193,20 @@ module load_store_unit
     end
 
     (* ramstyle = "MLAB, no_rw_check" *) id_t rd_to_id_table [32];
+    (* ramstyle = "MLAB, no_rw_check" *) logic [$clog2(CONFIG.NUM_WB_GROUPS)-1:0] rd_to_wb_group_table [32];
+
     id_t store_forward_id;
+    logic [$clog2(CONFIG.NUM_WB_GROUPS)-1:0] store_forward_wb_group;
+
     always_ff @ (posedge clk) begin
-        if (instruction_issued_with_rd)
+        if (instruction_issued_with_rd) begin
             rd_to_id_table[issue_stage.rd_addr] <= issue_stage.id;
+            rd_to_wb_group_table[issue_stage.rd_addr] <= issue_rd_wb_group;
+        end
     end
+
     assign store_forward_id = rd_to_id_table[issue_rs_addr[RS2]];
+    assign store_forward_wb_group = rs2_inuse ? rd_to_wb_group_table[issue_rs_addr[RS2]] : '0;
 
     ////////////////////////////////////////////////////
     //Alignment Exception
@@ -293,9 +302,9 @@ module load_store_unit
         .rst (rst),
         .gc (gc),
         .lsq (lsq),
+        .store_forward_wb_group (store_forward_wb_group),
         .wb_packet (wb_packet),
-        .retire_ids (retire_ids),
-        .retire_port_valid (retire_port_valid)
+        .store_retire (store_retire)
     );
     assign shared_inputs = sel_load ? lsq.load_data_out : lsq.store_data_out;
     assign lsq.load_pop = sub_unit_load_issue;

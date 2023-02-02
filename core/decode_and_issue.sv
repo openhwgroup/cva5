@@ -62,6 +62,7 @@ module decode_and_issue
         output issue_packet_t issue,
         output rs_addr_t issue_rs_addr [REGFILE_READ_PORTS],
         output phys_addr_t issue_phys_rs_addr [REGFILE_READ_PORTS],
+        output logic [$clog2(CONFIG.NUM_WB_GROUPS)-1:0] issue_rd_wb_group,
         output logic issue_stage_ready,
 
         //Register File
@@ -153,7 +154,6 @@ module decode_and_issue
     assign decode_phys_rd_addr = renamer.phys_rd_addr;
     assign decode_phys_rs_addr = renamer.phys_rs_addr;
     assign decode_rs_wb_group = renamer.rs_wb_group;
-
     ////////////////////////////////////////////////////
     //Issue
     always_ff @(posedge clk) begin
@@ -168,6 +168,7 @@ module decode_and_issue
             issue_rs_wb_group <= renamer.rs_wb_group;
             issue.rd_addr <= decode_instruction.rd_addr;
             issue.phys_rd_addr <= renamer.phys_rd_addr;
+            issue_rd_wb_group <= renamer_wb_group;
             issue.is_multicycle <= ~unit_needed[UNIT_IDS.ALU];
             issue.id <= decode.id;
             issue.exception_unit <= decode_exception_unit;
