@@ -290,7 +290,7 @@ module load_store_unit
         store : is_store_r,
         id : issue.id,
         phys_addr : issue.phys_addr,
-        forwarded_store : rs2_inuse,
+        forwarded_store : CONFIG.INCLUDE_FORWARDING_TO_STORES & rs2_inuse,
         id_needed : store_forward_id
     };
 
