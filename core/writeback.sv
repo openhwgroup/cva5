@@ -44,7 +44,6 @@ module writeback
     logic [NUM_WB_UNITS-1:0] unit_ack;
     //aliases for write-back-interface signals
     id_t [NUM_WB_UNITS-1:0] unit_instruction_id;
-    phys_addr_t [NUM_WB_UNITS-1:0] unit_phys_addr;
     logic [NUM_WB_UNITS-1:0] unit_done;
 
     logic [XLEN-1:0] unit_rd [NUM_WB_UNITS];
@@ -59,7 +58,6 @@ module writeback
     //Re-assigning interface inputs to array types so that they can be dynamically indexed
     generate for (i = 0; i < NUM_WB_UNITS; i++) begin : gen_wb_unit_unpacking
         assign unit_instruction_id[i] = unit_wb[i].id;
-        assign unit_phys_addr[i] = unit_wb[i].phys_addr;
         assign unit_done[i] = unit_wb[i].done;
         assign unit_wb[i].ack = unit_ack[i];
         assign unit_rd[i] = unit_wb[i].rd;
@@ -78,7 +76,6 @@ module writeback
     );
     assign wb_packet.valid = |unit_done;
     assign wb_packet.id = unit_instruction_id[unit_sel];
-    assign wb_packet.phys_addr = unit_phys_addr[unit_sel];
     assign wb_packet.data = unit_rd[unit_sel];
 
     assign unit_ack = NUM_WB_UNITS'(wb_packet.valid) << unit_sel;

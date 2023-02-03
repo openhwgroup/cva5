@@ -47,7 +47,6 @@ module custom_unit
     logic [31:0] result;
     logic done;
     id_t id;
-    phys_addr_t phys_addr;
     ////////////////////////////////////////////////////
     //Implementation
     //Simple 2-cycle adder that adds rs1 and rs2
@@ -71,10 +70,8 @@ module custom_unit
     assign issue.ready = ~wb.done;
 
     always_ff @(posedge clk) begin
-        if (issue.new_request) begin
+        if (issue.new_request)
             id <=  issue.id;
-            phys_addr <= issue.phys_addr;
-        end
     end
 
     always_ff @(posedge clk) begin
@@ -93,5 +90,4 @@ module custom_unit
             wb.done <= (wb.done & ~wb.ack) | issue.new_request;
     end
     assign wb.id = id;
-    assign wb.phys_addr = phys_addr;
 endmodule

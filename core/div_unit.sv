@@ -70,7 +70,6 @@ module div_unit
         logic divisor_is_zero;
         logic reuse_result;
         id_t id;
-        phys_addr_t phys_addr;
     } div_attributes_t;
 
     typedef struct packed{
@@ -170,7 +169,6 @@ module div_unit
     assign issue_fifo_inputs.attr.divisor_is_zero = divisor_is_zero;
     assign issue_fifo_inputs.attr.reuse_result = div_op_reuse;
     assign issue_fifo_inputs.attr.id = issue.id;
-    assign issue_fifo_inputs.attr.phys_addr = issue.phys_addr;
 
     ////////////////////////////////////////////////////
     //Input FIFO
@@ -238,7 +236,6 @@ module div_unit
     end
 
     assign wb.id = wb_attr.id;
-    assign wb.phys_addr = wb_attr.phys_addr;
     ////////////////////////////////////////////////////
     //Assertions
 

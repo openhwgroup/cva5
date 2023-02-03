@@ -72,12 +72,11 @@ interface unit_issue_interface;
     logic possible_issue;
     logic new_request;
     id_t id;
-    phys_addr_t phys_addr;
 
     logic ready;
 
-    modport decode (input ready, output possible_issue, new_request, id, phys_addr);
-    modport unit (output ready, input possible_issue, new_request, id, phys_addr);
+    modport decode (input ready, output possible_issue, new_request, id);
+    modport unit (output ready, input possible_issue, new_request, id);
 endinterface
 
 interface unit_writeback_interface;
@@ -87,17 +86,16 @@ interface unit_writeback_interface;
         logic ack;
 
         id_t id;
-        phys_addr_t phys_addr;
         logic done;
         logic [XLEN-1:0] rd;
 
         modport unit (
             input ack,
-            output id, done, rd, phys_addr
+            output id, done, rd
         );
         modport wb (
             output ack,
-            input id, done, rd, phys_addr
+            input id, done, rd
         );
 endinterface
 

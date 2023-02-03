@@ -232,7 +232,6 @@ module decode_and_issue
         assign unit_issue[i].possible_issue = issue.stage_valid & unit_needed_issue_stage[i] & unit_issue[i].ready;
         assign unit_issue[i].new_request = issue_to[i];
         assign unit_issue[i].id = issue.id;
-        assign unit_issue[i].phys_addr = issue.phys_rd_addr;
     end endgenerate
 
     ////////////////////////////////////////////////////

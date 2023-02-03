@@ -176,10 +176,8 @@ module csr_unit
     end
 
     always_ff @(posedge clk) begin
-        if (issue.new_request) begin
+        if (issue.new_request)
             wb.id <= issue.id;
-            wb.phys_addr <= issue.phys_addr;
-        end
     end
 
     assign wb.rd = selected_csr_r;

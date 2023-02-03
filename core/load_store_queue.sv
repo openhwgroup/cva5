@@ -48,7 +48,6 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
         logic [31:0] addr;
         logic [2:0] fn3;
         id_t id;
-        phys_addr_t phys_addr;
         logic store_collision;
         logic [LOG2_SQ_DEPTH-1:0] sq_index;
     } lq_entry_t;
@@ -98,7 +97,6 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
         addr : lsq.data_in.addr,
         fn3 : lsq.data_in.fn3,
         id : lsq.data_in.id, 
-        phys_addr : lsq.data_in.phys_addr,
         store_collision : potential_store_conflict,
         sq_index : sq_index
     };
@@ -142,8 +140,7 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
         be : '0,
         fn3 : lq_data_out.fn3,
         data_in : sq.data_out.data,
-        id : lq_data_out.id,
-        phys_addr : lq_data_out.phys_addr
+        id : lq_data_out.id
     };
 
     assign lsq.store_data_out = '{
@@ -153,8 +150,7 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
         be : sq.data_out.be,
         fn3 : sq.data_out.fn3,
         data_in : sq.data_out.data,
-        id : lq_data_out.id,
-        phys_addr : lq_data_out.phys_addr
+        id : lq_data_out.id
     };
 
     assign lsq.sq_empty = sq.empty;

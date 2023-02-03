@@ -47,7 +47,8 @@ module register_file
         register_file_issue_interface.register_file rf_issue,
 
         //Writeback
-        input wb_packet_t commit [CONFIG.NUM_WB_GROUPS]
+        input wb_packet_t commit [CONFIG.NUM_WB_GROUPS],
+        input phys_addr_t wb_phys_addr [CONFIG.NUM_WB_GROUPS]
     );
     typedef logic [31:0] rs_data_t [REGFILE_READ_PORTS];
     rs_data_t regfile_rs_data [CONFIG.NUM_WB_GROUPS];
@@ -81,8 +82,8 @@ module register_file
         toggle[1] = rf_issue.single_cycle_or_flush;
         toggle_addr[1] = rf_issue.phys_rd_addr;
         for (int i = 1; i < CONFIG.NUM_WB_GROUPS; i++) begin
-            toggle[i+1] = commit[i].valid & |commit[i].phys_addr;
-            toggle_addr[i+1] = commit[i].phys_addr;
+            toggle[i+1] = commit[i].valid & |wb_phys_addr[i];
+            toggle_addr[i+1] = wb_phys_addr[i];
         end
     end
     toggle_memory_set # (
@@ -110,7 +111,7 @@ module register_file
         lutram_1w_mr #(.WIDTH(32), .DEPTH(64), .NUM_READ_PORTS(REGFILE_READ_PORTS))
         register_file_bank (
             .clk,
-            .waddr(commit[i].phys_addr),
+            .waddr(wb_phys_addr[i]),
             .raddr(decode_phys_rs_addr),
             .ram_write(commit[i].valid & ~gc.writeback_supress),
             .new_ram_data(commit[i].data),

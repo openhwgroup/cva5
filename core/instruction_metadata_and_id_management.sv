@@ -64,6 +64,7 @@ module instruction_metadata_and_id_management
 
         //WB
         input wb_packet_t wb_packet [CONFIG.NUM_WB_GROUPS],
+        output phys_addr_t wb_phys_addr [CONFIG.NUM_WB_GROUPS],
 
         //Retirer
         output retire_packet_t retire,
@@ -85,6 +86,8 @@ module instruction_metadata_and_id_management
 
     (* ramstyle = "MLAB, no_rw_check" *) logic [0:0] uses_rd_table [MAX_IDS];
     (* ramstyle = "MLAB, no_rw_check" *) logic [0:0] is_store_table [MAX_IDS];
+
+    (* ramstyle = "MLAB, no_rw_check" *) phys_addr_t id_to_phys_rd_table [MAX_IDS];
 
     (* ramstyle = "MLAB, no_rw_check" *) logic [$bits(fetch_metadata_t)-1:0] fetch_metadata_table [MAX_IDS];
 
@@ -148,6 +151,14 @@ module instruction_metadata_and_id_management
     always_ff @ (posedge clk) begin
         if (decode_advance)
             is_store_table[decode_id] <= decode_is_store;
+    end
+
+    ////////////////////////////////////////////////////
+    //id_to_phys_rd_table
+    //Number of read ports = WB_GROUPS
+    always_ff @ (posedge clk) begin
+        if (decode_advance)
+            id_to_phys_rd_table[decode_id] <= decode_phys_rd_addr;
     end
 
 
@@ -269,6 +280,11 @@ module instruction_metadata_and_id_management
         .read_addr (retire_ids_next),
         .in_use (id_waiting_for_writeback)
     );
+
+    ////////////////////////////////////////////////////
+    //WB phys_addr lookup
+    always_comb for (int i = 0; i < CONFIG.NUM_WB_GROUPS; i++)
+        wb_phys_addr[i] = id_to_phys_rd_table[wb_packet[i].id];
 
     ////////////////////////////////////////////////////
     //Retirer
