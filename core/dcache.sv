@@ -132,7 +132,7 @@ module dcache
         load_state_next[LOAD_FILL] = (load_state[LOAD_FILL] & ~line_complete) | (load_state[LOAD_L1_REQUEST] & load_l1_arb_ack);
     end
 
-    assign load_ready = (load_state[LOAD_IDLE] | load_hit) & (store_state[STORE_IDLE]);
+    assign load_ready = (load_state[LOAD_IDLE] | load_hit) & (store_state[STORE_IDLE] | store_l1_arb_ack);
 
     always_ff @ (posedge clk) begin
         if (load_request) begin
@@ -290,8 +290,21 @@ module dcache
 
     always_ff @ (posedge clk) miss_data_valid <= l1_response.data_valid & is_target_word;
 
+    logic collision;
+    logic [31:0] saved_data;
+    logic [3:0] saved_be;
+    
+    assign collision = store_state[STORE_L1_REQUEST] & (stage2_store.addr[31:2] == ls_load.addr[31:2]);
+    always_ff @ (posedge clk) begin
+        if (load_request) begin
+            saved_data <= stage2_store.data;
+            saved_be <= {4{collision}} & stage2_store.be;
+        end
+    end
+
     assign load_sel = load_state[LOAD_HIT_CHECK] ? tag_hit_index : replacement_index_r;
-    assign ls.data_out = ram_load_data[load_sel];
+    always_comb for (int i = 0; i < 4; i++)
+        ls.data_out[8*i+:8] = saved_be[i] ? saved_data[8*i+:8] : ram_load_data[load_sel][8*i+:8];
     assign ls.data_valid = load_hit | miss_data_valid;
 
     ////////////////////////////////////////////////////
