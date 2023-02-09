@@ -43,7 +43,7 @@ if { [string first $scripts_vivado_version $current_vivado_version] == -1 } {
 
 set list_projs [get_projects -quiet]
 if { $list_projs eq "" } {
-   create_project project_1 myproj -part xc7a100tcsg324-1
+   create_project cva5-competition-baseline cva5-competition-baseline -part xc7a100tcsg324-1
    set_property BOARD_PART digilentinc.com:nexys-a7-100t:part0:1.2 [current_project]
 }
 
@@ -51,6 +51,11 @@ if { $list_projs eq "" } {
 # CHANGE DESIGN NAME HERE
 variable design_name
 set design_name system
+
+add_files -fileset constrs_1 -norecurse $script_folder/manual_pin_assignments.xdc
+
+set_property  ip_repo_paths  $script_folder/cva5_nexys_wrapper [current_project]
+update_ip_catalog
 
 # If you do not already have an existing IP Integrator design open,
 # you can create a design using the following command:
@@ -494,5 +499,9 @@ proc create_root_design { parentCell } {
 ##################################################################
 
 create_root_design ""
+
+make_wrapper -files [get_files $script_folder/cva5-competition-baseline/cva5-competition-baseline.srcs/sources_1/bd/system/system.bd] -top
+add_files -norecurse $script_folder/cva5-competition-baseline/cva5-competition-baseline.gen/sources_1/bd/system/hdl/system_wrapper.v
+update_compile_order -fileset sources_1
 
 
