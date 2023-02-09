@@ -41,8 +41,8 @@ module store_queue
         //Address hash (shared by loads and stores)
         input addr_hash_t addr_hash,
         //hash check on adding a load to the queue
-        output logic [LOG2_SQ_DEPTH-1:0] sq_index,
-        output logic [LOG2_SQ_DEPTH-1:0] sq_oldest,
+        output logic [$clog2(CONFIG.SQ_DEPTH)-1:0] sq_index,
+        output logic [$clog2(CONFIG.SQ_DEPTH)-1:0] sq_oldest,
         output logic potential_store_conflict,
 
         //Writeback snooping
@@ -54,16 +54,17 @@ module store_queue
 
     localparam LOG2_SQ_DEPTH = $clog2(CONFIG.SQ_DEPTH);
     localparam NUM_OF_FORWARDING_PORTS = CONFIG.NUM_WB_GROUPS - 1;
+    typedef logic [LOG2_SQ_DEPTH-1:0] sq_index_t;
+
     typedef struct packed {
         id_t id_needed;
         logic [$clog2(CONFIG.NUM_WB_GROUPS)-1:0] wb_group;
-        logic [LOG2_SQ_DEPTH-1:0] sq_index;
+        sq_index_t sq_index;
     } retire_table_t;
     retire_table_t retire_table_in;
     retire_table_t retire_table_out;
 
     wb_packet_t wb_snoop [CONFIG.NUM_WB_GROUPS];
-    wb_packet_t wb_snoop_r [CONFIG.NUM_WB_GROUPS];
 
     //Register-based memory blocks
     logic [CONFIG.SQ_DEPTH-1:0] valid;
@@ -73,8 +74,10 @@ module store_queue
     //LUTRAM-based memory blocks
     sq_entry_t sq_entry_in;
     sq_entry_t output_entry;    
+    sq_entry_t output_entry_r;    
 
-    logic [LOG2_SQ_DEPTH-1:0] sq_index_next;
+    sq_index_t sq_index_next;
+    sq_index_t sq_oldest_next;
     logic [LOG2_SQ_DEPTH:0] released_count;
 
     logic [CONFIG.SQ_DEPTH-1:0] new_request_one_hot;
@@ -84,19 +87,19 @@ module store_queue
     logic [31:0] sq_data_out;
     ////////////////////////////////////////////////////
     //Implementation     
-    assign sq_index_next = sq_index +LOG2_SQ_DEPTH'(sq.push);
-    always_ff @ (posedge clk) begin
-        if (rst)
-            sq_index <= 0;
-        else
-            sq_index <= sq_index_next;
-    end
+
+    //Store Queue indicies
+    assign sq_index_next = sq_index + LOG2_SQ_DEPTH'(sq.push);
+    assign sq_oldest_next = sq_oldest + LOG2_SQ_DEPTH'(sq.pop);
 
     always_ff @ (posedge clk) begin
-        if (rst)
+        if (rst) begin 
+            sq_index <= 0;
             sq_oldest <= 0;
-        else
-            sq_oldest <= sq_oldest + LOG2_SQ_DEPTH'(sq.pop);
+        end else begin
+            sq_index <= sq_index_next;
+            sq_oldest <= sq_oldest_next;
+        end
     end
 
     assign new_request_one_hot = CONFIG.SQ_DEPTH'(sq.push) << sq_index;
@@ -131,12 +134,14 @@ module store_queue
     store_attr (
         .clk(clk),
         .waddr(sq_index),
-        .raddr(sq_oldest),
+        .raddr(sq_oldest_next),
         .ram_write(sq.push),
         .new_ram_data(sq_entry_in),
         .ram_data_out(output_entry)
     );
-
+    always_ff @ (posedge clk) begin
+        output_entry_r <= output_entry;
+    end
     //Compare store addr-hashes against new load addr-hash
     //Optionally mask out any store completing on this cycle (~issued_one_hot)
     //Without masking out an issuing store, the store queue may be flushed more often
@@ -173,7 +178,6 @@ module store_queue
 
     always_ff @ (posedge clk) begin
         wb_snoop <= wb_packet;
-        wb_snoop_r <= wb_snoop;
     end
 
     assign retire_table_in = '{id_needed : sq.data_in.id_needed, wb_group : store_forward_wb_group, sq_index : sq_index};
@@ -233,9 +237,9 @@ module store_queue
         //Assuming aligned requests,
         //Possible byte selections: (A/C/D, B/D, C/D, D)
         sq_data_out[7:0] = data_pre_alignment[7:0];
-        sq_data_out[15:8] = (output_entry.addr[1:0] == 2'b01) ? data_pre_alignment[7:0] : data_pre_alignment[15:8];
-        sq_data_out[23:16] = (output_entry.addr[1:0] == 2'b10) ? data_pre_alignment[7:0] : data_pre_alignment[23:16];
-        case(output_entry.addr[1:0])
+        sq_data_out[15:8] = (output_entry_r.addr[1:0] == 2'b01) ? data_pre_alignment[7:0] : data_pre_alignment[15:8];
+        sq_data_out[23:16] = (output_entry_r.addr[1:0] == 2'b10) ? data_pre_alignment[7:0] : data_pre_alignment[23:16];
+        case(output_entry_r.addr[1:0])
             2'b10 : sq_data_out[31:24] = data_pre_alignment[15:8];
             2'b11 : sq_data_out[31:24] = data_pre_alignment[7:0];
             default : sq_data_out[31:24] = data_pre_alignment[31:24];
@@ -244,9 +248,9 @@ module store_queue
 
     assign sq.valid = |released_count;
     assign sq.data_out = '{
-        addr : output_entry.addr,
-        be : output_entry.be,
-        fn3 : output_entry.fn3,
+        addr : output_entry_r.addr,
+        be : output_entry_r.be,
+        fn3 : output_entry_r.fn3,
         forwarded_store : 0,
         data : sq_data_out
     };

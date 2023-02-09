@@ -91,9 +91,9 @@ module l1_to_axi
 
     ////////////////////////////////////////////////////
     //AXI
-    localparam MAX_WRITE_IN_FLIGHT = 64;
-    logic [$clog2(MAX_WRITE_IN_FLIGHT)-1:0] write_in_flight_count;
-    logic [$clog2(MAX_WRITE_IN_FLIGHT)-1:0] write_in_flight_count_next;
+    localparam MAX_WRITE_IN_FLIGHT = 512;
+    logic [$clog2(MAX_WRITE_IN_FLIGHT+1)-1:0] write_in_flight_count;
+    logic [$clog2(MAX_WRITE_IN_FLIGHT+1)-1:0] write_in_flight_count_next;
 
     logic [4:0] burst_size;
     assign burst_size = request.amo_type_or_burst_size;
@@ -103,7 +103,7 @@ module l1_to_axi
     assign axi.arburst = (burst_size !=0) ? 2'b01 : '0;// INCR
     assign axi.rready = 1; //always ready to receive data
     assign axi.arsize = 3'b010;//4 bytes
-    assign axi.arcache = 4'b0011; //Normal Non-cacheable Non-bufferable
+    assign axi.arcache = 4'b0000; //Normal Non-cacheable Non-bufferable
     assign axi.arid = 6'(request.sub_id);
 
     assign axi.araddr = {request.addr, 2'b00} & {25'h1FFFFFF, ~burst_size, 2'b00};
@@ -116,7 +116,7 @@ module l1_to_axi
     assign axi.awburst = '0;//2'b01;// INCR
     assign axi.awsize = 3'b010;//4 bytes
     assign axi.bready = 1;
-    assign axi.awcache = 4'b0011;//Normal Non-cacheable Non-bufferable
+    assign axi.awcache = 4'b0000;//Normal Non-cacheable Non-bufferable
     assign axi.awaddr = {request.addr, 2'b00};
     assign axi.awid = 6'(request.sub_id);
 
@@ -148,7 +148,7 @@ module l1_to_axi
         if (rst)
             write_in_flight_count <= 0;
         else
-            write_in_flight_count <= write_in_flight_count + $clog2(MAX_WRITE_IN_FLIGHT)'({(aw_complete | aw_complete_r) & (w_complete | w_complete_r)}) - $clog2(MAX_WRITE_IN_FLIGHT)'(axi.bvalid);
+            write_in_flight_count <= write_in_flight_count + $clog2(MAX_WRITE_IN_FLIGHT+1)'(write_pop) - $clog2(MAX_WRITE_IN_FLIGHT+1)'(axi.bvalid);
     end
     
     assign write_pop = (aw_complete | aw_complete_r) & (w_complete | w_complete_r);
