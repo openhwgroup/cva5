@@ -84,6 +84,7 @@ module litex_wrapper
         INCLUDE_IFENCE : 0,
         INCLUDE_CSRS : 1,
         INCLUDE_AMO : 0,
+        INCLUDE_CUSTOM : 0,
         //CSR constants
         CSRS : '{
             MACHINE_IMPLEMENTATION_ID : 0,
@@ -102,6 +103,7 @@ module litex_wrapper
         },
         //Memory Options
         SQ_DEPTH : 2,
+        INCLUDE_FORWARDING_TO_STORES : 0,
         INCLUDE_ICACHE : 0,
         ICACHE_ADDR : '{
             L: 32'h40000000,
@@ -184,6 +186,7 @@ module litex_wrapper
         INCLUDE_IFENCE : 0,
         INCLUDE_CSRS : 1,
         INCLUDE_AMO : 0,
+        INCLUDE_CUSTOM : 0,
         //CSR constants
         CSRS : '{
             MACHINE_IMPLEMENTATION_ID : 0,
@@ -202,6 +205,7 @@ module litex_wrapper
         },
         //Memory Options
         SQ_DEPTH : 4,
+        INCLUDE_FORWARDING_TO_STORES : 1,
         INCLUDE_ICACHE : 1,
         ICACHE_ADDR : '{
             L : 32'h00000000, 
@@ -271,7 +275,7 @@ module litex_wrapper
             RAS_ENTRIES : 8
         },
         //Writeback Options
-        NUM_WB_GROUPS : 2
+        NUM_WB_GROUPS : 3
     };
 
     function cpu_config_t config_select (input integer variant);
@@ -290,7 +294,6 @@ module litex_wrapper
     avalon_interface m_avalon();
     local_memory_interface instruction_bram();
     local_memory_interface data_bram();
-    trace_outputs_t tr;
     interrupt_t s_interrupt;
 
     //L2 to Wishbone

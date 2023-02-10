@@ -109,10 +109,12 @@ package cva5_config;
         bit INCLUDE_IFENCE; //local mem operations only
         bit INCLUDE_CSRS;
         bit INCLUDE_AMO; //cache operations only
+        bit INCLUDE_CUSTOM;
         //CSR constants
         csr_config_t CSRS;
         //Memory Options
         int unsigned SQ_DEPTH;//CAM-based reasonable max of 4
+        bit INCLUDE_FORWARDING_TO_STORES;
         //Caches
         bit INCLUDE_ICACHE;
         cache_config_t ICACHE;
@@ -162,6 +164,7 @@ package cva5_config;
         INCLUDE_IFENCE : 1,
         INCLUDE_CSRS : 1,
         INCLUDE_AMO : 0,
+        INCLUDE_CUSTOM : 0,
         //CSR constants
         CSRS : '{
             MACHINE_IMPLEMENTATION_ID : 0,
@@ -180,6 +183,7 @@ package cva5_config;
         },
         //Memory Options
         SQ_DEPTH : 4,
+        INCLUDE_FORWARDING_TO_STORES : 1,
         INCLUDE_ICACHE : 0,
         ICACHE_ADDR : '{
             L: 32'h80000000,
@@ -249,7 +253,7 @@ package cva5_config;
             RAS_ENTRIES : 8
         },
         //Writeback Options
-        NUM_WB_GROUPS : 2
+        NUM_WB_GROUPS : 3
     };
 
     ////////////////////////////////////////////////////
@@ -260,6 +264,7 @@ package cva5_config;
         int unsigned CSR;
         int unsigned MUL;
         int unsigned DIV;
+        int unsigned CUSTOM;
         int unsigned BR;
         int unsigned IEC;
     } unit_id_param_t;
@@ -270,8 +275,9 @@ package cva5_config;
         CSR : 2,
         MUL : 3,
         DIV : 4,
-        BR : 5,
-        IEC : 6
+        CUSTOM : 5,
+        BR : 6,
+        IEC : 7
     };
 
     ////////////////////////////////////////////////////
@@ -282,7 +288,7 @@ package cva5_config;
     ////////////////////////////////////////////////////
     //ID limit
     //MAX_IDS restricted to a power of 2
-    localparam MAX_IDS = 8; //8 sufficient for rv32im configs
+    localparam MAX_IDS = 16; //8 sufficient for rv32im configs
 
     ////////////////////////////////////////////////////
     //Number of commit ports
@@ -305,18 +311,12 @@ package cva5_config;
     } exception_sources_t;
 
     ////////////////////////////////////////////////////
-    //Trace Options
-    //Trace interface is necessary for verilator simulation
-    localparam ENABLE_TRACE_INTERFACE = 1;
-
-
-    ////////////////////////////////////////////////////
     //L1 Arbiter IDs
     localparam L1_CONNECTIONS = 4;
     typedef enum bit [1:0] {
         L1_DCACHE_ID = 0,
-        L1_DMMU_ID = 1,
-        L1_ICACHE_ID = 2,
+        L1_ICACHE_ID = 1,
+        L1_DMMU_ID = 2,
         L1_IMMU_ID = 3
     } l1_id_t;
 

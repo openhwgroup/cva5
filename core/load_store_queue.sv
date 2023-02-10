@@ -35,28 +35,29 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
         input gc_outputs_t gc,
 
         load_store_queue_interface.queue lsq,
+        input logic [$clog2(CONFIG.NUM_WB_GROUPS)-1:0] store_forward_wb_group,
         //Writeback snooping
-        input wb_packet_t wb_snoop,
+        input wb_packet_t wb_packet [CONFIG.NUM_WB_GROUPS],
 
         //Retire release
-        input id_t retire_ids [RETIRE_PORTS],
-        input logic retire_port_valid [RETIRE_PORTS],
-
-        output logic tr_possible_load_conflict_delay
+        input retire_packet_t store_retire
     );
+    localparam LOG2_SQ_DEPTH = $clog2(CONFIG.SQ_DEPTH);
 
     typedef struct packed {
         logic [31:0] addr;
         logic [2:0] fn3;
         id_t id;
-        logic [CONFIG.SQ_DEPTH-1:0] potential_store_conflicts;
+        logic store_collision;
+        logic [LOG2_SQ_DEPTH-1:0] sq_index;
     } lq_entry_t;
 
+
+    logic [LOG2_SQ_DEPTH-1:0] sq_index;
+    logic [LOG2_SQ_DEPTH-1:0] sq_oldest;
     addr_hash_t addr_hash;
-    logic [CONFIG.SQ_DEPTH-1:0] potential_store_conflicts;
+    logic potential_store_conflict;
     sq_entry_t sq_entry;
-    logic store_conflict;
-    logic load_selected;
 
     lq_entry_t lq_data_in;
     lq_entry_t lq_data_out;
@@ -66,9 +67,9 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
     ////////////////////////////////////////////////////
     //Implementation
 
-    //Can accept requests so long as store queue is not needed or is not full
+    //Can accept requests so long as store queue is not full
     assign lsq.full = lsq.data_in.store & sq.full;
-
+    
     //Address hash for load-store collision checking
     addr_hash lsq_addr_hash (
         .clk (clk),
@@ -89,21 +90,22 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
     //FIFO control signals
     assign lq.push = lsq.push & lsq.data_in.load;
     assign lq.potential_push = lsq.potential_push;
-    assign lq.pop = lsq.pop & load_selected;
+    assign lq.pop = lsq.load_pop;
 
     //FIFO data ports
     assign lq_data_in = '{
         addr : lsq.data_in.addr,
         fn3 : lsq.data_in.fn3,
         id : lsq.data_in.id, 
-        potential_store_conflicts : potential_store_conflicts
+        store_collision : potential_store_conflict,
+        sq_index : sq_index
     };
     assign lq.data_in = lq_data_in;
     assign lq_data_out = lq.data_out;
     ////////////////////////////////////////////////////
     //Store Queue
     assign sq.push = lsq.push &  lsq.data_in.store;
-    assign sq.pop = lsq.pop & ~load_selected;
+    assign sq.pop = lsq.store_pop;
     assign sq.data_in = lsq.data_in;
 
     store_queue  # (.CONFIG(CONFIG)) sq_block (
@@ -112,28 +114,41 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
         .lq_push (lq.push),
         .lq_pop (lq.pop),
         .sq (sq),
+        .store_forward_wb_group (store_forward_wb_group),
         .addr_hash (addr_hash),
-        .potential_store_conflicts (potential_store_conflicts),
-        .prev_store_conflicts (lq_data_out.potential_store_conflicts),
-        .store_conflict (store_conflict),
-        .wb_snoop (wb_snoop),
-        .retire_ids (retire_ids),
-        .retire_port_valid (retire_port_valid)
+        .potential_store_conflict (potential_store_conflict),
+        .sq_index (sq_index),
+        .sq_oldest (sq_oldest),
+        .wb_packet (wb_packet),
+        .store_retire (store_retire)
     );
 
     ////////////////////////////////////////////////////
     //Output
     //Priority is for loads over stores.
-    //A store will be selected only if either no loads are ready, OR if the store queue is full and a store is ready
-    assign load_selected = lq.valid & ~store_conflict;// & ~(sq_full & sq.valid);
+    //A store will be selected only if no loads are ready
+    logic load_blocked;
+    assign load_blocked = (lq_data_out.store_collision & (lq_data_out.sq_index != sq_oldest));
 
-    assign lsq.valid = load_selected | sq.valid;
-    assign lsq.data_out = '{
-        addr : load_selected ? lq_data_out.addr : sq.data_out.addr,
-        load : load_selected,
-        store : ~load_selected,
-        be : load_selected ? '0 : sq.data_out.be,
-        fn3 : load_selected ? lq_data_out.fn3 : sq.data_out.fn3,
+    assign lsq.load_valid = lq.valid & ~load_blocked;
+    assign lsq.store_valid = sq.valid;
+
+    assign lsq.load_data_out = '{
+        addr : lq_data_out.addr,
+        load : 1,
+        store : 0,
+        be : '0,
+        fn3 : lq_data_out.fn3,
+        data_in : sq.data_out.data,
+        id : lq_data_out.id
+    };
+
+    assign lsq.store_data_out = '{
+        addr : sq.data_out.addr,
+        load : 0,
+        store : 1,
+        be : sq.data_out.be,
+        fn3 : sq.data_out.fn3,
         data_in : sq.data_out.data,
         id : lq_data_out.id
     };
@@ -148,12 +163,5 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
 
     ////////////////////////////////////////////////////
     //Assertions
-
-    ////////////////////////////////////////////////////
-    //Trace Interface
-    generate if (ENABLE_TRACE_INTERFACE) begin : gen_lsq_trace
-        assign tr_possible_load_conflict_delay = lq.valid & (store_conflict | (sq.full & sq.valid));
-    end
-    endgenerate
 
 endmodule

@@ -41,13 +41,6 @@ package cva5_types;
         ALU_SHIFT = 2'b11
     } alu_op_t;
 
-    typedef enum logic [1:0] {
-        ALU_LOGIC_XOR = 2'b00,
-        ALU_LOGIC_OR = 2'b01,
-        ALU_LOGIC_AND = 2'b10,
-        ALU_LOGIC_ADD = 2'b11
-    } alu_logic_op_t;
-
     typedef struct packed{
         logic valid;
         exception_code_t code;
@@ -86,34 +79,6 @@ package cva5_types;
         fetch_metadata_t fetch_metadata;
     } issue_packet_t;
 
-    typedef struct packed{
-        logic [XLEN:0] in1;//contains sign padding bit for slt operation
-        logic [XLEN:0] in2;//contains sign padding bit for slt operation
-        logic [XLEN-1:0] shifter_in;
-        logic [31:0] constant_adder;
-        alu_op_t alu_op;
-        alu_logic_op_t logic_op;
-        logic [4:0] shift_amount;
-        logic subtract;
-        logic arith;//contains sign padding bit for arithmetic shift right operation
-        logic lshift;
-    } alu_inputs_t;
-
-    typedef struct packed {
-        logic [XLEN:0] rs1;
-        logic [XLEN:0] rs2;
-        logic [31:0] pc_p4;
-        logic [2:0] fn3;
-        logic [31:0] issue_pc;
-        logic issue_pc_valid;
-        logic jal;
-        logic jalr;
-        logic jal_jalr;
-        logic is_call;
-        logic is_return;
-        logic [20:0] pc_offset;
-    } branch_inputs_t;
-
     typedef struct packed {
         id_t id;
         logic valid;
@@ -137,48 +102,6 @@ package cva5_types;
         logic is_amo;
         logic [4:0] op;
     } amo_details_t;
-
-    typedef struct packed{
-        logic [XLEN-1:0] rs1;
-        logic [XLEN-1:0] rs2;
-        logic [11:0] offset;
-        logic [2:0] fn3;
-        logic load;
-        logic store;
-        logic fence;
-        logic forwarded_store;
-        id_t store_forward_id;
-        //amo support
-        amo_details_t amo;
-    } load_store_inputs_t;
-
-    typedef struct packed{
-        logic [XLEN-1:0] rs1;
-        logic [XLEN-1:0] rs2;
-        logic [1:0] op;
-    } mul_inputs_t;
-
-    typedef struct packed{
-        logic [XLEN-1:0] rs1;
-        logic [XLEN-1:0] rs2;
-        logic [1:0] op;
-        logic reuse_result;
-    } div_inputs_t;
-
-    typedef struct packed{
-        csr_addr_t addr;
-        logic[1:0] op;
-        logic reads;
-        logic writes;
-        logic [XLEN-1:0] data;
-    } csr_inputs_t;
-
-    typedef struct packed{
-        logic [31:0] pc_p4;
-        logic is_ifence;
-        logic is_mret;
-        logic is_sret;
-    } gc_inputs_t;
 
     typedef struct packed {
         logic [31:0] addr;
@@ -211,13 +134,6 @@ package cva5_types;
         logic valid;
         logic [31:0] data;
     } wb_packet_t;
-
-    typedef struct packed{
-        id_t id;
-        logic valid;
-        phys_addr_t phys_addr;
-        logic [31:0] data;
-    } commit_packet_t;
 
     typedef struct packed{
         logic valid;
@@ -262,57 +178,54 @@ package cva5_types;
         logic external;
     } interrupt_t;
     
-    typedef struct packed {
-        //Fetch
-        logic early_branch_correction;
+    typedef enum {
+        FETCH_EARLY_BR_CORRECTION_STAT,
+        FETCH_SUB_UNIT_STALL_STAT,
+        FETCH_ID_STALL_STAT,
+        FETCH_IC_HIT_STAT,
+        FETCH_IC_MISS_STAT,
+        FETCH_IC_ARB_STALL_STAT,
 
-        //Decode
-        logic operand_stall;
-        logic unit_stall;
-        logic no_id_stall;
-        logic no_instruction_stall;
-        logic other_stall;
-        logic instruction_issued_dec;
-        logic branch_operand_stall;
-        logic alu_operand_stall;
-        logic ls_operand_stall;
-        logic div_operand_stall;
+        FETCH_BP_BR_CORRECT_STAT,
+        FETCH_BP_BR_MISPREDICT_STAT,
+        FETCH_BP_RAS_CORRECT_STAT,
+        FETCH_BP_RAS_MISPREDICT_STAT,
 
-        //Instruction mix
-        logic alu_op;
-        logic branch_or_jump_op;
-        logic load_op;
-        logic store_op;
-        logic mul_op;
-        logic div_op;
-        logic misc_op;
+        ISSUE_NO_INSTRUCTION_STAT,
+        ISSUE_NO_ID_STAT,
+        ISSUE_FLUSH_STAT,
+        ISSUE_UNIT_BUSY_STAT,
+        ISSUE_OPERANDS_NOT_READY_STAT,
+        ISSUE_HOLD_STAT,
+        ISSUE_MULTI_SOURCE_STAT,
+        ISSUE_OPERAND_STALL_ON_LOAD_STAT,
+        ISSUE_OPERAND_STALL_ON_MULTIPLY_STAT,
+        ISSUE_OPERAND_STALL_ON_DIVIDE_STAT,
+        ISSUE_OPERAND_STALL_FOR_BRANCH_STAT,
+        ISSUE_STORE_WITH_FORWARDED_DATA_STAT,
+        ISSUE_DIVIDER_RESULT_REUSE_STAT,
 
-        //Branch Unit
-        logic branch_correct;
-        logic branch_misspredict;
-        logic return_correct;
-        logic return_misspredict;
+        LSU_LOAD_BLOCKED_BY_STORE_STAT,
+        LSU_SUB_UNIT_STALL_STAT,
+        LSU_DC_HIT_STAT,
+        LSU_DC_MISS_STAT,
+        LSU_DC_ARB_STALL_STAT
+    } stats_t;
 
-        //Load Store Unit
-        logic load_conflict_delay;
-
-        //Register File
-        logic rs1_forwarding_needed;
-        logic rs2_forwarding_needed;
-        logic rs1_and_rs2_forwarding_needed;
-
-    } cva5_trace_events_t;
+    typedef enum {
+        ALU_STAT,
+        BR_STAT,
+        MUL_STAT,
+        DIV_STAT,
+        LOAD_STAT,
+        STORE_STAT,
+        MISC_STAT
+    } instruction_mix_stats_t;
 
     typedef struct packed {
         logic [31:0] pc;
         logic [31:0] instruction;
         logic valid;
     } trace_retire_outputs_t;
-
-    typedef struct packed {
-        logic [31:0] instruction_pc_dec;
-        logic [31:0] instruction_data_dec;
-        cva5_trace_events_t events;
-    } trace_outputs_t;
 
 endpackage

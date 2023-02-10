@@ -25,15 +25,30 @@ module div_unit
     import cva5_config::*;
     import riscv_types::*;
     import cva5_types::*;
+    import opcodes::*;
 
     (
         input logic clk,
         input logic rst,
+        input gc_outputs_t gc,
 
-        input div_inputs_t div_inputs,
+        input logic instruction_issued_with_rd,
+
+        input decode_packet_t decode_stage,
+        output logic unit_needed,
+        output logic [REGFILE_READ_PORTS-1:0] uses_rs,
+        output logic uses_rd,
+        
+        input issue_packet_t issue_stage,
+        input logic issue_stage_ready,
+        input phys_addr_t issue_phys_rs_addr [REGFILE_READ_PORTS],
+        input logic [31:0] rf [REGFILE_READ_PORTS],
+
         unit_issue_interface.unit issue,
         unit_writeback_interface.unit wb
     );
+    common_instruction_t instruction;//rs1_addr, rs2_addr, fn3, fn7, rd_addr, upper/lower opcode
+    logic mult_div_op;
 
     logic signed_divop;
     logic negate_quotient;
@@ -76,43 +91,83 @@ module div_unit
 
     fifo_interface #(.DATA_WIDTH($bits(div_fifo_inputs_t))) input_fifo();
     fifo_interface #(.DATA_WIDTH(XLEN)) wb_fifo();
-    ////////////////////////////////////////////////////
-    //Implementation
+
     function logic [31:0] negate_if  (input logic [31:0] a, logic b);
         return ({32{b}} ^ a) + 32'(b);
     endfunction
+    ////////////////////////////////////////////////////
+    //Implementation
+
+    ////////////////////////////////////////////////////
+    //Decode
+    assign unit_needed = decode_stage.instruction inside {DIV, DIVU, REM, REMU};
+    always_comb begin
+        uses_rs = '0;
+        uses_rs[RS1] = unit_needed;
+        uses_rs[RS2] = unit_needed;
+        uses_rd = unit_needed;
+    end
+    ////////////////////////////////////////////////////
+    //Issue
+
+    ////////////////////////////////////////////////////
+    //Result resuse (for div/rem pairs)
+    phys_addr_t prev_div_rs_addr [2];
+    logic [1:0] div_rd_match;
+    logic prev_div_result_valid;
+    logic div_rs_overwrite;
+    logic div_op_reuse;
+
+    always_ff @(posedge clk) begin
+        if (issue.new_request)
+            prev_div_rs_addr <= issue_phys_rs_addr[RS1:RS2];
+    end
+
+    assign div_op_reuse = {prev_div_result_valid, prev_div_rs_addr[RS1], prev_div_rs_addr[RS2]} == {1'b1, issue_phys_rs_addr[RS1],issue_phys_rs_addr[RS2]};
+
+    //Clear if prev div inputs are overwritten by another instruction
+    assign div_rd_match[RS1] = (issue_stage.phys_rd_addr == prev_div_rs_addr[RS1]);
+    assign div_rd_match[RS2] = (issue_stage.phys_rd_addr == prev_div_rs_addr[RS2]);
+    assign div_rs_overwrite = |div_rd_match;
+
+    set_clr_reg_with_rst #(.SET_OVER_CLR(1), .WIDTH(1), .RST_VALUE(0)) prev_div_result_valid_m (
+        .clk, .rst,
+        .set(issue.new_request),
+        .clr((instruction_issued_with_rd & div_rs_overwrite) | gc.writeback_supress), //No instructions will be issued while gc.writeback_supress is asserted
+        .result(prev_div_result_valid)
+    );
 
     ////////////////////////////////////////////////////
     //Input and output sign determination
-    assign signed_divop = ~div_inputs.op[0];
+    assign signed_divop = ~ issue_stage.fn3[0];
 
-    assign negate_dividend = signed_divop & div_inputs.rs1[31];
-    assign negate_divisor = signed_divop & div_inputs.rs2[31];
+    assign negate_dividend = signed_divop & rf[RS1][31];
+    assign negate_divisor = signed_divop & rf[RS2][31];
 
-    assign negate_quotient = signed_divop & (div_inputs.rs1[31] ^ div_inputs.rs2[31]);
-    assign negate_remainder = signed_divop & (div_inputs.rs1[31]);
+    assign negate_quotient = signed_divop & (rf[RS1][31] ^ rf[RS2][31]);
+    assign negate_remainder = signed_divop & (rf[RS1][31]);
 
     ////////////////////////////////////////////////////
     //Input Processing
-    assign unsigned_dividend = negate_if (div_inputs.rs1, negate_dividend);
-    assign unsigned_divisor = negate_if (div_inputs.rs2, negate_divisor);
+    assign unsigned_dividend = negate_if (rf[RS1], negate_dividend);
+    assign unsigned_divisor = negate_if (rf[RS2], negate_divisor);
 
     //Note: If this becomes the critical path, we can use the one's complemented input instead.
     //It will potentially overestimate (only when the input is a negative power-of-two), and
     //the divisor width will need to be increased by one to safely handle the case where the divisor CLZ is overestimated
     clz dividend_clz_block (.clz_input(unsigned_dividend), .clz(dividend_CLZ));
     clz divisor_clz_block (.clz_input(unsigned_divisor), .clz(divisor_CLZ));
-    assign divisor_is_zero = (&divisor_CLZ) & ~div_inputs.rs2[0];
+    assign divisor_is_zero = (&divisor_CLZ) & ~rf[RS2][0];
 
     assign issue_fifo_inputs.unsigned_dividend = unsigned_dividend;
     assign issue_fifo_inputs.unsigned_divisor = unsigned_divisor;
     assign issue_fifo_inputs.dividend_CLZ = divisor_is_zero ? '0 : dividend_CLZ;
     assign issue_fifo_inputs.divisor_CLZ = divisor_CLZ;
 
-    assign issue_fifo_inputs.attr.remainder_op = div_inputs.op[1];
-    assign issue_fifo_inputs.attr.negate_result = div_inputs.op[1] ? negate_remainder : (negate_quotient & ~divisor_is_zero);
+    assign issue_fifo_inputs.attr.remainder_op =  issue_stage.fn3[1];
+    assign issue_fifo_inputs.attr.negate_result =  issue_stage.fn3[1] ? negate_remainder : (negate_quotient & ~divisor_is_zero);
     assign issue_fifo_inputs.attr.divisor_is_zero = divisor_is_zero;
-    assign issue_fifo_inputs.attr.reuse_result = div_inputs.reuse_result;
+    assign issue_fifo_inputs.attr.reuse_result = div_op_reuse;
     assign issue_fifo_inputs.attr.id = issue.id;
 
     ////////////////////////////////////////////////////

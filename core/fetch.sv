@@ -60,10 +60,7 @@ module fetch
         wishbone_interface.master iwishbone,
         input logic icache_on,
         l1_arbiter_request_interface.master l1_request,
-        l1_arbiter_return_interface.master l1_response,
-
-        //Trace Interface
-        output logic tr_early_branch_correction
+        l1_arbiter_return_interface.master l1_response
     );
 
     localparam NUM_SUB_UNITS = int'(CONFIG.INCLUDE_ILOCAL_MEM) + int'(CONFIG.INCLUDE_ICACHE) + int'(CONFIG.INCLUDE_IBUS);
@@ -308,8 +305,6 @@ module fetch
         assign is_branch_or_jump = fetch_instruction[6:2] inside {JAL_T, JALR_T, BRANCH_T};
         assign early_branch_flush = (valid_fetch_result & (|unit_data_valid)) & fetch_attr.is_predicted_branch_or_jump & (~is_branch_or_jump);
         assign early_branch_flush_ras_adjust = (valid_fetch_result & (|unit_data_valid)) & fetch_attr.is_branch & (~is_branch_or_jump);
-        if (ENABLE_TRACE_INTERFACE)
-            assign tr_early_branch_correction = early_branch_flush;
     end endgenerate
     ////////////////////////////////////////////////////
     //End of Implementation

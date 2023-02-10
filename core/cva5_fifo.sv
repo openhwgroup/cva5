@@ -87,8 +87,6 @@ module cva5_fifo
         assign fifo.data_out = shift_reg[~inflight_count[0]];
     end
     else begin : gen_width_3_plus
-        //Force FIFO depth to next power of 2
-        (* ramstyle = "MLAB, no_rw_check" *) logic [DATA_WIDTH-1:0] lut_ram [(2**LOG2_FIFO_DEPTH)];
         logic [LOG2_FIFO_DEPTH-1:0] write_index;
         logic [LOG2_FIFO_DEPTH-1:0] read_index;
         logic [LOG2_FIFO_DEPTH:0] inflight_count;
@@ -116,8 +114,8 @@ module cva5_fifo
             .en(fifo.push),
             .value(write_index)
         );
-
-        lutram_1w_1r #(.WIDTH(DATA_WIDTH), .DEPTH(FIFO_DEPTH))
+        //Force FIFO depth to next power of 2
+        lutram_1w_1r #(.WIDTH(DATA_WIDTH), .DEPTH(2**LOG2_FIFO_DEPTH))
         write_port (
             .clk(clk),
             .waddr(write_index),

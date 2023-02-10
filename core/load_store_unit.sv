@@ -25,6 +25,7 @@ module load_store_unit
     import cva5_config::*;
     import riscv_types::*;
     import cva5_types::*;
+    import opcodes::*;
 
     # (
         parameter cpu_config_t CONFIG = EXAMPLE_CONFIG
@@ -35,7 +36,20 @@ module load_store_unit
         input logic rst,
         input gc_outputs_t gc,
 
-        input load_store_inputs_t ls_inputs,
+        input decode_packet_t decode_stage,
+        output logic unit_needed,
+        output logic [REGFILE_READ_PORTS-1:0] uses_rs,
+        output logic uses_rd,
+        output logic decode_is_store,
+
+        input issue_packet_t issue_stage,
+        input logic issue_stage_ready,
+        input logic instruction_issued_with_rd,
+        input logic rs2_inuse,
+        input rs_addr_t issue_rs_addr [REGFILE_READ_PORTS],
+        input logic [$clog2(CONFIG.NUM_WB_GROUPS)-1:0] issue_rd_wb_group,
+        input logic [31:0] rf [REGFILE_READ_PORTS],
+
         unit_issue_interface.unit issue,
 
         input logic dcache_on,
@@ -55,17 +69,14 @@ module load_store_unit
         local_memory_interface.master data_bram,
 
         //Writeback-Store Interface
-        input wb_packet_t wb_snoop,
+        input wb_packet_t wb_packet [CONFIG.NUM_WB_GROUPS],
 
         //Retire release
-        input id_t retire_ids [RETIRE_PORTS],
-        input logic retire_port_valid [RETIRE_PORTS],
+        input retire_packet_t store_retire,
 
         exception_interface.unit exception,
         output load_store_status_t load_store_status,
-        unit_writeback_interface.unit wb,
-
-        output logic tr_load_conflict_delay
+        unit_writeback_interface.unit wb
     );
 
     localparam NUM_SUB_UNITS = int'(CONFIG.INCLUDE_DLOCAL_MEM) + int'(CONFIG.INCLUDE_PERIPHERAL_BUS) + int'(CONFIG.INCLUDE_DCACHE);
@@ -76,7 +87,7 @@ module load_store_unit
     localparam DCACHE_ID = int'(CONFIG.INCLUDE_DLOCAL_MEM) + int'(CONFIG.INCLUDE_PERIPHERAL_BUS);
 
     //Should be equal to pipeline depth of longest load/store subunit 
-    localparam ATTRIBUTES_DEPTH = 2;//CONFIG.INCLUDE_DCACHE ? 2 : 1;
+    localparam ATTRIBUTES_DEPTH = 1;
 
     //Subunit signals
     addr_utils_interface #(CONFIG.DLOCAL_MEM_ADDR.L, CONFIG.DLOCAL_MEM_ADDR.H) dlocal_mem_addr_utils ();
@@ -93,15 +104,19 @@ module load_store_unit
     logic [NUM_SUB_UNITS-1:0] unit_ready;
     logic [NUM_SUB_UNITS-1:0] unit_data_valid;
     logic [NUM_SUB_UNITS-1:0] last_unit;
-    logic [NUM_SUB_UNITS-1:0] current_unit;
 
-    logic units_ready;
+    logic sub_unit_ready;
+    logic [NUM_SUB_UNITS_W-1:0] subunit_id;
 
     logic unit_switch;
     logic unit_switch_in_progress;
     logic unit_switch_hold;
 
+    logic sel_load;
     logic sub_unit_issue;
+    logic sub_unit_load_issue;
+    logic sub_unit_store_issue;
+
     logic load_complete;
 
     logic [31:0] virtual_address;
@@ -110,46 +125,101 @@ module load_store_unit
     logic [31:0] aligned_load_data;
     logic [31:0] final_load_data;
 
-
     logic unaligned_addr;
     logic load_exception_complete;
     logic fence_hold;
 
     typedef struct packed{
-        logic is_halfword;
         logic is_signed;
         logic [1:0] byte_addr;
+        logic [1:0] sign_sel;
         logic [1:0] final_mux_sel;
         id_t id;
         logic [NUM_SUB_UNITS_W-1:0] subunit_id;
     } load_attributes_t;
     load_attributes_t  mem_attr, wb_attr;
 
+    common_instruction_t instruction;//rs1_addr, rs2_addr, fn3, fn7, rd_addr, upper/lower opcode
+
     logic [3:0] be;
     //FIFOs
     fifo_interface #(.DATA_WIDTH($bits(load_attributes_t))) load_attributes();
 
     load_store_queue_interface lsq();
-    logic tr_possible_load_conflict_delay;
-
     ////////////////////////////////////////////////////
     //Implementation
-    ////////////////////////////////////////////////////
 
+    ////////////////////////////////////////////////////
+    //Decode
+    assign instruction = decode_stage.instruction;
+
+    assign unit_needed = decode_stage.instruction inside {LB, LH, LW, LBU, LHU, SB, SH, SW, FENCE};
+    always_comb begin
+        uses_rs = '0;
+        uses_rs[RS1] = decode_stage.instruction inside {LB, LH, LW, LBU, LHU, SB, SH, SW};
+        uses_rs[RS2] = CONFIG.INCLUDE_FORWARDING_TO_STORES ? 0 : decode_stage.instruction inside {SB, SH, SW};
+        uses_rd = decode_stage.instruction inside {LB, LH, LW, LBU, LHU};
+    end
+
+    amo_details_t amo;
+    amo_details_t amo_r;
+    logic is_load;
+    logic is_store;
+    logic is_load_r;
+    logic is_store_r;
+    logic is_fence_r;
+    logic [2:0] fn3_r;
+    logic [11:0] ls_offset_r;
+
+    assign amo.is_amo =  CONFIG.INCLUDE_AMO & (instruction.upper_opcode == AMO_T);
+    assign amo.op = CONFIG.INCLUDE_AMO ? decode_stage.instruction[31:27] : '0;
+    assign amo.is_lr = CONFIG.INCLUDE_AMO & (amo.op == AMO_LR_FN5);
+    assign amo.is_sc = CONFIG.INCLUDE_AMO & (amo.op == AMO_SC_FN5);
+
+    assign is_load = (instruction.upper_opcode inside {LOAD_T, AMO_T}) & !(amo.is_amo & amo.is_sc); //LR and AMO_ops perform a read operation as well
+    assign is_store = (instruction.upper_opcode == STORE_T) | (amo.is_amo & amo.is_sc);//Used for LS unit and for ID tracking
+    assign decode_is_store = is_store;
+
+    always_ff @(posedge clk) begin
+        if (issue_stage_ready) begin
+            ls_offset_r <= decode_stage.instruction[5] ? {decode_stage.instruction[31:25], decode_stage.instruction[11:7]} : decode_stage.instruction[31:20];
+            is_load_r <= is_load;
+            is_store_r <= is_store;
+            is_fence_r <= (instruction.upper_opcode == FENCE_T);
+            amo_r <= amo;
+            fn3_r <= amo.is_amo ? LS_W_fn3 : instruction.fn3;
+        end
+    end
+
+    (* ramstyle = "MLAB, no_rw_check" *) id_t rd_to_id_table [32];
+    (* ramstyle = "MLAB, no_rw_check" *) logic [$clog2(CONFIG.NUM_WB_GROUPS)-1:0] rd_to_wb_group_table [32];
+
+    id_t store_forward_id;
+    logic [$clog2(CONFIG.NUM_WB_GROUPS)-1:0] store_forward_wb_group;
+
+    always_ff @ (posedge clk) begin
+        if (instruction_issued_with_rd) begin
+            rd_to_id_table[issue_stage.rd_addr] <= issue_stage.id;
+            rd_to_wb_group_table[issue_stage.rd_addr] <= issue_rd_wb_group;
+        end
+    end
+
+    assign store_forward_id = rd_to_id_table[issue_rs_addr[RS2]];
+    assign store_forward_wb_group = rs2_inuse ? rd_to_wb_group_table[issue_rs_addr[RS2]] : '0;
 
     ////////////////////////////////////////////////////
     //Alignment Exception
     generate if (CONFIG.INCLUDE_M_MODE) begin : gen_ls_exceptions
         logic new_exception;
         always_comb begin
-            case(ls_inputs.fn3)
+            case(fn3_r)
                 LS_H_fn3, L_HU_fn3 : unaligned_addr = virtual_address[0];
                 LS_W_fn3 : unaligned_addr = |virtual_address[1:0];
                 default : unaligned_addr = 0;
             endcase
         end
 
-        assign new_exception = unaligned_addr & issue.new_request & ~ls_inputs.fence;
+        assign new_exception = unaligned_addr & issue.new_request & ~is_fence_r;
         always_ff @(posedge clk) begin
             if (rst)
                 exception.valid <= 0;
@@ -159,7 +229,7 @@ module load_store_unit
 
         always_ff @(posedge clk) begin
             if (new_exception & ~exception.valid) begin
-                exception.code <= ls_inputs.store ? STORE_AMO_ADDR_MISSALIGNED : LOAD_ADDR_MISSALIGNED;
+                exception.code <= is_store_r ? STORE_AMO_ADDR_MISSALIGNED : LOAD_ADDR_MISSALIGNED;
                 exception.tval <= virtual_address;
                 exception.id <= issue.id;
             end
@@ -178,17 +248,17 @@ module load_store_unit
     assign load_store_status = '{
         sq_empty : lsq.sq_empty,
         no_released_stores_pending : lsq.no_released_stores_pending,
-        idle : lsq.empty & (~load_attributes.valid) & units_ready
+        idle : lsq.empty & (~load_attributes.valid) & (&unit_ready)
     };
 
     ////////////////////////////////////////////////////
     //TLB interface
-    assign virtual_address = ls_inputs.rs1 + 32'(signed'(ls_inputs.offset));
+    assign virtual_address = rf[RS1] + 32'(signed'(ls_offset_r));
 
     assign tlb.virtual_address = virtual_address;
     assign tlb.new_request = tlb_on & issue.new_request;
     assign tlb.execute = 0;
-    assign tlb.rnw = ls_inputs.load & ~ls_inputs.store;
+    assign tlb.rnw = is_load_r & ~is_store_r;
 
     ////////////////////////////////////////////////////
     //Byte enable generation
@@ -198,7 +268,7 @@ module load_store_unit
     //  SB: specific byte
     always_comb begin
         be = 0;
-        case(ls_inputs.fn3[1:0])
+        case(fn3_r[1:0])
             LS_B_fn3[1:0] : be[virtual_address[1:0]] = 1;
             LS_H_fn3[1:0] : begin
                 be[virtual_address[1:0]] = 1;
@@ -212,44 +282,41 @@ module load_store_unit
     //Load Store Queue
     assign lsq.data_in = '{
         addr : tlb_on ? tlb.physical_address : virtual_address,
-        fn3 : ls_inputs.fn3,
+        fn3 : fn3_r,
         be : be,
-        data : ls_inputs.rs2,
-        load : ls_inputs.load,
-        store : ls_inputs.store,
+        data : rf[RS2],
+        load : is_load_r,
+        store : is_store_r,
         id : issue.id,
-        forwarded_store : ls_inputs.forwarded_store,
-        id_needed : ls_inputs.store_forward_id
+        forwarded_store : CONFIG.INCLUDE_FORWARDING_TO_STORES & rs2_inuse,
+        id_needed : store_forward_id
     };
 
     assign lsq.potential_push = issue.possible_issue;
-    assign lsq.push = issue.new_request & ~unaligned_addr & (~tlb_on | tlb.done) & ~ls_inputs.fence;
+    assign lsq.push = issue.new_request & ~unaligned_addr & (~tlb_on | tlb.done) & ~is_fence_r;
 
     load_store_queue  # (.CONFIG(CONFIG)) lsq_block (
         .clk (clk),
         .rst (rst),
         .gc (gc),
         .lsq (lsq),
-        .wb_snoop (wb_snoop),
-        .retire_ids (retire_ids),
-        .retire_port_valid (retire_port_valid),
-        .tr_possible_load_conflict_delay (tr_possible_load_conflict_delay)
+        .store_forward_wb_group (store_forward_wb_group),
+        .wb_packet (wb_packet),
+        .store_retire (store_retire)
     );
-    assign shared_inputs = lsq.data_out;
-    assign lsq.pop = sub_unit_issue;
-
+    assign shared_inputs = sel_load ? lsq.load_data_out : lsq.store_data_out;
+    assign lsq.load_pop = sub_unit_load_issue;
+    assign lsq.store_pop = sub_unit_store_issue;
 
     ////////////////////////////////////////////////////
     //Unit tracking
-    assign current_unit = sub_unit_address_match;
-
     always_ff @ (posedge clk) begin
         if (load_attributes.push)
             last_unit <= sub_unit_address_match;
     end
 
     //When switching units, ensure no outstanding loads so that there can be no timing collisions with results
-    assign unit_switch = (current_unit != last_unit) & load_attributes.valid;
+    assign unit_switch = lsq.load_valid & (sub_unit_address_match != last_unit) & load_attributes.valid;
     always_ff @ (posedge clk) begin
         unit_switch_in_progress <= (unit_switch_in_progress | unit_switch) & ~load_attributes.valid;
     end
@@ -257,23 +324,27 @@ module load_store_unit
 
     ////////////////////////////////////////////////////
     //Primary Control Signals
-    assign units_ready = &unit_ready & (~unit_switch_hold);
+    assign sel_load = lsq.load_valid;
+
+    assign sub_unit_ready = unit_ready[subunit_id] & (~unit_switch_hold);
     assign load_complete = |unit_data_valid;
 
     assign issue.ready = (~tlb_on | tlb.ready) & (~lsq.full) & (~fence_hold) & (~exception.valid);
-    assign sub_unit_issue = lsq.valid & units_ready;
+
+    assign sub_unit_load_issue = sel_load & lsq.load_valid & sub_unit_ready & sub_unit_address_match[subunit_id];
+    assign sub_unit_store_issue = (lsq.store_valid & ~sel_load) & sub_unit_ready & sub_unit_address_match[subunit_id];
+    assign sub_unit_issue = (lsq.load_valid | lsq.store_valid) & sub_unit_ready & sub_unit_address_match[subunit_id];
 
     always_ff @ (posedge clk) begin
         if (rst)
             fence_hold <= 0;
         else
-            fence_hold <= (fence_hold & ~load_store_status.idle) | (issue.new_request & ls_inputs.fence);
+            fence_hold <= (fence_hold & ~load_store_status.idle) | (issue.new_request & is_fence_r);
     end
 
     ////////////////////////////////////////////////////
     //Load attributes FIFO
     logic [1:0] final_mux_sel;
-    logic [NUM_SUB_UNITS_W-1:0] subunit_id;
 
     one_hot_to_integer #(NUM_SUB_UNITS)
     sub_unit_select (
@@ -282,7 +353,7 @@ module load_store_unit
     );
 
     always_comb begin
-        case(shared_inputs.fn3)
+        case(lsq.load_data_out.fn3)
             LS_B_fn3, L_BU_fn3 : final_mux_sel = 0;
             LS_H_fn3, L_HU_fn3 : final_mux_sel = 1;
             default : final_mux_sel = 2; //LS_W_fn3
@@ -290,16 +361,16 @@ module load_store_unit
     end
     
     assign mem_attr = '{
-        is_halfword : shared_inputs.fn3[0],
-        is_signed : ~|shared_inputs.fn3[2:1],
-        byte_addr : shared_inputs.addr[1:0],
+        is_signed : ~|lsq.load_data_out.fn3[2:1],
+        byte_addr : lsq.load_data_out.addr[1:0],
+        sign_sel : lsq.load_data_out.addr[1:0] | {1'b0, lsq.load_data_out.fn3[0]},//halfwrord
         final_mux_sel : final_mux_sel,
-        id : shared_inputs.id,
+        id : lsq.load_data_out.id,
         subunit_id : subunit_id
     };
 
     assign load_attributes.data_in = mem_attr;
-    assign load_attributes.push = sub_unit_issue & shared_inputs.load;
+    assign load_attributes.push = sub_unit_load_issue;
     assign load_attributes.potential_push = load_attributes.push;
     
     cva5_fifo #(.DATA_WIDTH($bits(load_attributes_t)), .FIFO_DEPTH(ATTRIBUTES_DEPTH))
@@ -367,9 +438,20 @@ module load_store_unit
     endgenerate
 
     generate if (CONFIG.INCLUDE_DCACHE) begin : gen_ls_dcache
-            logic uncacheable;
+            logic load_ready;
+            logic store_ready;
+            logic uncacheable_load;
+            logic uncacheable_store;
+            logic dcache_load_request;
+            logic dcache_store_request;
+
             assign sub_unit_address_match[DCACHE_ID] = dcache_addr_utils.address_range_check(shared_inputs.addr);
-            assign uncacheable = uncacheable_utils.address_range_check(shared_inputs.addr);
+
+            assign uncacheable_load = CONFIG.DCACHE.USE_NON_CACHEABLE & uncacheable_utils.address_range_check(shared_inputs.addr);
+            assign uncacheable_store = CONFIG.DCACHE.USE_NON_CACHEABLE & uncacheable_utils.address_range_check(shared_inputs.addr);
+
+            assign dcache_load_request = sub_unit_load_issue & sub_unit_address_match[DCACHE_ID];
+            assign dcache_store_request = sub_unit_store_issue & sub_unit_address_match[DCACHE_ID];
 
             dcache # (.CONFIG(CONFIG))
             data_cache (
@@ -381,8 +463,16 @@ module load_store_unit
                 .sc_complete (sc_complete),
                 .sc_success (sc_success),
                 .clear_reservation (clear_reservation),
-                .amo (ls_inputs.amo),
-                .uncacheable (uncacheable),
+                .amo (amo_r),
+                .uncacheable_load (uncacheable_load),
+                .uncacheable_store (uncacheable_store),
+                .is_load (sel_load),
+                .load_ready (load_ready),
+                .store_ready (store_ready),
+                .load_request (dcache_load_request),
+                .store_request (dcache_store_request),
+                .ls_load (lsq.load_data_out),
+                .ls_store (lsq.store_data_out),
                 .ls (sub_unit[DCACHE_ID])
             );
         end
@@ -391,7 +481,6 @@ module load_store_unit
     ////////////////////////////////////////////////////
     //Output Muxing
     logic sign_bit_data [4];
-    logic [1:0] sign_bit_sel;
     logic sign_bit;
     
     assign unit_muxed_load_data = unit_data_array[wb_attr.subunit_id];
@@ -402,8 +491,7 @@ module load_store_unit
     assign aligned_load_data[7:0] = unit_muxed_load_data[wb_attr.byte_addr*8 +: 8];
 
     assign sign_bit_data = '{unit_muxed_load_data[7], unit_muxed_load_data[15], unit_muxed_load_data[23], unit_muxed_load_data[31]};
-    assign sign_bit_sel = wb_attr.byte_addr | {1'b0, wb_attr.is_halfword};
-    assign sign_bit = wb_attr.is_signed & sign_bit_data[sign_bit_sel];
+    assign sign_bit = wb_attr.is_signed & sign_bit_data[wb_attr.sign_sel];
 
     //Sign extending
     always_comb begin
@@ -430,17 +518,5 @@ module load_store_unit
         assert property (@(posedge clk) disable iff (rst) load_complete |-> (load_attributes.valid && unit_data_valid[wb_attr.subunit_id]))
         else $error("Spurious load complete detected!");
 
-    // `ifdef ENABLE_SIMULATION_ASSERTIONS
-    //     invalid_ls_address_assertion:
-    //         assert property (@(posedge clk) disable iff (rst) (sub_unit_issue & ~ls_inputs.fence) |-> |sub_unit_address_match)
-    //         else $error("invalid L/S address");
-    // `endif
-
-    ////////////////////////////////////////////////////
-    //Trace Interface
-    generate if (ENABLE_TRACE_INTERFACE) begin : gen_ls_trace
-        assign tr_load_conflict_delay = tr_possible_load_conflict_delay & units_ready;
-    end
-    endgenerate
 
 endmodule

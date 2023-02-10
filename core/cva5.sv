@@ -45,8 +45,6 @@ module cva5
         wishbone_interface.master dwishbone,
         wishbone_interface.master iwishbone,
 
-        output trace_outputs_t tr,
-
         l2_requester_interface.master l2,
 
         input interrupt_t s_interrupt,
@@ -64,8 +62,9 @@ module cva5
     localparam int unsigned CSR_UNIT_ID = LS_UNIT_ID + int'(CONFIG.INCLUDE_CSRS);
     localparam int unsigned MUL_UNIT_ID = CSR_UNIT_ID + int'(CONFIG.INCLUDE_MUL);
     localparam int unsigned DIV_UNIT_ID = MUL_UNIT_ID + int'(CONFIG.INCLUDE_DIV);
+    localparam int unsigned CUSTOM_UNIT_ID = DIV_UNIT_ID + int'(CONFIG.INCLUDE_CUSTOM);
     //Non-writeback units
-    localparam int unsigned BRANCH_UNIT_ID = DIV_UNIT_ID + 1;
+    localparam int unsigned BRANCH_UNIT_ID = CUSTOM_UNIT_ID + 1;
     localparam int unsigned IEC_UNIT_ID = BRANCH_UNIT_ID + 1;
 
     //Total number of units
@@ -77,6 +76,7 @@ module cva5
         CSR : CSR_UNIT_ID,
         MUL : MUL_UNIT_ID,
         DIV : DIV_UNIT_ID,
+        CUSTOM : CUSTOM_UNIT_ID,
         BR : BRANCH_UNIT_ID,
         IEC : IEC_UNIT_ID
     };
@@ -85,8 +85,16 @@ module cva5
     //Writeback Port Assignment
     //
     localparam int unsigned NUM_WB_UNITS_GROUP_1 = 1;//ALU
-    localparam int unsigned NUM_WB_UNITS_GROUP_2 = 1 + int'(CONFIG.INCLUDE_CSRS) + int'(CONFIG.INCLUDE_MUL) + int'(CONFIG.INCLUDE_DIV);//LS
-    localparam int unsigned NUM_WB_UNITS = NUM_WB_UNITS_GROUP_1 + NUM_WB_UNITS_GROUP_2;
+    localparam int unsigned ALU_UNIT_WB1_ID = 32'd0;
+
+    localparam int unsigned NUM_WB_UNITS_GROUP_2 = 1;//LS
+    localparam int unsigned LS_UNIT_WB2_ID = 32'd0;
+
+    localparam int unsigned NUM_WB_UNITS_GROUP_3 = int'(CONFIG.INCLUDE_CSRS) + int'(CONFIG.INCLUDE_MUL) + int'(CONFIG.INCLUDE_DIV) + int'(CONFIG.INCLUDE_CUSTOM);
+    localparam int unsigned DIV_UNIT_WB3_ID = 32'd0;
+    localparam int unsigned MUL_UNIT_WB3_ID = 32'd0 + int'(CONFIG.INCLUDE_DIV);
+    localparam int unsigned CSR_UNIT_WB3_ID = 32'd0 + int'(CONFIG.INCLUDE_MUL)+ int'(CONFIG.INCLUDE_DIV);
+    localparam int unsigned CUSTOM_UNIT_WB3_ID = 32'd0 + int'(CONFIG.INCLUDE_MUL)+ int'(CONFIG.INCLUDE_DIV) + int'(CONFIG.INCLUDE_CSRS);
 
     ////////////////////////////////////////////////////
     //Connecting Signals
@@ -107,21 +115,20 @@ module cva5
     issue_packet_t issue;
     register_file_issue_interface #(.NUM_WB_GROUPS(CONFIG.NUM_WB_GROUPS)) rf_issue();
 
+    logic [NUM_UNITS-1:0] unit_needed;
+    logic [NUM_UNITS-1:0][REGFILE_READ_PORTS-1:0] unit_uses_rs;
+    logic [NUM_UNITS-1:0] unit_uses_rd;
 
-    alu_inputs_t alu_inputs;
-    load_store_inputs_t ls_inputs;
-    branch_inputs_t branch_inputs;
-    mul_inputs_t mul_inputs;
-    div_inputs_t div_inputs;
-    gc_inputs_t gc_inputs;
-    csr_inputs_t csr_inputs;
+    logic [31:0] constant_alu;
 
     unit_issue_interface unit_issue [NUM_UNITS-1:0]();
 
     exception_packet_t  ls_exception;
     logic ls_exception_is_store;
 
-    unit_writeback_interface unit_wb  [NUM_WB_UNITS]();
+    unit_writeback_interface unit_wb1 [NUM_WB_UNITS_GROUP_1]();
+    unit_writeback_interface unit_wb2 [NUM_WB_UNITS_GROUP_2]();
+    unit_writeback_interface unit_wb3 [NUM_WB_UNITS_GROUP_3 == 0 ? 1 : NUM_WB_UNITS_GROUP_3]();
 
     mmu_interface immu();
     mmu_interface dmmu();
@@ -150,18 +157,20 @@ module cva5
     logic decode_uses_rd;
     rs_addr_t decode_rd_addr;
     exception_sources_t decode_exception_unit;
+    logic decode_is_store;
     phys_addr_t decode_phys_rd_addr;
     phys_addr_t decode_phys_rs_addr [REGFILE_READ_PORTS];
     logic [$clog2(CONFIG.NUM_WB_GROUPS)-1:0] decode_rs_wb_group [REGFILE_READ_PORTS];
 
         //ID freeing
     retire_packet_t retire;
+    retire_packet_t store_retire;
     id_t retire_ids [RETIRE_PORTS];
     id_t retire_ids_next [RETIRE_PORTS];
     logic retire_port_valid [RETIRE_PORTS];
         //Writeback
     wb_packet_t wb_packet [CONFIG.NUM_WB_GROUPS];
-    commit_packet_t commit_packet [CONFIG.NUM_WB_GROUPS];
+    phys_addr_t wb_phys_addr [CONFIG.NUM_WB_GROUPS];
          //Exception
     logic [31:0] oldest_pc;
 
@@ -186,47 +195,13 @@ module cva5
     logic processing_csr;
 
     //Decode Unit and Fetch Unit
+    logic issue_stage_ready;
+    phys_addr_t issue_phys_rs_addr [REGFILE_READ_PORTS];
+    rs_addr_t issue_rs_addr [REGFILE_READ_PORTS];
+    logic [$clog2(CONFIG.NUM_WB_GROUPS)-1:0] issue_rd_wb_group;
     logic illegal_instruction;
     logic instruction_issued;
     logic instruction_issued_with_rd;
-
-    //LS
-    wb_packet_t wb_snoop;
-
-    //Trace Interface Signals
-    logic tr_early_branch_correction;
-    logic tr_operand_stall;
-    logic tr_unit_stall;
-    logic tr_no_id_stall;
-    logic tr_no_instruction_stall;
-    logic tr_other_stall;
-    logic tr_branch_operand_stall;
-    logic tr_alu_operand_stall;
-    logic tr_ls_operand_stall;
-    logic tr_div_operand_stall;
-
-    logic tr_alu_op;
-    logic tr_branch_or_jump_op;
-    logic tr_load_op;
-    logic tr_store_op;
-    logic tr_mul_op;
-    logic tr_div_op;
-    logic tr_misc_op;
-
-    logic tr_instruction_issued_dec;
-    logic [31:0] tr_instruction_pc_dec;
-    logic [31:0] tr_instruction_data_dec;
-
-    logic tr_branch_correct;
-    logic tr_branch_misspredict;
-    logic tr_return_correct;
-    logic tr_return_misspredict;
-
-    logic tr_load_conflict_delay;
-
-    logic tr_rs1_forwarding_needed;
-    logic tr_rs2_forwarding_needed;
-    logic tr_rs1_and_rs2_forwarding_needed;
 
     ////////////////////////////////////////////////////
     //Implementation
@@ -270,12 +245,14 @@ module cva5
         .decode_rd_addr (decode_rd_addr),
         .decode_phys_rd_addr (decode_phys_rd_addr),
         .decode_exception_unit (decode_exception_unit),
+        .decode_is_store (decode_is_store),
         .issue (issue),
         .instruction_issued (instruction_issued),
         .instruction_issued_with_rd (instruction_issued_with_rd),
         .wb_packet (wb_packet),
-        .commit_packet (commit_packet),
+        .wb_phys_addr (wb_phys_addr),
         .retire (retire),
+        .store_retire (store_retire),
         .retire_ids (retire_ids),
         .retire_ids_next (retire_ids_next),
         .retire_port_valid(retire_port_valid),
@@ -310,8 +287,7 @@ module cva5
         .tlb_on (tlb_on),
         .l1_request (l1_request[L1_ICACHE_ID]), 
         .l1_response (l1_response[L1_ICACHE_ID]), 
-        .exception (1'b0),
-        .tr_early_branch_correction (tr_early_branch_correction)
+        .exception (1'b0)
     );
 
     branch_predictor #(.CONFIG(CONFIG))
@@ -389,6 +365,9 @@ module cva5
         .pc_id_available (pc_id_available),
         .decode (decode),
         .decode_advance (decode_advance),
+        .unit_needed (unit_needed),
+        .unit_uses_rs (unit_uses_rs),
+        .unit_uses_rd (unit_uses_rd),
         .renamer (decode_rename_interface),
         .decode_uses_rd (decode_uses_rd),
         .decode_rd_addr (decode_rd_addr),
@@ -399,37 +378,16 @@ module cva5
         .instruction_issued (instruction_issued),
         .instruction_issued_with_rd (instruction_issued_with_rd),
         .issue (issue),
+        .issue_rs_addr (issue_rs_addr),
+        .issue_stage_ready (issue_stage_ready),
+        .issue_phys_rs_addr (issue_phys_rs_addr),
+        .issue_rd_wb_group (issue_rd_wb_group),
         .rf (rf_issue),
-        .alu_inputs (alu_inputs),
-        .ls_inputs (ls_inputs),
-        .branch_inputs (branch_inputs),
-        .gc_inputs (gc_inputs),
-        .csr_inputs (csr_inputs),
-        .mul_inputs (mul_inputs),
-        .div_inputs (div_inputs),
+        .constant_alu (constant_alu),
         .unit_issue (unit_issue),
         .gc (gc),
         .current_privilege (current_privilege),
-        .exception (exception[PRE_ISSUE_EXCEPTION]),
-        .tr_operand_stall (tr_operand_stall),
-        .tr_unit_stall (tr_unit_stall),
-        .tr_no_id_stall (tr_no_id_stall),
-        .tr_no_instruction_stall (tr_no_instruction_stall),
-        .tr_other_stall (tr_other_stall),
-        .tr_branch_operand_stall (tr_branch_operand_stall),
-        .tr_alu_operand_stall (tr_alu_operand_stall),
-        .tr_ls_operand_stall (tr_ls_operand_stall),
-        .tr_div_operand_stall (tr_div_operand_stall),
-        .tr_alu_op (tr_alu_op),
-        .tr_branch_or_jump_op (tr_branch_or_jump_op),
-        .tr_load_op (tr_load_op),
-        .tr_store_op (tr_store_op),
-        .tr_mul_op (tr_mul_op),
-        .tr_div_op (tr_div_op),
-        .tr_misc_op (tr_misc_op),
-        .tr_instruction_issued_dec (tr_instruction_issued_dec),
-        .tr_instruction_pc_dec (tr_instruction_pc_dec),
-        .tr_instruction_data_dec (tr_instruction_data_dec)
+        .exception (exception[PRE_ISSUE_EXCEPTION])
     );
 
     ////////////////////////////////////////////////////
@@ -444,8 +402,10 @@ module cva5
         .decode_rs_wb_group (decode_rs_wb_group),
         .decode_advance (decode_advance),
         .decode_uses_rd (decode_uses_rd),
+        .decode_rd_addr (decode_rd_addr),
         .rf_issue (rf_issue),
-        .commit (commit_packet)
+        .commit (wb_packet),
+        .wb_phys_addr (wb_phys_addr)
     );
 
     ////////////////////////////////////////////////////
@@ -453,25 +413,36 @@ module cva5
     branch_unit #(.CONFIG(CONFIG))
     branch_unit_block ( 
         .clk (clk),
-        .rst (rst),                                    
+        .rst (rst),
+        .decode_stage (decode),
+        .issue_stage (issue),
+        .issue_stage_ready (issue_stage_ready),
+        .unit_needed (unit_needed[UNIT_IDS.BR]),
+        .uses_rs (unit_uses_rs[UNIT_IDS.BR]),
+        .uses_rd (unit_uses_rd[UNIT_IDS.BR]),
+        .rf (rf_issue.data),
+        .constant_alu (constant_alu),
         .issue (unit_issue[UNIT_IDS.BR]),
-        .branch_inputs (branch_inputs),
         .br_results (br_results),
         .branch_flush (branch_flush),
-        .exception (exception[BR_EXCEPTION]),
-        .tr_branch_correct (tr_branch_correct),
-        .tr_branch_misspredict (tr_branch_misspredict),
-        .tr_return_correct (tr_return_correct),
-        .tr_return_misspredict (tr_return_misspredict)
+        .exception (exception[BR_EXCEPTION])
     );
 
 
     alu_unit alu_unit_block (
         .clk (clk),
         .rst (rst),
-        .alu_inputs (alu_inputs),
+        .decode_stage (decode),
+        .issue_stage (issue),
+        .issue_stage_ready (issue_stage_ready),
+        .unit_needed (unit_needed[UNIT_IDS.ALU]),
+        .uses_rs (unit_uses_rs[UNIT_IDS.ALU]),
+        .uses_rd (unit_uses_rd[UNIT_IDS.ALU]),
+        .rf (rf_issue.data),
+        .constant_alu (constant_alu),
+        .issue_rs_addr (issue_rs_addr),
         .issue (unit_issue[UNIT_IDS.ALU]), 
-        .wb (unit_wb[UNIT_IDS.ALU])
+        .wb (unit_wb1[ALU_UNIT_WB1_ID])
     );
 
     load_store_unit #(.CONFIG(CONFIG))
@@ -479,7 +450,18 @@ module cva5
         .clk (clk),
         .rst (rst),
         .gc (gc),
-        .ls_inputs (ls_inputs),
+        .decode_stage (decode),
+        .issue_stage (issue),
+        .issue_stage_ready (issue_stage_ready),
+        .unit_needed (unit_needed[UNIT_IDS.LS]),
+        .uses_rs (unit_uses_rs[UNIT_IDS.LS]),
+        .uses_rd (unit_uses_rd[UNIT_IDS.LS]),
+        .decode_is_store (decode_is_store),
+        .instruction_issued_with_rd (instruction_issued_with_rd),
+        .issue_rs_addr (issue_rs_addr),
+        .issue_rd_wb_group (issue_rd_wb_group),
+        .rs2_inuse (rf_issue.inuse[RS2]),
+        .rf (rf_issue.data),
         .issue (unit_issue[UNIT_IDS.LS]),
         .dcache_on (1'b1), 
         .clear_reservation (1'b0), 
@@ -493,13 +475,11 @@ module cva5
         .m_avalon (m_avalon),
         .dwishbone (dwishbone),                                       
         .data_bram (data_bram),
-        .wb_snoop (wb_snoop),
-        .retire_ids (retire_ids),
-        .retire_port_valid(retire_port_valid),
+        .wb_packet (wb_packet),
+        .store_retire (store_retire),
         .exception (exception[LS_EXCEPTION]),
         .load_store_status(load_store_status),
-        .wb (unit_wb[UNIT_IDS.LS]),
-        .tr_load_conflict_delay (tr_load_conflict_delay)
+        .wb (unit_wb2[LS_UNIT_WB2_ID])
     );
 
     generate if (CONFIG.INCLUDE_S_MODE) begin : gen_dtlb_dmmu
@@ -535,9 +515,16 @@ module cva5
         csr_unit_block (
             .clk(clk),
             .rst(rst),
-            .csr_inputs (csr_inputs),
+            .decode_stage (decode),
+            .issue_stage (issue),
+            .issue_stage_ready (issue_stage_ready),
+            .issue_rs_addr (issue_rs_addr),
+            .unit_needed (unit_needed[UNIT_IDS.CSR]),
+            .uses_rs (unit_uses_rs[UNIT_IDS.CSR]),
+            .uses_rd (unit_uses_rd[UNIT_IDS.CSR]),
+            .rf (rf_issue.data),
             .issue (unit_issue[UNIT_IDS.CSR]), 
-            .wb (unit_wb[UNIT_IDS.CSR]),
+            .wb (unit_wb3[CSR_UNIT_WB3_ID]),
             .current_privilege(current_privilege),
             .interrupt_taken(interrupt_taken),
             .interrupt_pending(interrupt_pending),
@@ -562,8 +549,15 @@ module cva5
     gc_unit_block (
         .clk (clk),
         .rst (rst),
+        .decode_stage (decode),
+        .issue_stage (issue),
+        .issue_stage_ready (issue_stage_ready),
+        .unit_needed (unit_needed[UNIT_IDS.IEC]),
+        .uses_rs (unit_uses_rs[UNIT_IDS.IEC]),
+        .uses_rd (unit_uses_rd[UNIT_IDS.IEC]),
+        .constant_alu (constant_alu),
+        .rf (rf_issue.data),
         .issue (unit_issue[UNIT_IDS.IEC]),
-        .gc_inputs (gc_inputs),
         .branch_flush (branch_flush),
         .exception (exception),
         .exception_target_pc (exception_target_pc),
@@ -587,9 +581,15 @@ module cva5
         mul_unit mul_unit_block (
             .clk (clk),
             .rst (rst),
-            .mul_inputs (mul_inputs),
+            .decode_stage (decode),
+            .issue_stage (issue),
+            .issue_stage_ready (issue_stage_ready),
+            .unit_needed (unit_needed[UNIT_IDS.MUL]),
+            .uses_rs (unit_uses_rs[UNIT_IDS.MUL]),
+            .uses_rd (unit_uses_rd[UNIT_IDS.MUL]),
+            .rf (rf_issue.data),
             .issue (unit_issue[UNIT_IDS.MUL]),
-            .wb (unit_wb[UNIT_IDS.MUL])
+            .wb (unit_wb3[MUL_UNIT_WB3_ID])
         );
     end endgenerate
 
@@ -597,9 +597,35 @@ module cva5
         div_unit div_unit_block (
             .clk (clk),
             .rst (rst),
-            .div_inputs (div_inputs),
+            .gc (gc),
+            .instruction_issued_with_rd (instruction_issued_with_rd),
+            .decode_stage (decode),
+            .issue_stage (issue),
+            .issue_stage_ready (issue_stage_ready),
+            .issue_phys_rs_addr (issue_phys_rs_addr),
+            .unit_needed (unit_needed[UNIT_IDS.DIV]),
+            .uses_rs (unit_uses_rs[UNIT_IDS.DIV]),
+            .uses_rd (unit_uses_rd[UNIT_IDS.DIV]),
+            .rf (rf_issue.data),
             .issue (unit_issue[UNIT_IDS.DIV]), 
-            .wb (unit_wb[UNIT_IDS.DIV])
+            .wb (unit_wb3[DIV_UNIT_WB3_ID])
+        );
+    end endgenerate
+
+
+    generate if (CONFIG.INCLUDE_CUSTOM) begin : gen_custom
+        custom_unit custom_unit_block (
+            .clk (clk),
+            .rst (rst),
+            .decode_stage (decode),
+            .unit_needed (unit_needed[UNIT_IDS.CUSTOM]),
+            .uses_rs (unit_uses_rs[UNIT_IDS.CUSTOM]),
+            .uses_rd (unit_uses_rd[UNIT_IDS.CUSTOM]),
+            .issue_stage (issue),
+            .issue_stage_ready (issue_stage_ready),
+            .rf (rf_issue.data),
+            .issue (unit_issue[UNIT_IDS.CUSTOM]), 
+            .wb (unit_wb3[CUSTOM_UNIT_WB3_ID])
         );
     end endgenerate
 
@@ -607,20 +633,39 @@ module cva5
     //Writeback
     //First writeback port: ALU
     //Second writeback port: LS, CSR, [MUL], [DIV]
-    localparam int unsigned NUM_UNITS_PER_PORT [CONFIG.NUM_WB_GROUPS] = '{NUM_WB_UNITS_GROUP_1, NUM_WB_UNITS_GROUP_2};
     writeback #(
         .CONFIG (CONFIG),
-        .NUM_UNITS (NUM_UNITS_PER_PORT),
-        .NUM_WB_UNITS (NUM_WB_UNITS)
+        .NUM_WB_UNITS (NUM_WB_UNITS_GROUP_1)
     )
-    writeback_block (
+    writeback_block1 (
         .clk (clk),
         .rst (rst),
-        .wb_packet (wb_packet),
-        .unit_wb (unit_wb),
-        .wb_snoop (wb_snoop)
+        .wb_packet (wb_packet[0]),
+        .unit_wb (unit_wb1)
+    );
+    writeback #(
+        .CONFIG (CONFIG),
+        .NUM_WB_UNITS (NUM_WB_UNITS_GROUP_2)
+    )
+    writeback_block2 (
+        .clk (clk),
+        .rst (rst),
+        .wb_packet (wb_packet[1]),
+        .unit_wb (unit_wb2)
     );
 
+    generate if (NUM_WB_UNITS_GROUP_3 > 0) begin : gen_wb3
+        writeback #(
+            .CONFIG (CONFIG),
+            .NUM_WB_UNITS (NUM_WB_UNITS_GROUP_3)
+        )
+        writeback_block3 (
+            .clk (clk),
+            .rst (rst),
+            .wb_packet (wb_packet[2]),
+            .unit_wb (unit_wb3)
+        );
+    end endgenerate
     ////////////////////////////////////////////////////
     //End of Implementation
     ////////////////////////////////////////////////////
@@ -635,40 +680,5 @@ module cva5
     ////////////////////////////////////////////////////
     //Assertions
 
-    ////////////////////////////////////////////////////
-    //Trace Interface
-    generate if (ENABLE_TRACE_INTERFACE) begin : gen_cva5_trace
-        always_ff @(posedge clk) begin
-            tr.events.early_branch_correction <= tr_early_branch_correction;
-            tr.events.operand_stall <= tr_operand_stall;
-            tr.events.unit_stall <= tr_unit_stall;
-            tr.events.no_id_stall <= tr_no_id_stall;
-            tr.events.no_instruction_stall <= tr_no_instruction_stall;
-            tr.events.other_stall <= tr_other_stall;
-            tr.events.instruction_issued_dec <= tr_instruction_issued_dec;
-            tr.events.branch_operand_stall <= tr_branch_operand_stall;
-            tr.events.alu_operand_stall <= tr_alu_operand_stall;
-            tr.events.ls_operand_stall <= tr_ls_operand_stall;
-            tr.events.div_operand_stall <= tr_div_operand_stall;
-            tr.events.alu_op <= tr_alu_op;
-            tr.events.branch_or_jump_op <= tr_branch_or_jump_op;
-            tr.events.load_op <= tr_load_op;
-            tr.events.store_op <= tr_store_op;
-            tr.events.mul_op <= tr_mul_op;
-            tr.events.div_op <= tr_div_op;
-            tr.events.misc_op <= tr_misc_op;
-            tr.events.branch_correct <= tr_branch_correct;
-            tr.events.branch_misspredict <= tr_branch_misspredict;
-            tr.events.return_correct <= tr_return_correct;
-            tr.events.return_misspredict <= tr_return_misspredict;
-            tr.events.load_conflict_delay <= tr_load_conflict_delay;
-            tr.events.rs1_forwarding_needed <= tr_rs1_forwarding_needed;
-            tr.events.rs2_forwarding_needed <= tr_rs2_forwarding_needed;
-            tr.events.rs1_and_rs2_forwarding_needed <= tr_rs1_and_rs2_forwarding_needed;
-            tr.instruction_pc_dec <= tr_instruction_pc_dec;
-            tr.instruction_data_dec <= tr_instruction_data_dec;
-        end
-    end
-    endgenerate
 
 endmodule

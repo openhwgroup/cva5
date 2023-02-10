@@ -34,8 +34,9 @@ module itag_banks
         input logic clk,
         input logic rst,
 
-        input logic[31:0] stage1_addr,
-        input logic[31:0] stage2_addr,
+        input logic[SCONFIG.LINE_ADDR_W-1:0] stage1_line_addr,
+        input logic[SCONFIG.LINE_ADDR_W-1:0] stage2_line_addr,
+        input logic[SCONFIG.TAG_W-1:0] stage2_tag,
 
         input logic[CONFIG.ICACHE.WAYS-1:0] update_way,
         input logic update,
@@ -46,22 +47,11 @@ module itag_banks
         output logic[CONFIG.ICACHE.WAYS-1:0] tag_hit_way
         );
 
+    //Valid + tag
     typedef logic [SCONFIG.TAG_W : 0] itag_entry_t;
-
-    function logic[SCONFIG.TAG_W-1:0] getTag(logic[31:0] addr);
-        return addr[2+SCONFIG.SUB_LINE_ADDR_W+SCONFIG.LINE_ADDR_W +: SCONFIG.TAG_W];
-    endfunction
-
-    function logic[SCONFIG.LINE_ADDR_W-1:0] getLineAddr(logic[31:0] addr);
-        return addr[SCONFIG.LINE_ADDR_W + SCONFIG.SUB_LINE_ADDR_W + 1 : SCONFIG.SUB_LINE_ADDR_W + 2];
-    endfunction
-
-    logic hit_allowed;
     itag_entry_t  tag_line[CONFIG.ICACHE.WAYS-1:0];
 
-    itag_entry_t stage2_tag;
-    assign stage2_tag = {1'b1, getTag(stage2_addr)};
-
+    logic hit_allowed;
 
     always_ff @ (posedge clk) begin
         if (rst)
@@ -73,23 +63,22 @@ module itag_banks
     genvar i;
     generate
         for (i=0; i < CONFIG.ICACHE.WAYS; i++) begin : tag_bank_gen
-
             tag_bank #(SCONFIG.TAG_W+1, CONFIG.ICACHE.LINES) itag_bank (.*,
-                    .en_a(stage1_adv), .wen_a('0),
-                    .addr_a(getLineAddr(stage1_addr)),
-                    .data_in_a('0), .data_out_a(tag_line[i]),
-
-                    .en_b(update), .wen_b(update_way[i]),
-                    .addr_b(getLineAddr(stage2_addr)),
-                    .data_in_b(stage2_tag), .data_out_b()
+                    .en_a(stage1_adv),
+                    .wen_a('0),
+                    .addr_a(stage1_line_addr),
+                    .data_in_a('0),
+                    .data_out_a(tag_line[i]),
+                    .en_b(update),
+                    .wen_b(update_way[i]),
+                    .addr_b(stage2_line_addr),
+                    .data_in_b({1'b1, stage2_tag}),
+                    .data_out_b()
                 );
-
-            assign tag_hit_way[i] = ({hit_allowed,stage2_tag} == {1'b1,tag_line[i]});
-
+            assign tag_hit_way[i] = ({hit_allowed, 1'b1, stage2_tag} == {1'b1, tag_line[i]});
         end
     endgenerate
 
     assign tag_hit = |tag_hit_way;
-
 
 endmodule

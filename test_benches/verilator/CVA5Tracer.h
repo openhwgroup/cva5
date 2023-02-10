@@ -26,7 +26,7 @@
 #include <iostream>
 #include <iterator>
 #include "verilated.h"
-#include "verilated_vcd_c.h"
+#include "verilated_fst_c.h"
 #include "Vcva5_sim.h"
 #include "SimMem.h"
 #include "AXI_DDR_simulation/axi_ddr_sim.h"
@@ -39,39 +39,6 @@
 #define ERROR_TERMINATION_NOP 0x00F00013U
 #define SUCCESS_TERMINATION_NOP 0x00A00013U
 
-template <typename T, int N>
-constexpr int arraySize(T(&)[N]) { return N; }
-
-static const char * const eventNames[] = {
-    "early_branch_correction",
-    "operand_stall",
-    "unit_stall",
-    "no_id_stall",
-    "no_instruction_stall",
-    "other_stall",
-    "instruction_issued_dec",
-    "branch_operand_stall",
-    "alu_operand_stall",
-    "ls_operand_stall",
-    "div_operand_stall",
-    "alu_op",
-    "branch_or_jump_op",
-    "load_op",
-    "store_op",
-    "mul_op",
-    "div_op",
-    "misc_op",
-    "branch_correct",
-    "branch_misspredict",
-    "return_correct",
-    "return_misspredict",
-    "load_conflict_delay",
-    "rs1_forwarding_needed",
-    "rs2_forwarding_needed",
-    "rs1_and_rs2_forwarding_needed"
-};
-static const int numEvents = arraySize(eventNames);
-
 //Testbench with CVA5 trace outputs on toplevel
 class CVA5Tracer {
 public:
@@ -81,8 +48,6 @@ public:
   bool has_terminated();
   bool has_stalled();
   bool store_queue_empty();
-  void print_stats();
-  void reset_stats();
   void reset();
   void tick();
 
@@ -97,7 +62,7 @@ private:
   axi_ddr_sim * axi_ddr;
   SimMem *mem;
 #ifdef TRACE_ON
-		VerilatedVcdC	*verilatorWaveformTracer;
+		VerilatedFstC	*verilatorWaveformTracer;
 #endif
   std::ofstream* logFile;
   std::ofstream* pcFile;
@@ -107,16 +72,12 @@ private:
   int stall_limit = 2000;
   int stall_count = 0;
   uint64_t cycle_count = 0;
-  uint64_t event_counters[numEvents];
 
-  bool collect_stats = false;
   bool program_complete = false;
 
-  void update_stats();
   void update_UART();
   void update_memory();
   uint32_t instruction_r;
   uint32_t data_out_r;
-
 };
 #endif

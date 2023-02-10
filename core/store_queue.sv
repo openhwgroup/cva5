@@ -36,71 +36,70 @@ module store_queue
         input logic lq_push,
         input logic lq_pop,
         store_queue_interface.queue sq,
+        input logic [$clog2(CONFIG.NUM_WB_GROUPS)-1:0] store_forward_wb_group,
 
         //Address hash (shared by loads and stores)
         input addr_hash_t addr_hash,
         //hash check on adding a load to the queue
-        output logic [CONFIG.SQ_DEPTH-1:0] potential_store_conflicts,
-        //Load issue collision check
-        input logic [CONFIG.SQ_DEPTH-1:0] prev_store_conflicts,
-        output logic store_conflict,
+        output logic [$clog2(CONFIG.SQ_DEPTH)-1:0] sq_index,
+        output logic [$clog2(CONFIG.SQ_DEPTH)-1:0] sq_oldest,
+        output logic potential_store_conflict,
 
         //Writeback snooping
-        input wb_packet_t wb_snoop,
+        input wb_packet_t wb_packet [CONFIG.NUM_WB_GROUPS],
 
         //Retire
-        input id_t retire_ids [RETIRE_PORTS],
-        input logic retire_port_valid [RETIRE_PORTS]
+        input retire_packet_t store_retire
     );
 
     localparam LOG2_SQ_DEPTH = $clog2(CONFIG.SQ_DEPTH);
-    typedef logic [LOG2_MAX_IDS:0] load_check_count_t;
+    localparam NUM_OF_FORWARDING_PORTS = CONFIG.NUM_WB_GROUPS - 1;
+    typedef logic [LOG2_SQ_DEPTH-1:0] sq_index_t;
 
+    typedef struct packed {
+        id_t id_needed;
+        logic [$clog2(CONFIG.NUM_WB_GROUPS)-1:0] wb_group;
+        sq_index_t sq_index;
+    } retire_table_t;
+    retire_table_t retire_table_in;
+    retire_table_t retire_table_out;
 
-    wb_packet_t wb_snoop_r;
+    wb_packet_t wb_snoop [CONFIG.NUM_WB_GROUPS];
 
     //Register-based memory blocks
     logic [CONFIG.SQ_DEPTH-1:0] valid;
     logic [CONFIG.SQ_DEPTH-1:0] valid_next;
     addr_hash_t [CONFIG.SQ_DEPTH-1:0] hashes;
-    logic [CONFIG.SQ_DEPTH-1:0] released;
-    id_t [CONFIG.SQ_DEPTH-1:0] id_needed;
-    load_check_count_t [CONFIG.SQ_DEPTH-1:0] load_check_count;
-    logic [31:0] store_data_from_wb [CONFIG.SQ_DEPTH];
 
     //LUTRAM-based memory blocks
     sq_entry_t sq_entry_in;
-    (* ramstyle = "MLAB, no_rw_check" *) logic [$bits(sq_entry_t)-1:0] sq_entry [CONFIG.SQ_DEPTH];
-    (* ramstyle = "MLAB, no_rw_check" *) id_t [CONFIG.SQ_DEPTH-1:0] ids;
-    (* ramstyle = "MLAB, no_rw_check" *) logic [LOG2_SQ_DEPTH-1:0] sq_ids [MAX_IDS];
+    sq_entry_t output_entry;    
+    sq_entry_t output_entry_r;    
 
-    load_check_count_t [CONFIG.SQ_DEPTH-1:0] load_check_count_next;
-
-    logic [LOG2_SQ_DEPTH-1:0] sq_index;
-    logic [LOG2_SQ_DEPTH-1:0] sq_index_next;
-    logic [LOG2_SQ_DEPTH-1:0] sq_oldest;
+    sq_index_t sq_index_next;
+    sq_index_t sq_oldest_next;
+    logic [LOG2_SQ_DEPTH:0] released_count;
 
     logic [CONFIG.SQ_DEPTH-1:0] new_request_one_hot;
     logic [CONFIG.SQ_DEPTH-1:0] issued_one_hot;
 
-
-    logic [CONFIG.SQ_DEPTH-1:0] wb_id_match;
-
+    logic [31:0] data_pre_alignment;
+    logic [31:0] sq_data_out;
     ////////////////////////////////////////////////////
     //Implementation     
-    assign sq_index_next = sq_index +LOG2_SQ_DEPTH'(sq.push);
-    always_ff @ (posedge clk) begin
-        if (rst)
-            sq_index <= 0;
-        else
-            sq_index <= sq_index_next;
-    end
+
+    //Store Queue indicies
+    assign sq_index_next = sq_index + LOG2_SQ_DEPTH'(sq.push);
+    assign sq_oldest_next = sq_oldest + LOG2_SQ_DEPTH'(sq.pop);
 
     always_ff @ (posedge clk) begin
-        if (rst)
+        if (rst) begin 
+            sq_index <= 0;
             sq_oldest <= 0;
-        else
-            sq_oldest <= sq_oldest +LOG2_SQ_DEPTH'(sq.pop);
+        end else begin
+            sq_index <= sq_index_next;
+            sq_oldest <= sq_oldest_next;
+        end
     end
 
     assign new_request_one_hot = CONFIG.SQ_DEPTH'(sq.push) << sq_index;
@@ -120,7 +119,7 @@ module store_queue
         if (rst)
             sq.full <= 0;
         else
-            sq.full <= valid_next[sq_index_next] | (|load_check_count_next[sq_index_next]);
+            sq.full <= valid_next[sq_index_next];
     end
 
     //SQ attributes and issue data
@@ -128,128 +127,132 @@ module store_queue
         addr : sq.data_in.addr,
         be : sq.data_in.be,
         fn3 : sq.data_in.fn3,
-        forwarded_store : sq.data_in.forwarded_store,
-        data : sq.data_in.data
+        forwarded_store : '0,
+        data : '0
     };
+    lutram_1w_1r #(.WIDTH($bits(sq_entry_t)), .DEPTH(CONFIG.SQ_DEPTH))
+    store_attr (
+        .clk(clk),
+        .waddr(sq_index),
+        .raddr(sq_oldest_next),
+        .ram_write(sq.push),
+        .new_ram_data(sq_entry_in),
+        .ram_data_out(output_entry)
+    );
     always_ff @ (posedge clk) begin
-        if (sq.push)
-            sq_entry[sq_index] <= sq_entry_in;
+        output_entry_r <= output_entry;
     end
-
-    //Hash mem
-    always_ff @ (posedge clk) begin
-        if (sq.push)
-            hashes[sq_index] <= addr_hash;
-    end
-
-    //Keep count of the number of pending loads that might need a store result
-    //Mask out any store completing on this cycle
-    logic [CONFIG.SQ_DEPTH-1:0] new_load_waiting;
-    logic [CONFIG.SQ_DEPTH-1:0] waiting_load_completed;
-
+    //Compare store addr-hashes against new load addr-hash
+    //Optionally mask out any store completing on this cycle (~issued_one_hot)
+    //Without masking out an issuing store, the store queue may be flushed more often
+    //Omitted as negligible impact on embench at sq depth 4
     always_comb begin
+        potential_store_conflict = 0;
+        for (int i = 0; i < CONFIG.SQ_DEPTH; i++)
+            potential_store_conflict |= {valid[i], addr_hash} == {1'b1, hashes[i]};
+    end
+    ////////////////////////////////////////////////////
+    //Register-based storage
+    //Address hashes
+    always_ff @ (posedge clk) begin
         for (int i = 0; i < CONFIG.SQ_DEPTH; i++) begin
-            potential_store_conflicts[i] = (valid[i] & ~issued_one_hot[i]) & (addr_hash == hashes[i]);
-            new_load_waiting[i] = potential_store_conflicts[i] & lq_push;
-            waiting_load_completed[i] = prev_store_conflicts[i] & lq_pop;
-
-            load_check_count_next[i] =
-                load_check_count[i]
-                + LOG2_MAX_IDS'(new_load_waiting[i])
-                - LOG2_MAX_IDS'(waiting_load_completed[i]);
+            if (new_request_one_hot[i])
+                hashes[i] <= addr_hash;
         end
     end
-    always_ff @ (posedge clk) begin
-        if (rst)
-            load_check_count <= '0;
-        else
-            load_check_count <= load_check_count_next;
-    end
-
-    //If a potential blocking store has not been issued yet, the load is blocked until the store(s) complete
-    assign store_conflict = |(prev_store_conflicts & valid);
-
-    ////////////////////////////////////////////////////
-    //ID Handling
-
-    //sq_id to global_id mem
-    always_ff @ (posedge clk) begin
-        if (sq.push)
-            ids[sq_index] <= sq.data_in.id;
-    end
-    // global_id to sq_id mem
-    always_ff @ (posedge clk) begin
-        if (sq.push)
-            sq_ids[sq.data_in.id] <= sq_index;
-    end
-    //waiting on ID mem
-    always_ff @ (posedge clk) begin
-        if (sq.push)
-            id_needed[sq_index] <= sq.data_in.id_needed;
-    end
-
     ////////////////////////////////////////////////////
     //Release Handling
-    logic [CONFIG.SQ_DEPTH-1:0] newly_released;
-    logic [LOG2_SQ_DEPTH-1:0] store_released_index [RETIRE_PORTS];
-    logic store_released [RETIRE_PORTS];
-    always_comb begin
-        newly_released = '0;
-        for (int i = 0; i < RETIRE_PORTS; i++) begin
-            store_released_index[i] = sq_ids[retire_ids[i]];            
-            store_released[i] = {1'b1, ids[store_released_index[i]]} == {retire_port_valid[i], retire_ids[i]};
-            newly_released |= CONFIG.SQ_DEPTH'(store_released[i]) << store_released_index[i];
-        end
-    end
     always_ff @ (posedge clk) begin
-        released <= (released | newly_released) & ~new_request_one_hot;
+        if (rst)
+            released_count <= 0;
+        else
+            released_count <= released_count + (LOG2_SQ_DEPTH + 1)'(store_retire.valid) - (LOG2_SQ_DEPTH + 1)'(sq.pop);
     end
 
-    assign sq.no_released_stores_pending = ~|(valid & released);
+    assign sq.no_released_stores_pending = ~|released_count;
 
     ////////////////////////////////////////////////////
-    //Forwarded Store Data
-    always_ff @ (posedge clk) begin
-        wb_snoop_r <= wb_snoop;
-    end
+    //Forwarding and Store Data
+    //Forwarding is only needed from multi-cycle writeback ports
+    //Currently this is the LS port [1] and the MUL/DIV/CSR port [2]
 
     always_ff @ (posedge clk) begin
-        for (int i = 0; i < CONFIG.SQ_DEPTH; i++) begin
-            if ({1'b0, wb_snoop_r.valid, wb_snoop_r.id} == {released[i], 1'b1, id_needed[i]})
-                store_data_from_wb[i] <= wb_snoop_r.data;
-        end
+        wb_snoop <= wb_packet;
     end
-    
+
+    assign retire_table_in = '{id_needed : sq.data_in.id_needed, wb_group : store_forward_wb_group, sq_index : sq_index};
+    lutram_1w_1r #(.WIDTH($bits(retire_table_t)), .DEPTH(MAX_IDS))
+    store_retire_table_lutram (
+        .clk(clk),
+        .waddr(sq.data_in.id),
+        .raddr(store_retire.phys_id),
+        .ram_write(sq.push),
+        .new_ram_data(retire_table_in),
+        .ram_data_out(retire_table_out)
+    );
+
+    logic [31:0] wb_data [NUM_OF_FORWARDING_PORTS+1];
+
+    //Data issued with the store can be stored by store-id
+    lutram_1w_1r #(.WIDTH(32), .DEPTH(MAX_IDS))
+    non_forwarded_port (
+        .clk(clk),
+        .waddr(sq.data_in.id),
+        .raddr(store_retire.phys_id),
+        .ram_write(sq.push),
+        .new_ram_data(sq.data_in.data),
+        .ram_data_out(wb_data[0])
+    );
+
+    //Data from wb ports is stored by ID and then accessed by store-id to store-id-needed translation
+    generate
+    for (genvar i = 0; i < NUM_OF_FORWARDING_PORTS; i++) begin : lutrams
+        lutram_1w_1r #(.WIDTH(32), .DEPTH(MAX_IDS))
+        writeback_port (
+            .clk(clk),
+            .waddr(wb_snoop[i+1].id),
+            .raddr(retire_table_out.id_needed),
+            .ram_write(wb_snoop[i+1].valid),
+            .new_ram_data(wb_snoop[i+1].data),
+            .ram_data_out(wb_data[i+1])
+        );
+    end
+    endgenerate
+
+    //Final storage table for the store queue
+    //SQ-index addressed
+    lutram_1w_1r #(.WIDTH(32), .DEPTH(CONFIG.SQ_DEPTH))
+    sq_data_lutram (
+        .clk(clk),
+        .waddr(retire_table_out.sq_index),
+        .raddr(sq_oldest),
+        .ram_write(store_retire.valid),
+        .new_ram_data(wb_data[retire_table_out.wb_group]),
+        .ram_data_out(data_pre_alignment)
+    );
     ////////////////////////////////////////////////////
     //Store Transaction Outputs
-    logic [31:0] data_for_alignment;
-    logic [31:0] sq_data;
-    sq_entry_t output_entry;    
-    assign output_entry = sq_entry[sq_oldest];
-
     always_comb begin
         //Input: ABCD
         //Assuming aligned requests,
         //Possible byte selections: (A/C/D, B/D, C/D, D)
-        data_for_alignment = output_entry.forwarded_store ? store_data_from_wb[sq_oldest] : output_entry.data;
-
-        sq_data[7:0] = data_for_alignment[7:0];
-        sq_data[15:8] = (output_entry.addr[1:0] == 2'b01) ? data_for_alignment[7:0] : data_for_alignment[15:8];
-        sq_data[23:16] = (output_entry.addr[1:0] == 2'b10) ? data_for_alignment[7:0] : data_for_alignment[23:16];
-        case(output_entry.addr[1:0])
-            2'b10 : sq_data[31:24] = data_for_alignment[15:8];
-            2'b11 : sq_data[31:24] = data_for_alignment[7:0];
-            default : sq_data[31:24] = data_for_alignment[31:24];
+        sq_data_out[7:0] = data_pre_alignment[7:0];
+        sq_data_out[15:8] = (output_entry_r.addr[1:0] == 2'b01) ? data_pre_alignment[7:0] : data_pre_alignment[15:8];
+        sq_data_out[23:16] = (output_entry_r.addr[1:0] == 2'b10) ? data_pre_alignment[7:0] : data_pre_alignment[23:16];
+        case(output_entry_r.addr[1:0])
+            2'b10 : sq_data_out[31:24] = data_pre_alignment[15:8];
+            2'b11 : sq_data_out[31:24] = data_pre_alignment[7:0];
+            default : sq_data_out[31:24] = data_pre_alignment[31:24];
         endcase
     end
 
-    assign sq.valid = valid[sq_oldest] & released[sq_oldest];
+    assign sq.valid = |released_count;
     assign sq.data_out = '{
-        addr : output_entry.addr,
-        be : output_entry.be,
-        fn3 : output_entry.fn3,
-        forwarded_store : output_entry.forwarded_store,
-        data : sq_data
+        addr : output_entry_r.addr,
+        be : output_entry_r.be,
+        fn3 : output_entry_r.fn3,
+        forwarded_store : 0,
+        data : sq_data_out
     };
 
     ////////////////////////////////////////////////////

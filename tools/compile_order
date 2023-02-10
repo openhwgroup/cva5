@@ -2,13 +2,15 @@ core/cva5_config.sv
 core/riscv_types.sv
 core/csr_types.sv  
 core/cva5_types.sv  
+core/opcodes.sv  
+
 l2_arbiter/l2_config_and_types.sv 
 l2_arbiter/l2_interfaces.sv
 l2_arbiter/l2_external_interfaces.sv
 local_memory/local_memory_interface.sv 
 local_memory/local_mem.sv
 
-core/interfaces.sv  
+core/internal_interfaces.sv  
 core/external_interfaces.sv  
 
 core/lutrams/lutram_1w_1r.sv
@@ -47,8 +49,7 @@ core/wishbone_master.sv
 
 
 core/tag_bank.sv  
-core/ddata_bank.sv  
-core/dtag_banks.sv  
+core/dcache_tag_banks.sv  
 core/amo_alu.sv  
 core/dcache.sv  
 core/addr_hash.sv
@@ -56,7 +57,7 @@ core/store_queue.sv
 core/load_store_queue.sv
 core/load_store_unit.sv  
 
-core/itag_banks.sv  
+core/icache_tag_banks.sv  
 core/icache.sv  
 
 core/clz.sv
@@ -68,6 +69,8 @@ core/mmu.sv
 
 core/mul_unit.sv  
 
+core/custom_unit.sv  
+
 core/ras.sv  
 core/branch_predictor_ram.sv
 core/branch_predictor.sv  
@@ -78,7 +81,6 @@ core/decode_and_issue.sv
 
 core/register_free_list.sv
 core/renamer.sv
-core/register_bank.sv
 core/register_file.sv
 core/writeback.sv
 

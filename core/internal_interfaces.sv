@@ -51,6 +51,21 @@ interface branch_predictor_interface;
 
 endinterface
 
+interface unit_decode_interface;
+    import cva5_types::*;
+    import cva5_config::*;
+
+    logic [31:0] instruction;
+    logic issue_stage_ready;
+
+    logic unit_needed;
+    logic uses_rs [REGFILE_READ_PORTS];
+    logic uses_rd;
+
+    modport decode (input unit_needed, uses_rs, uses_rd, output instruction, issue_stage_ready);
+    modport unit (output unit_needed, uses_rs, uses_rd, input instruction, issue_stage_ready);
+endinterface
+
 interface unit_issue_interface;
     import cva5_types::*;
 
@@ -198,12 +213,17 @@ interface load_store_queue_interface;
     lsq_entry_t data_in;
     logic potential_push;
     logic push;
-    logic full;
+    logic load_pop;
+    logic store_pop;
 
     //LSQ outputs
-    data_access_shared_inputs_t data_out;
-    logic valid;
-    logic pop;
+    data_access_shared_inputs_t load_data_out;
+    data_access_shared_inputs_t store_data_out;
+
+    logic load_valid;
+    logic store_valid;
+
+    logic full;
 
     //LSQ status
     logic sq_empty;
@@ -211,12 +231,12 @@ interface load_store_queue_interface;
     logic no_released_stores_pending;
 
     modport queue (
-        input data_in, potential_push, push, pop,
-        output full, data_out, valid, sq_empty, empty, no_released_stores_pending
+        input data_in, potential_push, push, load_pop, store_pop,
+        output full, load_data_out, store_data_out, load_valid, store_valid, sq_empty, empty, no_released_stores_pending
     );
     modport ls (
-        output data_in, potential_push, push, pop,
-        input full, data_out, valid, sq_empty, empty, no_released_stores_pending
+        output data_in, potential_push, push, load_pop, store_pop,
+        input full, load_data_out, store_data_out, load_valid, store_valid, sq_empty, empty, no_released_stores_pending
     );
 endinterface
 
@@ -228,12 +248,11 @@ interface store_queue_interface;
     //Issue inputs
     lsq_entry_t data_in;
     logic push;
-    logic full;
+    logic pop;
 
     sq_entry_t data_out;
-
     logic valid;
-    logic pop;
+    logic full;
 
     //SQ status
     logic empty;
@@ -271,6 +290,31 @@ interface writeback_store_interface;
         );
 endinterface
 
+interface cache_functions_interface #(parameter int TAG_W = 8, parameter int LINE_W = 4, parameter int SUB_LINE_W = 2);
+
+    function logic [LINE_W-1:0] xor_mask (int WAY);
+        for (int i = 0; i < LINE_W; i++)
+            xor_mask[i] = ((WAY % 2) == 0) ? 1'b1 : 1'b0;
+    endfunction
+
+    function logic [LINE_W-1:0] getHashedLineAddr (logic[31:0] addr, int WAY);
+        getHashedLineAddr = addr[2 + SUB_LINE_W +: LINE_W] ^ (addr[2 + SUB_LINE_W + LINE_W +: LINE_W] & xor_mask(WAY));
+    endfunction
+
+    function logic[TAG_W-1:0] getTag(logic[31:0] addr);
+        getTag = addr[2 + LINE_W + SUB_LINE_W +: TAG_W];
+    endfunction
+
+    function logic [LINE_W-1:0] getTagLineAddr (logic[31:0] addr);
+        getTagLineAddr = addr[2 + SUB_LINE_W +: LINE_W];
+    endfunction
+
+    function logic [LINE_W+SUB_LINE_W-1:0] getDataLineAddr (logic[31:0] addr);
+        getDataLineAddr = addr[2 +: LINE_W + SUB_LINE_W];
+    endfunction
+
+endinterface
+
 interface addr_utils_interface #(parameter bit [31:0] BASE_ADDR = 32'h00000000, parameter bit [31:0] UPPER_BOUND = 32'hFFFFFFFF);
         //Based on the lower and upper address ranges,
         //find the number of bits needed to uniquely identify this memory range.
@@ -285,6 +329,7 @@ interface addr_utils_interface #(parameter bit [31:0] BASE_ADDR = 32'h00000000, 
 
         localparam int unsigned BIT_RANGE = bit_range();
 
+        /* verilator lint_off SELRANGE */
         function address_range_check (input logic[31:0] addr);
             return (BIT_RANGE == 0) ? 1 : (addr[31:32-BIT_RANGE] == BASE_ADDR[31:32-BIT_RANGE]);
         endfunction
