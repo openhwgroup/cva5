@@ -288,7 +288,6 @@ module load_store_unit
         load : is_load_r,
         store : is_store_r,
         id : issue.id,
-        forwarded_store : CONFIG.INCLUDE_FORWARDING_TO_STORES & rs2_inuse,
         id_needed : store_forward_id
     };
 
@@ -333,7 +332,7 @@ module load_store_unit
 
     assign sub_unit_load_issue = sel_load & lsq.load_valid & sub_unit_ready & sub_unit_address_match[subunit_id];
     assign sub_unit_store_issue = (lsq.store_valid & ~sel_load) & sub_unit_ready & sub_unit_address_match[subunit_id];
-    assign sub_unit_issue = (lsq.load_valid | lsq.store_valid) & sub_unit_ready & sub_unit_address_match[subunit_id];
+    assign sub_unit_issue = sub_unit_load_issue | sub_unit_store_issue;
 
     always_ff @ (posedge clk) begin
         if (rst)

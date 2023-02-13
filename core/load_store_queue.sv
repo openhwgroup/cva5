@@ -68,7 +68,10 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
     //Implementation
 
     //Can accept requests so long as store queue is not full
-    assign lsq.full = lsq.data_in.store & sq.full;
+    //To allow additional loads with a full store queue would require
+    //extra logic to handle the case where there is a collision and the
+    //sq is full
+    assign lsq.full = sq.full;
     
     //Address hash for load-store collision checking
     addr_hash lsq_addr_hash (
@@ -104,15 +107,13 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
     assign lq_data_out = lq.data_out;
     ////////////////////////////////////////////////////
     //Store Queue
-    assign sq.push = lsq.push &  lsq.data_in.store;
+    assign sq.push = lsq.push & lsq.data_in.store;
     assign sq.pop = lsq.store_pop;
     assign sq.data_in = lsq.data_in;
 
     store_queue  # (.CONFIG(CONFIG)) sq_block (
         .clk (clk),
         .rst (rst | gc.sq_flush),
-        .lq_push (lq.push),
-        .lq_pop (lq.pop),
         .sq (sq),
         .store_forward_wb_group (store_forward_wb_group),
         .addr_hash (addr_hash),
@@ -137,9 +138,9 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
         addr : lq_data_out.addr,
         load : 1,
         store : 0,
-        be : '0,
+        be : 'x,
         fn3 : lq_data_out.fn3,
-        data_in : sq.data_out.data,
+        data_in : 'x,
         id : lq_data_out.id
     };
 
@@ -148,9 +149,9 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
         load : 0,
         store : 1,
         be : sq.data_out.be,
-        fn3 : sq.data_out.fn3,
+        fn3 : 'x,
         data_in : sq.data_out.data,
-        id : lq_data_out.id
+        id : 'x
     };
 
     assign lsq.sq_empty = sq.empty;
