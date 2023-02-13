@@ -33,8 +33,6 @@ module store_queue
         input logic clk,
         input logic rst,
 
-        input logic lq_push,
-        input logic lq_pop,
         store_queue_interface.queue sq,
         input logic [$clog2(CONFIG.NUM_WB_GROUPS)-1:0] store_forward_wb_group,
 
@@ -107,27 +105,20 @@ module store_queue
 
     assign valid_next = (valid | new_request_one_hot) & ~issued_one_hot;
     always_ff @ (posedge clk) begin
-        if (rst)
+        if (rst) begin
             valid <= '0;
-        else
-            valid <= valid_next;
-    end
-
-    assign sq.empty = ~|valid;
-
-    always_ff @ (posedge clk) begin
-        if (rst)
             sq.full <= 0;
-        else
-            sq.full <= valid_next[sq_index_next];
+        end else begin
+            valid <= valid_next;
+            sq.full <= &valid_next;
+        end
     end
+    assign sq.empty = ~|valid;
 
     //SQ attributes and issue data
     assign sq_entry_in = '{
         addr : sq.data_in.addr,
         be : sq.data_in.be,
-        fn3 : sq.data_in.fn3,
-        forwarded_store : '0,
         data : '0
     };
     lutram_1w_1r #(.WIDTH($bits(sq_entry_t)), .DEPTH(CONFIG.SQ_DEPTH))
@@ -142,14 +133,12 @@ module store_queue
     always_ff @ (posedge clk) begin
         output_entry_r <= output_entry;
     end
+    
     //Compare store addr-hashes against new load addr-hash
-    //Optionally mask out any store completing on this cycle (~issued_one_hot)
-    //Without masking out an issuing store, the store queue may be flushed more often
-    //Omitted as negligible impact on embench at sq depth 4
     always_comb begin
         potential_store_conflict = 0;
         for (int i = 0; i < CONFIG.SQ_DEPTH; i++)
-            potential_store_conflict |= {valid[i], addr_hash} == {1'b1, hashes[i]};
+            potential_store_conflict |= {(valid[i] & ~issued_one_hot[i]), addr_hash} == {1'b1, hashes[i]};
     end
     ////////////////////////////////////////////////////
     //Register-based storage
@@ -250,8 +239,6 @@ module store_queue
     assign sq.data_out = '{
         addr : output_entry_r.addr,
         be : output_entry_r.be,
-        fn3 : output_entry_r.fn3,
-        forwarded_store : 0,
         data : sq_data_out
     };
 

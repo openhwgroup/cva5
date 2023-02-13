@@ -111,15 +111,12 @@ package cva5_types;
         logic [2:0] fn3;
         logic [31:0] data;
         id_t id;
-        logic forwarded_store;
         id_t id_needed;
     } lsq_entry_t;
 
     typedef struct packed {
         logic [31:0] addr;
         logic [3:0] be;
-        logic [2:0] fn3;
-        logic forwarded_store;
         logic [31:0] data;
     } sq_entry_t;
 
