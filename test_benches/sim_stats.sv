@@ -36,7 +36,7 @@ module sim_stats
         input logic end_collection,
         input logic stats [NUM_OF_STATS],
         input logic [NUM_INSTRUCTION_MIX_STATS-1:0] instruction_mix_stats [RETIRE_PORTS],
-        input retire_packet_t retire
+        input logic [LOG2_RETIRE_PORTS:0] retire_count
     );
     int log_file;
     logic en;
@@ -169,7 +169,7 @@ module sim_stats
                 instruction_mix_stat_count[i] <=0;
         end
         if (en) begin
-            instructions_retired <= instructions_retired + 64'(retire.count);
+            instructions_retired <= instructions_retired + 64'(retire_count);
             cycle_count <= cycle_count + 1;
             foreach (stat_count[i])
                 stat_count[i] <= stat_count[i] + 64'(stats[i]);

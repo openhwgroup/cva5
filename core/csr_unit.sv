@@ -76,8 +76,9 @@ module csr_unit
         output logic [31:0] epc,
 
         //Retire
-        input retire_packet_t retire,
+        input retire_packet_t wb_retire,
         input id_t retire_ids [RETIRE_PORTS],
+        input logic [LOG2_RETIRE_PORTS : 0] retire_count,
 
         //External
         input interrupt_t s_interrupt,
@@ -681,7 +682,7 @@ endgenerate
             minst_ret_input_next[CONFIG.CSRS.NON_STANDARD_OPTIONS.COUNTER_W-1:32] = updated_csr[CONFIG.CSRS.NON_STANDARD_OPTIONS.COUNTER_W-33:0];
     end
 
-    assign minst_ret_inc = {(LOG2_RETIRE_PORTS+1){~(CONFIG.CSRS.NON_STANDARD_OPTIONS.MINSTR_WRITEABLE & (mwrite_en(MINSTRET) | mwrite_en(MINSTRETH)))}} & retire.count;
+    assign minst_ret_inc = {(LOG2_RETIRE_PORTS+1){~(CONFIG.CSRS.NON_STANDARD_OPTIONS.MINSTR_WRITEABLE & (mwrite_en(MINSTRET) | mwrite_en(MINSTRETH)))}} & retire_count;
 
     always_ff @(posedge clk) begin
         if (rst)

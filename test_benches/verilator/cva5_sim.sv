@@ -578,7 +578,7 @@ module cva5_sim
         .end_collection (end_collection),
         .stats (stats),
         .instruction_mix_stats (instruction_mix_stats),
-        .retire (cpu.retire)
+        .retire_count (cpu.retire_count)
     );
 
     ////////////////////////////////////////////////////
