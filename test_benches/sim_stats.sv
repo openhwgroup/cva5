@@ -47,36 +47,40 @@ module sim_stats
     logic [63:0] instruction_mix_stat_count [NUM_INSTRUCTION_MIX_STATS-1:0];
     logic [$clog2(RETIRE_PORTS):0] instruction_mix_inc [NUM_INSTRUCTION_MIX_STATS-1:0];
 
+    function real to_percent (input logic [63:0] a, input logic [63:0] b);
+        to_percent = 100.0 * real'(a)/real'(a + b);
+    endfunction
+
     function void print_stats ();
         $display("Fetch---------------------------------------------------------");
         $display("Early Branch Correction : %-d", stat_count[FETCH_EARLY_BR_CORRECTION_STAT]);
         $display("Sub Unit Stall : %-d", stat_count[FETCH_SUB_UNIT_STALL_STAT]);
         $display("No ID available : %-d", stat_count[FETCH_ID_STALL_STAT]);
         $display("Instruction Cache");
-        $display("  Hits : %-d", stat_count[FETCH_IC_HIT_STAT]);
+        $display("  Hits : %-d (%.2f%%)", stat_count[FETCH_IC_HIT_STAT], to_percent(stat_count[FETCH_IC_HIT_STAT], stat_count[FETCH_IC_MISS_STAT]));
         $display("  Misses : %-d", stat_count[FETCH_IC_MISS_STAT]);
         $display("  Arbiter stall : %-d", stat_count[FETCH_IC_ARB_STALL_STAT]);
         $display("Branch Predictor");
         $display("  Branches");
-        $display("    Correct : %-d", stat_count[FETCH_BP_BR_CORRECT_STAT]);
+        $display("    Correct : %-d (%.2f%%)", stat_count[FETCH_BP_BR_CORRECT_STAT], to_percent(stat_count[FETCH_BP_BR_CORRECT_STAT], stat_count[FETCH_BP_BR_MISPREDICT_STAT]));
         $display("    Mispredict : %-d", stat_count[FETCH_BP_BR_MISPREDICT_STAT]);
         $display("  Returns (RAS)");
-        $display("    Correct : %-d", stat_count[FETCH_BP_RAS_CORRECT_STAT]);
+        $display("    Correct : %-d (%.2f%%)", stat_count[FETCH_BP_RAS_CORRECT_STAT], to_percent(stat_count[FETCH_BP_RAS_CORRECT_STAT], stat_count[FETCH_BP_RAS_MISPREDICT_STAT]));
         $display("    Mispredict : %-d", stat_count[FETCH_BP_RAS_MISPREDICT_STAT]);
 
         $display("Issue---------------------------------------------------------");
         $display("Stall Sources");
-        $display("  No Instruction : %-d", stat_count[ISSUE_NO_INSTRUCTION_STAT]);
+        $display("  No Instruction : %-d (%.2f%%)", stat_count[ISSUE_NO_INSTRUCTION_STAT], to_percent(stat_count[ISSUE_NO_INSTRUCTION_STAT], stat_count[ISSUE_UNIT_BUSY_STAT]+stat_count[ISSUE_OPERANDS_NOT_READY_STAT]+stat_count[ISSUE_HOLD_STAT]));
         $display("    Max IDs Issued : %-d", stat_count[ISSUE_NO_ID_STAT]);
         $display("    Flush : %-d", stat_count[ISSUE_FLUSH_STAT]);
-        $display("  Unit Busy : %-d", stat_count[ISSUE_UNIT_BUSY_STAT]);
-        $display("  Operands Not Ready : %-d", stat_count[ISSUE_OPERANDS_NOT_READY_STAT]);
-        $display("  Hold : %-d", stat_count[ISSUE_HOLD_STAT]);
+        $display("  Unit Busy : %-d (%.2f%%)", stat_count[ISSUE_UNIT_BUSY_STAT], to_percent(stat_count[ISSUE_UNIT_BUSY_STAT], stat_count[ISSUE_NO_INSTRUCTION_STAT]+stat_count[ISSUE_OPERANDS_NOT_READY_STAT]+stat_count[ISSUE_HOLD_STAT]));
+        $display("  Operands Not Ready : %-d (%.2f%%)", stat_count[ISSUE_OPERANDS_NOT_READY_STAT], to_percent(stat_count[ISSUE_OPERANDS_NOT_READY_STAT], stat_count[ISSUE_UNIT_BUSY_STAT]+stat_count[ISSUE_NO_INSTRUCTION_STAT]+stat_count[ISSUE_HOLD_STAT]));
+        $display("  Hold : %-d (%.2f%%)", stat_count[ISSUE_HOLD_STAT], to_percent(stat_count[ISSUE_HOLD_STAT], stat_count[ISSUE_UNIT_BUSY_STAT]+stat_count[ISSUE_NO_INSTRUCTION_STAT]+stat_count[ISSUE_OPERANDS_NOT_READY_STAT]));
         $display("  Multi-Source : %-d", stat_count[ISSUE_MULTI_SOURCE_STAT]);
         $display("Operand Stall Waiting On");
-        $display("  Load : %-d", stat_count[ISSUE_OPERAND_STALL_ON_LOAD_STAT]);
-        $display("  Multiply : %-d", stat_count[ISSUE_OPERAND_STALL_ON_MULTIPLY_STAT]);
-        $display("  Divide : %-d", stat_count[ISSUE_OPERAND_STALL_ON_DIVIDE_STAT]);
+        $display("  Load : %-d (%.2f%%)", stat_count[ISSUE_OPERAND_STALL_ON_LOAD_STAT], to_percent(stat_count[ISSUE_OPERAND_STALL_ON_LOAD_STAT], stat_count[ISSUE_OPERANDS_NOT_READY_STAT] - stat_count[ISSUE_OPERAND_STALL_ON_LOAD_STAT]));
+        $display("  Multiply : %-d (%.2f%%)", stat_count[ISSUE_OPERAND_STALL_ON_MULTIPLY_STAT], to_percent(stat_count[ISSUE_OPERAND_STALL_ON_MULTIPLY_STAT], stat_count[ISSUE_OPERANDS_NOT_READY_STAT] - stat_count[ISSUE_OPERAND_STALL_ON_MULTIPLY_STAT]));
+        $display("  Divide : %-d (%.2f%%)", stat_count[ISSUE_OPERAND_STALL_ON_DIVIDE_STAT], to_percent(stat_count[ISSUE_OPERAND_STALL_ON_DIVIDE_STAT], stat_count[ISSUE_OPERANDS_NOT_READY_STAT] - stat_count[ISSUE_OPERAND_STALL_ON_DIVIDE_STAT]));
         $display("Operands Stall (Branch) : %-d", stat_count[ISSUE_OPERAND_STALL_FOR_BRANCH_STAT]);
         $display("Store with Forwarded Data : %-d", stat_count[ISSUE_STORE_WITH_FORWARDED_DATA_STAT]);
         $display("Divider Result Reuse : %-d", stat_count[ISSUE_DIVIDER_RESULT_REUSE_STAT]);
@@ -85,7 +89,7 @@ module sim_stats
         $display("Load Blocked by Store : %-d", stat_count[LSU_LOAD_BLOCKED_BY_STORE_STAT]);
         $display("Sub Unit Stall : %-d", stat_count[LSU_SUB_UNIT_STALL_STAT]);
         $display("Data Cache");
-        $display("  Hits : %-d", stat_count[LSU_DC_HIT_STAT]);
+        $display("  Hits : %-d (%.2f%%)", stat_count[LSU_DC_HIT_STAT], to_percent(stat_count[LSU_DC_HIT_STAT], stat_count[LSU_DC_MISS_STAT]));
         $display("  Misses : %-d", stat_count[LSU_DC_MISS_STAT]);
         $display("  Arbiter stall : %-d", stat_count[LSU_DC_ARB_STALL_STAT]);
 
@@ -94,13 +98,13 @@ module sim_stats
         $display("Runtime (cycles) : %-d", cycle_count);
         $display("IPC : %-f", real'(instructions_retired)/real'(cycle_count));
         $display("Instruction Mix");
-        $display("  Basic ALU : %-d", instruction_mix_stat_count[ALU_STAT]);
-        $display("  Branch or Jump : %-d", instruction_mix_stat_count[BR_STAT]);
-        $display("  Multiply : %-d", instruction_mix_stat_count[MUL_STAT]);
-        $display("  Divide : %-d", instruction_mix_stat_count[DIV_STAT]);
-        $display("  Load : %-d", instruction_mix_stat_count[LOAD_STAT]);
-        $display("  Store : %-d", instruction_mix_stat_count[STORE_STAT]);
-        $display("  Misc : %-d", instruction_mix_stat_count[MISC_STAT]);
+        $display("  Basic ALU : %-d (%.2f%%)", instruction_mix_stat_count[ALU_STAT], to_percent(instruction_mix_stat_count[ALU_STAT],instructions_retired - instruction_mix_stat_count[ALU_STAT]));
+        $display("  Branch or Jump : %-d (%.2f%%)", instruction_mix_stat_count[BR_STAT], to_percent(instruction_mix_stat_count[BR_STAT],instructions_retired - instruction_mix_stat_count[BR_STAT]));
+        $display("  Multiply : %-d (%.2f%%)", instruction_mix_stat_count[MUL_STAT], to_percent(instruction_mix_stat_count[MUL_STAT],instructions_retired - instruction_mix_stat_count[MUL_STAT]));
+        $display("  Divide : %-d (%.2f%%)", instruction_mix_stat_count[DIV_STAT], to_percent(instruction_mix_stat_count[DIV_STAT],instructions_retired - instruction_mix_stat_count[DIV_STAT]));
+        $display("  Load : %-d (%.2f%%)", instruction_mix_stat_count[LOAD_STAT], to_percent(instruction_mix_stat_count[LOAD_STAT],instructions_retired - instruction_mix_stat_count[LOAD_STAT]));
+        $display("  Store : %-d (%.2f%%)", instruction_mix_stat_count[STORE_STAT], to_percent(instruction_mix_stat_count[STORE_STAT],instructions_retired - instruction_mix_stat_count[STORE_STAT]));
+        $display("  Misc : %-d (%.2f%%)", instruction_mix_stat_count[MISC_STAT], to_percent(instruction_mix_stat_count[MISC_STAT],instructions_retired - instruction_mix_stat_count[MISC_STAT]));
         $display("");
     endfunction
 
