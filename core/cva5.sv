@@ -605,7 +605,7 @@ module cva5
             .decode_stage (decode),
             .issue_stage (issue),
             .issue_stage_ready (issue_stage_ready),
-            .issue_phys_rs_addr (issue_phys_rs_addr),
+            .issue_rs_addr (issue_rs_addr),
             .unit_needed (unit_needed[UNIT_IDS.DIV]),
             .uses_rs (unit_uses_rs[UNIT_IDS.DIV]),
             .uses_rd (unit_uses_rd[UNIT_IDS.DIV]),

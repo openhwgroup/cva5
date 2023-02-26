@@ -41,7 +41,7 @@ module div_unit
         
         input issue_packet_t issue_stage,
         input logic issue_stage_ready,
-        input phys_addr_t issue_phys_rs_addr [REGFILE_READ_PORTS],
+        input rs_addr_t issue_rs_addr [REGFILE_READ_PORTS],
         input logic [31:0] rf [REGFILE_READ_PORTS],
 
         unit_issue_interface.unit issue,
@@ -112,7 +112,7 @@ module div_unit
 
     ////////////////////////////////////////////////////
     //Result resuse (for div/rem pairs)
-    phys_addr_t prev_div_rs_addr [2];
+    rs_addr_t prev_div_rs_addr [2];
     logic [1:0] div_rd_match;
     logic prev_div_result_valid;
     logic div_rs_overwrite;
@@ -120,19 +120,19 @@ module div_unit
 
     always_ff @(posedge clk) begin
         if (issue.new_request)
-            prev_div_rs_addr <= issue_phys_rs_addr[RS1:RS2];
+            prev_div_rs_addr <= issue_rs_addr[RS1:RS2];
     end
 
-    assign div_op_reuse = {prev_div_result_valid, prev_div_rs_addr[RS1], prev_div_rs_addr[RS2]} == {1'b1, issue_phys_rs_addr[RS1],issue_phys_rs_addr[RS2]};
+    assign div_op_reuse = {prev_div_result_valid, prev_div_rs_addr[RS1], prev_div_rs_addr[RS2]} == {1'b1, issue_rs_addr[RS1],issue_rs_addr[RS2]};
 
     //Clear if prev div inputs are overwritten by another instruction
-    assign div_rd_match[RS1] = (issue_stage.phys_rd_addr == prev_div_rs_addr[RS1]);
-    assign div_rd_match[RS2] = (issue_stage.phys_rd_addr == prev_div_rs_addr[RS2]);
+    assign div_rd_match[RS1] = (issue_stage.rd_addr == prev_div_rs_addr[RS1]);
+    assign div_rd_match[RS2] = (issue_stage.rd_addr == prev_div_rs_addr[RS2]);
     assign div_rs_overwrite = |div_rd_match;
 
     set_clr_reg_with_rst #(.SET_OVER_CLR(1), .WIDTH(1), .RST_VALUE(0)) prev_div_result_valid_m (
         .clk, .rst,
-        .set(issue.new_request),
+        .set(issue.new_request & ~((issue_stage.rd_addr == issue_rs_addr[RS1]) | (issue_stage.rd_addr == issue_rs_addr[RS2]))),
         .clr((instruction_issued_with_rd & div_rs_overwrite) | gc.writeback_supress), //No instructions will be issued while gc.writeback_supress is asserted
         .result(prev_div_result_valid)
     );
