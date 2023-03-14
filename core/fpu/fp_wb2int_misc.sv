@@ -36,20 +36,25 @@ module fp_wb2int_misc
     unit_writeback_interface.unit wb
 );
 
+    fp_mv_f2i_inputs_t fp_mv_f2i_inputs;
     fp_f2i_inputs_t fp_f2i_inputs;
     fp_cmp_inputs_t fp_cmp_inputs;
     fp_class_inputs_t fp_class_inputs;
+    unit_issue_interface mv_f2i_issue();
     unit_issue_interface f2i_issue();
     unit_issue_interface cmp_issue();
     unit_issue_interface class_issue();
+    unit_writeback_interface mv_f2i_wb();
     unit_writeback_interface f2i_wb();
     unit_writeback_interface cmp_wb();
     unit_writeback_interface class_wb();
-    logic [2:0] instruction;
+    logic [3:0] instruction;
     logic advance;
 
     ////////////////////////////////////////////////////
     //construct inputs for each unit
+    assign fp_mv_f2i_inputs = fp_wb2int_misc_inputs.fp_mv_f2i_inputs;
+
     assign fp_f2i_inputs = fp_wb2int_misc_inputs.fp_f2i_inputs;
 
     assign fp_cmp_inputs = fp_wb2int_misc_inputs.fp_cmp_inputs;
@@ -60,6 +65,9 @@ module fp_wb2int_misc
     //Issue Interfaces
     always_comb begin
         //Don't need to AND new_request with the current instruction, as the output mux handles result selection. Keeping for now for sanity check
+        mv_f2i_issue.new_request = issue.new_request & fp_wb2int_misc_inputs.instruction[3];
+        mv_f2i_issue.id = issue.id;
+        
         f2i_issue.new_request = issue.new_request & fp_wb2int_misc_inputs.instruction[2];
         f2i_issue.id = issue.id;
 
@@ -69,6 +77,16 @@ module fp_wb2int_misc
         class_issue.new_request = issue.new_request & fp_wb2int_misc_inputs.instruction[0];
         class_issue.id = issue.id;
     end
+
+    ////////////////////////////////////////////////////
+    //Mv F2I
+    fp_mv_f2i fp_mv_f2i_inst(
+        .clk (clk),
+        .advance (advance),
+        .issue (mv_f2i_issue),
+        .fp_mv_f2i_inputs (fp_mv_f2i_inputs),
+        .wb (mv_f2i_wb)
+    );
 
     ////////////////////////////////////////////////////
     //F2I
@@ -118,13 +136,19 @@ module fp_wb2int_misc
     //Output
     always_comb begin
         case(instruction)
-            3'b100: begin
+            4'b1000: begin
+                wb.done = mv_f2i_wb.done;
+                wb.id = mv_f2i_wb.id;
+                wb.rd = mv_f2i_wb.rd;
+                wb.fflags = mv_f2i_wb.fflags;
+            end
+            4'b0100: begin
                 wb.done = f2i_wb.done;
                 wb.id = f2i_wb.id;
                 wb.rd = f2i_wb.rd;
                 wb.fflags = f2i_wb.fflags;
             end
-            3'b010: begin
+            4'b0010: begin
                 wb.done = cmp_wb.done;
                 wb.id = cmp_wb.id;
                 wb.rd = cmp_wb.rd;

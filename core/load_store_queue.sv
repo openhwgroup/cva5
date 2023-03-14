@@ -92,6 +92,7 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
     //FPU support
     generate if (INCLUDE_FPU) begin
         assign lsq_entry.is_float = lsq.is_float;
+        assign lsq_entry.is_single = lsq.is_single;
         assign lsq_entry.fp_forwarded_store = lsq.fp_forwarded_store;
         assign lsq_entry.fp_data_in = lsq.fp_data_in;
         assign lsq_entry.we = lsq.we;
@@ -157,6 +158,7 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
     assign lsq.transaction_out.id = lq_entry.id;
     //FPU support
     assign lsq.transaction_out.is_float = load_selected ? lq_entry.is_float : sq_entry.is_float;
+    assign lsq.transaction_out.is_single = load_selected ? lq_entry.is_single : sq_entry.is_single;
     assign lsq.transaction_out.fp_data_in = {fp_sq_data, {(INTERFACE_FLEN-FLEN){1'b0}}};
     assign lsq.transaction_out.we = load_selected ? lq_entry.we : sq_entry.we;
 

@@ -41,6 +41,7 @@ package fpu_types;
 
     //constants
     localparam BIAS = 2**(EXPO_WIDTH-1) - 1;
+    localparam BIAS_F = 2**(EXPO_WIDTH_F-1)-1;
     localparam E_MIN = {{(EXPO_WIDTH-1){1'b0}}, 1'b1}; //min exponent represented in IEEE
     localparam E_MAX = {{(EXPO_WIDTH-1){1'b1}}, 1'b0};   //max exponent represented in IEEE
     localparam [FLEN-1:0] CANONICAL_NAN = {1'b0, {EXPO_WIDTH{1'b1}}, 1'b1, {(FRAC_WIDTH-1){1'b0}}}; //canonical NaN
@@ -98,6 +99,7 @@ package fpu_types;
         logic expo_overflow;
         logic [4:0] fflags;
         logic [2:0] rm;
+        logic d2s;
         //shared with normalization
         logic carry;
         logic safe;
@@ -107,7 +109,6 @@ package fpu_types;
         logic subnormal;
         logic right_shift;
         logic[EXPO_WIDTH-1:0] right_shift_amt;
-        logic overflow_before_rounding;
     } fp_normalize_packet_t;
 
     typedef struct packed {
@@ -115,13 +116,15 @@ package fpu_types;
         id_t   id;
         logic [4:0] fflags;
         logic [2:0] rm;
+        logic d2s;
         logic sign_norm;
         logic [EXPO_WIDTH-1:0] expo_norm;
         logic expo_overflow_norm;
         logic right_shift;
         logic [EXPO_WIDTH-1:0] shift_amt;
+        logic sp_overflow;
+        logic [EXPO_WIDTH_F-1:0] sp_expo;
         logic signed [FRAC_WIDTH+3+GRS_WIDTH-1:0] shifter_in;
-        logic overflow_before_rounding;
     } fp_normalize_pre_processing_packet_t;
 
     typedef struct packed{
@@ -132,9 +135,9 @@ package fpu_types;
         logic hidden;
         logic roundup;
         logic [4:0] fflags;
-        logic overflow_before_rounding;
         logic [FLEN-1:0] result_if_overflow;
         //logic [2:0] rm;
+        logic d2s;
     } fp_round_packet_t;
 
     typedef struct packed{
@@ -154,7 +157,6 @@ package fpu_types;
         id_t id;
         logic done;
         logic [FLEN-1:0] rd;
-        logic [4:0] fflags;
     } fp_unit_writeback_t;
 
     typedef struct packed{
@@ -212,6 +214,7 @@ package fpu_types;
         logic                swap;
         logic                add;
         logic [EXPO_WIDTH:0] expo_diff;
+        logic                single;
         grs_t                fp_add_grs;
     } fp_add_inputs_t;
 
@@ -222,7 +225,6 @@ package fpu_types;
 
         logic [EXPO_WIDTH-1:0] rs1_pre_normalize_shift_amt;
         logic [EXPO_WIDTH-1:0] rs2_pre_normalize_shift_amt;
-        logic [EXPO_WIDTH-1:0] rs3_pre_normalize_shift_amt;
         logic                  rs1_subnormal;
         logic                  rs2_subnormal;
         logic                  rs3_subnormal;
@@ -250,12 +252,12 @@ package fpu_types;
         logic [EXPO_WIDTH-1:0] rs2_pre_normalize_shift_amt;
         logic                  rs1_normal;
         logic                  rs2_normal;
-        logic [6:0]            fn7;        //only need to two 2nd bit
         logic [2:0]            rm;
         id_t                   id;
-        logic                  is_div;
+        logic                  is_sqrt;
         logic [3:0]            rs1_special_case;
         logic [3:0]            rs2_special_case;
+        logic                  single;
     } fp_div_sqrt_inputs_t;
 
     typedef struct packed{
@@ -302,12 +304,26 @@ package fpu_types;
     } fp_sign_inject_inputs_t;
 
     typedef struct packed{
+        logic [31:0]        rs1;
+    } fp_mv_i2f_inputs_t;
+
+    typedef struct packed{
+        logic [FLEN-1:0]    rs1;
+        logic               invalid;
+        logic               inexact;
+        logic               hidden;
+    } fp_conv_inputs_t;
+
+    typedef struct packed{ //TODO: union inputs?
         fp_i2f_inputs_t         fp_i2f_inputs;
         fp_minmax_inputs_t      fp_minmax_inputs;
         fp_sign_inject_inputs_t fp_sign_inject_inputs;
+        fp_mv_i2f_inputs_t      fp_mv_i2f_inputs;
+        fp_conv_inputs_t        fp_conv_inputs;
 
-        logic [2:0]         instruction; //{i2f, minmax, sign_inj}
+        logic [4:0]         instruction; //{conv, mvi2f, i2f, minmax, sign_inj}
         logic [2:0]         rm;
+        logic               single;
     } fp_wb2fp_misc_inputs_t;
 
     typedef struct packed{
@@ -323,6 +339,7 @@ package fpu_types;
         logic                       is_signed;
         logic                       subtract;
         logic [2:0]                 rm;
+        logic                       nan;
     } fp_f2i_inputs_t;
 
     typedef struct packed{
@@ -341,13 +358,16 @@ package fpu_types;
     } fp_class_inputs_t;
 
     typedef struct packed{
+        logic [FLEN_F-1:0]    rs1;
+    } fp_mv_f2i_inputs_t;
+
+    typedef struct packed{ //TODO: union? sharing fields?
+        fp_mv_f2i_inputs_t fp_mv_f2i_inputs;
         fp_f2i_inputs_t fp_f2i_inputs;
         fp_cmp_inputs_t fp_cmp_inputs;
         fp_class_inputs_t fp_class_inputs;
 
-        logic [2:0]         instruction; //{f2i, cmp, class}
-        logic [2:0]         rm;
-        logic               is_signed;
+        logic [3:0]         instruction; //{mvf2i, f2i, cmp, class}
     } fp_wb2int_misc_inputs_t;
 
     //intermediate outputs from FMUL for FMADD instructions
@@ -363,11 +383,11 @@ package fpu_types;
         logic rs3_hidden_bit;
         logic [2:0] mul_rm;
         logic [2:0] instruction;
-        logic invalid_operation;
         logic [3:0] rs1_special_case;
         logic [3:0] rs2_special_case;
         logic [EXPO_WIDTH:0] expo_diff;
         logic swap;
+        logic single;
     } fma_mul_outputs_t;
 
     //additional inputs to support FP LS
@@ -470,4 +490,19 @@ package fpu_types;
         logic [4:0] fflags;
         //id_t id;
     } unit_fflags_wb_t;
+
+    typedef union packed {
+        logic[FLEN-1:0] raw;
+        struct packed {
+            logic sign;
+            logic[EXPO_WIDTH-1:0] expo;
+            logic[FRAC_WIDTH-1:0] frac;
+        } d;
+        struct packed {
+            logic[FLEN-FLEN_F-1:0] box;
+            logic sign;
+            logic[EXPO_WIDTH_F-1:0] expo;
+            logic[FRAC_WIDTH_F-1:0] frac;
+        } s;
+    } fp_t;
 endpackage

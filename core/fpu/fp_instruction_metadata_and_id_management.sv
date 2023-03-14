@@ -142,7 +142,7 @@ module fp_instruction_metadata_and_id_management
         assign fp_commit_packet[i].phys_addr = commit_phys_addr[i];        
         assign fp_commit_packet[i].valid = fp_wb_packet[i].valid;
 
-        //MCA Only
+        //MCA Only //TODO: what is this doing?
         sandbox #(.SANDBOX_FRAC_W(FRAC_WIDTH), .SANDBOX_EXPO_W(EXPO_WIDTH))
         sandbox_inst (
             .data_in (fp_wb_packet[i].data),

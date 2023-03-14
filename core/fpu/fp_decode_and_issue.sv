@@ -74,10 +74,13 @@ module fp_decode_and_issue
     logic [6:0] fn7;
     logic [4:0] opcode_trim;
 
+    logic is_single;
     logic is_fld;
     logic is_sqrt;
     logic is_sign_inj, is_sign_inj_r;
     logic is_minmax, is_minmax_r;
+    logic is_mv_f2i, is_mv_i2f;
+    logic is_s2d, is_d2s;
     logic is_class_r, is_f2i_r, is_fcmp_r, is_i2f_r;
     logic enable_pre_normalize;
 
@@ -94,31 +97,34 @@ module fp_decode_and_issue
     assign rs3_addr = decode.instruction[31:27];
     assign rd_addr = decode.instruction[11:7];
 
+    assign is_single = ((opcode_trim inside {FMADD_T, FMSUB_T, FNMSUB_T, FNMADD_T, FOP_T} & ~fn7[0]) | (opcode_trim inside {FLD_T, FSD_T} & ~decode.instruction[12]) | is_s2d) & ~is_d2s;
     assign is_fld = opcode_trim == FLD_T;
-    assign is_i2f = opcode_trim == FOP_T & fn7 == FCVT_DW;
-    assign is_f2i = opcode_trim == FOP_T & fn7 == FCVT_WD;
-    assign is_class = opcode_trim == FOP_T & fn7 == FCLASS;
-    assign is_sqrt = opcode_trim == FOP_T & fn7 == FSQRT;
-    assign is_fcmp = opcode_trim == FOP_T & fn7 == FCMP;
-    assign is_minmax = opcode_trim == FOP_T & fn7 == FMIN_MAX;
-    assign is_sign_inj = opcode_trim == FOP_T & fn7 == FSIGN_INJECTION;
-    assign enable_pre_normalize = opcode_trim inside {FMADD_T, FMSUB_T, FNMSUB_T, FNMADD_T} | (opcode_trim == FOP_T & fn7 inside {FMUL, FDIV, FSQRT, FCVT_WD});
+    assign is_i2f = opcode_trim == FOP_T & fn7 inside {FCVT_DW, FCVT_SW};
+    assign is_mv_i2f = opcode_trim == FOP_T & fn7 == FMV_WX;
+    assign is_f2i = opcode_trim == FOP_T & fn7 inside {FCVT_WD, FCVT_WS};
+    assign is_mv_f2i = opcode_trim == FOP_T & fn7 == FMV_XW;
+    assign is_s2d = opcode_trim == FOP_T & fn7 == FCVT_DS;
+    assign is_d2s = opcode_trim == FOP_T & fn7 == FCVT_SD;
+    assign is_class = opcode_trim == FOP_T & (fn7 == FCLASS | (fn7 == FMV_XW & decode.instruction[12])); //FCLASS_F has the same fn7 as FMV_XW
+    assign is_sqrt = opcode_trim == FOP_T & fn7 inside {FSQRT, FSQRT_F};
+    assign is_fcmp = opcode_trim == FOP_T & fn7 inside {FCMP, FCMP_F};
+    assign is_minmax = opcode_trim == FOP_T & fn7 inside {FMIN_MAX, FMIN_MAX_F};
+    assign is_sign_inj = opcode_trim == FOP_T & fn7 inside {FSIGN_INJECTION, FSIGN_INJECTION_F};
+    assign enable_pre_normalize = opcode_trim inside {FMADD_T, FMSUB_T, FNMSUB_T, FNMADD_T} | (opcode_trim == FOP_T & fn7 inside {FMUL, FDIV, FSQRT, FCVT_WD, FMUL_F, FDIV_F, FSQRT_F, FCVT_WS});//TODO: why are the converts here?
 
     ////////////////////////////////////////////////////
     //Register File Support
-    assign uses_rs1 = opcode_trim inside {FMADD_T, FMSUB_T, FNMSUB_T, FNMADD_T} | (opcode_trim == FOP_T & fn7 inside {FADD, FSUB, FMUL, FDIV, FSQRT, FSIGN_INJECTION, FMIN_MAX, FCMP, FCVT_SD, FCLASS, FCVT_WD});
-    assign uses_rs2 = opcode_trim inside {FMADD_T, FMSUB_T, FNMSUB_T, FNMADD_T} | (opcode_trim == FOP_T & fn7 inside {FADD, FSUB, FMUL, FDIV, FSIGN_INJECTION, FMIN_MAX, FCMP});
+    assign uses_rs1 = opcode_trim inside {FMADD_T, FMSUB_T, FNMSUB_T, FNMADD_T} | (opcode_trim == FOP_T & fn7 inside {FADD, FSUB, FMUL, FDIV, FSQRT, FSIGN_INJECTION, FMIN_MAX, FCMP, FCVT_SD, FCLASS, FCVT_WD, FADD_F, FSUB_F, FMUL_F, FDIV_F, FSQRT_F, FSIGN_INJECTION_F, FMIN_MAX_F, FCMP_F, FCVT_DS, /*FCLASS_F,*/ FCVT_WS, FMV_XW});
+    assign uses_rs2 = opcode_trim inside {FMADD_T, FMSUB_T, FNMSUB_T, FNMADD_T} | (opcode_trim == FOP_T & fn7 inside {FADD, FSUB, FMUL, FDIV, FSIGN_INJECTION, FMIN_MAX, FCMP, FADD_F, FSUB_F, FMUL_F, FDIV_F, FSIGN_INJECTION_F, FMIN_MAX_F, FCMP_F});
     assign uses_rs3 = opcode_trim inside {FMADD_T, FMSUB_T, FNMSUB_T, FNMADD_T};
     assign uses_rd = decode.wb2_float;
 
     ////////////////////////////////////////////////////
     //Unit Determination
-    assign unit_needed[FP_UNIT_IDS.FMADD] = opcode[6-:3] == 3'b100 | (opcode_trim == FOP_T & fn7 inside{FMUL, FADD, FSUB});
-    assign unit_needed[FP_UNIT_IDS.FDIV_SQRT] = opcode_trim inside {FOP_T} & fn7[3:0] == 4'b1101;
-    assign unit_needed[FP_UNIT_IDS.MISC_WB2FP] = is_i2f | is_minmax | is_sign_inj;
-    assign unit_needed[FP_UNIT_IDS.MISC_WB2INT] = is_f2i | is_fcmp | is_class;
-    //assign unit_needed[FP_UNIT_IDS.FMINMAX_CMP] = opcode_trim inside {FOP_T} & fn7 inside {FMIN_MAX, FCMP, FSIGN_INJECTION, FCLASS};
-    //assign unit_needed[FP_UNIT_IDS.FCVT] = opcode_trim inside {FOP_T} & fn7 inside {FCVT_SD, FCVT_DS, FCVT_DW, FCVT_WD};
+    assign unit_needed[FP_UNIT_IDS.FMADD] = opcode[6-:3] == 3'b100 | (opcode_trim == FOP_T & fn7 inside{FMUL, FADD, FSUB, FMUL_F, FADD_F, FSUB_F});
+    assign unit_needed[FP_UNIT_IDS.FDIV_SQRT] = opcode_trim inside {FOP_T} & (fn7[3:0] == 4'b1101 || fn7[3:0] == 4'b1100);
+    assign unit_needed[FP_UNIT_IDS.MISC_WB2FP] = is_i2f | is_mv_i2f | is_minmax | is_sign_inj | is_s2d | is_d2s;
+    assign unit_needed[FP_UNIT_IDS.MISC_WB2INT] = is_f2i | is_mv_f2i | is_fcmp | is_class;
 
     ////////////////////////////////////////////////////
     //Renamer Support
@@ -132,10 +138,7 @@ module fp_decode_and_issue
 
     ////////////////////////////////////////////////////
     //Decode ID Support
-    rs_addr_t fp_decode_rd_addr;
-
     assign fp_decode_uses_rd = uses_rd;
-    assign fp_decode_rd_addr = rd_addr;
     assign fp_decode_phys_rd_addr = fp_renamer.phys_rd_addr;
     assign fp_decode_phys_rs_addr[RS1] = fp_renamer.phys_rs_addr[RS1];
     assign fp_decode_phys_rs_addr[RS2] = fp_renamer.phys_rs_addr[RS2];
@@ -163,12 +166,17 @@ module fp_decode_and_issue
             issue.fp_phys_rd_addr <= fp_renamer.phys_rd_addr;
             fp_issue_rs_wb_group <= fp_renamer.rs_wb_group;
             issue.is_float <= decode.is_float;
+            issue.is_single <= is_single;
             issue.wb2_float <= decode.wb2_float;
             issue.accumulating_csrs <= decode.accumulating_csrs;
             issue.enable_pre_normalize <= enable_pre_normalize;
             issue.is_fld <= is_fld;
             issue.is_f2i <= is_f2i;
+            issue.is_mv_f2i <= is_mv_f2i;
             issue.is_i2f <= is_i2f;
+            issue.is_mv_i2f <= is_mv_i2f;
+            issue.is_s2d <= is_s2d;
+            issue.is_d2s <= is_d2s;
             issue.is_class <= is_class;
             issue.is_sign_inj <= is_sign_inj;
             issue.is_minmax <= is_minmax;
@@ -207,17 +215,7 @@ module fp_decode_and_issue
     ////////////////////////////////////////////////////
     //DYN Rounding mode support
     logic [2:0] rm;
-    assign rm = &issue.fn3 ? dyn_rm : issue.fn3;
-
-    ////////////////////////////////////////////////////
-    //Special Case Detection
-    localparam VARIABLE_EXPO_WIDTH = EXPO_WIDTH;
-    localparam VARIABLE_FRAC_WIDTH = FRAC_WIDTH;
-    logic is_inf[FP_REGFILE_READ_PORTS];
-    logic is_SNaN[FP_REGFILE_READ_PORTS];
-    logic is_QNaN[FP_REGFILE_READ_PORTS];
-    logic is_zero[FP_REGFILE_READ_PORTS];
-    logic hidden_bit[FP_REGFILE_READ_PORTS];
+    assign rm = &issue.fn3 ? dyn_rm : issue.fn3; //TODO: Although issue is an output, fn3 is treated as an input
 
     //FP store forwarding
     (* ramstyle = "MLAB, no_rw_check" *) id_t rd_to_id_table [32]; //separate table for fp id tracking to avoid overwriting

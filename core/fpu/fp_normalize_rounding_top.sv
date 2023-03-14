@@ -52,6 +52,7 @@ module fp_normalize_rounding_top
     logic [NUM_WB_UNITS-1:0] unit_expo_overflow [FP_NUM_WB_GROUPS];
     logic [NUM_WB_UNITS-1:0] unit_right_shift [FP_NUM_WB_GROUPS];
     logic [NUM_WB_UNITS-1:0] unit_subnormal [FP_NUM_WB_GROUPS];
+    logic [NUM_WB_UNITS-1:0] unit_d2s [FP_NUM_WB_GROUPS];
 
     typedef logic [2:0] unit_rm_t;
     unit_rm_t [NUM_WB_UNITS-1:0] unit_rm [FP_NUM_WB_GROUPS];
@@ -105,6 +106,7 @@ module fp_normalize_rounding_top
                 assign unit_subnormal[i][j] = intermediate_unit_wb[CUMULATIVE_NUM_UNITS[i] + j].subnormal;
                 assign unit_right_shift[i][j] = intermediate_unit_wb[CUMULATIVE_NUM_UNITS[i] + j].right_shift;
                 assign unit_right_shift_amt[i][j] = intermediate_unit_wb[CUMULATIVE_NUM_UNITS[i] + j].right_shift_amt;
+                assign unit_d2s[i][j] = intermediate_unit_wb[CUMULATIVE_NUM_UNITS[i] + j].d2s;
                 assign intermediate_unit_wb[CUMULATIVE_NUM_UNITS[i] + j].ack = unit_ack[i][j];
             end
         end
@@ -143,6 +145,7 @@ module fp_normalize_rounding_top
             normalize_packet.expo_overflow = unit_expo_overflow[i][unit_sel[i]];
             normalize_packet.fflags =  unit_fflags[i][unit_sel[i]];
             normalize_packet.rm =  unit_rm[i][unit_sel[i]];
+            normalize_packet.d2s = unit_d2s[i][unit_sel[i]];
             normalize_packet.carry = unit_carry[i][unit_sel[i]];
             normalize_packet.safe = unit_safe[i][unit_sel[i]];
             normalize_packet.hidden = unit_hidden[i][unit_sel[i]];
@@ -161,7 +164,9 @@ module fp_normalize_rounding_top
     //Shared normalzation
     logic [FLEN-1:0]             result_if_overflow;
     logic advance_norm;
+    /* verilator lint_off UNOPTFLAT */ //TODO
     fp_normalize_pre_processing_packet_t normalize_pre_processing_packet;
+    /* verilator lint_on UNOPTFLAT */
 
     assign advance_norm = advance_shift | ~normalize_packet_r.valid;
     always_ff @ (posedge clk) begin
@@ -170,10 +175,35 @@ module fp_normalize_rounding_top
     end
 
     //normalization
-    fp_normalize normalize_inst(
-        .fp_normalize_packet(normalize_packet_r),
-        .fp_normalize_pre_processing_packet(normalize_pre_processing_packet)
+    fp_prenormalize normalize_inst(
+        .single(normalize_packet_r.d2s),
+        .right_shift_in(normalize_packet_r.right_shift),
+        .overflow_in(normalize_packet_r.expo_overflow),
+        .subnormal(normalize_packet_r.subnormal),
+        .hidden_bit(normalize_packet_r.hidden),
+        .expo_in(normalize_packet_r.data[FLEN-2-:EXPO_WIDTH]),
+        .left_shift_amt(normalize_packet_r.clz),
+        .right_shift_amt(normalize_packet_r.right_shift_amt),
+
+        .right_shift_out(normalize_pre_processing_packet.right_shift),
+        .dp_overflow_out(normalize_pre_processing_packet.expo_overflow_norm),
+        .sp_overflow_out(normalize_pre_processing_packet.sp_overflow),
+        .shift_amt_out(normalize_pre_processing_packet.shift_amt),
+        .dp_expo_out(normalize_pre_processing_packet.expo_norm),
+        .sp_expo_out(normalize_pre_processing_packet.sp_expo)
     );
+    assign normalize_pre_processing_packet.sign_norm = normalize_packet_r.data[FLEN-1];
+    assign normalize_pre_processing_packet.valid = normalize_packet_r.valid;
+    assign normalize_pre_processing_packet.rm = normalize_packet_r.rm;
+    assign normalize_pre_processing_packet.id = normalize_packet_r.id;
+    assign normalize_pre_processing_packet.fflags = normalize_packet_r.fflags;
+    assign normalize_pre_processing_packet.d2s = normalize_packet_r.d2s;
+
+    logic signed [FRAC_WIDTH+3+GRS_WIDTH-1:0] in_left;
+    logic signed [FRAC_WIDTH+3+GRS_WIDTH-1:0] in_right;
+    assign in_right = {normalize_packet_r.carry, normalize_packet_r.safe, normalize_packet_r.hidden, normalize_packet_r.data[FRAC_WIDTH-1:0], normalize_packet_r.grs};
+    assign in_left = reverse(in_right);
+    assign normalize_pre_processing_packet.shifter_in = normalize_pre_processing_packet.right_shift ? in_right : in_left;
 
     ////////////////////////////////////////////////////
     //Shifter
@@ -186,7 +216,6 @@ module fp_normalize_rounding_top
     logic [EXPO_WIDTH-1:0] result_expo_norm;
     logic expo_overflow_norm;
     logic [FRAC_WIDTH-1:0] result_frac_norm;
-    logic overflow_before_rounding;
     logic carry_norm;
     logic safe_norm;
     logic hidden_norm;
@@ -201,9 +230,8 @@ module fp_normalize_rounding_top
 
         {carry_norm, safe_norm, hidden_norm, result_frac_norm, grs_norm} = right_shift ? result : result_reversed;
         result_sign_norm = normalize_pre_processing_packet_r.sign_norm;
-        result_expo_norm = normalize_pre_processing_packet_r.expo_norm;
-        expo_overflow_norm = normalize_pre_processing_packet_r.expo_overflow_norm;
-        overflow_before_rounding = normalize_pre_processing_packet_r.overflow_before_rounding;
+        result_expo_norm = normalize_pre_processing_packet_r.d2s ? {{(EXPO_WIDTH-EXPO_WIDTH_F){normalize_pre_processing_packet_r.sp_expo[EXPO_WIDTH_F-1]}}, normalize_pre_processing_packet_r.sp_expo} : normalize_pre_processing_packet_r.expo_norm;
+        expo_overflow_norm = normalize_pre_processing_packet_r.d2s ? normalize_pre_processing_packet_r.sp_overflow : normalize_pre_processing_packet_r.expo_overflow_norm;
     end
 
     assign advance_shift = advance_round | ~normalize_pre_processing_packet_r.valid;
@@ -212,12 +240,22 @@ module fp_normalize_rounding_top
             normalize_pre_processing_packet_r <= normalize_pre_processing_packet;
     end
 
+    logic[2:0] round_grs;
+    assign round_grs = normalize_pre_processing_packet_r.d2s ? 
+        {result_frac_norm[FRAC_WIDTH-FRAC_WIDTH_F-1 -: 2], |result_frac_norm[FRAC_WIDTH-FRAC_WIDTH_F-3:0] | |grs_norm} : 
+        {grs_norm[GRS_WIDTH-1-:2], |grs_norm[0+:GRS_WIDTH-2]};
+    logic round_lsb;
+    assign round_lsb = normalize_pre_processing_packet_r.d2s ? result_frac_norm[FRAC_WIDTH-FRAC_WIDTH_F] : result_frac_norm[0];
+
+    logic round_inexact;
+    assign round_inexact = |round_grs;
+
     //roundup calculation
     fp_round_simplified round(
         .sign(result_sign_norm),
         .rm(normalize_pre_processing_packet_r.rm),
-        .grs({grs_norm[GRS_WIDTH-1-:2], |grs_norm[0+:GRS_WIDTH-2]}),
-        .lsb(result_frac_norm[0]),
+        .grs(round_grs),
+        .lsb(round_lsb),
         .roundup(round_packet.roundup),
         .result_if_overflow(result_if_overflow)
     );
@@ -228,9 +266,9 @@ module fp_normalize_rounding_top
     assign round_packet.expo_overflow = expo_overflow_norm;
     assign round_packet.hidden = hidden_norm;
     assign round_packet.id = normalize_pre_processing_packet_r.id;
-    assign round_packet.result_if_overflow = result_if_overflow;
-    assign round_packet.fflags = {normalize_pre_processing_packet_r.fflags[4:1], normalize_pre_processing_packet_r.fflags[0] | |grs_norm};
-    assign round_packet.overflow_before_rounding = overflow_before_rounding;
+    assign round_packet.result_if_overflow = normalize_pre_processing_packet_r.d2s ? {{(FLEN-FLEN_F){1'b1}}, result_if_overflow[FLEN-1], result_if_overflow[FRAC_WIDTH +: EXPO_WIDTH_F], result_if_overflow[FRAC_WIDTH_F-1:0]} : result_if_overflow; //Convert dp overflow value to sp
+    assign round_packet.d2s = normalize_pre_processing_packet_r.d2s;
+    assign round_packet.fflags = {normalize_pre_processing_packet_r.fflags[4:1], normalize_pre_processing_packet_r.fflags[0] | round_inexact};
 
     ////////////////////////////////////////////////////
     //Shared rounding
@@ -247,6 +285,7 @@ module fp_normalize_rounding_top
     logic                        overflowExp, underflowExp;
     logic frac_overflow_debug;
     logic advance_round;
+    logic round_d2s;
 
     assign advance_round = unit_wb.ack | ~round_packet_r.valid;
     always_ff @ (posedge clk) begin
@@ -263,21 +302,29 @@ module fp_normalize_rounding_top
     assign sign_out = round_packet_r.data[FLEN-1];
     assign expo = round_packet_r.data[FLEN-2-:EXPO_WIDTH];
     assign expo_overflow_round = round_packet_r.expo_overflow;
-    assign frac = round_packet_r.data[FRAC_WIDTH-1:0];
+    assign frac = round_d2s ? {round_packet_r.data[FRAC_WIDTH-1 -: FRAC_WIDTH_F], {(FRAC_WIDTH-FRAC_WIDTH_F){1'b1}}} : round_packet_r.data[FRAC_WIDTH-1:0];
     assign hidden_round = round_packet_r.hidden;
     assign fflags = round_packet_r.fflags;
+    assign round_d2s = round_packet_r.d2s;
 
     assign {frac_overflow_debug, frac_round_intermediate} = {hidden_round, frac} + (FRAC_WIDTH+1)'(roundup);
     assign frac_out = frac_round_intermediate[FRAC_WIDTH-1:0] >> frac_overflow;
     assign overflowExp = (frac_overflow & &expo[EXPO_WIDTH-1:1]) | expo_overflow_round;
     assign expo_out = expo + EXPO_WIDTH'(frac_overflow);
-    assign underflowExp = ~(hidden_round) & |frac_out;
+    assign underflowExp = ~(hidden_round) & |frac_out & fflags[0]; //Underflow only occurs if inexact
     assign fflags_out = fflags[4] ? fflags : fflags | {2'b0, overflowExp, underflowExp, overflowExp}; //inexact is asserted when overflow
 
     //Output
     assign unit_wb.id = round_packet_r.id;
     assign unit_wb.done = round_packet_r.valid;
-    assign unit_wb.rd = overflowExp ? round_packet_r.result_if_overflow : {sign_out, expo_out, frac_out};
+    always_comb begin
+        if (overflowExp)
+            unit_wb.rd = round_packet_r.result_if_overflow;
+        else if (round_d2s)
+            unit_wb.rd = {{(FLEN-FLEN_F){1'b1}}, sign_out, expo_out[0 +: EXPO_WIDTH_F], frac_out[FRAC_WIDTH-1 -: FRAC_WIDTH_F]};
+        else
+            unit_wb.rd = {sign_out, expo_out, frac_out};
+    end
     assign unit_wb.fflags = fflags_out;
 
     function logic [FRAC_WIDTH+3+GRS_WIDTH-1:0] reverse(input logic signed [FRAC_WIDTH+3+GRS_WIDTH-1:0] in);

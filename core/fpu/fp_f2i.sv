@@ -36,8 +36,6 @@ module fp_f2i
 
     id_t                        id;
     logic                       done;
-    localparam                  NUM_STICKY_LUTS = (FRAC_WIDTH+1-2-1)/6+1; //number of 6-input LUTs
-    localparam                  NUM_INT_LUTS = (XLEN-1)/6+1;
     logic                       sign;
     logic [EXPO_WIDTH-1:0]      expo_unbiased;
     logic [FRAC_WIDTH:0]        rs1_frac;
@@ -49,13 +47,13 @@ module fp_f2i
     logic                       expo_unbiased_greater_than_30;
     logic                       is_signed;
     logic [2:0]                 rm;
+    logic                       nan;
 
     logic [XLEN-1:0]            f2i_int, r_f2i_int;
     logic [FRAC_WIDTH:0]        f2i_frac;
     logic [2:0]                 grs;
     logic                       sticky;
     logic                       inexact, r_inexact;
-    logic [NUM_STICKY_LUTS-1:0] f2i_frac_sticky_OR;
     logic                       roundup;
     logic [FLEN-1:0]            result_if_overflow;
 
@@ -64,7 +62,7 @@ module fp_f2i
     logic                       greater_than_largest_unsigned_int, r_greater_than_largest_unsigned_int;
     logic                       greater_than_largest_signed_int, r_greater_than_largest_signed_int;
     logic                       smaller_than_smallest_signed_int, r_smaller_than_smallest_signed_int;
-    logic [XLEN-1:0]            special_case_result, r_special_case_result;
+    logic [XLEN-1:0]            special_case_result;
     logic                       special, r_special;
 
     logic                       subtract, r_subtract;
@@ -87,6 +85,7 @@ module fp_f2i
     assign expo_unbiased_greater_than_30 = fp_f2i_inputs.expo_unbiased_greater_than_30;
     assign is_signed = fp_f2i_inputs.is_signed;
     assign rm = fp_f2i_inputs.rm;
+    assign nan = fp_f2i_inputs.nan;
 
     //left shift
     assign f2i_int_dot_frac = shift_in << expo_unbiased;
@@ -130,7 +129,7 @@ module fp_f2i
     assign inexact = |grs;
     assign all_frac = &f2i_int[XLEN-2:0];
     assign greater_than_largest_unsigned_int = (~is_signed) & ((f2i_int[XLEN-1] & all_frac & inexact) | expo_unbiased_greater_than_31);
-    assign greater_than_largest_signed_int   = (is_signed & ~sign) & ((~f2i_int[XLEN-1] & all_frac & inexact) | expo_unbiased_greater_than_30);
+    assign greater_than_largest_signed_int   = nan | ((is_signed & ~sign) & ((~f2i_int[XLEN-1] & all_frac & inexact) | expo_unbiased_greater_than_30));
     assign smaller_than_smallest_signed_int  = (is_signed & sign) & ((f2i_int[XLEN-1] & (any_frac | inexact)) | expo_unbiased_greater_than_31);
     assign special = (~is_signed & (greater_than_largest_unsigned_int | sign)) |
                     (is_signed & (greater_than_largest_signed_int | smaller_than_smallest_signed_int));
@@ -169,7 +168,6 @@ module fp_f2i
             r_in1 <= in1;
             r_subtract <= subtract;
 
-            r_special_case_result <= special_case_result;
             r_special <= special;
         end
     end

@@ -39,6 +39,7 @@ module fp_div_core
     logic                   start_algorithm_r;
     logic                   done[1:0];
     id_t                    id_in_progress;
+    logic                   single;
     logic [FLEN-1:0]        rs1, rs2;
     logic                   rs1_hidden_bit, rs2_hidden_bit;
     logic                   rs1_sign, rs2_sign;
@@ -74,6 +75,7 @@ module fp_div_core
             rs1_normal <= fp_div_sqrt_inputs.rs1_normal;
             rs2_normal <= fp_div_sqrt_inputs.rs2_normal;
             id_in_progress <= fp_div_sqrt_inputs.id;
+            single <= fp_div_sqrt_inputs.single;
             rs1_is_inf <= fp_div_sqrt_inputs.rs1_special_case[3];
             rs1_is_SNaN <= fp_div_sqrt_inputs.rs1_special_case[2];
             rs1_is_QNaN <= fp_div_sqrt_inputs.rs1_special_case[1];
@@ -99,7 +101,7 @@ module fp_div_core
 
     //special case handling
     assign invalid_operation = (rs1_is_zero & rs2_is_zero) | (rs1_is_inf & rs2_is_inf) | rs1_is_SNaN | rs2_is_SNaN;
-    assign div_by_zero       = ~rs1_is_zero & ~rs1_is_inf & (rs2_is_zero);
+    assign div_by_zero       = ~rs1_is_zero & ~rs1_is_inf & ~rs1_is_QNaN & ~rs1_is_SNaN & rs2_is_zero;
     assign output_QNaN       = invalid_operation | rs1_is_QNaN | rs2_is_QNaN;
     assign output_inf        = ~output_QNaN & (div_by_zero | rs1_is_inf);
     generate if (ENABLE_SUBNORMAL) begin
@@ -175,7 +177,8 @@ module fp_div_core
     assign advance = ~fp_wb.done | fp_wb.ack;
     assign fp_wb.done = done[0];
     assign fp_wb.id = id_in_progress;
-    assign fp_wb.fflags = {1'b0, div_by_zero, 3'b0};// ,|grs_round & ~early_terminate};
+    assign fp_wb.d2s = single;
+    assign fp_wb.fflags = {invalid_operation, div_by_zero, 3'b0};// ,|grs_round & ~early_terminate};
     assign fp_wb.rm = rm;
     assign fp_wb.rd = output_special_case[0] ? special_case_results[0] :
                                                 {result_sign[0], result_expo[EXPO_WIDTH-1:0], result_frac[FRAC_WIDTH-1:0]};

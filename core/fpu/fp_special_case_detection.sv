@@ -20,29 +20,6 @@
  *             Yuhui Gao <yuhuig@sfu.ca>
  */
 
-module fp_special_case_detection_mp
-#(
-    parameter FRAC_W=52,
-    parameter EXPO_W=11
-)(
-    input logic [FRAC_W+EXPO_W:0] input1,
-    output logic is_inf,
-    output logic is_SNaN,
-    output logic is_QNaN,
-    output logic is_zero
-);
-
-    localparam FPLEN = 1 + FRAC_W + EXPO_W;
-
-    logic expo_all_1s = &input1[FPLEN-2-:EXPO_W];
-
-    assign is_inf = expo_all_1s & ~(|input1[0+:FRAC_W]);
-    assign is_SNaN = expo_all_1s & ~input1[FRAC_W-1] & input1[FRAC_W-2] & ~|input1[FRAC_W-3:0];
-    assign is_QNaN = expo_all_1s & input1[FRAC_W-1] & ~|input1[FRAC_W-2:0];
-    assign is_zero = ~|input1[FPLEN-2-:EXPO_W]; // subnormal considered zero
-
-endmodule
-
 module fp_special_case_detection
     import taiga_config::*;
 

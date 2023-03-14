@@ -662,9 +662,9 @@ module taiga_sim
             fmul_operand_stall_rs1   = fmul_operand_stall & rs1_conflict;
             fmul_operand_stall_rs2   = fmul_operand_stall & rs2_conflict;
             fadd_stall_due_to_fmadd  = cpu.fpu_block.fpu_block.fp_madd_inst.add_issue.new_request & ~cpu.fpu_block.fpu_block.fp_madd_inst.fp_add_inputs_fifo.pop & cpu.fpu_block.fpu_block.fp_madd_inst.fp_add_inputs_fifo.valid; //fadd input fifo not issued though valid
-            rs1_subnormal = cpu.instruction_issued & uses_rs1 & ~cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.hidden_bit[RS1] & ~cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.is_zero[RS1];
-            rs2_subnormal = cpu.instruction_issued & uses_rs2 & ~cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.hidden_bit[RS2] & ~cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.is_zero[RS2];
-            rs3_subnormal = cpu.instruction_issued & uses_rs3 & ~cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.hidden_bit[RS3] & ~cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.is_zero[RS3];
+            //rs1_subnormal = cpu.instruction_issued & uses_rs1 & ~cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.hidden_bit[RS1] & ~cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.is_zero[RS1];
+            //rs2_subnormal = cpu.instruction_issued & uses_rs2 & ~cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.hidden_bit[RS2] & ~cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.is_zero[RS2];
+            //rs3_subnormal = cpu.instruction_issued & uses_rs3 & ~cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.hidden_bit[RS3] & ~cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.is_zero[RS3];
             rd_subnormal = cpu.fp_commit_packet[0].valid & ~(|cpu.fp_commit_packet[0].data[FLEN-2-:EXPO_WIDTH]) & |cpu.fp_commit_packet[0].data[0+:FRAC_WIDTH];
             wb_round_overflow = cpu.fpu_block.fpu_block.norm_round_inst.frac_overflow & cpu.fpu_block.fpu_block.norm_round_inst.round_packet_r.valid;
             roundup = cpu.fpu_block.fpu_block.norm_round_inst.roundup & cpu.fpu_block.fpu_block.norm_round_inst.round_packet_r.valid;

@@ -34,14 +34,11 @@ module fp_add_madd_fused
 (
     input logic clk,
     input logic rst,
-    input logic fma_mul_invalid_operation,
     input fp_add_inputs_t fp_add_inputs,
     unit_issue_interface.unit issue,
     fp_unit_writeback_interface.unit fp_wb
 );
 
-    logic [FLEN-1:0]               rs1;
-    logic [FLEN-1:0]               rs2;
     logic [FLEN-1:0]               temp_rs1;
     logic [FLEN-1:0]               temp_rs2;
     logic                          temp_rs1_sign;
@@ -75,18 +72,13 @@ module fp_add_madd_fused
     logic [EXPO_WIDTH-1:0]         result_expo [1:0];
     logic                          result_expo_overflow [1:0];
     logic [FRAC_WIDTH+2:0]         result_frac [1:0];
-    logic                          result_sign_norm [2:0];
-    logic [EXPO_WIDTH-1:0]         result_expo_norm [2:0];
-    logic [FRAC_WIDTH:0]           result_frac_norm [2:0];
 
     logic [EXPO_WIDTH:0]           expo_diff[2:0];
     logic [EXPO_WIDTH:0]           align_shift_amt;
     logic [FRAC_WIDTH+1:0]         rs2_frac_aligned[1:0];
     grs_t                          grs_in;
     grs_t                          rs1_grs[1:0], rs2_grs[1:0];
-    grs_t                          grs;//guard, round, sticky bits
-    logic                          overflow_before_rounding [2:0];
-    logic                          roundup[1:0];
+    grs_t                          grs;
     logic                          inexact[3:0];
     logic                          invalid_operation[4:0];
     logic                          output_QNaN[4:0];
@@ -95,6 +87,7 @@ module fp_add_madd_fused
     logic                          rs1_NaN, rs2_NaN;
     logic                          done [3:0];
     id_t                           id [3:0];
+    logic                          d2s[1:0];
     logic [EXPO_WIDTH-1:0] clz_with_prepended_0s, left_shift_amt, left_shift_amt_offset;
     logic [FLEN-1:0] special_case_results[1:0];
     logic output_special_case[1:0];
@@ -125,7 +118,7 @@ module fp_add_madd_fused
     assign rs1_NaN = |fp_add_inputs.rs1_special_case[2:1];
     assign rs2_NaN = |fp_add_inputs.rs2_special_case[2:1];
 
-    assign invalid_operation[0] = fma_mul_invalid_operation || fp_add_inputs.rs1_special_case[2] || fp_add_inputs.rs2_special_case[2] ||
+    assign invalid_operation[0] = fp_add_inputs.rs1_special_case[2] || fp_add_inputs.rs2_special_case[2] ||
                                     (rs1_inf & rs2_inf & (temp_rs1_sign ^ temp_rs2_sign)); //substraction in magnitude of infinities
     assign inexact[0] = |fp_add_inputs.fp_add_grs;
     assign output_QNaN[0] = rs1_NaN || rs2_NaN || invalid_operation[0];
@@ -204,7 +197,7 @@ module fp_add_madd_fused
     assign adder_in2 = {1'b0, rs2_frac_aligned[1], {rs2_grs[1][GRS_WIDTH-1-:(GRS_WIDTH-1)], rs2_grs[1][0] | rs2_grs_sticky_bit[1]}};
     assign adder_in1_1s = adder_in1;
     assign adder_in2_1s = adder_in2 ^ {(FRAC_WIDTH+GRS_WIDTH+3){subtract[1]}};
-    assign in1 = {adder_in1_1s, subtract[1]};
+    assign in1 = {adder_in1_1s, 1'b0/*subtract[1]*/};
     assign in2 = {adder_in2_1s, subtract[1]};
     assign {adder_carry_out, result_frac_intermediate, grs_intermediate, add_sub_carry_in} = in1 + in2;
     assign {result_frac[0], grs_add} = {result_frac_intermediate, grs_intermediate} ^ {(FRAC_WIDTH+GRS_WIDTH+3){~adder_carry_out & subtract[1]}};
@@ -238,26 +231,22 @@ module fp_add_madd_fused
         );
 
         assign left_shift_amt_offset = result_frac_all_0s ? left_shift_amt_bias_if_result_frac_all_0s : left_shift_amt_bias_if_result_frac_not_all_0s;
-        assign left_shift_amt = (clz_with_prepended_0s & {EXPO_WIDTH{~output_special_case[1]}}) - (left_shift_amt_offset & {EXPO_WIDTH{~output_special_case[1]}});
+        assign left_shift_amt = (clz_with_prepended_0s & {EXPO_WIDTH{~output_special_case[1] & ~output_zero}}) - (left_shift_amt_offset & {EXPO_WIDTH{~output_special_case[1] & ~output_zero}});
     end endgenerate
 
     assign output_special_case[0] = output_inf[1] | output_QNaN[1];
     always_comb begin
-        if(output_inf[2]) begin
+        if(output_inf[2])
             special_case_results[0] = {result_sign[1], {(EXPO_WIDTH){1'b1}}, {(FRAC_WIDTH){1'b0}}};
-        end else if (output_QNaN[2]) begin
+        else //qnan
             special_case_results[0] = CANONICAL_NAN;
-        end else begin
-            special_case_results[0] = '0;
-        end
     end
 
     //output
     /* verilator lint_off UNOPTFLAT */
     logic advance_stage [3:0] ;
     assign advance_stage[0] = ~done[0] | advance_stage[1];
-    //assign advance_stage[1] = ~done[1] | advance_stage[2];
-    assign advance_stage[1] = fp_wb.ack | ~fp_wb.done;//~done[2] | advance_stage[3];
+    assign advance_stage[1] = fp_wb.ack | ~fp_wb.done;
     /* verilator lint_on UNOPTFLAT */
 
     assign issue.ready = advance_stage[0]; //FADD module is ready when first pipeline stage is empty
@@ -265,22 +254,24 @@ module fp_add_madd_fused
     assign fp_wb.id = id[1];
     assign fp_wb.fflags = {invalid_operation[2], 3'b0, inexact[2]};
     assign fp_wb.rm = rm[2];
-    assign fp_wb.carry = result_frac[1][FRAC_WIDTH+2];
-    assign fp_wb.safe = result_frac[1][FRAC_WIDTH+1];
-    assign fp_wb.hidden = result_frac[1][FRAC_WIDTH];
+    assign fp_wb.carry = result_frac[1][FRAC_WIDTH+2] & ~output_special_case[1];
+    assign fp_wb.safe = result_frac[1][FRAC_WIDTH+1] & ~output_special_case[1];
+    assign fp_wb.hidden = result_frac[1][FRAC_WIDTH] | output_special_case[1];
     assign fp_wb.grs = output_special_case[1] ? 0 : grs;
     assign fp_wb.clz = left_shift_amt;
-    assign fp_wb.expo_overflow = result_expo_overflow[1];
+    assign fp_wb.expo_overflow = result_expo_overflow[1] & ~output_special_case[1];
     assign fp_wb.rd = output_special_case[1] ? special_case_results[0] :
                                                 {result_sign[1], result_expo[1], result_frac[1][FRAC_WIDTH-1:0]};
     assign fp_wb.right_shift_amt = EXPO_WIDTH'({fp_wb.carry, ~fp_wb.carry & fp_wb.safe});
-    assign fp_wb.subnormal = ~|result_expo[1];
+    assign fp_wb.subnormal = ~|result_expo[1] & ~output_special_case[1];
     assign fp_wb.right_shift = fp_wb.carry | fp_wb.safe;
+    assign fp_wb.d2s = d2s[1];
 
     //pipeline
     always_ff @ (posedge clk) begin
         if (advance_stage[0]) begin
             done[0] <= issue.new_request;
+            d2s[0] <= fp_add_inputs.single;
             id[0] <= issue.id;
             rm[1] <= rm[0];
 
@@ -318,17 +309,15 @@ module fp_add_madd_fused
             invalid_operation[1] <= invalid_operation[0];
             output_QNaN[1] <= output_QNaN[0];
             output_inf[1] <= output_inf[0];
-            inexact[1] <= inexact[0];//|fp_add_grs;
+            inexact[1] <= inexact[0];
         end
 
         //adder -> norm
         if (advance_stage[1]) begin
             done[1] <= done[0];
+            d2s[1] <= d2s[0];
             id[1] <= id[0];
             rm[2] <= rm[1];
-            //result_sign[1] <= result_sign[0];
-            //result_expo[1] <= result_expo[0];
-            //result_expo_overflow[1] <= result_expo_overflow[0];
             result_frac[1] <= result_frac[0];
             r_adder_carry_out <= adder_carry_out;
             grs <= grs_add;
@@ -339,35 +328,6 @@ module fp_add_madd_fused
             output_special_case[1] <= output_special_case[0];
         end
 
-        //norm -> round1
-        if (advance_stage[2]) begin
-            done[2] <= done[1];
-            id[2] <= id[1];
-            rm[3] <= rm[2];
-            result_sign_norm[1] <= result_sign_norm[0];
-            result_sign_norm[2] <= result_sign_norm[1];
-            result_expo_norm[1] <= result_expo_norm[0];
-            result_expo_norm[2] <= result_expo_norm[1];
-            result_frac_norm[1] <= result_frac_norm[0];
-            result_frac_norm[2] <= result_frac_norm[1];
-            inexact[3] <= inexact[2];
-            invalid_operation[3] <= invalid_operation[2];
-            output_QNaN[3] <= output_QNaN[2];
-            output_inf[3] <= output_inf[2];
-        end
-
-        //norm -> round2
-        if (advance_stage[3]) begin
-            done[3] <= done[2];
-            id[3] <= id[2];
-            //grs_round_compressed[1] <= grs_round_compressed[0];
-            output_inf[4] <= output_inf[3];
-            invalid_operation[4] <= invalid_operation[2];
-            output_QNaN[4] <= output_QNaN[3];
-            roundup[1] <= roundup[0];
-            special_case_results[1] <= special_case_results[0];
-            overflow_before_rounding[1] <= overflow_before_rounding[0];
-        end
     end
 
     ////////////////////////////////////////////////////

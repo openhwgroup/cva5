@@ -53,8 +53,8 @@ module fp_div_sqrt_wrapper
     assign issue.ready = div_issue.ready & sqrt_issue.ready;
     assign div_issue.id = issue.id;
     assign sqrt_issue.id = issue.id;
-    assign div_issue.new_request = issue.new_request & ~fp_div_sqrt_inputs.fn7[5];
-    assign sqrt_issue.new_request = issue.new_request & fp_div_sqrt_inputs.fn7[5];
+    assign div_issue.new_request = issue.new_request & ~fp_div_sqrt_inputs.is_sqrt;
+    assign sqrt_issue.new_request = issue.new_request & fp_div_sqrt_inputs.is_sqrt;
     assign div_issue.possible_issue = issue.possible_issue;
     assign sqrt_issue.possible_issue = issue.possible_issue;
 
@@ -74,6 +74,7 @@ module fp_div_sqrt_wrapper
             wb.subnormal = div_wb.subnormal;
             wb.right_shift = div_wb.right_shift;
             wb.right_shift_amt = div_wb.right_shift_amt;
+            wb.d2s = div_wb.d2s;
         end else begin
             wb.rd = sqrt_wb.rd;
             wb.id = sqrt_wb.id;
@@ -87,6 +88,7 @@ module fp_div_sqrt_wrapper
             wb.subnormal = sqrt_wb.subnormal;
             wb.right_shift = sqrt_wb.right_shift;
             wb.right_shift_amt = sqrt_wb.right_shift_amt;
+            wb.d2s = sqrt_wb.d2s;
         end
     end
 endmodule

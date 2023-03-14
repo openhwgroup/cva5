@@ -35,6 +35,7 @@ module fp_sqrt
 );
     typedef struct packed{
         id_t id;
+        logic single;
     } sqrt_attributes_t;
 
     typedef struct packed{
@@ -60,7 +61,7 @@ module fp_sqrt
     logic [2:0] rm;
 
     assign {is_inf, is_SNaN, is_QNaN, is_zero} = sqrt_op.special_case;
-    assign invalid_operation = rs1_sign & ~is_zero;
+    assign invalid_operation = (rs1_sign & ~is_zero) | is_SNaN;
     assign output_inf = is_inf & ~rs1_sign;
     assign output_QNaN = is_SNaN | is_QNaN | invalid_operation;
     assign output_zero = is_zero;
@@ -73,7 +74,7 @@ module fp_sqrt
         else if (output_inf)
             early_terminate_result = {1'b0, {EXPO_WIDTH{1'b1}}, FRAC_WIDTH'(0)};
         else if (output_zero)
-            early_terminate_result = {fp_div_sqrt_inputs.rs1[FLEN-1], (FRAC_WIDTH+EXPO_WIDTH)'(0)};
+            early_terminate_result = {rs1_sign, (FRAC_WIDTH+EXPO_WIDTH)'(0)};
         else
             early_terminate_result = {2'b0, {(EXPO_WIDTH-1){1'b1}}, FRAC_WIDTH'(0)};
     end
@@ -96,6 +97,7 @@ module fp_sqrt
         assign fifo_inputs.radicand = fp_div_sqrt_inputs.rs1;
     end endgenerate
     assign fifo_inputs.attr.id = issue.id;
+    assign fifo_inputs.attr.single = fp_div_sqrt_inputs.single;
     assign fifo_inputs.hidden_bit = fp_div_sqrt_inputs.rs1_hidden_bit;
     assign fifo_inputs.special_case = fp_div_sqrt_inputs.rs1_special_case;
 
@@ -205,6 +207,7 @@ module fp_sqrt
     assign wb.safe = 0;
     assign wb.hidden = result_frac[0][FRAC_WIDTH];
     assign wb.rd = early_terminate ? early_terminate_result : {rs1_sign, result_expo, result_frac[0][0+:FRAC_WIDTH]};
+    assign wb.d2s = in_progress_attr.single;
 
     ////////////////////////////////////////////////////
     //Output

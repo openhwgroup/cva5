@@ -110,10 +110,15 @@ package taiga_types;
         logic accumulating_csrs;
         logic wb2_float;
         logic is_float;
+        logic is_single;
         logic enable_pre_normalize;
         logic is_fld;
         logic is_i2f;
         logic is_f2i;
+        logic is_mv_i2f;
+        logic is_mv_f2i;
+        logic is_s2d;
+        logic is_d2s;
         logic is_class;
         logic is_fcmp;
         logic is_minmax;
@@ -187,6 +192,7 @@ package taiga_types;
 
         //FPU support
         logic is_float; 
+        logic is_single;
         logic [ARITH_FLEN-1:0] fp_rs2;
         logic fp_forwarded_store;
     } load_store_inputs_t;
@@ -245,6 +251,7 @@ package taiga_types;
         logic new_issue;
         //FPU support
         logic is_float;
+        logic is_single;
         logic fp_forwarded_store;
         logic [ARITH_FLEN-1:0] fp_data_in;
         logic we; //word select signal
@@ -257,6 +264,7 @@ package taiga_types;
         logic [3:0] potential_store_conflicts;
         //FPU support
         logic is_float;
+        logic is_single;
         logic we;
     } lq_entry_t;
 
@@ -267,6 +275,7 @@ package taiga_types;
         logic forwarded_store;
         //FPU support
         logic is_float;
+        logic is_single;
         logic we;
         logic fp_forwarded_store;
     } sq_entry_t;
@@ -304,6 +313,7 @@ package taiga_types;
 
         //FPU support
         logic is_float;
+        logic is_single;
         logic [SOFTWARE_FLEN-1:0] fp_data_in;
         logic we;
     } data_access_shared_inputs_t;

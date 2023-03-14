@@ -439,6 +439,7 @@ module decode_and_issue
 
     //FPU support
     assign ls_inputs.is_float = issue.is_float;
+    assign ls_inputs.is_single = issue.is_single;
     assign ls_inputs.fp_rs2 = fp_rf.data[RS2];
     assign ls_inputs.fp_forwarded_store = fp_rf.inuse[RS2];
 

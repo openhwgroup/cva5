@@ -96,7 +96,7 @@ module fp_cmp
         if (sign_equ)
             flt = (swap ^ rs1_sign) & ~feq;
         else
-            flt = rs1_sign & ~(rs1_zero & rs1_zero);
+            flt = rs1_sign & ~(rs1_zero & rs2_zero);
     end
 
     ////////////////////////////////////////////////////
@@ -105,7 +105,7 @@ module fp_cmp
 
     ////////////////////////////////////////////////////
     //Register
-    always_ff @ (posedge clk) begin
+    always_ff @ (posedge clk) begin //TODO is this needed?
         if (advance) begin
             done <= issue.new_request;
             id <= issue.id;

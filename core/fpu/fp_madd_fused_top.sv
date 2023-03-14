@@ -67,19 +67,15 @@ module fp_madd_fused_top
     fp_unit_writeback_t     fma_mul_wb;
     logic                   mul_op;
     logic                   add_op;
-    logic                   fma_mul_invalid_operation;
     //logic [2:0]             fma_mul_instruction;
     grs_t                   fma_mul_grs;
     logic [FLEN-1:0]        fma_add_rs1;
     logic                   fma_add_rs1_sign;
     logic                   add_invalid_operation;
-    logic [EXPO_WIDTH:0]    expo_diff;
-    logic [EXPO_WIDTH:0]    expo_diff_negate;
 
     assign fma_mul_wb = fma_mul_outputs_r.mul_wb;
     assign mul_op = fma_mul_outputs_r.mul_op;
     assign add_op = fma_mul_outputs_r.add_op;
-    assign fma_mul_invalid_operation = fma_mul_outputs_r.invalid_operation;
     //assign fma_mul_instruction = fma_mul_outputs_r.instruction;
     assign fma_mul_grs = fma_mul_outputs_r.mul_grs;//mul_op == 1 ? ~fma_mul_outputs_r.mul_grs : fma_mul_outputs_r.mul_grs;
     assign fma_add_rs1 = fma_mul_wb.rd;
@@ -98,6 +94,7 @@ module fp_madd_fused_top
     assign fma_add_inputs.add = add_op == 0 ? 1 : 0;
     assign fma_add_inputs.expo_diff = fma_mul_outputs_r.expo_diff;
     assign fma_add_inputs.fp_add_grs = fma_mul_grs;
+    assign fma_add_inputs.single = fma_mul_outputs_r.single;
 
     ////////////////////////////////////////////////////////
     //FADD instruction inputs FIFO
@@ -112,17 +109,6 @@ module fp_madd_fused_top
 
     assign add_inputs.fp_add_inputs = fp_madd_inputs.fp_add_inputs;
     assign add_inputs.id = issue.id;
-    //pre calculate expo diff for FADD
-    generate if (ENABLE_SUBNORMAL) begin
-        // subnormal expo is implicitly set to 1
-        assign expo_diff = (fp_madd_inputs.rs1[FLEN-2-:EXPO_WIDTH] + {{(EXPO_WIDTH-1){1'b0}}, ~fp_madd_inputs.rs1_hidden_bit})-
-                        (fp_madd_inputs.rs2[FLEN-2-:EXPO_WIDTH] + {{(EXPO_WIDTH-1){1'b0}}, ~fp_madd_inputs.rs2_hidden_bit});
-        assign expo_diff_negate = (fp_madd_inputs.rs2[FLEN-2-:EXPO_WIDTH] + {{(EXPO_WIDTH-1){1'b0}}, ~fp_madd_inputs.rs2_hidden_bit}) -
-                                (fp_madd_inputs.rs1[FLEN-2-:EXPO_WIDTH] + {{(EXPO_WIDTH-1){1'b0}}, ~fp_madd_inputs.rs1_hidden_bit});
-    end else begin
-        assign expo_diff = (fp_madd_inputs.rs1[FLEN-2-:EXPO_WIDTH]) - (fp_madd_inputs.rs2[FLEN-2-:EXPO_WIDTH]);
-        assign expo_diff_negate = (fp_madd_inputs.rs2[FLEN-2-:EXPO_WIDTH]) - (fp_madd_inputs.rs1[FLEN-2-:EXPO_WIDTH]);
-    end endgenerate
 
     //reduce fifo depth; change add ready signal
     assign fp_add_inputs_fifo.data_in = add_inputs;
@@ -146,19 +132,16 @@ module fp_madd_fused_top
             fp_add_inputs = fma_add_inputs;
             add_issue.id = fma_mul_wb.id;
             add_issue.new_request = fma_mul_wb.done & add_issue.ready;
-            add_invalid_operation = 0;
         end else begin
             fp_add_inputs = add_inputs_from_fifo.fp_add_inputs;
             add_issue.id = add_inputs_from_fifo.id;
             add_issue.new_request = fp_add_inputs_fifo.pop;//fp_add_inputs_fifo.valid; //issue if fifo not empty
-            add_invalid_operation = fma_mul_invalid_operation;
         end
     end
 
     fp_add_madd_fused ADD (
         .clk          (clk),
         .rst          (rst),
-        .fma_mul_invalid_operation (add_invalid_operation),
         .fp_add_inputs(fp_add_inputs),
         .issue        (add_issue),
         .fp_wb        (fp_madd_wb)

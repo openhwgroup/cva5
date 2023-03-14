@@ -214,6 +214,7 @@ endgenerate
     //FPU support
     generate if (CONFIG.FP.INCLUDE_FPU) begin
         assign lsq.is_float = ls_inputs.is_float;
+        assign lsq.is_single = ls_inputs.is_single;
         assign lsq.fp_data_in = ls_inputs.fp_rs2;
         assign lsq.fp_forwarded_store = ls_inputs.fp_forwarded_store;
         assign lsq.we = virtual_address[2]; //word select signal

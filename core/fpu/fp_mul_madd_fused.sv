@@ -85,6 +85,7 @@ module fp_mul_madd_fused
     logic                          output_zero [4:0];
     logic                          done [3:0];
     id_t                           id [3:0];
+    logic                          d2s [3:0];
     fp_unit_writeback_t            fma_mul_wb;
     logic [FLEN-1:0]               rs3 [3:0];
     logic                          rs3_hidden_bit[3:0];
@@ -119,8 +120,7 @@ module fp_mul_madd_fused
     assign rs2_inf = fp_madd_inputs.rs2_special_case[3];
     assign rs1_NaN = |fp_madd_inputs.rs1_special_case[2:1];
     assign rs2_NaN = |fp_madd_inputs.rs2_special_case[2:1];
-    assign invalid_operation[0] = (((rs1_zero & rs2_inf) | (rs1_inf & rs2_zero)) & rs2 != CANONICAL_NAN)
-                                | (rs1 == SNAN) | (rs2 == SNAN);
+    assign invalid_operation[0] = (rs1_zero & rs2_inf) | (rs1_inf & rs2_zero) | fp_madd_inputs.rs1_special_case[2] | fp_madd_inputs.rs2_special_case[2];
     assign output_QNaN[0] = invalid_operation[0] | rs1_NaN | rs2_NaN;
     assign output_inf[0] = ((rs1_inf & ~rs2_zero) | (~rs1_zero & rs2_inf)) & ~output_QNaN[0];
     generate if (ENABLE_SUBNORMAL)
@@ -210,6 +210,7 @@ module fp_mul_madd_fused
     assign issue.ready = advance_stage[0];
     assign fp_wb.done = done[2];
     assign fp_wb.id = id[2];
+    assign fp_wb.d2s = d2s[2];
     assign fp_wb.fflags = {invalid_operation[3], 4'b0};//, |grs[1]};
     assign fp_wb.carry = 1'b0;
     assign fp_wb.safe = result_frac[1][FRAC_WIDTH+1];
@@ -248,8 +249,8 @@ module fp_mul_madd_fused
     assign fma_mul_outputs.rs3_hidden_bit = rs3_hidden_bit[2];
     assign fma_mul_outputs.mul_rm = rm[2];
     assign fma_mul_outputs.instruction = instruction[2];
-    assign fma_mul_outputs.invalid_operation = invalid_operation[2];
-    assign fma_mul_outputs.rs1_special_case = {output_inf[2], 1'b0, output_QNaN[2], output_zero[2]};
+    assign fma_mul_outputs.rs1_special_case = {output_inf[2], invalid_operation[2], output_QNaN[2], output_zero[2]};
+    assign fma_mul_outputs.single = d2s[1];
     assign rs3_expo = rs3[2][FLEN-2-:EXPO_WIDTH];
 
     generate if (ENABLE_SUBNORMAL) begin
@@ -270,6 +271,7 @@ module fp_mul_madd_fused
         if (advance_stage[0]) begin
             done[0] <= issue.new_request;
             id[0] <= issue.id;
+            d2s[0] <= fp_madd_inputs.fp_add_inputs.single;
             rm[1] <= rm[0];
 
             rs1_sign[1] <= rs1_sign[0];
@@ -296,6 +298,7 @@ module fp_mul_madd_fused
         if (advance_stage[1]) begin
             done[1] <= done[0];
             id[1] <= id[0];
+            d2s[1] <= d2s[0];
             rm[2] <= rm[1];
             rs1_sign[2] <= rs1_sign[1];
             rs1_expo[2] <= rs1_expo[1];
@@ -322,6 +325,7 @@ module fp_mul_madd_fused
         if (advance_stage[2]) begin
             done[2] <= done[1] & instruction[2][0]; //only FMUL instructions go the FMUL writeback path
             id[2] <= id[1];
+            d2s[2] <= d2s[1];
             rm[3] <= rm[2];
 
             output_special_case[1] <= output_special_case[0];

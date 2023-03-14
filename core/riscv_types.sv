@@ -291,7 +291,6 @@ package riscv_types;
         FNMSUB_T = 5'b10010,
         FNMADD_T = 5'b10011,
         FOP_T = 5'b10100
-        //end of RV32D
     } opcodes_fp_trimmed_t;
 
     typedef enum bit [6:0]{
@@ -307,12 +306,24 @@ package riscv_types;
         FCMP            = 7'b1010001,
         FCLASS          = 7'b1110001,
         FCVT_WD         = 7'b1100001,       //double only double -> int
-        FCVT_DW         = 7'b1101001,       //double only int -> double
+        FCVT_DW         = 7'b1101001       //double only int -> double
+    } fn7_arith_fp_d_t;
+
+    typedef enum bit [6:0]{ //TODO: Better handling of single/double precision
+        FADD_F            = 7'b0000000,
+        FSUB_F            = 7'b0000100,
+        FMUL_F            = 7'b0001000,
+        FDIV_F            = 7'b0001100,
+        FSQRT_F           = 7'b0101100,
+        FSIGN_INJECTION_F = 7'b0010000,
+        FMIN_MAX_F        = 7'b0010100,
+        FCMP_F            = 7'b1010000,
+        //FCLASS_F          = 7'b1110000, //Same as MV_XW
         FMV_XW          = 7'b1110000,       //single f to 32bit int
         FMV_WX          = 7'b1111000,        //32bit int to single f
         FCVT_SW         = 7'b1101000,       //single only int -> f
         FCVT_WS         = 7'b1100000        //single only f -> int
-    } fn7_arith_fp_t;
+    } fn7_arith_fp_s_t;
 
     typedef enum bit [2:0]{
         FSGNJ = 3'b000,
@@ -330,14 +341,4 @@ package riscv_types;
         FLT = 3'b001,
         FLE = 3'b000
     } fn3_fp_cmp_t;
-
-    typedef enum bit [4:0]{
-        FCVT_W_D = 5'b00000,
-        FCVT_WU_D = 5'b00001
-    } rs2_fp_cvt_wd_t;
-
-    typedef enum bit [4:0]{
-        FCVT_D_W = 5'b00000,
-        FCVTT_D_WU = 5'b00001
-    } rs2_fp_cvt_dw_t;
 endpackage

@@ -76,7 +76,7 @@ module fp_normalize
     //Expo_overflow: FMUL, FDIV can assert
     //Expo_overflow_norm: FADD, FMUL can assert due to right shifting
 
-    //Righ Shift
+    //Right Shift
     //Needed by: FADD, FDIV, FMUL
     //The right shift amt is calculated by each unit; subnormal needs to support larger right shifter due to the multiplication's pre-normalization; normal's right shift amt cannot exceed 2
     generate if (ENABLE_SUBNORMAL) begin
@@ -91,7 +91,7 @@ module fp_normalize
 
     //Left Shift
     //Neededby: FSUB; FSQRT if subnormal is enabled
-    //Left shift is done by first reversing the bit order and sign-shited(>>>)
+    //Left shift is done by first reversing the bit order and sign-shifted(>>>)
     //This is needed to preserve the sticky bit
     generate if (ENABLE_SUBNORMAL) begin
         //FADD of two subnormals may result in promotion of subnormal to normal
@@ -118,8 +118,6 @@ module fp_normalize
         left = reverse(right);
         fp_normalize_pre_processing_packet.shifter_in = right_shift ? right : left;
         fp_normalize_pre_processing_packet.shift_amt = right_shift ? right_shift_amt : left_shift_amt_adjusted;
-
-        fp_normalize_pre_processing_packet.overflow_before_rounding = (expo_overflow_norm | (&expo_norm)) & |left_shift_amt;
 
         fp_normalize_pre_processing_packet.valid = fp_normalize_packet.valid;
         fp_normalize_pre_processing_packet.rm = fp_normalize_packet.rm;

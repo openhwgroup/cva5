@@ -26,6 +26,7 @@ module fp_minmax
     input logic clk,
     unit_issue_interface.unit issue,
     input fp_minmax_inputs_t fp_minmax_inputs,
+    input logic single,
     fp_unit_writeback_interface.unit wb
 );
 
@@ -41,4 +42,5 @@ module fp_minmax
     assign wb.fflags = {fp_minmax_inputs.invalid, 4'b0};
     assign wb.done = issue.new_request;
     assign wb.id = issue.id;
+    assign wb.d2s = single;
 endmodule

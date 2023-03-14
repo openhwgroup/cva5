@@ -59,7 +59,7 @@ module load_queue
     assign lq_output_valid = load_fifo.valid;
 
     //FIFO data ports
-    assign load_fifo.data_in = {lsq.addr, lsq.fn3, lsq.id, potential_store_conflicts, lsq.is_float, lsq.we};
+    assign load_fifo.data_in = {lsq.addr, lsq.fn3, lsq.id, potential_store_conflicts, lsq.is_float, lsq.is_single, lsq.we};
     assign lq_entry = load_fifo.data_out;
 
     ////////////////////////////////////////////////////

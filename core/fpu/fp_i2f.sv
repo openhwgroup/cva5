@@ -31,6 +31,7 @@ module fp_i2f
     input logic clk,
     unit_issue_interface.unit issue,
     input fp_i2f_inputs_t fp_i2f_inputs,
+    input logic single,
     fp_unit_writeback_interface.unit wb
 );
 
@@ -61,7 +62,7 @@ module fp_i2f
     // reduced precision >= XLEN can be handled using main shifter
     generate if (FRAC_WIDTH >= XLEN) begin
         assign i2f_frac = {{(FRAC_WIDTH-XLEN){1'b0}}, int_rs1_abs};
-        assign i2f_clz = FRAC_WIDTH - i2f_int_width_minus_1;
+        assign i2f_clz = (FRAC_WIDTH - i2f_int_width_minus_1) & {{EXPO_WIDTH{~int_rs1_zero}}};
         assign i2f_expo = (FRAC_WIDTH + BIAS) & {{EXPO_WIDTH{~int_rs1_zero}}};
     end else begin // reduced precision < XLEN won't fit in main shifter, so is handled here
         logic[XLEN+2:0] wide;
@@ -79,4 +80,5 @@ module fp_i2f
     assign wb.clz = i2f_clz;
     assign wb.done = issue.new_request;
     assign wb.id = issue.id;
+    assign wb.d2s = single;
 endmodule

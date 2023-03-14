@@ -118,7 +118,7 @@ module  fp_illegal_instruction_checker
 
     //need to read from integer reg file
     assign need_int_data = instruction inside {
-        FLW, FSW, FCVT_S_W, FCVT_S_WU, FMV_X_W,
+        FLW, FSW, FCVT_S_W, FCVT_S_WU, FMV_W_X,
 
         FLD, FSD, FCVT_D_W, FCVT_D_WU
     };
@@ -126,7 +126,7 @@ module  fp_illegal_instruction_checker
     assign need_float_data = instruction inside {
         FSW, FMADD_S, FMSUB_S, FNMSUB_S, FNMADD_S, FADD_S, FSUB_S, FMUL_S,
         FDIV_S, FSQRT_S, FSGNJ_S, FSGNJN_S, FSGNJX_S, FMIN_S, FMAX_S, FCVT_W_S,
-        FCVT_WU_S, FMV_W_X, FEQ_S, FLT_S, FLE_S, FLASS_S,
+        FCVT_WU_S, FMV_X_W, FEQ_S, FLT_S, FLE_S, FLASS_S,
 
         FSD, FMADD_D, FMSUB_D, FNMSUB_D, FNMADD_D, FADD_D, FSUB_D, FMUL_D,
         FDIV_D, FSQRT_D, FSGNJ_D, FSGNJN_D, FSGNJX_D, FMIN_D, FMAX_D, FCVT_W_D,
@@ -152,12 +152,14 @@ module  fp_illegal_instruction_checker
     assign opcode_trim = opcode[6:2];
     assign fn7 = instruction[31:25];
     assign float_instruction = opcode_trim inside {FLD_T, FSD_T, FMADD_T, FMSUB_T, FNMSUB_T, FNMADD_T, FOP_T};//sp_legal | db_legal;
-    assign write_int_data = (opcode_trim == FOP_T) & (fn7 inside {FCVT_WD, FCMP, FCLASS});
+    assign write_int_data = (opcode_trim == FOP_T) & (fn7 inside {FCVT_WD, FCMP, FCLASS, FCVT_WS, FCMP_F, /*FCLASS_F,*/ FMV_XW});
     assign write_float_data = float_instruction && !write_int_data && !(opcode_trim == FSD_T);
 
-    assign accumulating_csrs = instruction inside {FMADD_D, FMSUB_D, FNMSUB_D, FNMADD_D,
-        FMADD_D, FADD_D, FSUB_D, FMUL_D, FDIV_D, FSQRT_D, FMIN_D, FMAX_D, FCVT_S_D, FCVT_D_S,
-        FEQ_D, FLT_D, FLE_D, FCVT_W_D, FCVT_WU_D
+    assign accumulating_csrs = instruction inside {
+        FMADD_D, FMSUB_D, FNMSUB_D, FNMADD_D, FADD_D, FSUB_D, FMUL_D, FDIV_D, FSQRT_D,
+        FMIN_D, FMAX_D, FCVT_S_D, FCVT_D_S, FEQ_D, FLT_D, FLE_D, FCVT_W_D, FCVT_WU_D,
+        FMADD_S, FMSUB_S, FNMSUB_S, FNMADD_S, FADD_S, FSUB_S, FMUL_S, FDIV_S, FSQRT_S,
+        FMIN_S, FMAX_S, FCVT_W_S, FCVT_WU_S, FEQ_S, FLT_S, FLE_S, FCVT_S_W, FCVT_S_WU
     };
 
 endmodule

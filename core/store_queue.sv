@@ -157,7 +157,7 @@ module store_queue
     //Attributes LUTRAM
     always_ff @ (posedge clk) begin
         if (new_sq_request)
-            store_attr[sq_index] <= {lsq.addr, lsq.be, lsq.fn3, lsq.forwarded_store, lsq.is_float, lsq.we, lsq.fp_forwarded_store};
+            store_attr[sq_index] <= {lsq.addr, lsq.be, lsq.fn3, lsq.forwarded_store, lsq.is_float, lsq.is_single, lsq.we, lsq.fp_forwarded_store};
     end
 
     //Hash mem
@@ -269,6 +269,7 @@ module store_queue
     assign sq_entry.be = output_attr.be;
     assign sq_entry.fn3 = output_attr.fn3;
     assign sq_entry.is_float = output_attr.is_float;
+    assign sq_entry.is_single = output_attr.is_single;
     assign sq_entry.we = output_attr.we;
 
     always_comb begin

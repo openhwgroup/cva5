@@ -110,14 +110,15 @@ interface fp_unit_writeback_interface;
     logic right_shift;
     logic [EXPO_WIDTH-1:0] right_shift_amt;
     logic subnormal;
+    logic d2s;
 
     modport unit (
         input ack,
-        output id, done, rd, expo_overflow, fflags, rm, carry, hidden, grs, clz, safe, subnormal, right_shift, right_shift_amt
+        output id, done, rd, expo_overflow, fflags, rm, carry, hidden, grs, clz, safe, subnormal, right_shift, right_shift_amt, d2s
     );
     modport wb (
         output ack,
-        input id, done, rd, expo_overflow, fflags, rm, carry, hidden, grs, clz, safe, subnormal, right_shift, right_shift_amt
+        input id, done, rd, expo_overflow, fflags, rm, carry, hidden, grs, clz, safe, subnormal, right_shift, right_shift_amt, d2s
     );
 endinterface
 

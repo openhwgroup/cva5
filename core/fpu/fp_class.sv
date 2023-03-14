@@ -72,12 +72,12 @@ module fp_class
     assign rs1_zero = rs1_special_case[0];
 
     assign neg_inf = rs1_sign && rs1_inf;
-    assign neg_normal = rs1_sign && !rs1_subnormal;
+    assign neg_normal = rs1_sign && !rs1_subnormal && !rs1_inf && !sNaN && !qNaN;
     assign neg_subnormal = rs1_sign && rs1_subnormal && !rs1_zero;
     assign neg_zero = rs1_sign && rs1_zero;
     assign pos_zero = !rs1_sign && rs1_zero;
     assign pos_subnormal = !rs1_sign && rs1_subnormal && !rs1_zero;
-    assign pos_normal = !rs1_sign && !rs1_subnormal;
+    assign pos_normal = !rs1_sign && !rs1_subnormal && !rs1_inf && !sNaN && !qNaN;;
     assign pos_inf = !rs1_sign && rs1_inf;
     assign sNaN = rs1_special_case[2];//(rs1 == SNAN);
     assign qNaN = rs1_special_case[1];//(rs1 == CANONICAL_NAN);
