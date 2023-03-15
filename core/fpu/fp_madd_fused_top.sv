@@ -67,16 +67,13 @@ module fp_madd_fused_top
     fp_unit_writeback_t     fma_mul_wb;
     logic                   mul_op;
     logic                   add_op;
-    //logic [2:0]             fma_mul_instruction;
     grs_t                   fma_mul_grs;
     logic [FLEN-1:0]        fma_add_rs1;
     logic                   fma_add_rs1_sign;
-    logic                   add_invalid_operation;
 
     assign fma_mul_wb = fma_mul_outputs_r.mul_wb;
     assign mul_op = fma_mul_outputs_r.mul_op;
     assign add_op = fma_mul_outputs_r.add_op;
-    //assign fma_mul_instruction = fma_mul_outputs_r.instruction;
     assign fma_mul_grs = fma_mul_outputs_r.mul_grs;//mul_op == 1 ? ~fma_mul_outputs_r.mul_grs : fma_mul_outputs_r.mul_grs;
     assign fma_add_rs1 = fma_mul_wb.rd;
     assign fma_add_rs1_sign = mul_op ^ fma_add_rs1[FLEN-1];
@@ -89,7 +86,6 @@ module fp_madd_fused_top
     assign fma_add_inputs.rs2_special_case = fma_mul_outputs_r.rs2_special_case;
     assign fma_add_inputs.rs2_hidden_bit = fma_mul_outputs_r.rs3_hidden_bit;
     assign fma_add_inputs.rm = fma_mul_outputs_r.mul_rm;
-    assign fma_add_inputs.fn7 = (add_op == 0) ? FADD : FSUB;
     assign fma_add_inputs.swap = fma_mul_outputs_r.swap;
     assign fma_add_inputs.add = add_op == 0 ? 1 : 0;
     assign fma_add_inputs.expo_diff = fma_mul_outputs_r.expo_diff;
@@ -114,7 +110,6 @@ module fp_madd_fused_top
     assign fp_add_inputs_fifo.data_in = add_inputs;
     assign fp_add_inputs_fifo.potential_push = is_fadd & issue.new_request;
     assign fp_add_inputs_fifo.push = fp_add_inputs_fifo.potential_push;
-    //assign fp_add_inputs_fifo.pop = ~fma_mul_instruction[2] & fp_add_inputs_fifo.valid & add_issue.ready;
     assign fp_add_inputs_fifo.pop = ~fma_mul_outputs_r.is_fma & fp_add_inputs_fifo.valid & add_issue.ready;
     assign add_inputs_from_fifo = fp_add_inputs_fifo.data_out;
     taiga_fifo #(.DATA_WIDTH($bits(add_input_struct_t)), .FIFO_DEPTH(1)) add_input_fifo (.fifo(fp_add_inputs_fifo), .*);

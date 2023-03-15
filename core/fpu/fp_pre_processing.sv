@@ -403,7 +403,6 @@ module fp_pre_processing
     assign fp_add_inputs.rs1_special_case = {r_is_inf[RS1], r_is_SNaN[RS1], r_is_QNaN[RS1], r_is_zero[RS1]};
     assign fp_add_inputs.rs2_special_case = {r_is_inf[RS2], r_is_SNaN[RS2], r_is_QNaN[RS2], r_is_zero[RS2]};
     assign fp_add_inputs.rm = r_rm;
-    assign fp_add_inputs.fn7 = r_fn7;
     assign fp_add_inputs.swap = r_swap;
     assign fp_add_inputs.add = r_add;
     assign fp_add_inputs.rs1_expo_overflow = 0;

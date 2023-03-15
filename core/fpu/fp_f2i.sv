@@ -58,7 +58,6 @@ module fp_f2i
     logic [FLEN-1:0]            result_if_overflow;
 
     logic                       all_frac;
-    logic                       any_frac;
     logic                       greater_than_largest_unsigned_int, r_greater_than_largest_unsigned_int;
     logic                       greater_than_largest_signed_int, r_greater_than_largest_signed_int;
     logic                       smaller_than_smallest_signed_int, r_smaller_than_smallest_signed_int;
@@ -130,7 +129,7 @@ module fp_f2i
     assign all_frac = &f2i_int[XLEN-2:0];
     assign greater_than_largest_unsigned_int = (~is_signed) & ((f2i_int[XLEN-1] & all_frac & inexact) | expo_unbiased_greater_than_31);
     assign greater_than_largest_signed_int   = nan | ((is_signed & ~sign) & ((~f2i_int[XLEN-1] & all_frac & inexact) | expo_unbiased_greater_than_30));
-    assign smaller_than_smallest_signed_int  = (is_signed & sign) & ((f2i_int[XLEN-1] & (any_frac | inexact)) | expo_unbiased_greater_than_31);
+    assign smaller_than_smallest_signed_int  = (is_signed & sign) & ((f2i_int[XLEN-1] & inexact) | expo_unbiased_greater_than_31);
     assign special = (~is_signed & (greater_than_largest_unsigned_int | sign)) |
                     (is_signed & (greater_than_largest_signed_int | smaller_than_smallest_signed_int));
 

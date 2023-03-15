@@ -41,9 +41,9 @@ module fp_mul_madd_fused
     parameter BIAS = {1'b0, {(EXPO_WIDTH-1){1'b1}}};
     logic [FLEN-1:0]               rs1;
     logic [FLEN-1:0]               rs2;
-    logic [2:0]                    rm [4:0];
+    logic [2:0]                    rm [3:0];
     logic [6:0]                    opcode [3:0];
-    logic [2:0]                    instruction [3:0];
+    logic [2:0]                    instruction [2:0];
 
     logic                          rs1_hidden_bit;
     logic                          rs1_sign [2:0];
@@ -79,15 +79,15 @@ module fp_mul_madd_fused
     logic output_special_case[1:0];
 
     logic [HALF_GRS_WIDTH-1:0]                          grs [1:0];
-    logic                          output_QNaN [4:0];
-    logic                          invalid_operation [4:0];
-    logic                          output_inf[4:0];
-    logic                          output_zero [4:0];
-    logic                          done [3:0];
-    id_t                           id [3:0];
+    logic                          output_QNaN [3:0];
+    logic                          invalid_operation [3:0];
+    logic                          output_inf[3:0];
+    logic                          output_zero [3:0];
+    logic                          done [2:0];
+    id_t                           id [2:0];
     logic                          d2s [3:0];
     fp_unit_writeback_t            fma_mul_wb;
-    logic [FLEN-1:0]               rs3 [3:0];
+    logic [FLEN-1:0]               rs3 [2:0];
     logic                          rs3_hidden_bit[3:0];
     logic [3:0]                    rs3_special_case [3:0];
     logic [EXPO_WIDTH+1:0]           expo_diff;
@@ -199,10 +199,9 @@ module fp_mul_madd_fused
     end
 
     /* verilator lint_off UNOPTFLAT */
-    logic advance_stage [3:0] ;
+    logic advance_stage [2:0] ;
     assign advance_stage[0] = ~done[0] | advance_stage[1];
     assign advance_stage[1] = ~done[1] | advance_stage[2];
-    //assign advance_stage[2] = ~done[2] | advance_stage[3];
     assign advance_stage[2] = fp_wb.ack | ~fp_wb.done;
     /* verilator lint_on UNOPTFLAT */
 
@@ -248,7 +247,6 @@ module fp_mul_madd_fused
     assign fma_mul_outputs.rs2_special_case = rs3_special_case[2];
     assign fma_mul_outputs.rs3_hidden_bit = rs3_hidden_bit[2];
     assign fma_mul_outputs.mul_rm = rm[2];
-    assign fma_mul_outputs.instruction = instruction[2];
     assign fma_mul_outputs.rs1_special_case = {output_inf[2], invalid_operation[2], output_QNaN[2], output_zero[2]};
     assign fma_mul_outputs.single = d2s[1];
     assign rs3_expo = rs3[2][FLEN-2-:EXPO_WIDTH];
@@ -334,8 +332,6 @@ module fp_mul_madd_fused
             output_inf[3] <= output_inf[2];
             output_zero[3] <= output_zero[2];
             opcode[3] <= opcode[2];
-            instruction[3] <= instruction[2];
-            rs3[3] <= rs3[2];
             rs3_hidden_bit[3] <= rs3_hidden_bit[2];
             result_sign[1] <= result_sign[0];
             result_expo[1] <= result_expo[0];
@@ -343,16 +339,6 @@ module fp_mul_madd_fused
             pre_normalize_shift_amt[3] <= pre_normalize_shift_amt[2];
             right_shift[1] <= right_shift[0];
             result_frac[1] <= result_frac[0];
-        end
-        //round1
-        if (advance_stage[3]) begin
-            done[3] <= done[2];
-            id[3] <= id[2];
-            rm[4] <= rm[3];
-            invalid_operation[4] <= invalid_operation[3];
-            output_QNaN[4] <= output_QNaN[3];
-            output_inf[4] <= output_inf[3];
-            output_zero[4] <= output_zero[3];
         end
     end
 
