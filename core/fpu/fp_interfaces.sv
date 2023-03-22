@@ -139,30 +139,6 @@ interface fp_load_store_queue_interface;
     modport ls (output we, data_in, data_id, is_float, forwarded_store, input id_needed_by_store, transaction_out);
 endinterface
 
-interface shared_decode_interface;
-    import taiga_config::*;
-    import taiga_types::*;
-    import riscv_types::*;
-
-    logic float_need_int_rs1;
-    logic int_rs1_conflict;
-    rs_addr_t int_rs1_addr;
-    logic [XLEN-1:0] int_rs1_data;
-    logic fp_rs1_conflict;
-    logic [FLEN-1:0] fp_rs1_data;
-    rs_addr_t int_rs2_addr;
-    id_t fp_store_forward_id;
-    logic fp_issue_stage_valid;
-
-    logic instruction_issued;
-    logic fp_instruction_issued;
-    id_t fp_issue_id;
-
-    modport base (input fp_issue_id, fp_instruction_issued, fp_issue_stage_valid, float_need_int_rs1, fp_rs1_conflict, fp_rs1_data, fp_store_forward_id, int_rs1_addr, output int_rs1_conflict, int_rs1_data, int_rs2_addr, instruction_issued);
-
-    modport float (output fp_issue_id, fp_instruction_issued, fp_issue_stage_valid, float_need_int_rs1, fp_rs1_conflict, fp_rs1_data, fp_store_forward_id, int_rs1_addr, input int_rs1_conflict, int_rs1_data, int_rs2_addr, instruction_issued);
-endinterface
-
 interface unsigned_sqrt_interface #(parameter DATA_WIDTH = 32);
     logic start;
     logic [DATA_WIDTH-1:0] radicand;

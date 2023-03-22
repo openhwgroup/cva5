@@ -42,10 +42,6 @@ module fp_decode_and_issue
     //output logic [$clog2(CONFIG.FP.FP_NUM_WB_GROUPS)-1:0] fp_decode_rs_wb_group [FP_REGFILE_READ_PORTS],
     output logic fp_decode_rs_wb_group [FP_REGFILE_READ_PORTS],
     output logic [FP_NUM_UNITS-1:0] unit_needed,
-    output logic is_i2f,
-    output logic is_f2i,
-    output logic is_class,
-    output logic is_fcmp,
 
     output issue_packet_t issue,
     input logic issue_stage_ready,
@@ -75,18 +71,21 @@ module fp_decode_and_issue
     logic [4:0] opcode_trim;
 
     logic is_single;
+    logic is_i2f;
+    logic is_f2i;
+    logic is_class;
+    logic is_fcmp;
     logic is_fld;
     logic is_sqrt;
     logic is_sign_inj, is_sign_inj_r;
     logic is_minmax, is_minmax_r;
     logic is_mv_f2i, is_mv_i2f;
     logic is_s2d, is_d2s;
-    logic is_class_r, is_f2i_r, is_fcmp_r, is_i2f_r;
     logic enable_pre_normalize;
 
-    logic uses_rs1;
-    logic uses_rs2;
-    logic uses_rs3;
+    logic uses_rs1, uses_rs1_r;
+    logic uses_rs2, uses_rs2_r;
+    logic uses_rs3, uses_rs3_r;
     logic uses_rd;
 
     assign opcode = decode.instruction[6:0];
@@ -155,10 +154,9 @@ module fp_decode_and_issue
     always_ff @(posedge clk) begin
         if (issue_stage_ready) begin
             issue.rs_addr[RS3] <= rs3_addr;
-            issue.fn7 <= fn7;
-            issue.fp_uses_rs1 <= uses_rs1;
-            issue.fp_uses_rs2 <= uses_rs2;
-            issue.fp_uses_rs3 <= uses_rs3;
+            uses_rs1_r <= uses_rs1;
+            uses_rs2_r <= uses_rs2;
+            uses_rs3_r <= uses_rs3;
             issue.fp_uses_rd <= uses_rd;
             issue.fp_phys_rs_addr[RS1] <= fp_renamer.phys_rs_addr[RS1];
             issue.fp_phys_rs_addr[RS2] <= fp_renamer.phys_rs_addr[RS2];
@@ -181,13 +179,6 @@ module fp_decode_and_issue
             issue.is_sign_inj <= is_sign_inj;
             issue.is_minmax <= is_minmax;
             issue.is_fcmp <= is_fcmp;
-
-            is_f2i_r <= is_f2i;
-            is_i2f_r <= is_i2f;
-            is_class_r <= is_class;
-            is_sign_inj_r <= is_sign_inj;
-            is_minmax_r <= is_minmax;
-            is_fcmp_r <= is_fcmp;
         end
     end
 
@@ -195,9 +186,9 @@ module fp_decode_and_issue
     //Issue Determination
     logic rs1_conflict, rs2_conflict, rs3_conflict;
 
-    assign rs1_conflict = fp_rf.inuse[RS1] & issue.fp_uses_rs1;
-    assign rs2_conflict = fp_rf.inuse[RS2] & issue.fp_uses_rs2;
-    assign rs3_conflict = fp_rf.inuse[RS3] & issue.fp_uses_rs3;
+    assign rs1_conflict = fp_rf.inuse[RS1] & uses_rs1_r;
+    assign rs2_conflict = fp_rf.inuse[RS2] & uses_rs2_r;
+    assign rs3_conflict = fp_rf.inuse[RS3] & uses_rs3_r;
     assign fp_operands_ready = (~rs1_conflict) & (~rs2_conflict) & (~rs3_conflict);
 
     assign fp_rf.phys_rs_addr[RS1] = issue.fp_phys_rs_addr[RS1];

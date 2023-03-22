@@ -134,10 +134,6 @@ module decode_and_issue
     logic is_ifence;
     logic csr_imm_op;
     logic environment_op;
-    logic is_i2f;
-    logic is_f2i;
-    logic is_class;
-    logic is_fcmp;     
 
     logic issue_valid;
     logic operands_ready;
@@ -638,10 +634,6 @@ module decode_and_issue
             .fp_decode_phys_rs_addr (fp_decode_phys_rs_addr),
             .fp_decode_rs_wb_group (fp_decode_rs_wb_group),
             .unit_needed (unit_needed[TOTAL_NUM_UNITS-1-:FP_NUM_UNITS]),
-            .is_i2f (is_i2f),
-            .is_f2i (is_f2i),
-            .is_class (is_class),
-            .is_fcmp (is_fcmp),
             .issue (issue),
             .issue_stage_ready (issue_stage_ready),
             .instruction_issued (instruction_issued),

@@ -87,7 +87,7 @@ module fp_madd_fused_top
     assign fma_add_inputs.rs2_hidden_bit = fma_mul_outputs_r.rs3_hidden_bit;
     assign fma_add_inputs.rm = fma_mul_outputs_r.mul_rm;
     assign fma_add_inputs.swap = fma_mul_outputs_r.swap;
-    assign fma_add_inputs.add = add_op == 0 ? 1 : 0;
+    assign fma_add_inputs.add = ~add_op;
     assign fma_add_inputs.expo_diff = fma_mul_outputs_r.expo_diff;
     assign fma_add_inputs.fp_add_grs = fma_mul_grs;
     assign fma_add_inputs.single = fma_mul_outputs_r.single;

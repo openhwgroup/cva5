@@ -118,7 +118,7 @@ module fp_pre_processing
     assign issue = i_fp_pre_processing_packet.issue;
     assign single = issue.is_single;
     assign opcode = issue.opcode;
-    assign fn7 = issue.fn7;
+    assign fn7 = issue.instruction[31:25];
     assign issue_id = issue.id;
 
     always_ff @ (posedge clk) begin
@@ -369,8 +369,8 @@ module fp_pre_processing
     logic add, r_add;
 
     assign is_fma = issue.opcode[6:4] == 3'b100; //Fused multiply and add instruction
-    assign is_fmul = issue.opcode[6:4] == 3'b101 & issue.fn7[3];
-    assign is_fadd = issue.opcode[6:4] == 3'b101 & ~issue.fn7[3];
+    assign is_fmul = issue.opcode[6:4] == 3'b101 & fn7[3];
+    assign is_fadd = issue.opcode[6:4] == 3'b101 & ~fn7[3];
     assign add = ~|fn7[6:2];
 
     //Cycle 1 - drive inputs

@@ -63,36 +63,6 @@ package fpu_types;
     } fp_decode_packet_t;
 
     typedef struct packed{
-        logic [31:0] pc;
-        logic [31:0] instruction;
-        logic [2:0] fn3;
-        logic [6:0] fn7;
-        logic [6:0] opcode;
-
-        rs_addr_t [FP_REGFILE_READ_PORTS-1:0] rs_addr;
-        phys_addr_t [FP_REGFILE_READ_PORTS-1:0] phys_rs_addr;
-        //logic [$clog2(EXAMPLE_CONFIG.FP.FP_NUM_WB_GROUPS)-1:0] [FP_REGFILE_READ_PORTS-1:0] rs_wb_group;
-        logic [FP_REGFILE_READ_PORTS-1:0] rs_wb_group;
-
-        rs_addr_t rd_addr;
-        phys_addr_t phys_rd_addr;
-        //logic [$clog2(EXAMPLE_CONFIG.FP.FP_NUM_WB_GROUPS)-1:0] rd_wb_group;
-        logic rd_wb_group;
-
-        logic uses_int_rs1;
-        logic uses_rs1;
-        logic uses_rs2;
-        logic uses_rs3;
-        logic uses_rd;
-        id_t id;
-        logic stage_valid;
-        logic float_wb2_int_reg;
-        fetch_metadata_t fetch_metadata;
-        logic is_float;
-        logic accumulating_csrs;
-    } fp_issue_packet_t;
-
-    typedef struct packed{
         id_t id;
         logic valid;
         logic [FLEN-1:0] data;

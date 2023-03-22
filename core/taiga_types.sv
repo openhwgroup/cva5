@@ -80,7 +80,6 @@ package taiga_types;
         logic [31:0] pc;
         logic [31:0] instruction;
         logic [2:0] fn3;
-        logic [6:0] fn7;
         logic [6:0] opcode;
 
         rs_addr_t [FP_REGFILE_READ_PORTS-1:0] rs_addr;
@@ -103,9 +102,6 @@ package taiga_types;
         phys_addr_t [FP_REGFILE_READ_PORTS-1:0] fp_phys_rs_addr;
         phys_addr_t fp_phys_rd_addr;
 
-        logic fp_uses_rs1;
-        logic fp_uses_rs2;
-        logic fp_uses_rs3;
         logic fp_uses_rd;
         logic accumulating_csrs;
         logic wb2_float;

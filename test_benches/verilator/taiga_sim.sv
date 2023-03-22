@@ -557,7 +557,7 @@ module taiga_sim
         int in_flight_ids;
 
         logic rs1_conflict, rs2_conflict, rs3_conflict;
-        logic uses_rs1, uses_rs2, uses_rs3;
+        //logic uses_rs1, uses_rs2, uses_rs3;
 
         //Operand Stall Source Tracking
         logic [cpu.FP_NUM_UNITS:0] stall_unit_onehot [2:0];
@@ -601,9 +601,9 @@ module taiga_sim
         assign rs1_conflict = cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.rs1_conflict;
         assign rs2_conflict = cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.rs2_conflict;
         assign rs3_conflict = cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.rs3_conflict;
-        assign uses_rs1 = cpu.issue.fp_uses_rs1;
-        assign uses_rs2 = cpu.issue.fp_uses_rs2;
-        assign uses_rs3 = cpu.issue.fp_uses_rs3;
+        //assign uses_rs1 = cpu.issue.fp_uses_rs1;
+        //assign uses_rs2 = cpu.issue.fp_uses_rs2;
+        //assign uses_rs3 = cpu.issue.fp_uses_rs3;
 
         ////////////////////////////////////////////////////
         //Stall 
@@ -620,12 +620,12 @@ module taiga_sim
             fmadd_operand_stall = fp_operand_stall & cpu.decode_and_issue_block.unit_needed_issue_stage[cpu.NUM_UNITS+cpu.FMADD_UNIT_ID] & cpu.fpu_block.fpu_block.fp_pre_processing_inst.is_fma;
             fadd_operand_stall  = fp_operand_stall & cpu.decode_and_issue_block.unit_needed_issue_stage[cpu.NUM_UNITS+cpu.FMADD_UNIT_ID] & cpu.fpu_block.fpu_block.fp_pre_processing_inst.is_fadd;
             fmul_operand_stall  = fp_operand_stall & cpu.decode_and_issue_block.unit_needed_issue_stage[cpu.NUM_UNITS+cpu.FMADD_UNIT_ID] & cpu.fpu_block.fpu_block.fp_pre_processing_inst.is_fmul;
-            fdiv_operand_stall  = fp_operand_stall & cpu.decode_and_issue_block.unit_needed_issue_stage[cpu.NUM_UNITS+cpu.FDIV_SQRT_UNIT_ID] & cpu.issue.fn7 == FDIV;
-            fsqrt_operand_stall = fp_operand_stall & cpu.decode_and_issue_block.unit_needed_issue_stage[cpu.NUM_UNITS+cpu.FDIV_SQRT_UNIT_ID] & cpu.issue.fn7 == FSQRT;
-            fcmp_operand_stall  = fp_operand_stall & ((cpu.decode_and_issue_block.unit_needed_issue_stage[cpu.NUM_UNITS+cpu.MISC_WB2INT_UNIT_ID] & cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.is_fcmp_r) | (cpu.decode_and_issue_block.unit_needed_issue_stage[cpu.NUM_UNITS+cpu.MISC_WB2FP_UNIT_ID] & cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.is_minmax_r));
-            fsign_inject_operand_stall = fp_operand_stall & cpu.decode_and_issue_block.unit_needed_issue_stage[cpu.NUM_UNITS+cpu.MISC_WB2FP_UNIT_ID] & cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.is_sign_inj_r;
-            fclass_operand_stall       = fp_operand_stall & cpu.decode_and_issue_block.unit_needed_issue_stage[cpu.NUM_UNITS+cpu.MISC_WB2INT_UNIT_ID] & cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.is_class_r;
-            fcvt_operand_stall         = (fp_operand_stall & cpu.decode_and_issue_block.unit_needed_issue_stage[cpu.NUM_UNITS+cpu.FP_UNIT_IDS.MISC_WB2INT] & cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.is_f2i_r);// | (fp_operand_stall & cpu.decode_and_issue_block.unit_needed_issue_stage[cpu.NUM_UNITS+cpu.MISC_WB2FP_UNIT_ID] & cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.is_i2f_r);
+            //fdiv_operand_stall  = fp_operand_stall & cpu.decode_and_issue_block.unit_needed_issue_stage[cpu.NUM_UNITS+cpu.FDIV_SQRT_UNIT_ID] & cpu.issue.fn7 == FDIV;
+            //fsqrt_operand_stall = fp_operand_stall & cpu.decode_and_issue_block.unit_needed_issue_stage[cpu.NUM_UNITS+cpu.FDIV_SQRT_UNIT_ID] & cpu.issue.fn7 == FSQRT;
+            //fcmp_operand_stall  = fp_operand_stall & ((cpu.decode_and_issue_block.unit_needed_issue_stage[cpu.NUM_UNITS+cpu.MISC_WB2INT_UNIT_ID] & cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.is_fcmp_r) | (cpu.decode_and_issue_block.unit_needed_issue_stage[cpu.NUM_UNITS+cpu.MISC_WB2FP_UNIT_ID] & cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.is_minmax_r));
+            //fsign_inject_operand_stall = fp_operand_stall & cpu.decode_and_issue_block.unit_needed_issue_stage[cpu.NUM_UNITS+cpu.MISC_WB2FP_UNIT_ID] & cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.is_sign_inj_r;
+            //fclass_operand_stall       = fp_operand_stall & cpu.decode_and_issue_block.unit_needed_issue_stage[cpu.NUM_UNITS+cpu.MISC_WB2INT_UNIT_ID] & cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.is_class_r;
+            //fcvt_operand_stall         = (fp_operand_stall & cpu.decode_and_issue_block.unit_needed_issue_stage[cpu.NUM_UNITS+cpu.FP_UNIT_IDS.MISC_WB2INT] & cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.is_f2i_r);// | (fp_operand_stall & cpu.decode_and_issue_block.unit_needed_issue_stage[cpu.NUM_UNITS+cpu.MISC_WB2FP_UNIT_ID] & cpu.decode_and_issue_block.fp_decode_and_issue_block.fp_decode_and_issue_block.is_i2f_r);
 
             //instruction mix
             fp_load_op  = cpu.unit_issue[cpu.UNIT_IDS.LS].new_request & cpu.issue.is_float & cpu.ls_inputs.load;
