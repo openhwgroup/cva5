@@ -27,8 +27,7 @@ module fp_normalize_rounding_top
     import fpu_types::*;
 
 #(
-    parameter int unsigned NUM_WB_UNITS = 3,
-    parameter int unsigned NUM_UNITS [FP_NUM_WB_GROUPS] = '{3}
+    parameter int unsigned NUM_WB_UNITS = 3
 )(
     input logic clk,
     input logic rst,
@@ -38,37 +37,25 @@ module fp_normalize_rounding_top
 
     //Writeback
     //aliases for write-back-interface signals
-    logic [NUM_WB_UNITS-1:0] unit_ack [FP_NUM_WB_GROUPS];
-    id_t [NUM_WB_UNITS-1:0] unit_instruction_id [FP_NUM_WB_GROUPS];
-
-    logic [NUM_WB_UNITS-1:0] unit_done [FP_NUM_WB_GROUPS];
-
-    typedef logic [FLEN-1:0] unit_rd_t [NUM_WB_UNITS];
-    unit_rd_t unit_rd [FP_NUM_WB_GROUPS];
-
-    logic [NUM_WB_UNITS-1:0] unit_carry [FP_NUM_WB_GROUPS];
-    logic [NUM_WB_UNITS-1:0] unit_safe [FP_NUM_WB_GROUPS];
-    logic [NUM_WB_UNITS-1:0] unit_hidden [FP_NUM_WB_GROUPS];
-    logic [NUM_WB_UNITS-1:0] unit_expo_overflow [FP_NUM_WB_GROUPS];
-    logic [NUM_WB_UNITS-1:0] unit_right_shift [FP_NUM_WB_GROUPS];
-    logic [NUM_WB_UNITS-1:0] unit_subnormal [FP_NUM_WB_GROUPS];
-    logic [NUM_WB_UNITS-1:0] unit_d2s [FP_NUM_WB_GROUPS];
-
-    typedef logic [2:0] unit_rm_t;
-    unit_rm_t [NUM_WB_UNITS-1:0] unit_rm [FP_NUM_WB_GROUPS];
-
-    typedef logic [4:0] unit_fflags_t [NUM_WB_UNITS];
-    unit_fflags_t unit_fflags [FP_NUM_WB_GROUPS];
-
-    fp_shift_amt_t [NUM_WB_UNITS-1:0] unit_clz [FP_NUM_WB_GROUPS];
-
-    grs_t [NUM_WB_UNITS-1:0] unit_grs [FP_NUM_WB_GROUPS];
-
-    typedef logic [EXPO_WIDTH-1:0] unit_right_shift_amt_t;
-    unit_right_shift_amt_t [NUM_WB_UNITS-1:0] unit_right_shift_amt [FP_NUM_WB_GROUPS];
+    logic [NUM_WB_UNITS-1:0] unit_ack;
+    id_t [NUM_WB_UNITS-1:0] unit_instruction_id;
+    logic [NUM_WB_UNITS-1:0] unit_done;
+    logic [NUM_WB_UNITS-1:0][FLEN-1:0] unit_rd;
+    logic [NUM_WB_UNITS-1:0] unit_carry;
+    logic [NUM_WB_UNITS-1:0] unit_safe;
+    logic [NUM_WB_UNITS-1:0] unit_hidden;
+    logic [NUM_WB_UNITS-1:0] unit_expo_overflow;
+    logic [NUM_WB_UNITS-1:0] unit_right_shift;
+    logic [NUM_WB_UNITS-1:0] unit_subnormal;
+    logic [NUM_WB_UNITS-1:0] unit_d2s;
+    logic [NUM_WB_UNITS-1:0][2:0] unit_rm;
+    logic [NUM_WB_UNITS-1:0][4:0] unit_fflags;
+    fp_shift_amt_t [NUM_WB_UNITS-1:0] unit_clz;
+    grs_t [NUM_WB_UNITS-1:0] unit_grs;
+    logic [NUM_WB_UNITS-1:0][EXPO_WIDTH-1:0] unit_right_shift_amt;
 
     //Per-ID muxes for commit buffer
-    logic [$clog2(NUM_WB_UNITS)-1:0] unit_sel [FP_NUM_WB_GROUPS];
+    logic [$clog2(NUM_WB_UNITS)-1:0] unit_sel;
 
     //Shared normalization
     fp_normalize_packet_t normalize_packet, normalize_packet_r;
@@ -76,88 +63,57 @@ module fp_normalize_rounding_top
     //Shared rounding
     fp_round_packet_t round_packet, round_packet_r;
 
-    typedef int unsigned unit_count_t [FP_NUM_WB_GROUPS];
-    function unit_count_t get_cumulative_unit_count();
-        unit_count_t counts;
-        int unsigned cumulative_count = 0;
-        for (int i = 0; i < FP_NUM_WB_GROUPS; i++) begin
-            counts[i] = cumulative_count;
-            cumulative_count += NUM_UNITS[i];
-        end
-        return counts;
-    endfunction
-
-    localparam unit_count_t CUMULATIVE_NUM_UNITS = get_cumulative_unit_count();
-
     ////////////////////////////////////////////////////
     //Implementation
     //Re-assigning interface inputs to array types so that they can be dynamically indexed
     generate
-        for (genvar i = 0; i < FP_NUM_WB_GROUPS; i++) begin
-            for (genvar j = 0; j < NUM_UNITS[i]; j++) begin
-                assign unit_instruction_id[i][j] = intermediate_unit_wb[CUMULATIVE_NUM_UNITS[i] + j].id;
-                assign unit_done[i][j] = intermediate_unit_wb[CUMULATIVE_NUM_UNITS[i] + j].done;
-                assign unit_rm[i][j] = intermediate_unit_wb[CUMULATIVE_NUM_UNITS[i] + j].rm;
-                assign unit_grs[i][j] = intermediate_unit_wb[CUMULATIVE_NUM_UNITS[i] + j].grs;
-                assign unit_carry[i][j] = intermediate_unit_wb[CUMULATIVE_NUM_UNITS[i] + j].carry;
-                assign unit_safe[i][j] = intermediate_unit_wb[CUMULATIVE_NUM_UNITS[i] + j].safe;
-                assign unit_hidden[i][j] = intermediate_unit_wb[CUMULATIVE_NUM_UNITS[i] + j].hidden;
-                assign unit_clz[i][j] = intermediate_unit_wb[CUMULATIVE_NUM_UNITS[i] + j].clz;
-                assign unit_subnormal[i][j] = intermediate_unit_wb[CUMULATIVE_NUM_UNITS[i] + j].subnormal;
-                assign unit_right_shift[i][j] = intermediate_unit_wb[CUMULATIVE_NUM_UNITS[i] + j].right_shift;
-                assign unit_right_shift_amt[i][j] = intermediate_unit_wb[CUMULATIVE_NUM_UNITS[i] + j].right_shift_amt;
-                assign unit_d2s[i][j] = intermediate_unit_wb[CUMULATIVE_NUM_UNITS[i] + j].d2s;
-                assign intermediate_unit_wb[CUMULATIVE_NUM_UNITS[i] + j].ack = unit_ack[i][j];
-            end
-        end
-    endgenerate
-
-    //As units are selected for commit ports based on their unit ID,
-    //for each additional commit port one unit can be skipped for the commit mux
-    generate
-        for (genvar i = 0; i < FP_NUM_WB_GROUPS; i++) begin
-            for (genvar j = 0; j < NUM_UNITS[i]; j++) begin
-                assign unit_rd[i][j] = intermediate_unit_wb[CUMULATIVE_NUM_UNITS[i] + j].rd;
-                assign unit_expo_overflow[i][j] = intermediate_unit_wb[CUMULATIVE_NUM_UNITS[i] + j].expo_overflow;
-                assign unit_fflags[i][j] = intermediate_unit_wb[CUMULATIVE_NUM_UNITS[i] + j].fflags;
-            end
+        for (genvar i = 0; i < NUM_WB_UNITS; i++) begin
+            assign unit_instruction_id[i] = intermediate_unit_wb[i].id;
+            assign unit_done[i] = intermediate_unit_wb[i].done;
+            assign unit_rm[i] = intermediate_unit_wb[i].rm;
+            assign unit_grs[i] = intermediate_unit_wb[i].grs;
+            assign unit_carry[i] = intermediate_unit_wb[i].carry;
+            assign unit_safe[i] = intermediate_unit_wb[i].safe;
+            assign unit_hidden[i] = intermediate_unit_wb[i].hidden;
+            assign unit_clz[i] = intermediate_unit_wb[i].clz;
+            assign unit_subnormal[i] = intermediate_unit_wb[i].subnormal;
+            assign unit_right_shift[i] = intermediate_unit_wb[i].right_shift;
+            assign unit_right_shift_amt[i] = intermediate_unit_wb[i].right_shift_amt;
+            assign unit_d2s[i] = intermediate_unit_wb[i].d2s;
+            assign unit_rd[i] = intermediate_unit_wb[i].rd;
+            assign unit_expo_overflow[i] = intermediate_unit_wb[i].expo_overflow;
+            assign unit_fflags[i] = intermediate_unit_wb[i].fflags;
+            assign intermediate_unit_wb[i].ack = unit_ack[i];
         end
     endgenerate
 
     ////////////////////////////////////////////////////
     //Unit select for normalization module
-    generate for (genvar i = 0; i < FP_NUM_WB_GROUPS; i++) begin
-        priority_encoder
-            #(.WIDTH(NUM_UNITS[i]))
-        unit_done_encoder
-        (
-            .priority_vector (unit_done[i][NUM_UNITS[i]-1 : 0]),
-            .encoded_result (unit_sel[i][NUM_UNITS[i] == 1 ? 0 : ($clog2(NUM_UNITS[i])-1) : 0])
-        );
-    end endgenerate
+    priority_encoder #(.WIDTH(NUM_WB_UNITS)) unit_done_encoder (
+        .priority_vector(unit_done),
+        .encoded_result(unit_sel)
+    );
 
     always_comb begin
-        for (int i = 0; i < FP_NUM_WB_GROUPS; i++) begin
-            //ID, data and rounding signals muxes
-            normalize_packet.valid = |unit_done[i];
-            normalize_packet.id = unit_instruction_id[i][unit_sel[i]];
-            normalize_packet.data = unit_rd[i][unit_sel[i]];
-            normalize_packet.expo_overflow = unit_expo_overflow[i][unit_sel[i]];
-            normalize_packet.fflags =  unit_fflags[i][unit_sel[i]];
-            normalize_packet.rm =  unit_rm[i][unit_sel[i]];
-            normalize_packet.d2s = unit_d2s[i][unit_sel[i]];
-            normalize_packet.carry = unit_carry[i][unit_sel[i]];
-            normalize_packet.safe = unit_safe[i][unit_sel[i]];
-            normalize_packet.hidden = unit_hidden[i][unit_sel[i]];
-            normalize_packet.grs = unit_grs[i][unit_sel[i]];
-            normalize_packet.clz = unit_clz[i][unit_sel[i]];
-            normalize_packet.subnormal = unit_subnormal[i][unit_sel[i]];
-            normalize_packet.right_shift = unit_right_shift[i][unit_sel[i]];
-            normalize_packet.right_shift_amt = unit_right_shift_amt[i][unit_sel[i]];
-            //Unit Ack
-            unit_ack[i] = '0;
-            unit_ack[i][unit_sel[i]] = advance_norm & normalize_packet.valid; //writeback not valid until the normalization stage is ready
-        end
+        //ID, data and rounding signals muxes
+        normalize_packet.valid = |unit_done;
+        normalize_packet.id = unit_instruction_id[unit_sel];
+        normalize_packet.data = unit_rd[unit_sel];
+        normalize_packet.expo_overflow = unit_expo_overflow[unit_sel];
+        normalize_packet.fflags =  unit_fflags[unit_sel];
+        normalize_packet.rm =  unit_rm[unit_sel];
+        normalize_packet.d2s = unit_d2s[unit_sel];
+        normalize_packet.carry = unit_carry[unit_sel];
+        normalize_packet.safe = unit_safe[unit_sel];
+        normalize_packet.hidden = unit_hidden[unit_sel];
+        normalize_packet.grs = unit_grs[unit_sel];
+        normalize_packet.clz = unit_clz[unit_sel];
+        normalize_packet.subnormal = unit_subnormal[unit_sel];
+        normalize_packet.right_shift = unit_right_shift[unit_sel];
+        normalize_packet.right_shift_amt = unit_right_shift_amt[unit_sel];
+        //Unit Ack
+        unit_ack = '0;
+        unit_ack[unit_sel] = advance_norm & normalize_packet.valid; //writeback not valid until the normalization stage is ready
     end
 
     ////////////////////////////////////////////////////

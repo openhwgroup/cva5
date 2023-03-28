@@ -574,7 +574,7 @@ module taiga_sim
         assign debug = {cpu.unit_issue[cpu.UNIT_IDS.LS].new_request&cpu.issue.is_float&cpu.ls_inputs.load, cpu.decode_and_issue_block.issue_to[cpu.TOTAL_NUM_UNITS-1-:cpu.FP_NUM_UNITS]};
 
         //writeback stall source tracking
-        logic [3:0] unit_done_r, unit_done_r_r;
+        //logic [3:0] unit_done_r, unit_done_r_r;
         always_ff @ (posedge clk) begin
             if (cpu.decode_and_issue_block.fp_instruction_issued_with_rd) begin
                 register_unit_id_table[cpu.issue.fp_phys_rd_addr] <= {cpu.unit_issue[cpu.UNIT_IDS.LS].new_request&cpu.issue.is_float&cpu.ls_inputs.load, cpu.decode_and_issue_block.issue_to[cpu.TOTAL_NUM_UNITS-1-:cpu.FP_NUM_UNITS]};
@@ -584,8 +584,8 @@ module taiga_sim
                 register_unit_id_table[cpu.fp_commit_packet[0].phys_addr] <= 0;
             end
 
-            unit_done_r <= cpu.fpu_block.fpu_block.norm_round_inst.unit_done[0];
-            unit_done_r_r <= unit_done_r;
+            //unit_done_r <= cpu.fpu_block.fpu_block.norm_round_inst.unit_done[0];
+            //unit_done_r_r <= unit_done_r;
 
             //if (cpu.decode_and_issue_block.instruction_issued & (uses_rs1 | uses_rs2 | uses_rs3) & ~fp_store_op)
                 //$display("pc: 0x%h, rs1: 0x%h, rs2: 0x%h, rs3: 0x%h, int_rs1: 0x%h", cpu.decode_and_issue_block.issue.pc, cpu.fp_pre_processing_packet.rs1,cpu.fp_pre_processing_packet.rs2, cpu.fp_pre_processing_packet.rs3, cpu.fp_pre_processing_packet.int_rs1);
@@ -648,10 +648,10 @@ module taiga_sim
             operand_stall_due_to_wb2fp = ((stall_unit_onehot[RS3][cpu.MISC_WB2FP_UNIT_ID] & rs3_conflict) | (stall_unit_onehot[RS2][cpu.MISC_WB2FP_UNIT_ID] & rs2_conflict) | (stall_unit_onehot[RS1][cpu.MISC_WB2FP_UNIT_ID] & rs1_conflict)) & fp_operand_stall;
 
             //writeback stall
-            fmadd_wb_stall           = fp_units_pending_wb[cpu.FP_ARITH_WB_ID] & unit_done_r_r[cpu.FMADD_WB_ID];
-            fmul_wb_stall            = fp_units_pending_wb[cpu.FP_ARITH_WB_ID] & unit_done_r_r[cpu.FMUL_WB_ID];
-            fdiv_sqrt_wb_stall       = fp_units_pending_wb[cpu.FP_ARITH_WB_ID] & unit_done_r_r[cpu.FDIV_SQRT_WB_ID];
-            wb2fp_wb_stall           = fp_units_pending_wb[cpu.FP_ARITH_WB_ID] & unit_done_r_r[cpu.MISC_WB2FP_WB_ID];
+            //fmadd_wb_stall           = fp_units_pending_wb[cpu.FP_ARITH_WB_ID] & unit_done_r_r[cpu.FMADD_WB_ID];
+            //fmul_wb_stall            = fp_units_pending_wb[cpu.FP_ARITH_WB_ID] & unit_done_r_r[cpu.FMUL_WB_ID];
+            //fdiv_sqrt_wb_stall       = fp_units_pending_wb[cpu.FP_ARITH_WB_ID] & unit_done_r_r[cpu.FDIV_SQRT_WB_ID];
+            //wb2fp_wb_stall           = fp_units_pending_wb[cpu.FP_ARITH_WB_ID] & unit_done_r_r[cpu.MISC_WB2FP_WB_ID];
 
             fmadd_stall_due_to_fmadd = operand_stall_due_to_fmadd & (fmadd_operand_stall | fmul_operand_stall | fadd_operand_stall);
             fmadd_operand_stall_rs1  = fmadd_operand_stall & rs1_conflict;
