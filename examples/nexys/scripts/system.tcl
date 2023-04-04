@@ -45,6 +45,9 @@ set list_projs [get_projects -quiet]
 if { $list_projs eq "" } {
    create_project cva5-competition-baseline cva5-competition-baseline -part xc7a100tcsg324-1
    set_property BOARD_PART digilentinc.com:nexys-a7-100t:part0:1.2 [current_project]
+} else {
+   common::send_gid_msg -ssname BD::TCL -id 2100 -severity "ERROR" "Open project must be closed before running."
+   return -1
 }
 
 
