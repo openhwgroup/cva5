@@ -163,11 +163,12 @@ module cva5
     logic [$clog2(CONFIG.NUM_WB_GROUPS)-1:0] decode_rs_wb_group [REGFILE_READ_PORTS];
 
         //ID freeing
-    retire_packet_t retire;
+    retire_packet_t wb_retire;
     retire_packet_t store_retire;
     id_t retire_ids [RETIRE_PORTS];
     id_t retire_ids_next [RETIRE_PORTS];
     logic retire_port_valid [RETIRE_PORTS];
+    logic [LOG2_RETIRE_PORTS : 0] retire_count;
         //Writeback
     wb_packet_t wb_packet [CONFIG.NUM_WB_GROUPS];
     phys_addr_t wb_phys_addr [CONFIG.NUM_WB_GROUPS];
@@ -251,11 +252,12 @@ module cva5
         .instruction_issued_with_rd (instruction_issued_with_rd),
         .wb_packet (wb_packet),
         .wb_phys_addr (wb_phys_addr),
-        .retire (retire),
+        .wb_retire (wb_retire),
         .store_retire (store_retire),
         .retire_ids (retire_ids),
         .retire_ids_next (retire_ids_next),
         .retire_port_valid(retire_port_valid),
+        .retire_count (retire_count),
         .post_issue_count(post_issue_count),
         .oldest_pc (oldest_pc),
         .current_exception_unit (current_exception_unit)
@@ -349,7 +351,7 @@ module cva5
         .decode (decode_rename_interface),
         .issue (issue), //packet
         .instruction_issued_with_rd (instruction_issued_with_rd),
-        .retire (retire) //packet
+        .wb_retire (wb_retire)
     );
 
     ////////////////////////////////////////////////////
@@ -538,8 +540,9 @@ module cva5
             .mret(mret),
             .sret(sret),
             .epc(epc),
-            .retire(retire),
+            .wb_retire (wb_retire),
             .retire_ids(retire_ids),
+            .retire_count (retire_count),
             .s_interrupt(s_interrupt),
             .m_interrupt(m_interrupt)
         );
@@ -567,7 +570,7 @@ module cva5
         .mret(mret),
         .sret(sret),
         .epc(epc),
-        .retire (retire),
+        .wb_retire (wb_retire),
         .retire_ids (retire_ids),
         .retire_ids_next (retire_ids_next),
         .interrupt_taken(interrupt_taken),
@@ -602,7 +605,7 @@ module cva5
             .decode_stage (decode),
             .issue_stage (issue),
             .issue_stage_ready (issue_stage_ready),
-            .issue_phys_rs_addr (issue_phys_rs_addr),
+            .issue_rs_addr (issue_rs_addr),
             .unit_needed (unit_needed[UNIT_IDS.DIV]),
             .uses_rs (unit_uses_rs[UNIT_IDS.DIV]),
             .uses_rd (unit_uses_rd[UNIT_IDS.DIV]),

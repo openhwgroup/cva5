@@ -174,7 +174,7 @@ module store_queue
     store_retire_table_lutram (
         .clk(clk),
         .waddr(sq.data_in.id),
-        .raddr(store_retire.phys_id),
+        .raddr(store_retire.id),
         .ram_write(sq.push),
         .new_ram_data(retire_table_in),
         .ram_data_out(retire_table_out)
@@ -187,7 +187,7 @@ module store_queue
     non_forwarded_port (
         .clk(clk),
         .waddr(sq.data_in.id),
-        .raddr(store_retire.phys_id),
+        .raddr(store_retire.id),
         .ram_write(sq.push),
         .new_ram_data(sq.data_in.data),
         .ram_data_out(wb_data[0])

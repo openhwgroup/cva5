@@ -44,7 +44,7 @@ module renamer
         input logic instruction_issued_with_rd,
 
         //Retire response
-        input retire_packet_t retire
+        input retire_packet_t wb_retire
     );
     //////////////////////////////////////////
     typedef struct packed{
@@ -91,7 +91,7 @@ module renamer
     );
 
     //During post reset init, initialize FIFO with free list (registers 32-63)
-    assign free_list.potential_push = (gc.init_clear & ~clear_index[5]) | (retire.valid);
+    assign free_list.potential_push = (gc.init_clear & ~clear_index[5]) | (wb_retire.valid);
     assign free_list.push = free_list.potential_push;
 
     assign free_list.data_in = gc.init_clear ? {1'b1, clear_index[4:0]} : (gc.writeback_supress ? inuse_table_output.spec_phys_addr : inuse_table_output.previous_phys_addr);
@@ -110,7 +110,7 @@ module renamer
     inuse_table (
         .clk (clk),
         .waddr (issue.id),
-        .raddr (retire.phys_id),
+        .raddr (wb_retire.id),
         .ram_write (instruction_issued_with_rd),
         .new_ram_data (inuse_table_input),
         .ram_data_out (inuse_table_output)
@@ -135,12 +135,12 @@ module renamer
     rs_addr_t spec_table_write_index;
     rs_addr_t spec_table_write_index_mux [4];
 
-    assign spec_table_update =  rename_valid | rollback | gc.init_clear | (retire.valid & gc.writeback_supress);
+    assign spec_table_update =  rename_valid | rollback | gc.init_clear | (wb_retire.valid & gc.writeback_supress);
 
     logic [1:0] spec_table_sel;
     
     one_hot_to_integer #(.C_WIDTH(4)) spec_table_sel_one_hot_to_int (
-        .one_hot ({gc.init_clear, rollback, (retire.valid & gc.writeback_supress), 1'b0}),
+        .one_hot ({gc.init_clear, rollback, (wb_retire.valid & gc.writeback_supress), 1'b0}),
         .int_out (spec_table_sel)
     );
 

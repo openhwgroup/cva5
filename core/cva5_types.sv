@@ -133,9 +133,8 @@ package cva5_types;
     } wb_packet_t;
 
     typedef struct packed{
+        id_t id;
         logic valid;
-        id_t phys_id;
-        logic [LOG2_RETIRE_PORTS : 0] count;
     } retire_packet_t;
 
     typedef struct packed {

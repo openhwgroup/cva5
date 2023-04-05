@@ -67,11 +67,12 @@ module instruction_metadata_and_id_management
         output phys_addr_t wb_phys_addr [CONFIG.NUM_WB_GROUPS],
 
         //Retirer
-        output retire_packet_t retire,
+        output retire_packet_t wb_retire,
         output retire_packet_t store_retire,
         output id_t retire_ids [RETIRE_PORTS],
         output id_t retire_ids_next [RETIRE_PORTS],
         output logic retire_port_valid [RETIRE_PORTS],
+        output logic [LOG2_RETIRE_PORTS : 0] retire_count,
 
         //CSR
         output logic [LOG2_MAX_IDS:0] post_issue_count,
@@ -103,11 +104,11 @@ module instruction_metadata_and_id_management
     logic [LOG2_MAX_IDS:0] post_issue_count_next;
     logic [LOG2_MAX_IDS:0] inflight_count;
 
-    retire_packet_t retire_next;
+    retire_packet_t wb_retire_next;
     retire_packet_t store_retire_next;
 
     logic retire_port_valid_next [RETIRE_PORTS];
-
+    logic [LOG2_RETIRE_PORTS : 0] retire_count_next;
     genvar i;
     ////////////////////////////////////////////////////
     //Implementation
@@ -202,7 +203,7 @@ module instruction_metadata_and_id_management
             if (rst)
                 retire_ids_next[i] <= LOG2_MAX_IDS'(i);
             else
-                retire_ids_next[i] <= retire_ids_next[i] + LOG2_MAX_IDS'(retire_next.count);
+                retire_ids_next[i] <= retire_ids_next[i] + LOG2_MAX_IDS'(retire_count_next);
         end
 
         always_ff @ (posedge clk) begin
@@ -230,7 +231,7 @@ module instruction_metadata_and_id_management
             pre_issue_count <= pre_issue_count_next;
     end
 
-    assign post_issue_count_next = post_issue_count + ID_COUNTER_W'(instruction_issued) - ID_COUNTER_W'(retire_next.count);
+    assign post_issue_count_next = post_issue_count + ID_COUNTER_W'(instruction_issued) - ID_COUNTER_W'(retire_count_next);
     always_ff @ (posedge clk) begin
         if (rst)
             post_issue_count <= 0;
@@ -334,20 +335,21 @@ module instruction_metadata_and_id_management
         .encoded_result (retire_with_rd_sel)
     );
 
-    assign retire_next.phys_id = retire_ids_next[retire_with_rd_sel];
-    assign retire_next.valid = retire_with_rd_found;
+    assign wb_retire_next.id = retire_ids_next[retire_with_rd_sel];
+    assign wb_retire_next.valid = retire_with_rd_found;
     
     always_comb begin
-        retire_next.count = 0;
+        retire_count_next = 0;
         for (int i = 0; i < RETIRE_PORTS; i++) begin
-            retire_next.count += retire_port_valid_next[i];
+            retire_count_next += retire_port_valid_next[i];
         end
     end
 
     always_ff @ (posedge clk) begin
-        retire.valid <= retire_next.valid;
-        retire.phys_id <= retire_next.phys_id;
-        retire.count <= gc.writeback_supress ? '0 : retire_next.count;
+        wb_retire.valid <= wb_retire_next.valid;
+        wb_retire.id <= wb_retire_next.id;
+
+        retire_count <= gc.writeback_supress ? '0 : retire_count_next;
         for (int i = 0; i < RETIRE_PORTS; i++)
             retire_port_valid[i] <= retire_port_valid_next[i] & ~gc.writeback_supress;
     end
@@ -358,9 +360,8 @@ module instruction_metadata_and_id_management
         .encoded_result (retire_with_store_sel)
     );
 
-    assign store_retire_next.phys_id = retire_ids_next[retire_with_store_sel];
+    assign store_retire_next.id = retire_ids_next[retire_with_store_sel];
     assign store_retire_next.valid = retire_with_store_found;
-    assign store_retire_next.count = 1;
 
     always_ff @ (posedge clk) begin
         store_retire <= store_retire_next;

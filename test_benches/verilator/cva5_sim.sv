@@ -483,11 +483,11 @@ module cva5_sim
 
     //Issue phys_rd to unit mem
     //Used for determining what outputs an operand stall is waiting on
-    logic [`ISSUE_P.NUM_UNITS-1:0] phys_addr_table [64];
+    logic [`ISSUE_P.NUM_UNITS-1:0] rd_addr_table [32];
 
     always_ff @(posedge clk) begin
         if (cpu.instruction_issued_with_rd)
-            phys_addr_table[`ISSUE_P.issue.phys_rd_addr] <= `ISSUE_P.unit_needed_issue_stage;
+            rd_addr_table[`ISSUE_P.issue.rd_addr] <= `ISSUE_P.unit_needed_issue_stage;
     end
 
     generate if (EXAMPLE_CONFIG.INCLUDE_ICACHE) begin
@@ -545,9 +545,9 @@ module cva5_sim
 
         //Issue Stall Source
         for (int i = 0; i < REGFILE_READ_PORTS; i++) begin
-            stats[ISSUE_OPERAND_STALL_ON_LOAD_STAT] |= `ISSUE_P.issue.stage_valid & phys_addr_table[`ISSUE_P.issue_phys_rs_addr[i]][`ISSUE_P.UNIT_IDS.LS] & `ISSUE_P.rs_conflict[i] ;
-            stats[ISSUE_OPERAND_STALL_ON_MULTIPLY_STAT] |= EXAMPLE_CONFIG.INCLUDE_MUL & `ISSUE_P.issue.stage_valid & phys_addr_table[`ISSUE_P.issue_phys_rs_addr[i]][`ISSUE_P.UNIT_IDS.MUL] & `ISSUE_P.rs_conflict[i] ;
-            stats[ISSUE_OPERAND_STALL_ON_DIVIDE_STAT] |= EXAMPLE_CONFIG.INCLUDE_DIV & `ISSUE_P.issue.stage_valid & phys_addr_table[`ISSUE_P.issue_phys_rs_addr[i]][`ISSUE_P.UNIT_IDS.DIV] & `ISSUE_P.rs_conflict[i] ;
+            stats[ISSUE_OPERAND_STALL_ON_LOAD_STAT] |= `ISSUE_P.issue.stage_valid & rd_addr_table[`ISSUE_P.issue_rs_addr[i]][`ISSUE_P.UNIT_IDS.LS] & `ISSUE_P.rs_conflict[i] ;
+            stats[ISSUE_OPERAND_STALL_ON_MULTIPLY_STAT] |= EXAMPLE_CONFIG.INCLUDE_MUL & `ISSUE_P.issue.stage_valid & rd_addr_table[`ISSUE_P.issue_rs_addr[i]][`ISSUE_P.UNIT_IDS.MUL] & `ISSUE_P.rs_conflict[i] ;
+            stats[ISSUE_OPERAND_STALL_ON_DIVIDE_STAT] |= EXAMPLE_CONFIG.INCLUDE_DIV & `ISSUE_P.issue.stage_valid & rd_addr_table[`ISSUE_P.issue_rs_addr[i]][`ISSUE_P.UNIT_IDS.DIV] & `ISSUE_P.rs_conflict[i] ;
         end
 
         //LS Stats
@@ -578,7 +578,7 @@ module cva5_sim
         .end_collection (end_collection),
         .stats (stats),
         .instruction_mix_stats (instruction_mix_stats),
-        .retire (cpu.retire)
+        .retire_count (cpu.retire_count)
     );
 
     ////////////////////////////////////////////////////
