@@ -31,7 +31,7 @@ module fp_div_core
     input logic                   rst,
     input fp_div_sqrt_inputs_t    fp_div_sqrt_inputs,
     input logic                   start_algorithm,
-    fp_unit_writeback_interface.unit fp_wb
+    fp_intermediate_wb_interface.unit fp_wb
 );
 
     unsigned_division_interface #(.DATA_WIDTH(2*FRAC_WIDTH+3)) div();

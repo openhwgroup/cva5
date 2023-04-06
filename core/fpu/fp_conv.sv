@@ -29,7 +29,7 @@ module fp_conv
     unit_issue_interface.unit issue,
     input fp_conv_inputs_t fp_conv_inputs,
     input logic single,
-    fp_unit_writeback_interface.unit wb
+    fp_intermediate_wb_interface.unit wb
 );
 
     assign wb.rd = fp_conv_inputs.rs1;

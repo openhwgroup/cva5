@@ -36,7 +36,7 @@ module fp_add_madd_fused
     input logic rst,
     input fp_add_inputs_t fp_add_inputs,
     unit_issue_interface.unit issue,
-    fp_unit_writeback_interface.unit fp_wb
+    fp_intermediate_wb_interface.unit fp_wb
 );
 
     logic [FLEN-1:0]               temp_rs1;

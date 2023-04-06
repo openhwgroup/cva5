@@ -28,7 +28,7 @@ module fp_mv_i2f
     input logic clk,
     unit_issue_interface.unit issue,
     input fp_mv_i2f_inputs_t fp_mv_i2f_inputs,
-    fp_unit_writeback_interface.unit wb
+    fp_intermediate_wb_interface.unit wb
 );
 
     //This instruction is meant to transfer single precision numbers, so in reduced precision only the single precision bits are used

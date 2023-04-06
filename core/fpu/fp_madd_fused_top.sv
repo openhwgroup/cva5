@@ -31,8 +31,8 @@ module fp_madd_fused_top
     input logic rst,
     input fp_madd_inputs_t fp_madd_inputs,
     unit_issue_interface.unit issue,
-    fp_unit_writeback_interface.unit fp_madd_wb,
-    fp_unit_writeback_interface.unit fp_mul_wb
+    fp_intermediate_wb_interface.unit fp_madd_wb,
+    fp_intermediate_wb_interface.unit fp_mul_wb
 );
 
     logic is_fma, is_fadd, is_fmul;

@@ -87,7 +87,7 @@ interface fp_unit_issue_interface;
     modport unit (output ready, input possible_issue, new_request, new_request_r, id);
 endinterface
 
-interface fp_unit_writeback_interface;
+interface fp_intermediate_wb_interface;
     import taiga_config::*;
     import riscv_types::*;
     import taiga_types::*;
@@ -121,6 +121,27 @@ interface fp_unit_writeback_interface;
         input id, done, rd, expo_overflow, fflags, rm, carry, hidden, grs, clz, safe, subnormal, right_shift, right_shift_amt, d2s
     );
 endinterface
+
+interface fp_unit_writeback_interface;
+    import taiga_types::*;
+
+        logic ack;
+
+        id_t id;
+        logic done;
+        logic [FLEN-1:0] rd;
+        logic [4:0] fflags;
+
+        modport unit (
+            input ack,
+            output id, done, rd, fflags
+        );
+        modport wb (
+            output ack,
+            input id, done, rd, fflags
+        );
+endinterface
+
 
 interface fp_load_store_queue_interface;
     import taiga_config::*;

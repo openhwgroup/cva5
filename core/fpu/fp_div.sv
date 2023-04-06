@@ -28,7 +28,7 @@ module fp_div
     input logic                   rst,
     input fp_div_sqrt_inputs_t    fp_div_sqrt_inputs,
     unit_issue_interface.unit  issue,
-    fp_unit_writeback_interface.unit div_wb
+    fp_intermediate_wb_interface.unit div_wb
 );
 
     logic                         running;

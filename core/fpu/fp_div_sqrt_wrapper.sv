@@ -28,11 +28,11 @@ module fp_div_sqrt_wrapper
     input logic                   rst,
     input fp_div_sqrt_inputs_t    fp_div_sqrt_inputs,
     unit_issue_interface.unit  issue,
-    fp_unit_writeback_interface.unit wb
+    fp_intermediate_wb_interface.unit wb
 );
 
     unit_issue_interface div_issue(), sqrt_issue();
-    fp_unit_writeback_interface div_wb(), sqrt_wb();
+    fp_intermediate_wb_interface div_wb(), sqrt_wb();
 
     fp_sqrt sqrt(
         .clk (clk),

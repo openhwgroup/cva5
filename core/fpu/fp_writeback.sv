@@ -40,7 +40,7 @@ module fp_writeback
         input logic clk,
         input logic rst,
         //Unit writeback
-        fp_unit_writeback_interface.wb unit_wb[NUM_WB_UNITS],
+        fp_intermediate_wb_interface.wb unit_wb[NUM_WB_UNITS],
         //WB output
         output fp_wb_packet_t wb_packet [FP_NUM_WB_GROUPS],
         //FCSR output

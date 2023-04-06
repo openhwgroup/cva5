@@ -27,7 +27,7 @@ module fp_minmax
     unit_issue_interface.unit issue,
     input fp_minmax_inputs_t fp_minmax_inputs,
     input logic single,
-    fp_unit_writeback_interface.unit wb
+    fp_intermediate_wb_interface.unit wb
 );
 
     ////////////////////////////////////////////////////

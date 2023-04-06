@@ -33,7 +33,7 @@ module fp_wb2fp_misc
     input logic clk,
     unit_issue_interface.unit issue,
     input fp_wb2fp_misc_inputs_t fp_wb2fp_misc_inputs,
-    fp_unit_writeback_interface.unit wb
+    fp_intermediate_wb_interface.unit wb
 );
 
     unit_issue_interface conv_issue();
@@ -46,11 +46,11 @@ module fp_wb2fp_misc
     fp_i2f_inputs_t fp_i2f_inputs;
     fp_minmax_inputs_t fp_minmax_inputs;
     fp_sign_inject_inputs_t fp_sign_inject_inputs;
-    fp_unit_writeback_interface conv_wb();
-    fp_unit_writeback_interface mv_i2f_wb();
-    fp_unit_writeback_interface i2f_wb();
-    fp_unit_writeback_interface minmax_wb();
-    fp_unit_writeback_interface sign_inj_wb();
+    fp_intermediate_wb_interface conv_wb();
+    fp_intermediate_wb_interface mv_i2f_wb();
+    fp_intermediate_wb_interface i2f_wb();
+    fp_intermediate_wb_interface minmax_wb();
+    fp_intermediate_wb_interface sign_inj_wb();
     logic advance;
     logic single;
 

@@ -27,7 +27,7 @@ module fp_sign_inj
     input logic clk,
     unit_issue_interface.unit issue,
     input fp_sign_inject_inputs_t fp_sign_inject_inputs,
-    fp_unit_writeback_interface.unit wb
+    fp_intermediate_wb_interface.unit wb
 );
 
     ////////////////////////////////////////////////////

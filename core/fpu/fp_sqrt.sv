@@ -31,7 +31,7 @@ module fp_sqrt
     input logic rst,
     unit_issue_interface.unit issue,
     input fp_div_sqrt_inputs_t fp_div_sqrt_inputs,
-    fp_unit_writeback_interface.unit wb
+    fp_intermediate_wb_interface.unit wb
 );
     typedef struct packed{
         id_t id;

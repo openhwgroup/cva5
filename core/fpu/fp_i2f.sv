@@ -32,7 +32,7 @@ module fp_i2f
     unit_issue_interface.unit issue,
     input fp_i2f_inputs_t fp_i2f_inputs,
     input logic single,
-    fp_unit_writeback_interface.unit wb
+    fp_intermediate_wb_interface.unit wb
 );
 
     logic                            int_rs1_zero;

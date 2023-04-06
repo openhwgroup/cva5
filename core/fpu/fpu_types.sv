@@ -149,16 +149,33 @@ package fpu_types;
 
     typedef struct packed{
         logic [2:0] rm;
-        issue_packet_t issue;
+        logic valid;
+        logic [FP_NUM_UNITS-1:0] unit;
         logic [FLEN-1:0] rs1;
         logic [FLEN-1:0] rs2;
         logic [FLEN-1:0] rs3;
         logic [XLEN-1:0] int_rs1;
-
-        logic [FP_NUM_UNITS-1:0] unit_needed_issue_stage;
-        logic [FP_NUM_UNITS-1:0] issue_to_issue_stage;
-        id_t  id;
-        logic possible_issue;
+        id_t id;
+        logic is_single;
+        logic enable_prenorm;
+        logic is_fma;
+        logic is_fmul;
+        logic is_fadd;
+        logic is_div;
+        logic is_sqrt;
+        logic is_i2f;
+        logic is_mv_f2i;
+        logic is_s2d;
+        logic is_d2s;
+        logic is_minmax;
+        logic is_sign_inj;
+        logic is_f2i;
+        logic is_mv_i2f;
+        logic is_fcmp;
+        logic is_class;
+        logic add;
+        logic conv_signed;
+        logic [1:0] fma_op;
     } fp_pre_processing_packet_t;
 
     typedef struct packed{

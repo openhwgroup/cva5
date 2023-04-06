@@ -33,7 +33,7 @@ module fp_mul_madd_fused
     input fp_madd_inputs_t fp_madd_inputs,
     unit_issue_interface.unit issue,
     //output fp_unit_writeback_t fp_wb,
-    fp_unit_writeback_interface.unit fp_wb,
+    fp_intermediate_wb_interface.unit fp_wb,
     //output [4:0] fflags,
     output fma_mul_outputs_t fma_mul_outputs
 );
@@ -42,7 +42,7 @@ module fp_mul_madd_fused
     logic [FLEN-1:0]               rs1;
     logic [FLEN-1:0]               rs2;
     logic [2:0]                    rm [3:0];
-    logic [6:0]                    opcode [3:0];
+    logic [1:0]                    opcode [3:0];
     logic [2:0]                    instruction [2:0];
 
     logic                          rs1_hidden_bit;
@@ -96,7 +96,7 @@ module fp_mul_madd_fused
     ////////////////////////////////////////////////////
     //Implementation
     assign rm[0] = fp_madd_inputs.rm;
-    assign opcode[0] = fp_madd_inputs.op;
+    assign opcode[0] = fp_madd_inputs.fma_op;
     assign instruction[0] = fp_madd_inputs.instruction;
     assign rs3[0] = fp_madd_inputs.rs3;
     assign rs3_hidden_bit[0] = fp_madd_inputs.rs3_hidden_bit;
@@ -241,8 +241,8 @@ module fp_mul_madd_fused
     assign fma_mul_outputs.mul_wb_rd_safe = result_frac[0][FRAC_WIDTH+1];
     assign fma_mul_outputs.mul_wb = fma_mul_wb;
     assign fma_mul_outputs.mul_grs = {grs[0], {HALF_GRS_WIDTH{1'b0}}};
-    assign fma_mul_outputs.mul_op = opcode[2][3];
-    assign fma_mul_outputs.add_op = opcode[2][2];
+    assign fma_mul_outputs.mul_op = opcode[2][1];
+    assign fma_mul_outputs.add_op = opcode[2][0];
     assign fma_mul_outputs.rs3 = rs3[2];
     assign fma_mul_outputs.rs2_special_case = rs3_special_case[2];
     assign fma_mul_outputs.rs3_hidden_bit = rs3_hidden_bit[2];

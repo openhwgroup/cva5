@@ -31,7 +31,7 @@ module fp_normalize_rounding_top
 )(
     input logic clk,
     input logic rst,
-    fp_unit_writeback_interface.wb intermediate_unit_wb[NUM_WB_UNITS],
+    fp_intermediate_wb_interface.wb intermediate_unit_wb[NUM_WB_UNITS],
     fp_unit_writeback_interface.unit unit_wb
 );
 

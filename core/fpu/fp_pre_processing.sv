@@ -32,14 +32,12 @@ module fp_pre_processing
 )(
     input logic clk,
     input logic rst,
-    unit_issue_interface.unit i_fp_unit_issue [FP_NUM_UNITS-1:0],
     unit_issue_interface.decode o_fp_unit_issue [FP_NUM_UNITS-1:0],
 
     //Unit Inputs
     input fp_pre_processing_packet_t  i_fp_pre_processing_packet,
 
-
-    output logic                      issue_advance,
+    output logic ready,
     output fp_madd_inputs_t           o_fp_madd_inputs,
     output fp_div_sqrt_inputs_t       o_fp_div_sqrt_inputs,
     output fp_wb2fp_misc_inputs_t     o_fp_wb2fp_misc_inputs,
@@ -48,53 +46,42 @@ module fp_pre_processing
 
     /////////////////////////////////////////////
     //Control Logic
-    id_t id;
-    logic possible_issue;
-    logic pre_processing_valid;
-    logic pre_processing_stage_valid;
-    logic pre_processing_stage_ready;
+    id_t issue_id, r_issue_id;
+    logic [FP_NUM_UNITS-1:0] target_unit;
     logic [FP_NUM_UNITS-1:0] issue_to;
-    logic [FP_NUM_UNITS-1:0] r_issue_to_issue_stage;
-    logic [FP_NUM_UNITS-1:0] unit_needed_pre_processing_stage;
-    logic [FP_NUM_UNITS-1:0] pre_processing_ready;
-    logic [FP_NUM_UNITS-1:0] ready;
+    logic [FP_NUM_UNITS-1:0] unit_ready;
+    logic accept_request;
+    logic stage2_valid;
+    logic stage2_advance;
 
-    //preprocessing can accept new inputs if
-    //1. no inputs is currently in preprocessing stage
-    //2. data currently being preprocessed will propagate forward
-    assign pre_processing_valid = pre_processing_stage_valid & |pre_processing_ready;
-    assign pre_processing_stage_ready = ~pre_processing_stage_valid | (pre_processing_stage_valid & (~|unit_needed_pre_processing_stage | |pre_processing_ready));
-    assign issue_advance = pre_processing_stage_ready;// & issue.stage_valid;
+    assign stage2_advance = stage2_valid & |(unit_ready & target_unit);
+    assign issue_to = target_unit & {FP_NUM_UNITS{stage2_advance}};
+    assign ready = ~stage2_valid | stage2_advance;
+    assign accept_request = ready & i_fp_pre_processing_packet.valid;
 
-    assign pre_processing_ready = ready & unit_needed_pre_processing_stage;
-
-    assign issue_to = {FP_NUM_UNITS{pre_processing_valid}} & r_issue_to_issue_stage;
-
-    always_ff @ (posedge clk) begin
-        if (pre_processing_stage_ready) begin
-            pre_processing_stage_valid <= issue.stage_valid & issue.is_float & ~issue.is_fld;
-            unit_needed_pre_processing_stage <= i_fp_pre_processing_packet.unit_needed_issue_stage;
-            r_issue_to_issue_stage <= i_fp_pre_processing_packet.issue_to_issue_stage;
-            id <= i_fp_pre_processing_packet.id;
-            possible_issue <= i_fp_pre_processing_packet.possible_issue;
+    always_ff @(posedge clk) begin
+        if (rst) begin
+            target_unit <= '0;
+            stage2_valid <= 0;
+        end
+        else begin
+            if (accept_request) begin
+                target_unit <= i_fp_pre_processing_packet.unit;
+                stage2_valid <= 1;
+            end
+            else if (stage2_advance)
+                stage2_valid <= 0;
         end
     end
+
 
     /////////////////////////////////////////////
-    //Issue interface passby
+    //Intermediate interface
     generate for (genvar i = 0; i < FP_NUM_UNITS; i++) begin
-        assign o_fp_unit_issue[i].possible_issue = possible_issue;
+        assign unit_ready[i] = o_fp_unit_issue[i].ready;
         assign o_fp_unit_issue[i].new_request = issue_to[i];
-        assign o_fp_unit_issue[i].id = id;
+        assign o_fp_unit_issue[i].id = r_issue_id;
     end
-    endgenerate
-
-    //Ready signals are always combinational
-    generate
-        for (genvar i = 0; i < FP_NUM_UNITS; i++) begin
-            assign i_fp_unit_issue[i].ready = ready[i]; //for issue stage
-            assign ready[i] = o_fp_unit_issue[i].ready;
-        end
     endgenerate
 
     /////////////////////////////////////////////
@@ -103,26 +90,21 @@ module fp_pre_processing
     logic [FLEN-1:0] r_rs1, r_rs2, r_rs3;
     logic [FLEN_F-1:0] r_rs1_sp;
     logic [2:0] rm, r_rm;
-    issue_packet_t issue;
     logic single, r_single;
-    logic r_is_i2f, r_is_f2i, r_is_mv_i2f, r_is_mv_f2i, r_is_class, r_is_fcmp, r_is_minmax, r_is_sign_inj, r_is_s2d, r_is_d2s;
-    logic [6:0] opcode, r_opcode;
-    logic [6:0] fn7, r_fn7;
-    id_t issue_id, r_issue_id;
+    logic r_is_i2f, r_is_f2i, r_is_mv_i2f, r_is_mv_f2i, r_is_class, r_is_fcmp, r_is_minmax, r_is_sign_inj, r_is_s2d, r_is_d2s, r_is_sqrt;
+    logic [1:0] r_fma_op;
+
     logic r_rs2_sign;
 
     assign rs1 = i_fp_pre_processing_packet.rs1;
     assign rs2 = i_fp_pre_processing_packet.rs2;
     assign rs3 = i_fp_pre_processing_packet.rs3;
     assign rm = i_fp_pre_processing_packet.rm;
-    assign issue = i_fp_pre_processing_packet.issue;
-    assign single = issue.is_single;
-    assign opcode = issue.opcode;
-    assign fn7 = issue.instruction[31:25];
-    assign issue_id = issue.id;
+    assign single = i_fp_pre_processing_packet.is_single;
+    assign issue_id = i_fp_pre_processing_packet.id;
 
     always_ff @ (posedge clk) begin
-        if (pre_processing_stage_ready) begin
+        if (accept_request) begin
             r_rs1 <= single ? rs_converted[RS1] : rs1;
             r_rs2 <= single ? rs_converted[RS2] : rs2;
             r_rs3 <= single ? rs_converted[RS3] : rs3;
@@ -130,20 +112,20 @@ module fp_pre_processing
             r_rs2_sign <= single ? rs2_boxed & rs2[FLEN_F-1] : rs2[FLEN-1];
             r_rm  <= rm;
             r_single <= single;
-            r_opcode <= opcode;
-            r_fn7 <= fn7;
             r_issue_id <= issue_id;
 
-            r_is_i2f <= issue.is_i2f;
-            r_is_f2i <= issue.is_f2i;
-            r_is_mv_i2f <= issue.is_mv_i2f;
-            r_is_mv_f2i <= issue.is_mv_f2i;
-            r_is_d2s <= issue.is_d2s;
-            r_is_s2d <= issue.is_s2d;
-            r_is_class <= issue.is_class;
-            r_is_fcmp <= issue.is_fcmp;
-            r_is_minmax <= issue.is_minmax;
-            r_is_sign_inj <= issue.is_sign_inj;
+            r_is_i2f <= i_fp_pre_processing_packet.is_i2f;
+            r_is_f2i <= i_fp_pre_processing_packet.is_f2i;
+            r_is_mv_i2f <= i_fp_pre_processing_packet.is_mv_i2f;
+            r_is_mv_f2i <= i_fp_pre_processing_packet.is_mv_f2i;
+            r_is_d2s <= i_fp_pre_processing_packet.is_d2s;
+            r_is_s2d <= i_fp_pre_processing_packet.is_s2d;
+            r_is_class <= i_fp_pre_processing_packet.is_class;
+            r_is_fcmp <= i_fp_pre_processing_packet.is_fcmp;
+            r_is_minmax <= i_fp_pre_processing_packet.is_minmax;
+            r_is_sign_inj <= i_fp_pre_processing_packet.is_sign_inj;
+            r_is_sqrt <= i_fp_pre_processing_packet.is_sqrt;
+            r_fma_op <= i_fp_pre_processing_packet.fma_op;
         end
     end
 
@@ -226,7 +208,7 @@ module fp_pre_processing
 
     for (genvar i = 0; i < FP_REGFILE_READ_PORTS; i++) begin
         always_ff @ (posedge clk) begin
-            if (pre_processing_stage_ready) begin
+            if (accept_request) begin
                 r_is_inf[i] <= is_inf[i];
                 r_is_zero[i] <= is_zero[i];
                 r_is_SNaN[i] <= is_SNaN[i];
@@ -290,7 +272,7 @@ module fp_pre_processing
     //assign expo_diff_issued = r_expo_diff[EXPO_WIDTH] ? r_expo_diff_negate : r_expo_diff;
 
     always_ff @ (posedge clk) begin
-        if (pre_processing_stage_ready) begin
+        if (accept_request) begin
             r_rs1_boxed <= rs1_boxed;
             r_hidden_single <= hidden_single[0];
             r_expo_diff <= expo_diff;
@@ -315,7 +297,7 @@ module fp_pre_processing
 
     //Issue cycle - pre normalize rs1 and rs2
     //Pre-normalize only enabled for fma/fmul and fdiv/fsqrt
-    assign pre_normalize_enable = issue.enable_pre_normalize;
+    assign pre_normalize_enable = i_fp_pre_processing_packet.enable_prenorm;
 
     //Cycle 1 - swap
     always_comb begin
@@ -348,7 +330,7 @@ module fp_pre_processing
     end
 
     always_ff @ (posedge clk) begin
-        if (pre_processing_stage_ready) begin
+        if (accept_request) begin
             r_rs1_pre_normalize_shift_amt <= rs1_pre_normalize_shift_amt;
             r_rs2_pre_normalize_shift_amt <= rs2_pre_normalize_shift_amt;
 
@@ -368,10 +350,10 @@ module fp_pre_processing
     logic r_is_fma, r_is_fadd, r_is_fmul;
     logic add, r_add;
 
-    assign is_fma = issue.opcode[6:4] == 3'b100; //Fused multiply and add instruction
-    assign is_fmul = issue.opcode[6:4] == 3'b101 & fn7[3];
-    assign is_fadd = issue.opcode[6:4] == 3'b101 & ~fn7[3];
-    assign add = ~|fn7[6:2];
+    assign is_fma = i_fp_pre_processing_packet.is_fma;
+    assign is_fmul = i_fp_pre_processing_packet.is_fmul;
+    assign is_fadd = i_fp_pre_processing_packet.is_fadd;
+    assign add = i_fp_pre_processing_packet.add;
 
     //Cycle 1 - drive inputs
     assign o_fp_madd_inputs.instruction = {r_is_fma, r_is_fadd, r_is_fmul};
@@ -380,7 +362,7 @@ module fp_pre_processing
     assign o_fp_madd_inputs.rs1_pre_normalize_shift_amt = rs1_pre_normalize_shift_amt_swapped;
     assign o_fp_madd_inputs.rs2_pre_normalize_shift_amt = rs2_pre_normalize_shift_amt_swapped;
     assign o_fp_madd_inputs.rs3 = r_rs3;
-    assign o_fp_madd_inputs.op = r_opcode;
+    assign o_fp_madd_inputs.fma_op = r_fma_op;
     assign o_fp_madd_inputs.rm = r_rm;
     assign o_fp_madd_inputs.rs1_subnormal = is_subnormal_swapped[RS1];
     assign o_fp_madd_inputs.rs2_subnormal = is_subnormal_swapped[RS2];
@@ -412,7 +394,7 @@ module fp_pre_processing
     assign fp_add_inputs.fp_add_grs = 0;
 
     always_ff @ (posedge clk) begin
-        if (pre_processing_stage_ready) begin
+        if (accept_request) begin
             r_is_fma <= is_fma;
             r_is_fmul <= is_fmul;
             r_is_fadd <= is_fadd;
@@ -424,19 +406,6 @@ module fp_pre_processing
     //FDIV/SQRT
     //Inputs are not swapped
     //Issue cycle
-    //assign o_fp_div_sqrt_inputs.rs1 = {rs1[FLEN-1], rs1[FLEN-2-:EXPO_WIDTH], rs1_frac_pre_normalized};
-    //assign o_fp_div_sqrt_inputs.rs2 = {rs2[FLEN-1], rs2[FLEN-2-:EXPO_WIDTH], rs2_frac_pre_normalized};
-    //assign o_fp_div_sqrt_inputs.rs1_hidden_bit = rs1_hidden_bit_pre_normalized;
-    //assign o_fp_div_sqrt_inputs.rs2_hidden_bit = rs2_hidden_bit_pre_normalized;
-    //assign o_fp_div_sqrt_inputs.rs1_pre_normalize_shift_amt = rs1_pre_normalize_shift_amt;
-    //assign o_fp_div_sqrt_inputs.rs2_pre_normalize_shift_amt = rs2_pre_normalize_shift_amt;
-    //assign o_fp_div_sqrt_inputs.rm = rm;
-    //assign o_fp_div_sqrt_inputs.fn7 = fn7;
-    //assign o_fp_div_sqrt_inputs.id = issue_id;//fp_unit_issue[FP_DIV_SQRT_WB_ID].instruction_id;
-    //assign o_fp_div_sqrt_inputs.rs1_special_case = {is_inf[RS1], is_SNaN[RS1], is_QNaN[RS1], is_zero[RS1]};
-    //assign o_fp_div_sqrt_inputs.rs2_special_case = {is_inf[RS2], is_SNaN[RS2], is_QNaN[RS2], is_zero[RS2]};
-    //assign o_fp_div_sqrt_inputs.rs1_normal = ~is_subnormal[RS1];
-    //assign o_fp_div_sqrt_inputs.rs2_normal = ~is_subnormal[RS2];
     assign o_fp_div_sqrt_inputs.rs1 = rs1_pre_normalized;
     assign o_fp_div_sqrt_inputs.rs2 = rs2_pre_normalized;
     assign o_fp_div_sqrt_inputs.rs1_hidden_bit = r_rs1_hidden_bit_pre_normalized;
@@ -444,7 +413,7 @@ module fp_pre_processing
     assign o_fp_div_sqrt_inputs.rs1_pre_normalize_shift_amt = r_rs1_pre_normalize_shift_amt;
     assign o_fp_div_sqrt_inputs.rs2_pre_normalize_shift_amt = r_rs2_pre_normalize_shift_amt;
     assign o_fp_div_sqrt_inputs.rm = r_rm;
-    assign o_fp_div_sqrt_inputs.is_sqrt = r_fn7[5];
+    assign o_fp_div_sqrt_inputs.is_sqrt = r_is_sqrt;
     assign o_fp_div_sqrt_inputs.id = r_issue_id;//fp_unit_issue[FP_DIV_SQRT_WB_ID].instruction_id;
     assign o_fp_div_sqrt_inputs.rs1_special_case = {r_is_inf[RS1], r_is_SNaN[RS1], r_is_QNaN[RS1], r_is_zero[RS1]};
     assign o_fp_div_sqrt_inputs.rs2_special_case = {r_is_inf[RS2], r_is_SNaN[RS2], r_is_QNaN[RS2], r_is_zero[RS2]};
@@ -469,7 +438,7 @@ module fp_pre_processing
 
     //Issue Cycle
     //i2f
-    assign i2f_is_signed = ~issue.rs_addr[RS2][0];
+    assign i2f_is_signed = i_fp_pre_processing_packet.conv_signed;
     assign int_rs1 = i_fp_pre_processing_packet.int_rs1;
     assign neg_int_rs1 = -i_fp_pre_processing_packet.int_rs1;
     assign int_rs1_sign = i2f_is_signed & int_rs1[XLEN-1];
@@ -548,7 +517,7 @@ module fp_pre_processing
     assign o_fp_wb2fp_misc_inputs.fp_conv_inputs.hidden = r_hidden_bit[RS1];
 
     always_ff @ (posedge clk) begin
-        if (pre_processing_stage_ready) begin
+        if (accept_request) begin
             r_abs_int_rs1 <= abs_int_rs1;
             r_int_rs1_sign <= int_rs1_sign;
             r_int_rs1_zero <= int_rs1_zero;
@@ -564,7 +533,7 @@ module fp_pre_processing
     logic f2i_int_less_than_1;
     logic rs1_expo_unbiased_greater_than_31, rs1_expo_unbiased_greater_than_30;
 
-    assign f2i_is_signed = ~issue.rs_addr[RS2][0];
+    assign f2i_is_signed = i_fp_pre_processing_packet.conv_signed;
     assign rs1_expo = r_rs1[FLEN-2-:EXPO_WIDTH];
 
     assign {f2i_int_less_than_1, rs1_expo_unbiased} = (rs1_expo - BIAS);
@@ -605,7 +574,7 @@ module fp_pre_processing
     assign o_fp_wb2int_misc_inputs.fp_mv_f2i_inputs.rs1 = r_rs1_sp; //TODO: trick mvf2i into being considered a double inst
 
     always_ff @ (posedge clk) begin
-        if (pre_processing_stage_ready)
+        if (accept_request)
             r_f2i_is_signed <= f2i_is_signed;
     end
 
