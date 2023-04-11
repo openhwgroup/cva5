@@ -477,8 +477,8 @@ module cva5_sim
 
     assign NUM_RETIRE_PORTS = RETIRE_PORTS;
     generate for (genvar i = 0; i < RETIRE_PORTS; i++) begin
-        assign retire_ports_pc[i] = cpu.id_block.pc_table[cpu.retire_ids[i]];
-        assign retire_ports_instruction[i] = cpu.id_block.instruction_table[cpu.retire_ids[i]];
+        assign retire_ports_pc[i] = cpu.id_block.pc_table.ram[cpu.retire_ids[i]];
+        assign retire_ports_instruction[i] = cpu.id_block.instruction_table.ram[cpu.retire_ids[i]];
         assign retire_ports_valid[i] = cpu.retire_port_valid[i];
     end endgenerate
 
