@@ -108,7 +108,7 @@ module register_file
     //LUTRAM implementation
     //Read in decode stage, writeback groups muxed and output registered per regfile read port
     generate for (genvar i = 0; i < CONFIG.NUM_WB_GROUPS; i++) begin : register_file_gen
-        lutram_1w_mr #(.WIDTH(32), .DEPTH(64), .NUM_READ_PORTS(REGFILE_READ_PORTS))
+        lutram_1w_mr #(.DATA_TYPE(logic[31:0]), .DEPTH(64), .NUM_READ_PORTS(REGFILE_READ_PORTS))
         register_file_bank (
             .clk,
             .waddr(wb_phys_addr[i]),

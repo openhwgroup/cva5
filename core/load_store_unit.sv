@@ -137,13 +137,13 @@ module load_store_unit
         id_t id;
         logic [NUM_SUB_UNITS_W-1:0] subunit_id;
     } load_attributes_t;
-    load_attributes_t  mem_attr, wb_attr;
+    load_attributes_t  wb_attr;
 
     common_instruction_t instruction;//rs1_addr, rs2_addr, fn3, fn7, rd_addr, upper/lower opcode
 
     logic [3:0] be;
     //FIFOs
-    fifo_interface #(.DATA_WIDTH($bits(load_attributes_t))) load_attributes();
+    fifo_interface #(.DATA_TYPE(load_attributes_t)) load_attributes();
 
     load_store_queue_interface lsq();
     ////////////////////////////////////////////////////
@@ -359,7 +359,7 @@ module load_store_unit
         endcase
     end
     
-    assign mem_attr = '{
+    assign load_attributes.data_in = '{
         is_signed : ~|lsq.load_data_out.fn3[2:1],
         byte_addr : lsq.load_data_out.addr[1:0],
         sign_sel : lsq.load_data_out.addr[1:0] | {1'b0, lsq.load_data_out.fn3[0]},//halfwrord
@@ -367,12 +367,10 @@ module load_store_unit
         id : lsq.load_data_out.id,
         subunit_id : subunit_id
     };
-
-    assign load_attributes.data_in = mem_attr;
     assign load_attributes.push = sub_unit_load_issue;
     assign load_attributes.potential_push = load_attributes.push;
     
-    cva5_fifo #(.DATA_WIDTH($bits(load_attributes_t)), .FIFO_DEPTH(ATTRIBUTES_DEPTH))
+    cva5_fifo #(.DATA_TYPE(load_attributes_t), .FIFO_DEPTH(ATTRIBUTES_DEPTH))
     attributes_fifo (
         .clk (clk),
         .rst (rst), 

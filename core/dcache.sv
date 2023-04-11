@@ -186,7 +186,7 @@ module dcache
     ////////////////////////////////////////////////////
     //L1 Arbiter Interface
     //Priority to oldest request
-    fifo_interface #(.DATA_WIDTH(1)) request_order();
+    fifo_interface #(.DATA_TYPE(logic)) request_order();
 
     assign request_order.data_in = load_request;
     assign request_order.push = load_request | store_request;
@@ -194,7 +194,7 @@ module dcache
 
     assign request_order.pop = l1_request.ack | load_hit;
 
-    cva5_fifo #(.DATA_WIDTH(1), .FIFO_DEPTH(2))
+    cva5_fifo #(.DATA_TYPE(logic), .FIFO_DEPTH(2))
     request_order_fifo (
         .clk (clk),
         .rst (rst), 

@@ -52,17 +52,13 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
         logic [LOG2_SQ_DEPTH-1:0] sq_index;
     } lq_entry_t;
 
-
     logic [LOG2_SQ_DEPTH-1:0] sq_index;
     logic [LOG2_SQ_DEPTH-1:0] sq_oldest;
     addr_hash_t addr_hash;
     logic potential_store_conflict;
     sq_entry_t sq_entry;
 
-    lq_entry_t lq_data_in;
-    lq_entry_t lq_data_out;
-
-    fifo_interface #(.DATA_WIDTH($bits(lq_entry_t))) lq();
+    fifo_interface #(.DATA_TYPE(lq_entry_t)) lq();
     store_queue_interface sq();
     ////////////////////////////////////////////////////
     //Implementation
@@ -83,7 +79,7 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
 
     ////////////////////////////////////////////////////
     //Load Queue
-    cva5_fifo #(.DATA_WIDTH($bits(lq_entry_t)), .FIFO_DEPTH(MAX_IDS))
+    cva5_fifo #(.DATA_TYPE(lq_entry_t), .FIFO_DEPTH(MAX_IDS))
     load_queue_fifo (
         .clk(clk),
         .rst(rst),
@@ -96,15 +92,13 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
     assign lq.pop = lsq.load_pop;
 
     //FIFO data ports
-    assign lq_data_in = '{
+    assign lq.data_in = '{
         addr : lsq.data_in.addr,
         fn3 : lsq.data_in.fn3,
         id : lsq.data_in.id, 
         store_collision : potential_store_conflict,
         sq_index : sq_index
     };
-    assign lq.data_in = lq_data_in;
-    assign lq_data_out = lq.data_out;
     ////////////////////////////////////////////////////
     //Store Queue
     assign sq.push = lsq.push & lsq.data_in.store;
@@ -129,19 +123,19 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
     //Priority is for loads over stores.
     //A store will be selected only if no loads are ready
     logic load_blocked;
-    assign load_blocked = (lq_data_out.store_collision & (lq_data_out.sq_index != sq_oldest));
+    assign load_blocked = (lq.data_out.store_collision & (lq.data_out.sq_index != sq_oldest));
 
     assign lsq.load_valid = lq.valid & ~load_blocked;
     assign lsq.store_valid = sq.valid;
 
     assign lsq.load_data_out = '{
-        addr : lq_data_out.addr,
+        addr : lq.data_out.addr,
         load : 1,
         store : 0,
         be : 'x,
-        fn3 : lq_data_out.fn3,
+        fn3 : lq.data_out.fn3,
         data_in : 'x,
-        id : lq_data_out.id
+        id : lq.data_out.id
     };
 
     assign lsq.store_data_out = '{

@@ -121,7 +121,7 @@ module store_queue
         be : sq.data_in.be,
         data : '0
     };
-    lutram_1w_1r #(.WIDTH($bits(sq_entry_t)), .DEPTH(CONFIG.SQ_DEPTH))
+    lutram_1w_1r #(.DATA_TYPE(sq_entry_t), .DEPTH(CONFIG.SQ_DEPTH))
     store_attr (
         .clk(clk),
         .waddr(sq_index),
@@ -170,7 +170,7 @@ module store_queue
     end
 
     assign retire_table_in = '{id_needed : sq.data_in.id_needed, wb_group : store_forward_wb_group, sq_index : sq_index};
-    lutram_1w_1r #(.WIDTH($bits(retire_table_t)), .DEPTH(MAX_IDS))
+    lutram_1w_1r #(.DATA_TYPE(retire_table_t), .DEPTH(MAX_IDS))
     store_retire_table_lutram (
         .clk(clk),
         .waddr(sq.data_in.id),
@@ -183,7 +183,7 @@ module store_queue
     logic [31:0] wb_data [NUM_OF_FORWARDING_PORTS+1];
 
     //Data issued with the store can be stored by store-id
-    lutram_1w_1r #(.WIDTH(32), .DEPTH(MAX_IDS))
+    lutram_1w_1r #(.DATA_TYPE(logic[31:0]), .DEPTH(MAX_IDS))
     non_forwarded_port (
         .clk(clk),
         .waddr(sq.data_in.id),
@@ -196,7 +196,7 @@ module store_queue
     //Data from wb ports is stored by ID and then accessed by store-id to store-id-needed translation
     generate
     for (genvar i = 0; i < NUM_OF_FORWARDING_PORTS; i++) begin : lutrams
-        lutram_1w_1r #(.WIDTH(32), .DEPTH(MAX_IDS))
+        lutram_1w_1r #(.DATA_TYPE(logic[31:0]), .DEPTH(MAX_IDS))
         writeback_port (
             .clk(clk),
             .waddr(wb_snoop[i+1].id),
@@ -210,7 +210,7 @@ module store_queue
 
     //Final storage table for the store queue
     //SQ-index addressed
-    lutram_1w_1r #(.WIDTH(32), .DEPTH(CONFIG.SQ_DEPTH))
+    lutram_1w_1r #(.DATA_TYPE(logic[31:0]), .DEPTH(CONFIG.SQ_DEPTH))
     sq_data_lutram (
         .clk(clk),
         .waddr(retire_table_out.sq_index),

@@ -51,7 +51,7 @@ module toggle_memory
     assign new_ram_data = toggle ^ _read_data[0];
 
     lutram_1w_mr #(
-        .WIDTH(1),
+        .DATA_TYPE(logic),
         .DEPTH(DEPTH),
         .NUM_READ_PORTS(NUM_READ_PORTS+1)
     )

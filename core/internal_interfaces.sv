@@ -109,11 +109,11 @@ interface exception_interface;
     modport econtrol (input valid, code, id, tval, output ack);
 endinterface
 
-interface fifo_interface #(parameter DATA_WIDTH = 42);//#(parameter type data_type = logic[31:0]);
+interface fifo_interface #(parameter type DATA_TYPE = logic);
     logic push;
     logic pop;
-    logic [DATA_WIDTH-1:0] data_in;
-    logic [DATA_WIDTH-1:0] data_out;
+    DATA_TYPE data_in;
+    DATA_TYPE data_out;
     logic valid;
     logic full;
     logic potential_push;

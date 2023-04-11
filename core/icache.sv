@@ -68,7 +68,7 @@ module icache
     logic second_cycle;
     logic [31:0] second_cycle_addr;
 
-    fifo_interface #(.DATA_WIDTH(32)) input_fifo();
+    fifo_interface #(.DATA_TYPE(logic[31:0])) input_fifo();
 
     logic new_request;
     logic [31:0] new_request_addr;
@@ -88,7 +88,7 @@ module icache
 
     assign new_request_addr = input_fifo.valid ? input_fifo.data_out : fetch_sub.addr;
 
-    cva5_fifo #(.DATA_WIDTH(32), .FIFO_DEPTH(2))
+    cva5_fifo #(.DATA_TYPE(logic[31:0]), .FIFO_DEPTH(2))
     cache_input_fifo (
         .clk (clk), 
         .rst (rst), 

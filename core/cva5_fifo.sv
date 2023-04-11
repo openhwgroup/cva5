@@ -32,7 +32,7 @@ module cva5_fifo
     import cva5_types::*;
     
     #(
-        parameter DATA_WIDTH = 70, 
+        parameter type DATA_TYPE = logic,
         parameter FIFO_DEPTH = 4
     )
     (
@@ -63,7 +63,7 @@ module cva5_fifo
     //connected as a shift reg for the same resources as a LUTRAM FIFO
     //but with better timing
     else if (FIFO_DEPTH == 2) begin : gen_width_two
-        logic [DATA_WIDTH-1:0] shift_reg [FIFO_DEPTH];
+        DATA_TYPE shift_reg [FIFO_DEPTH];
         logic [LOG2_FIFO_DEPTH:0] inflight_count;
         ////////////////////////////////////////////////////
         //Occupancy Tracking
@@ -115,7 +115,7 @@ module cva5_fifo
             .value(write_index)
         );
         //Force FIFO depth to next power of 2
-        lutram_1w_1r #(.WIDTH(DATA_WIDTH), .DEPTH(2**LOG2_FIFO_DEPTH))
+        lutram_1w_1r #(.DATA_TYPE(DATA_TYPE), .DEPTH(2**LOG2_FIFO_DEPTH))
         write_port (
             .clk(clk),
             .waddr(write_index),

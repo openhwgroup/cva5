@@ -93,7 +93,6 @@ module fetch
         logic mmu_fault;
         logic [NUM_SUB_UNITS_W-1:0] subunit_id;
     } fetch_attributes_t;
-    fetch_attributes_t fetch_attr_in;
     fetch_attributes_t fetch_attr;
 
     logic [MAX_OUTSTANDING_REQUESTS_W:0] inflight_count;
@@ -109,7 +108,7 @@ module fetch
     logic [31:0] pc;
 
     logic flush_or_rst;
-    fifo_interface #(.DATA_WIDTH($bits(fetch_attributes_t))) fetch_attr_fifo();
+    fifo_interface #(.DATA_TYPE(fetch_attributes_t)) fetch_attr_fifo();
 
     logic update_pc;
     logic new_mem_request;
@@ -190,25 +189,23 @@ module fetch
         .one_hot (sub_unit_address_match), 
         .int_out (subunit_id)
     );
-    assign fetch_attr_in = '{
+    assign fetch_attr_fifo.data_in = '{
         is_predicted_branch_or_jump : bp.use_prediction,
         is_branch : (bp.use_prediction & bp.is_branch),
         address_valid : address_valid,
         mmu_fault : tlb.is_fault,
         subunit_id : subunit_id
     };
-    assign fetch_attr_fifo.data_in = fetch_attr_in;
     assign fetch_attr_fifo.push = pc_id_assigned;
     assign fetch_attr_fifo.potential_push = pc_id_assigned;
     assign fetch_attr_fifo.pop = internal_fetch_complete;
 
-    cva5_fifo #(.DATA_WIDTH($bits(fetch_attributes_t)), .FIFO_DEPTH(MAX_OUTSTANDING_REQUESTS))
+    cva5_fifo #(.DATA_TYPE(fetch_attributes_t), .FIFO_DEPTH(MAX_OUTSTANDING_REQUESTS))
     attributes_fifo (
         .clk (clk), 
         .rst (rst), 
         .fifo (fetch_attr_fifo)
     );
-
     assign fetch_attr = fetch_attr_fifo.data_out;
 
     assign inflight_count_next = inflight_count + MAX_OUTSTANDING_REQUESTS_W'(fetch_attr_fifo.push) - MAX_OUTSTANDING_REQUESTS_W'(fetch_attr_fifo.pop);

@@ -91,7 +91,7 @@ module tlb_lut_ram
     genvar i;
     generate
         for (i=0; i<WAYS; i=i+1) begin : lut_rams
-            lutram_1w_1r #(.WIDTH($bits(tlb_entry_t)), .DEPTH(DEPTH))
+            lutram_1w_1r #(.DATA_TYPE(tlb_entry_t), .DEPTH(DEPTH))
             write_port (
                 .clk(clk),
                 .waddr(tlb_addr),

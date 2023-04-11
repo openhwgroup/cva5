@@ -25,7 +25,7 @@ module lutram_1w_mr
     import cva5_config::*;
 
     #(
-        parameter WIDTH = 32,
+        parameter type DATA_TYPE = logic,
         parameter DEPTH = 32,
         parameter NUM_READ_PORTS = 2
     )
@@ -36,14 +36,14 @@ module lutram_1w_mr
         input logic[$clog2(DEPTH)-1:0] raddr [NUM_READ_PORTS],
 
         input logic ram_write,
-        input logic[WIDTH-1:0] new_ram_data,
-        output logic[WIDTH-1:0] ram_data_out [NUM_READ_PORTS]
+        input DATA_TYPE new_ram_data,
+        output DATA_TYPE ram_data_out [NUM_READ_PORTS]
     );
 
 //For Xilinx with their wider selection of LUTRAMs, infer a multi-read port LUTRAM
 //For Intel, build the multi-read port ram from simple-dual-port LUTRAMs
 generate if (FPGA_VENDOR == XILINX) begin : xilinx_gen
-    logic [WIDTH-1:0] ram [DEPTH-1:0];
+    logic [$bits(DATA_TYPE)-1:0] ram [DEPTH-1:0];
 
     initial ram = '{default: 0};
     always_ff @ (posedge clk) begin
@@ -61,7 +61,7 @@ end
 else if (FPGA_VENDOR == INTEL) begin : intel_gen
 
     for (genvar i = 0; i < NUM_READ_PORTS; i++) begin : lutrams
-        lutram_1w_1r #(.WIDTH(WIDTH), .DEPTH(DEPTH))
+        lutram_1w_1r #(.DATA_TYPE(DATA_TYPE), .DEPTH(DEPTH))
         write_port (
             .clk(clk),
             .waddr(waddr),

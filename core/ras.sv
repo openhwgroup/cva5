@@ -43,7 +43,7 @@ module ras
     localparam RAS_DEPTH_W = $clog2(CONFIG.BP.RAS_ENTRIES);
     logic [RAS_DEPTH_W-1:0] read_index;
     logic [RAS_DEPTH_W-1:0] new_index;
-    fifo_interface #(.DATA_WIDTH(RAS_DEPTH_W)) ri_fifo();
+    fifo_interface #(.DATA_TYPE(logic[RAS_DEPTH_W-1:0])) ri_fifo();
     ///////////////////////////////////////////////////////
     //For simulation purposes
     initial lut_ram = '{default: 0};
@@ -52,8 +52,12 @@ module ras
     
     //On a speculative branch, save the current stack pointer
     //Restored if branch is misspredicted (gc_fetch_flush)
-    cva5_fifo #(.DATA_WIDTH(RAS_DEPTH_W), .FIFO_DEPTH(MAX_IDS))
-        read_index_fifo (.clk, .rst(rst | gc.fetch_flush | early_branch_flush_ras_adjust), .fifo(ri_fifo));
+    cva5_fifo #(.DATA_TYPE(logic[RAS_DEPTH_W-1:0]), .FIFO_DEPTH(MAX_IDS))
+    read_index_fifo (
+        .clk,
+        .rst(rst | gc.fetch_flush | early_branch_flush_ras_adjust),
+        .fifo(ri_fifo)
+    );
 
     assign ri_fifo.data_in = read_index;
     assign ri_fifo.push = ras.branch_fetched;
