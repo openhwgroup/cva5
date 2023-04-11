@@ -51,21 +51,6 @@ interface branch_predictor_interface;
 
 endinterface
 
-interface unit_decode_interface;
-    import cva5_types::*;
-    import cva5_config::*;
-
-    logic [31:0] instruction;
-    logic issue_stage_ready;
-
-    logic unit_needed;
-    logic uses_rs [REGFILE_READ_PORTS];
-    logic uses_rd;
-
-    modport decode (input unit_needed, uses_rs, uses_rd, output instruction, issue_stage_ready);
-    modport unit (output unit_needed, uses_rs, uses_rd, input instruction, issue_stage_ready);
-endinterface
-
 interface unit_issue_interface;
     import cva5_types::*;
 
@@ -79,24 +64,19 @@ interface unit_issue_interface;
     modport unit (output ready, input possible_issue, new_request, id);
 endinterface
 
-interface unit_writeback_interface;
+interface unit_writeback_interface #(parameter type PAYLOAD_TYPE = logic);
     import riscv_types::*;
     import cva5_types::*;
 
-        logic ack;
+    //Handshaking
+    logic ack;
+    logic done;
 
-        id_t id;
-        logic done;
-        logic [XLEN-1:0] rd;
+    id_t id;
+    logic [31:0] rd;
 
-        modport unit (
-            input ack,
-            output id, done, rd
-        );
-        modport wb (
-            output ack,
-            input id, done, rd
-        );
+    modport unit (input ack, output done, id, rd);
+    modport wb (output ack, input done, id, rd);
 endinterface
 
 interface ras_interface;
@@ -127,20 +107,6 @@ interface exception_interface;
     
     modport unit (output valid, code, id, tval, input ack);
     modport econtrol (input valid, code, id, tval, output ack);
-endinterface
-
-interface csr_exception_interface;
-    import riscv_types::*;
-    import cva5_types::*;
-
-    logic valid;
-    exception_code_t code;
-    logic [31:0] tval;
-    logic [31:0] exception_pc;
-    logic [31:0] trap_pc;
-
-    modport econtrol (output valid, code, tval, exception_pc, input trap_pc);
-    modport csr (input valid, code, tval, exception_pc, output trap_pc);
 endinterface
 
 interface fifo_interface #(parameter DATA_WIDTH = 42);//#(parameter type data_type = logic[31:0]);
@@ -266,28 +232,6 @@ interface store_queue_interface;
         output data_in, push, pop,
         input full, data_out, valid, empty, no_released_stores_pending
     );
-endinterface
-
-interface writeback_store_interface;
-    import riscv_types::*;
-    import cva5_types::*;
-
-        id_t id_needed;
-        logic possibly_waiting;
-        logic waiting;
-        logic ack;
-
-        logic id_done;
-        logic [31:0] data;
-
-        modport ls (
-            input id_done, data,
-            output id_needed, possibly_waiting ,waiting, ack
-        );
-        modport wb (
-            input id_needed, possibly_waiting, waiting, ack,
-            output id_done, data
-        );
 endinterface
 
 interface cache_functions_interface #(parameter int TAG_W = 8, parameter int LINE_W = 4, parameter int SUB_LINE_W = 2);

@@ -286,7 +286,6 @@ module cva5
         .iwishbone (iwishbone),
         .icache_on ('1),
         .tlb (itlb), 
-        .tlb_on (tlb_on),
         .l1_request (l1_request[L1_ICACHE_ID]), 
         .l1_response (l1_response[L1_ICACHE_ID]), 
         .exception (1'b0)
