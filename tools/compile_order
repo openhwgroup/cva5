@@ -17,13 +17,10 @@ core/lutrams/lutram_1w_1r.sv
 core/lutrams/lutram_1w_mr.sv
 
 core/set_clr_reg_with_rst.sv
-core/one_hot_occupancy.sv 
-core/binary_occupancy.sv 
 core/one_hot_to_integer.sv  
 core/cycler.sv  
 core/lfsr.sv
 core/cva5_fifo.sv  
-core/shift_counter.sv
 core/priority_encoder.sv
 
 core/toggle_memory.sv
@@ -76,7 +73,6 @@ core/branch_predictor_ram.sv
 core/branch_predictor.sv  
 core/fetch.sv
 
-core/illegal_instruction_checker.sv
 core/decode_and_issue.sv
 
 core/register_free_list.sv
