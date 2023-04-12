@@ -59,7 +59,6 @@ module store_queue
         logic [$clog2(CONFIG.NUM_WB_GROUPS)-1:0] wb_group;
         sq_index_t sq_index;
     } retire_table_t;
-    retire_table_t retire_table_in;
     retire_table_t retire_table_out;
 
     wb_packet_t wb_snoop [CONFIG.NUM_WB_GROUPS];
@@ -70,9 +69,9 @@ module store_queue
     addr_hash_t [CONFIG.SQ_DEPTH-1:0] hashes;
 
     //LUTRAM-based memory blocks
-    sq_entry_t sq_entry_in;
     sq_entry_t output_entry;    
     sq_entry_t output_entry_r;    
+    logic [1:0] retire_alignment;
 
     sq_index_t sq_index_next;
     sq_index_t sq_oldest_next;
@@ -82,6 +81,7 @@ module store_queue
     logic [CONFIG.SQ_DEPTH-1:0] issued_one_hot;
 
     logic [31:0] data_pre_alignment;
+    logic [31:0] marshalled_data;
     logic [31:0] sq_data_out;
     ////////////////////////////////////////////////////
     //Implementation     
@@ -116,24 +116,32 @@ module store_queue
     assign sq.empty = ~|valid;
 
     //SQ attributes and issue data
-    assign sq_entry_in = '{
-        addr : sq.data_in.addr,
-        be : sq.data_in.be,
-        data : '0
-    };
     lutram_1w_1r #(.DATA_TYPE(sq_entry_t), .DEPTH(CONFIG.SQ_DEPTH))
     store_attr (
         .clk(clk),
         .waddr(sq_index),
         .raddr(sq_oldest_next),
         .ram_write(sq.push),
-        .new_ram_data(sq_entry_in),
+        .new_ram_data('{
+            addr : sq.data_in.addr,
+            be : sq.data_in.be,
+            data : '0
+        }),
         .ram_data_out(output_entry)
     );
     always_ff @ (posedge clk) begin
         output_entry_r <= output_entry;
     end
-    
+
+    lutram_1w_1r #(.DATA_TYPE(logic[1:0]), .DEPTH(MAX_IDS))
+    store_alignment (
+        .clk(clk),
+        .waddr(sq.data_in.id),
+        .raddr(store_retire.id),
+        .ram_write(sq.push),
+        .new_ram_data(sq.data_in.addr[1:0]),
+        .ram_data_out(retire_alignment)
+    );
     //Compare store addr-hashes against new load addr-hash
     always_comb begin
         potential_store_conflict = 0;
@@ -169,14 +177,17 @@ module store_queue
         wb_snoop <= wb_packet;
     end
 
-    assign retire_table_in = '{id_needed : sq.data_in.id_needed, wb_group : store_forward_wb_group, sq_index : sq_index};
     lutram_1w_1r #(.DATA_TYPE(retire_table_t), .DEPTH(MAX_IDS))
     store_retire_table_lutram (
         .clk(clk),
         .waddr(sq.data_in.id),
         .raddr(store_retire.id),
         .ram_write(sq.push),
-        .new_ram_data(retire_table_in),
+        .new_ram_data('{
+            id_needed : sq.data_in.id_needed,
+            wb_group : store_forward_wb_group,
+            sq_index : sq_index
+        }),
         .ram_data_out(retire_table_out)
     );
 
@@ -208,6 +219,24 @@ module store_queue
     end
     endgenerate
 
+    ////////////////////////////////////////////////////
+    //Data Marshalling 
+    assign data_pre_alignment = wb_data[retire_table_out.wb_group];
+    always_comb begin
+        //Input: ABCD
+        //Assuming aligned requests,
+        //Possible byte selections: (A/C/D, B/D, C/D, D)
+        marshalled_data[7:0] = data_pre_alignment[7:0];
+        marshalled_data[15:8] = (retire_alignment[1:0] == 2'b01) ? data_pre_alignment[7:0] : data_pre_alignment[15:8];
+        marshalled_data[23:16] = (retire_alignment[1:0] == 2'b10) ? data_pre_alignment[7:0] : data_pre_alignment[23:16];
+        case(retire_alignment[1:0])
+            2'b10 : marshalled_data[31:24] = data_pre_alignment[15:8];
+            2'b11 : marshalled_data[31:24] = data_pre_alignment[7:0];
+            default : marshalled_data[31:24] = data_pre_alignment[31:24];
+        endcase
+    end
+
+
     //Final storage table for the store queue
     //SQ-index addressed
     lutram_1w_1r #(.DATA_TYPE(logic[31:0]), .DEPTH(CONFIG.SQ_DEPTH))
@@ -216,24 +245,9 @@ module store_queue
         .waddr(retire_table_out.sq_index),
         .raddr(sq_oldest),
         .ram_write(store_retire.valid),
-        .new_ram_data(wb_data[retire_table_out.wb_group]),
-        .ram_data_out(data_pre_alignment)
+        .new_ram_data(marshalled_data),
+        .ram_data_out(sq_data_out)
     );
-    ////////////////////////////////////////////////////
-    //Store Transaction Outputs
-    always_comb begin
-        //Input: ABCD
-        //Assuming aligned requests,
-        //Possible byte selections: (A/C/D, B/D, C/D, D)
-        sq_data_out[7:0] = data_pre_alignment[7:0];
-        sq_data_out[15:8] = (output_entry_r.addr[1:0] == 2'b01) ? data_pre_alignment[7:0] : data_pre_alignment[15:8];
-        sq_data_out[23:16] = (output_entry_r.addr[1:0] == 2'b10) ? data_pre_alignment[7:0] : data_pre_alignment[23:16];
-        case(output_entry_r.addr[1:0])
-            2'b10 : sq_data_out[31:24] = data_pre_alignment[15:8];
-            2'b11 : sq_data_out[31:24] = data_pre_alignment[7:0];
-            default : sq_data_out[31:24] = data_pre_alignment[31:24];
-        endcase
-    end
 
     assign sq.valid = |released_count;
     assign sq.data_out = '{
