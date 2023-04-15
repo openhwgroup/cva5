@@ -157,8 +157,8 @@ package cva5_config;
     localparam cpu_config_t EXAMPLE_CONFIG = '{
         //ISA options
         INCLUDE_M_MODE : 1,
-        INCLUDE_S_MODE : 1,
-        INCLUDE_U_MODE : 1,
+        INCLUDE_S_MODE : 0,
+        INCLUDE_U_MODE : 0,
         INCLUDE_MUL : 1,
         INCLUDE_DIV : 1,
         INCLUDE_IFENCE : 1,
@@ -173,10 +173,10 @@ package cva5_config;
             RESET_MTVEC : 32'h80000100,
             NON_STANDARD_OPTIONS : '{
                 COUNTER_W : 33,
-                MCYCLE_WRITEABLE : 1,
-                MINSTR_WRITEABLE : 1,
+                MCYCLE_WRITEABLE : 0,
+                MINSTR_WRITEABLE : 0,
                 MTVEC_WRITEABLE : 1,
-                INCLUDE_MSCRATCH : 1,
+                INCLUDE_MSCRATCH : 0,
                 INCLUDE_MCAUSE : 1,
                 INCLUDE_MTVAL : 1
             }
