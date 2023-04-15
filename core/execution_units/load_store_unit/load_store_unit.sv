@@ -191,22 +191,25 @@ module load_store_unit
         end
     end
 
-    (* ramstyle = "MLAB, no_rw_check" *) id_t rd_to_id_table [32];
-    (* ramstyle = "MLAB, no_rw_check" *) logic [$clog2(CONFIG.NUM_WB_GROUPS)-1:0] rd_to_wb_group_table [32];
+    typedef struct packed{
+        id_t id;
+        logic [$clog2(CONFIG.NUM_WB_GROUPS)-1:0] wb_group;
+    } rd_attributes_t;
+    rd_attributes_t rd_attributes;
 
-    id_t store_forward_id;
-    logic [$clog2(CONFIG.NUM_WB_GROUPS)-1:0] store_forward_wb_group;
-
-    always_ff @ (posedge clk) begin
-        if (instruction_issued_with_rd) begin
-            rd_to_id_table[issue_stage.rd_addr] <= issue_stage.id;
-            rd_to_wb_group_table[issue_stage.rd_addr] <= issue_rd_wb_group;
-        end
-    end
-
-    assign store_forward_id = rd_to_id_table[issue_rs_addr[RS2]];
-    assign store_forward_wb_group = rs2_inuse ? rd_to_wb_group_table[issue_rs_addr[RS2]] : '0;
-
+    lutram_1w_1r #(.DATA_TYPE(rd_attributes_t), .DEPTH(32))
+    rd_to_id_table (
+        .clk(clk),
+        .waddr(issue_stage.rd_addr),
+        .raddr(issue_rs_addr[RS2]),
+        .ram_write(instruction_issued_with_rd),
+        .new_ram_data('{
+            id : issue_stage.id,
+            wb_group : issue_rd_wb_group
+        }),
+        .ram_data_out(rd_attributes)
+    );
+    
     ////////////////////////////////////////////////////
     //Alignment Exception
     generate if (CONFIG.INCLUDE_M_MODE) begin : gen_ls_exceptions
@@ -288,7 +291,7 @@ module load_store_unit
         load : is_load_r,
         store : is_store_r,
         id : issue.id,
-        id_needed : store_forward_id
+        id_needed : rd_attributes.id
     };
 
     assign lsq.potential_push = issue.possible_issue;
@@ -299,7 +302,7 @@ module load_store_unit
         .rst (rst),
         .gc (gc),
         .lsq (lsq),
-        .store_forward_wb_group (store_forward_wb_group),
+        .store_forward_wb_group (rs2_inuse ? rd_attributes.wb_group : '0),
         .wb_packet (wb_packet),
         .store_retire (store_retire)
     );

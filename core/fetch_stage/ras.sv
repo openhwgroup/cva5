@@ -38,17 +38,11 @@ module ras
         ras_interface.self ras
     );
 
-    (* ramstyle = "MLAB, no_rw_check" *) logic[31:0] lut_ram [CONFIG.BP.RAS_ENTRIES];
-
     localparam RAS_DEPTH_W = $clog2(CONFIG.BP.RAS_ENTRIES);
     logic [RAS_DEPTH_W-1:0] read_index;
     logic [RAS_DEPTH_W-1:0] new_index;
     fifo_interface #(.DATA_TYPE(logic[RAS_DEPTH_W-1:0])) ri_fifo();
-    ///////////////////////////////////////////////////////
-    //For simulation purposes
-    initial lut_ram = '{default: 0};
      ///////////////////////////////////////////////////////
-    assign ras.addr = lut_ram[read_index];
     
     //On a speculative branch, save the current stack pointer
     //Restored if branch is misspredicted (gc_fetch_flush)
@@ -64,11 +58,16 @@ module ras
     assign ri_fifo.potential_push = ras.branch_fetched;
     assign ri_fifo.pop = ras.branch_retired & ri_fifo.valid; //Prevent popping from fifo if reset due to early_branch_flush_ras_adjust
 
-    always_ff @ (posedge clk) begin
-        if (ras.push)
-            lut_ram[new_index] <= ras.new_addr;
-    end
-    
+    lutram_1w_1r #(.DATA_TYPE(logic[31:0]), .DEPTH(CONFIG.BP.RAS_ENTRIES))
+    ras_stack (
+        .clk(clk),
+        .waddr(new_index),
+        .raddr(read_index),
+        .ram_write(ras.push),
+        .new_ram_data(ras.new_addr),
+        .ram_data_out(ras.addr)
+    );
+
     //Rolls over when full, most recent calls will be correct, but calls greater than depth
     //will be lost.
     logic [RAS_DEPTH_W-1:0] new_index_base;

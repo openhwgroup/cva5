@@ -83,8 +83,6 @@ module branch_predictor
         logic branch_prediction_used;
         logic [CONFIG.BP.WAYS-1:0] branch_predictor_update_way;
     } branch_metadata_t;
-    (* ramstyle = "MLAB, no_rw_check" *) logic [$bits(branch_metadata_t)-1:0] branch_metadata_table [MAX_IDS];
-    branch_metadata_t branch_metadata_if;
     branch_metadata_t branch_metadata_ex;
 
     logic branch_predictor_direction_changed;
@@ -172,15 +170,20 @@ module branch_predictor
         .en (1'b1), 
         .one_hot (replacement_way)
     );
-    assign branch_metadata_if.branch_predictor_metadata = if_entry[hit_way].metadata;
-    assign branch_metadata_if.branch_prediction_used = use_predicted_pc;
-    assign branch_metadata_if.branch_predictor_update_way = tag_match ? tag_matches : replacement_way;
 
-    always_ff @ (posedge clk) begin
-        if (bp.pc_id_assigned)
-            branch_metadata_table[bp.pc_id] <= branch_metadata_if;
-    end
-    assign branch_metadata_ex = branch_metadata_table[br_results.id];
+    lutram_1w_1r #(.DATA_TYPE(branch_metadata_t), .DEPTH(MAX_IDS))
+    branch_metadata_table (
+        .clk(clk),
+        .waddr(bp.pc_id),
+        .raddr(br_results.id),
+        .ram_write(bp.pc_id_assigned),
+        .new_ram_data('{
+            branch_predictor_metadata : if_entry[hit_way].metadata,
+            branch_prediction_used : use_predicted_pc,
+            branch_predictor_update_way : tag_match ? tag_matches : replacement_way
+        }),
+        .ram_data_out(branch_metadata_ex)
+    );
 
     ////////////////////////////////////////////////////
     //Execution stage update
