@@ -15,6 +15,7 @@ core/types_and_interfaces/external_interfaces.sv
 
 core/common_components/lutram_1w_1r.sv
 core/common_components/lutram_1w_mr.sv
+core/common_components/dual_port_bram.sv
 core/common_components/set_clr_reg_with_rst.sv
 core/common_components/one_hot_to_integer.sv
 core/common_components/cycler.sv
@@ -26,7 +27,7 @@ core/common_components/toggle_memory_set.sv
 
 core/common_components/vendor_support/intel/intel_byte_enable_ram.sv
 core/common_components/vendor_support/xilinx/xilinx_byte_enable_ram.sv
-core/common_components/byte_en_BRAM.sv
+core/common_components/byte_en_bram.sv
 
 core/execution_units/csr_unit.sv
 core/execution_units/gc_unit.sv
@@ -59,9 +60,7 @@ core/execution_units/div_core.sv
 core/execution_units/div_unit.sv
 
 core/fetch_stage/ras.sv
-core/fetch_stage/branch_predictor_ram.sv
 core/fetch_stage/branch_predictor.sv
-core/fetch_stage/tag_bank.sv
 core/fetch_stage/icache_tag_banks.sv
 core/fetch_stage/icache.sv
 core/fetch_stage/fetch.sv

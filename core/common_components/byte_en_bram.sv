@@ -22,7 +22,7 @@
 
 
 
-module byte_en_BRAM
+module byte_en_bram
 
     import cva5_config::*;
     import cva5_types::*;

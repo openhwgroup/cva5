@@ -190,17 +190,17 @@ module icache
     //Data Banks
     genvar i;
     generate for (i=0; i < CONFIG.ICACHE.WAYS; i++) begin : idata_bank_gen
-        byte_en_BRAM #(CONFIG.ICACHE.LINES*CONFIG.ICACHE.LINE_W) idata_bank (
+        dual_port_bram #(.WIDTH(32), .LINES(CONFIG.ICACHE.LINES*CONFIG.ICACHE.LINE_W)) idata_bank (
             .clk(clk),
-            .addr_a(addr_utils.getDataLineAddr(new_request_addr)),
-            .addr_b(addr_utils.getDataLineAddr({second_cycle_addr[31:SCONFIG.SUB_LINE_ADDR_W+2], word_count, 2'b0})),
             .en_a(new_request),
-            .en_b(tag_update_way[i] & l1_response.data_valid),
-            .be_a('0),
-            .be_b('1),
+            .wen_a(0),
+            .addr_a(addr_utils.getDataLineAddr(new_request_addr)),
             .data_in_a('0),
-            .data_in_b(l1_response.data),
             .data_out_a(data_out[i]),
+            .en_b(1),
+            .wen_b(tag_update_way[i] & l1_response.data_valid),
+            .addr_b(addr_utils.getDataLineAddr({second_cycle_addr[31:SCONFIG.SUB_LINE_ADDR_W+2], word_count, 2'b0})),
+            .data_in_b(l1_response.data),
             .data_out_b()
         );
     end endgenerate

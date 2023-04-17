@@ -90,9 +90,8 @@ module dcache_tag_banks
     ////////////////////////////////////////////////////
     //Memory instantiation and hit detection
     generate for (genvar i = 0; i < CONFIG.DCACHE.WAYS; i++) begin : tag_bank_gen
-        tag_bank #($bits(dtag_entry_t), CONFIG.DCACHE.LINES) dtag_bank ( 
+        dual_port_bram #(.WIDTH($bits(dtag_entry_t)), .LINES(CONFIG.DCACHE.LINES)) dtag_bank ( 
             .clk (clk),
-            .rst (rst),
             .en_a (store_req | (miss_req & miss_way[i]) | external_inv),
             .wen_a ((miss_req & miss_way[i]) | external_inv),
             .addr_a (porta_addr),

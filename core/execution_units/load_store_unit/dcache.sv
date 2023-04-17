@@ -253,7 +253,7 @@ module dcache
     assign data_read_addr = load_state[LOAD_FILL] ? {addr_utils.getTagLineAddr(stage2_load.addr), word_count} : addr_utils.getDataLineAddr(ls_load.addr);
 
     generate for (genvar i=0; i < CONFIG.DCACHE.WAYS; i++) begin : data_bank_gen
-        byte_en_BRAM #(CONFIG.DCACHE.LINES*CONFIG.DCACHE.LINE_W) data_bank (
+        byte_en_bram #(CONFIG.DCACHE.LINES*CONFIG.DCACHE.LINE_W) data_bank (
             .clk(clk),
             .addr_a(data_read_addr),
             .addr_b(addr_utils.getDataLineAddr(stage2_store.addr)),

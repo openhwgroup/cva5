@@ -63,7 +63,8 @@ module itag_banks
     genvar i;
     generate
         for (i=0; i < CONFIG.ICACHE.WAYS; i++) begin : tag_bank_gen
-            tag_bank #(SCONFIG.TAG_W+1, CONFIG.ICACHE.LINES) itag_bank (.*,
+            dual_port_bram #(.WIDTH(SCONFIG.TAG_W+1), .LINES(CONFIG.ICACHE.LINES)) itag_bank (.*,
+                    .clk(clk),
                     .en_a(stage1_adv),
                     .wen_a('0),
                     .addr_a(stage1_line_addr),
