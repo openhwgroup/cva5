@@ -17,6 +17,10 @@ struct l2_arb_inputs{
 	uint32_t sub_id;
 	uint32_t be;
 };
+struct l2_data_inputs{
+	uint32_t data;
+	uint32_t be;
+};
 struct l2_arb_expected_output{
 	uint32_t rd_data;
 	uint32_t rd_sub_id;
@@ -24,7 +28,7 @@ struct l2_arb_expected_output{
 
 queue<l2_arb_inputs> test_inputs;
 queue<l2_arb_expected_output> test_expected_output;
-queue<uint32_t> test_data_inputs;
+queue<l2_data_inputs> test_data_inputs;
 
 void assign_read_input(uint32_t address, uint32_t burst_length, uint32_t sub_id){
 	l2_arb_inputs in_elem{address, 1, burst_length, sub_id};
@@ -32,17 +36,19 @@ void assign_read_input(uint32_t address, uint32_t burst_length, uint32_t sub_id)
 };
 
 void assign_write_input(uint32_t address, uint32_t burst_length, uint32_t sub_id, uint32_t be){
-	l2_arb_inputs in_elem{address, 0, burst_length, sub_id, be};
+	l2_arb_inputs in_elem{address, 0, burst_length, sub_id};
 	test_inputs.push(in_elem);
 	for(int i = burst_length-1 ; i >= 0; i--){
-		test_data_inputs.push(i+71);
+		l2_data_inputs in_data_elem{i+71, be};
+		test_data_inputs.push(in_data_elem);
 	}
 };
 
 void assign_single_write_input(uint32_t address, uint32_t sub_id, uint32_t data, uint32_t be){
-	l2_arb_inputs in_elem{address, 0, 1, sub_id, be};
+	l2_arb_inputs in_elem{address, 0, 1, sub_id};
 	test_inputs.push(in_elem);
-	test_data_inputs.push(data);
+	l2_data_inputs in_data_elem{data, be};
+	test_data_inputs.push(in_data_elem);
 	
 };
 vluint64_t main_time = 0; // Current simulation time
@@ -142,7 +148,6 @@ int main(int argc, char **argv) {
 			tb->is_amo = 0;
 			tb->amo_type_or_burst_size = elem.burst_length - 1;
 			tb->sub_id = elem.sub_id;
-			tb->be = elem.be;
 			number_of_data_left = elem.burst_length;
 			tb->request_push = 1;
 			tb->wr_data_push = 0;
@@ -151,9 +156,10 @@ int main(int argc, char **argv) {
 			tb->request_push = 0;
 
 			if(!tb->data_full){
-				uint32_t data = test_data_inputs.front();
+				l2_data_inputs data_elem = test_data_inputs.front();
 				test_data_inputs.pop();
-				tb->wr_data = data;
+				tb->wr_data = data_elem.data;
+				tb->wr_data_be = data_elem.be;
 				tb->wr_data_push = 1;
 
 				number_of_data_left--;

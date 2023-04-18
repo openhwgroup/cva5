@@ -78,6 +78,7 @@ module l1_arbiter
     //Dcache Specific
     assign l2.wr_data_push = CONFIG.INCLUDE_DCACHE & (push_ready & l1_request[L1_DCACHE_ID].request & ~l1_request[L1_DCACHE_ID].rnw); //Assumes data cache has highest priority
     assign l2.wr_data = l1_request[L1_DCACHE_ID].data;
+    assign l2.wr_data_be = l1_request[L1_DCACHE_ID].be;
 
     assign l2.inv_ack = CONFIG.DCACHE.USE_EXTERNAL_INVALIDATIONS ? l1_response[L1_DCACHE_ID].inv_ack : l2.inv_valid;
     assign l1_response[L1_DCACHE_ID].inv_addr = l2.inv_addr;
@@ -89,7 +90,6 @@ module l1_arbiter
         always_comb begin
             l2_requests[i].addr = l1_request[i].addr[31:2];
             l2_requests[i].rnw = l1_request[i].rnw;
-            l2_requests[i].be = l1_request[i].be;
             l2_requests[i].is_amo = l1_request[i].is_amo;
             l2_requests[i].amo_type_or_burst_size = l1_request[i].size;
             l2_requests[i].sub_id = L2_SUB_ID_W'(i);
@@ -113,7 +113,6 @@ module l1_arbiter
 
     assign l2.addr = l2_requests[arb_sel].addr;
     assign l2.rnw = l2_requests[arb_sel].rnw;
-    assign l2.be = l2_requests[arb_sel].be;
     assign l2.is_amo = l2_requests[arb_sel].is_amo;
     assign l2.amo_type_or_burst_size = l2_requests[arb_sel].amo_type_or_burst_size;
     assign l2.sub_id = l2_requests[arb_sel].sub_id;

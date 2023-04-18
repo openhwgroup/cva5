@@ -182,7 +182,7 @@ module axi_to_arb
 
     assign axi_wdata = read_modify_write ? amo_result_r : l2.wr_data;
 
-    assign axi_wstrb =read_modify_write ? '1 : l2.be;
+    assign axi_wstrb = read_modify_write ? '1 : l2.wr_data_be;
 
 
     //Done when read request sent, or slave ack on write data
