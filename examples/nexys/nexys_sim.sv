@@ -367,6 +367,11 @@ module cva5_sim
         assign darb_stall = cpu.l1_request[L1_DCACHE_ID].request & ~cpu.l1_request[L1_DCACHE_ID].ack;
     end endgenerate
 
+    logic [`ISSUE_P.NUM_UNITS-1:0] unit_ready;
+    generate for (i=0; i<`ISSUE_P.NUM_UNITS; i++)
+        assign unit_ready[i] = cpu.unit_issue[i].ready;
+    endgenerate
+
     always_comb begin
         stats = '{default: '0};
         //Fetch
@@ -387,9 +392,9 @@ module cva5_sim
         base_no_instruction_stall = ~`ISSUE_P.issue.stage_valid | cpu.gc.fetch_flush;
             base_no_id_sub_stall = (`METADATA_P.post_issue_count == MAX_IDS);
             base_flush_sub_stall = cpu.gc.fetch_flush;
-        base_unit_busy_stall = `ISSUE_P.issue.stage_valid & ~|`ISSUE_P.issue_ready;
-        base_operands_stall = `ISSUE_P.issue.stage_valid & ~`ISSUE_P.operands_ready;
-        base_hold_stall = `ISSUE_P.issue.stage_valid & (cpu.gc.issue_hold | `ISSUE_P.pre_issue_exception_pending);
+        base_unit_busy_stall = `ISSUE_P.issue.stage_valid & ~|(`ISSUE_P.unit_needed_issue_stage & unit_ready);
+        base_operands_stall = `ISSUE_P.issue.stage_valid & ~(&`ISSUE_P.operand_ready);
+        base_hold_stall = `ISSUE_P.issue.stage_valid & `ISSUE_P.issue_hold;
 
         stall_source_count = 4'(base_no_instruction_stall) + 4'(base_unit_busy_stall) + 4'(base_operands_stall) + 4'(base_hold_stall);
         single_source_issue_stall = (stall_source_count == 1);
@@ -410,9 +415,9 @@ module cva5_sim
 
         //Issue Stall Source
         for (int i = 0; i < REGFILE_READ_PORTS; i++) begin
-            stats[ISSUE_OPERAND_STALL_ON_LOAD_STAT] |= `ISSUE_P.issue.stage_valid & rd_addr_table[`ISSUE_P.issue_rs_addr[i]][`ISSUE_P.UNIT_IDS.LS] & `ISSUE_P.rs_conflict[i] ;
-            stats[ISSUE_OPERAND_STALL_ON_MULTIPLY_STAT] |= EXAMPLE_CONFIG.INCLUDE_MUL & `ISSUE_P.issue.stage_valid & rd_addr_table[`ISSUE_P.issue_rs_addr[i]][`ISSUE_P.UNIT_IDS.MUL] & `ISSUE_P.rs_conflict[i] ;
-            stats[ISSUE_OPERAND_STALL_ON_DIVIDE_STAT] |= EXAMPLE_CONFIG.INCLUDE_DIV & `ISSUE_P.issue.stage_valid & rd_addr_table[`ISSUE_P.issue_rs_addr[i]][`ISSUE_P.UNIT_IDS.DIV] & `ISSUE_P.rs_conflict[i] ;
+            stats[ISSUE_OPERAND_STALL_ON_LOAD_STAT] |= `ISSUE_P.issue.stage_valid & rd_addr_table[`ISSUE_P.issue_rs_addr[i]][`ISSUE_P.UNIT_IDS.LS] & ~`ISSUE_P.operand_ready[i] ;
+            stats[ISSUE_OPERAND_STALL_ON_MULTIPLY_STAT] |= EXAMPLE_CONFIG.INCLUDE_MUL & `ISSUE_P.issue.stage_valid & rd_addr_table[`ISSUE_P.issue_rs_addr[i]][`ISSUE_P.UNIT_IDS.MUL] & ~`ISSUE_P.operand_ready[i] ;
+            stats[ISSUE_OPERAND_STALL_ON_DIVIDE_STAT] |= EXAMPLE_CONFIG.INCLUDE_DIV & `ISSUE_P.issue.stage_valid & rd_addr_table[`ISSUE_P.issue_rs_addr[i]][`ISSUE_P.UNIT_IDS.DIV] & ~`ISSUE_P.operand_ready[i] ;
         end
 
         //LS Stats

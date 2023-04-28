@@ -166,7 +166,7 @@ module gc_unit
     assign instruction = decode_stage.instruction;
 
     assign unit_needed =
-        (CONFIG.INCLUDE_M_MODE & decode_stage.instruction inside {ECALL, EBREAK, MRET}) |
+        (CONFIG.INCLUDE_M_MODE & decode_stage.instruction inside {MRET}) |
         (CONFIG.INCLUDE_S_MODE & decode_stage.instruction inside {SRET, SFENCE_VMA}) |
         (CONFIG.INCLUDE_IFENCE & decode_stage.instruction inside {FENCE_I});
     always_comb begin

@@ -316,7 +316,7 @@ interface unsigned_division_interface #(parameter DATA_WIDTH = 32);
     modport divider (output remainder, quotient, done, input dividend, dividend_CLZ, divisor, divisor_CLZ, divisor_is_zero, start);
 endinterface
 
-interface renamer_interface #(parameter NUM_WB_GROUPS = 2);
+interface renamer_interface #(parameter NUM_WB_GROUPS = 3);
     import cva5_config::*;
     import riscv_types::*;
     import cva5_types::*;
@@ -342,7 +342,7 @@ interface renamer_interface #(parameter NUM_WB_GROUPS = 2);
     );
 endinterface
 
-interface register_file_issue_interface #(parameter NUM_WB_GROUPS = 2);
+interface register_file_issue_interface #(parameter NUM_WB_GROUPS = 3);
     import cva5_config::*;
     import riscv_types::*;
     import cva5_types::*;
