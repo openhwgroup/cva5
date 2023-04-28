@@ -50,7 +50,7 @@ module mul_unit
     logic valid [2];
     id_t id [2];
 
-    logic rs1_is_signed, rs2_is_signed;
+    logic rs1_is_signed, rs2_is_signed, is_mulhx;
     logic signed [32:0] rs1_ext, rs2_ext;
     logic signed [32:0] rs1_r, rs2_r;
 
@@ -68,14 +68,19 @@ module mul_unit
         uses_rs[RS2] = unit_needed;
         uses_rd = unit_needed;
     end
+
+    assign instruction = decode_stage.instruction;
+    always_ff @(posedge clk) begin
+        if (issue_stage_ready) begin
+            rs1_is_signed <= instruction.fn3[1:0] inside {MULH_fn3[1:0], MULHSU_fn3[1:0]};
+            rs2_is_signed <= instruction.fn3[1:0] inside {MULH_fn3[1:0]};
+            is_mulhx <= instruction.fn3[1:0] inside {MULH_fn3[1:0], MULHSU_fn3[1:0], MULHU_fn3[1:0]};
+        end
+    end
     ////////////////////////////////////////////////////
     //Issue
-
-    assign rs1_is_signed = issue_stage.fn3[1:0] inside {MULH_fn3[1:0], MULHSU_fn3[1:0]};//MUL doesn't matter
-    assign rs2_is_signed = issue_stage.fn3[1:0] inside {MUL_fn3[1:0], MULH_fn3[1:0]};//MUL doesn't matter
-
-    assign rs1_ext = signed'({rf[RS1][31] & rs1_is_signed, rf[RS1]});
-    assign rs2_ext = signed'({rf[RS2][31] & rs2_is_signed, rf[RS2]});
+    assign rs1_ext = signed'({rs1_is_signed & rf[RS1][31], rf[RS1]});
+    assign rs2_ext = signed'({rs2_is_signed & rf[RS2][31], rf[RS2]});
 
     //Pipeline advancement control signals
     assign issue.ready = stage1_advance;
@@ -96,7 +101,7 @@ module mul_unit
     //Attribute Pipeline
     always_ff @ (posedge clk) begin
         if (stage1_advance) begin
-            mulh[0] <= (issue_stage.fn3[1:0] != MUL_fn3[1:0]);
+            mulh[0] <= is_mulhx;
             id[0] <= issue.id;
         end
         if (stage2_advance) begin
