@@ -79,12 +79,18 @@ module litex_wrapper
         INCLUDE_M_MODE : 1,
         INCLUDE_S_MODE : 0,
         INCLUDE_U_MODE : 0,
-        INCLUDE_MUL : 0,
-        INCLUDE_DIV : 0,
+        INCLUDE_UNIT : '{
+            ALU : 1,
+            LS : 1,
+            MUL : 0,
+            DIV : 0,
+            CSR : 1,
+            CUSTOM : 0,
+            BR : 1,
+            IEC : 1
+        },
         INCLUDE_IFENCE : 0,
-        INCLUDE_CSRS : 1,
         INCLUDE_AMO : 0,
-        INCLUDE_CUSTOM : 0,
         //CSR constants
         CSRS : '{
             MACHINE_IMPLEMENTATION_ID : 0,
@@ -181,12 +187,18 @@ module litex_wrapper
         INCLUDE_M_MODE : 1,
         INCLUDE_S_MODE : 0,
         INCLUDE_U_MODE : 0,
-        INCLUDE_MUL : 1,
-        INCLUDE_DIV : 1,
+        INCLUDE_UNIT : '{
+            ALU : 1,
+            LS : 1,
+            MUL : 1,
+            DIV : 1,
+            CSR : 1,
+            CUSTOM : 0,
+            BR : 1,
+            IEC : 1
+        },
         INCLUDE_IFENCE : 0,
-        INCLUDE_CSRS : 1,
         INCLUDE_AMO : 0,
-        INCLUDE_CUSTOM : 0,
         //CSR constants
         CSRS : '{
             MACHINE_IMPLEMENTATION_ID : 0,

@@ -29,9 +29,7 @@ module decode_and_issue
     import opcodes::*;
 
     # (
-        parameter cpu_config_t CONFIG = EXAMPLE_CONFIG,
-        parameter NUM_UNITS = 7,
-        parameter unit_id_param_t UNIT_IDS = EXAMPLE_UNIT_IDS
+        parameter cpu_config_t CONFIG = EXAMPLE_CONFIG
     )
 
     (
@@ -47,9 +45,9 @@ module decode_and_issue
         //Renamer
         renamer_interface.decode renamer,
 
-        input logic [NUM_UNITS-1:0] unit_needed,
-        input logic [NUM_UNITS-1:0][REGFILE_READ_PORTS-1:0] unit_uses_rs,
-        input logic [NUM_UNITS-1:0] unit_uses_rd,
+        input logic [MAX_NUM_UNITS-1:0] unit_needed,
+        input logic [MAX_NUM_UNITS-1:0][REGFILE_READ_PORTS-1:0] unit_uses_rs,
+        input logic [MAX_NUM_UNITS-1:0] unit_uses_rd,
 
         output logic decode_uses_rd,
         output rs_addr_t decode_rd_addr,
@@ -70,7 +68,7 @@ module decode_and_issue
 
         output logic [31:0] constant_alu,
 
-        unit_issue_interface.decode unit_issue [NUM_UNITS-1:0],
+        unit_issue_interface.decode unit_issue [MAX_NUM_UNITS-1:0],
 
         input gc_outputs_t gc,
         input logic [1:0] current_privilege,
@@ -89,8 +87,8 @@ module decode_and_issue
 
     logic issue_hold;
     logic [REGFILE_READ_PORTS-1:0] operand_ready;
-    logic [NUM_UNITS-1:0] unit_needed_issue_stage;
-    logic [NUM_UNITS-1:0] issue_to;
+    logic [MAX_NUM_UNITS-1:0] unit_needed_issue_stage;
+    logic [MAX_NUM_UNITS-1:0] issue_to;
 
     logic [$clog2(CONFIG.NUM_WB_GROUPS)-1:0] issue_rs_wb_group [REGFILE_READ_PORTS];
     logic issue_uses_rs [REGFILE_READ_PORTS];
@@ -120,7 +118,7 @@ module decode_and_issue
     always_comb begin
         uses_rd = |unit_uses_rd;
         uses_rs = '{default: 0};
-        for (int i = 0; i < NUM_UNITS; i++)
+        for (int i = 0; i < MAX_NUM_UNITS; i++)
             for (int j = 0; j < REGFILE_READ_PORTS; j++)
                 uses_rs[j] |= unit_uses_rs[i][j];
     end
@@ -129,9 +127,9 @@ module decode_and_issue
     //Renamer Support
     always_comb begin
         decode_wb_group = $clog2(CONFIG.NUM_WB_GROUPS)'(CONFIG.NUM_WB_GROUPS - 1);
-        if (unit_needed[UNIT_IDS.ALU])
+        if (unit_needed[ALU_ID])
             decode_wb_group = 0;
-        else if (unit_needed[UNIT_IDS.LS] )
+        else if (unit_needed[LS_ID] )
             decode_wb_group = 1;
     end
 
@@ -163,7 +161,7 @@ module decode_and_issue
             issue.rd_addr <= decode_instruction.rd_addr;
             issue.phys_rd_addr <= renamer.phys_rd_addr;
             issue_rd_wb_group <= decode_wb_group;
-            issue.is_multicycle <= ~unit_needed[UNIT_IDS.ALU];
+            issue.is_multicycle <= ~unit_needed[ALU_ID];
             issue.id <= decode.id;
             issue.exception_unit <= decode_exception_unit;
             issue_uses_rs <= uses_rs;
@@ -193,7 +191,7 @@ module decode_and_issue
 
     ////////////////////////////////////////////////////
     //Unit EX signals
-    generate for (i = 0; i < NUM_UNITS; i++) begin : gen_unit_issue_signals
+    generate for (i = 0; i < MAX_NUM_UNITS; i++) begin : gen_unit_issue_signals
         assign unit_issue[i].possible_issue = issue.stage_valid & unit_needed_issue_stage[i] & unit_issue[i].ready;
         assign issue_to[i] = unit_issue[i].possible_issue & (&operand_ready) & ~issue_hold;
         assign unit_issue[i].new_request = issue_to[i] & ~gc.fetch_flush;
@@ -233,8 +231,8 @@ module decode_and_issue
     //can be automatically added to this expression
     always_comb begin
         unique case (1'b1)
-            unit_needed[UNIT_IDS.LS] : decode_exception_unit = LS_EXCEPTION;
-            unit_needed[UNIT_IDS.BR] : decode_exception_unit = BR_EXCEPTION;
+            unit_needed[LS_ID] : decode_exception_unit = LS_EXCEPTION;
+            unit_needed[BR_ID] : decode_exception_unit = BR_EXCEPTION;
             default : decode_exception_unit = PRE_ISSUE_EXCEPTION;
         endcase
         if (~decode.fetch_metadata.ok)

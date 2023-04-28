@@ -28,14 +28,15 @@ module writeback
     
     # (
         parameter cpu_config_t CONFIG = EXAMPLE_CONFIG,
-        parameter int unsigned NUM_WB_UNITS = 5
+        parameter int unsigned NUM_WB_UNITS = 5,
+        parameter unit_id_enum_t WB_INDEX [NUM_WB_UNITS] = '{ALU_ID, MUL_ID, DIV_ID, LS_ID, CSR_ID}
     )
 
     (
         input logic clk,
         input logic rst,
         //Unit writeback
-        unit_writeback_interface.wb unit_wb[NUM_WB_UNITS],
+        unit_writeback_interface.wb unit_wb[MAX_NUM_UNITS],
         //WB output
         output wb_packet_t wb_packet
     );
@@ -53,10 +54,10 @@ module writeback
     //Implementation
     //Re-assigning interface inputs to array types so that they can be dynamically indexed
     generate for (genvar i = 0; i < NUM_WB_UNITS; i++) begin : gen_wb_unit_unpacking
-        assign unit_instruction_id[i] = unit_wb[i].id;
-        assign unit_done[i] = unit_wb[i].done;
-        assign unit_rd[i] = unit_wb[i].rd;
-        assign unit_wb[i].ack = unit_ack[i];
+        assign unit_instruction_id[i] = unit_wb[WB_INDEX[i]].id;
+        assign unit_done[i] = unit_wb[WB_INDEX[i]].done;
+        assign unit_rd[i] = unit_wb[WB_INDEX[i]].rd;
+        assign unit_wb[WB_INDEX[i]].ack = unit_ack[i];
     end endgenerate
 
     ////////////////////////////////////////////////////

@@ -99,17 +99,51 @@ package cva5_config;
         int unsigned DEPTH;
     } tlb_config_t;
 
+    ////////////////////////////////////////////////////
+    //Unit IDs
+    //To add a new unit update:
+    //   - MAX_NUM_UNITS
+    //   - units_t
+    //   - unit_id_enum_t
+    //ensuring that the bit index in units_t matches the enum value in unit_id_enum_t
+
+    localparam MAX_NUM_UNITS = 8;
+    typedef struct packed {
+        bit IEC;
+        bit BR;
+        //End of Write-Back Units
+        bit CUSTOM;
+        bit CSR;
+        bit DIV;
+        bit MUL;
+        bit LS;
+        bit ALU;
+    } units_t;
+
+    typedef enum bit [$clog2(MAX_NUM_UNITS)-1:0] {
+        IEC_ID = 7,
+        BR_ID = 6,
+        //End of Write-Back Units
+        CUSTOM_ID = 5,
+        CSR_ID = 4,
+        DIV_ID = 3,
+        MUL_ID = 2,
+        LS_ID = 1,
+        ALU_ID = 0
+    } unit_id_enum_t;
+
     typedef struct packed {
         //ISA options
         bit INCLUDE_M_MODE;
         bit INCLUDE_S_MODE;
         bit INCLUDE_U_MODE;
-        bit INCLUDE_MUL;
-        bit INCLUDE_DIV;
+
         bit INCLUDE_IFENCE; //local mem operations only
-        bit INCLUDE_CSRS;
-        bit INCLUDE_AMO; //cache operations only
-        bit INCLUDE_CUSTOM;
+        bit INCLUDE_AMO;
+
+        //Units
+        units_t INCLUDE_UNIT;
+    
         //CSR constants
         csr_config_t CSRS;
         //Memory Options
@@ -159,12 +193,21 @@ package cva5_config;
         INCLUDE_M_MODE : 1,
         INCLUDE_S_MODE : 0,
         INCLUDE_U_MODE : 0,
-        INCLUDE_MUL : 1,
-        INCLUDE_DIV : 1,
+
+        INCLUDE_UNIT : '{
+            ALU : 1,
+            LS : 1,
+            MUL : 1,
+            DIV : 1,
+            CSR : 1,
+            CUSTOM : 0,
+            BR : 1,
+            IEC : 1
+        },
+
         INCLUDE_IFENCE : 1,
-        INCLUDE_CSRS : 1,
         INCLUDE_AMO : 0,
-        INCLUDE_CUSTOM : 0,
+
         //CSR constants
         CSRS : '{
             MACHINE_IMPLEMENTATION_ID : 0,
@@ -256,29 +299,7 @@ package cva5_config;
         NUM_WB_GROUPS : 3
     };
 
-    ////////////////////////////////////////////////////
-    //Unit IDs
-    typedef struct packed {
-        int unsigned ALU;
-        int unsigned LS;
-        int unsigned CSR;
-        int unsigned MUL;
-        int unsigned DIV;
-        int unsigned CUSTOM;
-        int unsigned BR;
-        int unsigned IEC;
-    } unit_id_param_t;
 
-    localparam unit_id_param_t EXAMPLE_UNIT_IDS = '{
-        ALU : 0,
-        LS : 1,
-        CSR : 2,
-        MUL : 3,
-        DIV : 4,
-        CUSTOM : 5,
-        BR : 6,
-        IEC : 7
-    };
 
     ////////////////////////////////////////////////////
     //Bus Options

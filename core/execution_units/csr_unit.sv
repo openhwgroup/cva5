@@ -284,7 +284,7 @@ module csr_unit
         mxlen:1,
         A:(CONFIG.INCLUDE_AMO),
         I:1,
-        M:(CONFIG.INCLUDE_MUL && CONFIG.INCLUDE_DIV),
+        M:(CONFIG.INCLUDE_UNIT.MUL && CONFIG.INCLUDE_UNIT.DIV),
         S:(CONFIG.INCLUDE_S_MODE),
         U:(CONFIG.INCLUDE_U_MODE)
     };

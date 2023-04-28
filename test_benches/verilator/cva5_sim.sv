@@ -483,7 +483,7 @@ module cva5_sim
 
     //Issue phys_rd to unit mem
     //Used for determining what outputs an operand stall is waiting on
-    logic [`ISSUE_P.NUM_UNITS-1:0] rd_addr_table [32];
+    logic [MAX_NUM_UNITS-1:0] rd_addr_table [32];
 
     always_ff @(posedge clk) begin
         if (cpu.instruction_issued_with_rd)
@@ -502,8 +502,8 @@ module cva5_sim
         assign darb_stall = cpu.l1_request[L1_DCACHE_ID].request & ~cpu.l1_request[L1_DCACHE_ID].ack;
     end endgenerate
 
-    logic [`ISSUE_P.NUM_UNITS-1:0] unit_ready;
-    generate for (i=0; i<`ISSUE_P.NUM_UNITS; i++)
+    logic [MAX_NUM_UNITS-1:0] unit_ready;
+    generate for (i=0; i<MAX_NUM_UNITS; i++)
         assign unit_ready[i] = cpu.unit_issue[i].ready;
     endgenerate
 
@@ -544,15 +544,15 @@ module cva5_sim
         stats[ISSUE_MULTI_SOURCE_STAT] = (base_no_instruction_stall | base_unit_busy_stall | base_operands_stall | base_hold_stall) & ~single_source_issue_stall;
 
         //Misc Issue stats
-        stats[ISSUE_OPERAND_STALL_FOR_BRANCH_STAT] = stats[ISSUE_OPERANDS_NOT_READY_STAT] & `ISSUE_P.unit_needed_issue_stage[`ISSUE_P.UNIT_IDS.BR];
-        stats[ISSUE_STORE_WITH_FORWARDED_DATA_STAT] = `ISSUE_P.issue_to[`ISSUE_P.UNIT_IDS.LS] & `LS_P.is_store_r & `LS_P.rs2_inuse;
-        stats[ISSUE_DIVIDER_RESULT_REUSE_STAT] = `ISSUE_P.issue_to[`ISSUE_P.UNIT_IDS.DIV] & `DIV_P.div_op_reuse;
+        stats[ISSUE_OPERAND_STALL_FOR_BRANCH_STAT] = stats[ISSUE_OPERANDS_NOT_READY_STAT] & `ISSUE_P.unit_needed_issue_stage[BR_ID];
+        stats[ISSUE_STORE_WITH_FORWARDED_DATA_STAT] = `ISSUE_P.issue_to[LS_ID] & `LS_P.is_store_r & `LS_P.rs2_inuse;
+        stats[ISSUE_DIVIDER_RESULT_REUSE_STAT] = `ISSUE_P.issue_to[DIV_ID] & `DIV_P.div_op_reuse;
 
         //Issue Stall Source
         for (int i = 0; i < REGFILE_READ_PORTS; i++) begin
-            stats[ISSUE_OPERAND_STALL_ON_LOAD_STAT] |= `ISSUE_P.issue.stage_valid & rd_addr_table[`ISSUE_P.issue_rs_addr[i]][`ISSUE_P.UNIT_IDS.LS] & ~`ISSUE_P.operand_ready[i] ;
-            stats[ISSUE_OPERAND_STALL_ON_MULTIPLY_STAT] |= EXAMPLE_CONFIG.INCLUDE_MUL & `ISSUE_P.issue.stage_valid & rd_addr_table[`ISSUE_P.issue_rs_addr[i]][`ISSUE_P.UNIT_IDS.MUL] & ~`ISSUE_P.operand_ready[i] ;
-            stats[ISSUE_OPERAND_STALL_ON_DIVIDE_STAT] |= EXAMPLE_CONFIG.INCLUDE_DIV & `ISSUE_P.issue.stage_valid & rd_addr_table[`ISSUE_P.issue_rs_addr[i]][`ISSUE_P.UNIT_IDS.DIV] & ~`ISSUE_P.operand_ready[i] ;
+            stats[ISSUE_OPERAND_STALL_ON_LOAD_STAT] |= `ISSUE_P.issue.stage_valid & rd_addr_table[`ISSUE_P.issue_rs_addr[i]][LS_ID] & ~`ISSUE_P.operand_ready[i] ;
+            stats[ISSUE_OPERAND_STALL_ON_MULTIPLY_STAT] |= EXAMPLE_CONFIG.INCLUDE_UNIT.MUL & `ISSUE_P.issue.stage_valid & rd_addr_table[`ISSUE_P.issue_rs_addr[i]][MUL_ID] & ~`ISSUE_P.operand_ready[i] ;
+            stats[ISSUE_OPERAND_STALL_ON_DIVIDE_STAT] |= EXAMPLE_CONFIG.INCLUDE_UNIT.DIV & `ISSUE_P.issue.stage_valid & rd_addr_table[`ISSUE_P.issue_rs_addr[i]][DIV_ID] & ~`ISSUE_P.operand_ready[i] ;
         end
 
         //LS Stats
