@@ -25,6 +25,7 @@ if {[string equal [get_filesets -quiet sources_1] ""]} {
 }
 
 #import sources needed for blackbox packaging
+import_files -norecurse $sources_dir/examples/nexys/nexys_config.sv
 import_files -norecurse $sources_dir/examples/nexys/nexys_wrapper.sv
 import_files -norecurse $sources_dir/l2_arbiter/l2_external_interfaces.sv
 import_files -norecurse $sources_dir/local_memory/local_memory_interface.sv
