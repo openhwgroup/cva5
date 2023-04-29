@@ -75,6 +75,13 @@ module nexys_wrapper
 	    input logic [5:0] m_axi_bid
     );
 
+    localparam wb_group_config_t NEXYS_WB_GROUP_CONFIG = '{
+        0 : '{0: ALU_ID, default : NON_WRITEBACK_ID},
+        1 : '{0: LS_ID, default : NON_WRITEBACK_ID},
+        2 : '{0: MUL_ID, 1: DIV_ID, 2: CSR_ID, 3: CUSTOM_ID, default : NON_WRITEBACK_ID},
+        default : '{default : NON_WRITEBACK_ID}
+    };
+
     localparam cpu_config_t NEXYS_CONFIG = '{
         //ISA options
         INCLUDE_M_MODE : 1,
@@ -180,7 +187,8 @@ module nexys_wrapper
             RAS_ENTRIES : 8
         },
         //Writeback Options
-        NUM_WB_GROUPS : 3
+        NUM_WB_GROUPS : 3,
+        WB_GROUP : NEXYS_WB_GROUP_CONFIG
     };
 
     //Unused outputs

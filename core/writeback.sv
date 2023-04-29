@@ -29,7 +29,7 @@ module writeback
     # (
         parameter cpu_config_t CONFIG = EXAMPLE_CONFIG,
         parameter int unsigned NUM_WB_UNITS = 5,
-        parameter unit_id_enum_t WB_INDEX [NUM_WB_UNITS] = '{ALU_ID, MUL_ID, DIV_ID, LS_ID, CSR_ID}
+        parameter unit_id_enum_t [MAX_NUM_UNITS-1:0] WB_INDEX = '{0: ALU_ID, 1: MUL_ID, 2: DIV_ID, 3: LS_ID, 4: CSR_ID, default: NON_WRITEBACK_ID}
     )
 
     (

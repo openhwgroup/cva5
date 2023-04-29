@@ -52,14 +52,6 @@ module cva5
         );
 
     ////////////////////////////////////////////////////
-    //WB Assignment
-    localparam unit_id_enum_t WB_GROUP1 [1] = '{ALU_ID};
-    localparam unit_id_enum_t WB_GROUP2 [1] = '{LS_ID};
-    localparam unit_id_enum_t WB_GROUP3 [4] = '{MUL_ID, DIV_ID, CSR_ID, CUSTOM_ID};
-
-    unit_writeback_interface unit_wb [MAX_NUM_UNITS]();
-
-    ////////////////////////////////////////////////////
     //Connecting Signals
     l1_arbiter_request_interface l1_request[L1_CONNECTIONS-1:0]();
     l1_arbiter_return_interface l1_response[L1_CONNECTIONS-1:0]();
@@ -129,6 +121,7 @@ module cva5
     logic retire_port_valid [RETIRE_PORTS];
     logic [LOG2_RETIRE_PORTS : 0] retire_count;
         //Writeback
+    unit_writeback_interface unit_wb [MAX_NUM_UNITS]();
     wb_packet_t wb_packet [CONFIG.NUM_WB_GROUPS];
     phys_addr_t wb_phys_addr [CONFIG.NUM_WB_GROUPS];
          //Exception
@@ -590,42 +583,20 @@ module cva5
 
     ////////////////////////////////////////////////////
     //Writeback
-    writeback #(
-        .CONFIG (CONFIG),
-        .NUM_WB_UNITS ($size(WB_GROUP1)),
-        .WB_INDEX (WB_GROUP1)
-    )
-    writeback_block1 (
-        .clk (clk),
-        .rst (rst),
-        .wb_packet (wb_packet[0]),
-        .unit_wb (unit_wb)
-    );
-    writeback #(
-        .CONFIG (CONFIG),
-        .NUM_WB_UNITS ($size(WB_GROUP2)),
-        .WB_INDEX (WB_GROUP2)
-    )
-    writeback_block2 (
-        .clk (clk),
-        .rst (rst),
-        .wb_packet (wb_packet[1]),
-        .unit_wb (unit_wb)
-    );
-
-    generate if ($size(WB_GROUP3) > 0) begin : gen_wb3
+    generate for (genvar i = 0; i < CONFIG.NUM_WB_GROUPS; i++) begin : gen_wb
         writeback #(
             .CONFIG (CONFIG),
-            .NUM_WB_UNITS ($size(WB_GROUP3)),
-            .WB_INDEX (WB_GROUP3)
+            .NUM_WB_UNITS (get_num_wb_units(CONFIG.WB_GROUP[i])),
+            .WB_INDEX (CONFIG.WB_GROUP[i])
         )
-        writeback_block3 (
+        writeback_block (
             .clk (clk),
             .rst (rst),
-            .wb_packet (wb_packet[2]),
+            .wb_packet (wb_packet[i]),
             .unit_wb (unit_wb)
         );
     end endgenerate
+
     ////////////////////////////////////////////////////
     //End of Implementation
     ////////////////////////////////////////////////////

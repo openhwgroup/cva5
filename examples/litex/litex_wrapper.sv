@@ -74,6 +74,13 @@ module litex_wrapper
         input logic idbus_err
     );
 
+
+    localparam wb_group_config_t MINIMAL_WB_GROUP_CONFIG = '{
+        0 : '{0: ALU_ID, default : NON_WRITEBACK_ID},
+        1 : '{0: LS_ID, 1: CSR_ID, default : NON_WRITEBACK_ID},
+        default : '{default : NON_WRITEBACK_ID}
+    };
+
     localparam cpu_config_t MINIMAL_CONFIG = '{
         //ISA options
         INCLUDE_M_MODE : 1,
@@ -179,7 +186,15 @@ module litex_wrapper
             RAS_ENTRIES : 8
         },
         //Writeback Options
-        NUM_WB_GROUPS : 2
+        NUM_WB_GROUPS : 2,
+        WB_GROUP : MINIMAL_WB_GROUP_CONFIG
+    };
+
+    localparam wb_group_config_t STANDARD_WB_GROUP_CONFIG = '{
+        0 : '{0: ALU_ID, default : NON_WRITEBACK_ID},
+        1 : '{0: LS_ID, default : NON_WRITEBACK_ID},
+        2 : '{0: MUL_ID, 1: DIV_ID, 2: CSR_ID, 3: CUSTOM_ID, default : NON_WRITEBACK_ID},
+        default : '{default : NON_WRITEBACK_ID}
     };
 
     localparam cpu_config_t STANDARD_CONFIG = '{
@@ -287,7 +302,8 @@ module litex_wrapper
             RAS_ENTRIES : 8
         },
         //Writeback Options
-        NUM_WB_GROUPS : 3
+        NUM_WB_GROUPS : 3,
+        WB_GROUP : STANDARD_WB_GROUP_CONFIG
     };
 
     function cpu_config_t config_select (input integer variant);

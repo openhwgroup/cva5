@@ -106,7 +106,7 @@ package cva5_config;
     //   - units_t
     //   - unit_id_enum_t
     //ensuring that the bit index in units_t matches the enum value in unit_id_enum_t
-
+    //Additionally, writeback units must be grouped before non-writeback units
     localparam MAX_NUM_UNITS = 8;
     typedef struct packed {
         bit IEC;
@@ -120,6 +120,7 @@ package cva5_config;
         bit ALU;
     } units_t;
 
+
     typedef enum bit [$clog2(MAX_NUM_UNITS)-1:0] {
         IEC_ID = 7,
         BR_ID = 6,
@@ -131,6 +132,9 @@ package cva5_config;
         LS_ID = 1,
         ALU_ID = 0
     } unit_id_enum_t;
+    localparam unit_id_enum_t NON_WRITEBACK_ID = BR_ID;
+
+    typedef unit_id_enum_t [MAX_NUM_UNITS-1:0][MAX_NUM_UNITS-1:0] wb_group_config_t;
 
     typedef struct packed {
         //ISA options
@@ -175,6 +179,7 @@ package cva5_config;
         branch_predictor_config_t BP;
         //Writeback Options
         int unsigned NUM_WB_GROUPS;
+        wb_group_config_t WB_GROUP;
     } cpu_config_t;
 
     //Function to generate derived cache parameters
@@ -187,6 +192,24 @@ package cva5_config;
         };
     endfunction
 
+
+    //WB config
+    //ALU requires its own WB port
+    //LS unit must be the first unit on its writeback port (LS unit does not use ack signal for timing considerations)
+    localparam wb_group_config_t EXAMPLE_WB_GROUP_CONFIG = '{
+        0 : '{0: ALU_ID, default : NON_WRITEBACK_ID},
+        1 : '{0: LS_ID, default : NON_WRITEBACK_ID},
+        2 : '{0: MUL_ID, 1: DIV_ID, 2: CSR_ID, 3: CUSTOM_ID, default : NON_WRITEBACK_ID},
+        default : '{default : NON_WRITEBACK_ID}
+    };
+
+    //Convenience function for determining how many writeback units are in each writeback group 
+    function int unsigned get_num_wb_units (input unit_id_enum_t [MAX_NUM_UNITS-1:0] ids);
+        get_num_wb_units = 0;
+        for (int i = 0; i < MAX_NUM_UNITS; i++)
+            if (ids[i] != NON_WRITEBACK_ID)
+                get_num_wb_units++;
+    endfunction
 
     localparam cpu_config_t EXAMPLE_CONFIG = '{
         //ISA options
@@ -296,7 +319,8 @@ package cva5_config;
             RAS_ENTRIES : 8
         },
         //Writeback Options
-        NUM_WB_GROUPS : 3
+        NUM_WB_GROUPS : 3,
+        WB_GROUP : EXAMPLE_WB_GROUP_CONFIG
     };
 
 
