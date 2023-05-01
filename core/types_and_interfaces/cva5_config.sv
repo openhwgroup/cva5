@@ -120,11 +120,10 @@ package cva5_config;
         bit ALU;
     } units_t;
 
-
     typedef enum bit [$clog2(MAX_NUM_UNITS)-1:0] {
         IEC_ID = 7,
         BR_ID = 6,
-        //End of Write-Back Units
+        //End of Write-Back Units (insert new writeback units here)
         CUSTOM_ID = 5,
         CSR_ID = 4,
         DIV_ID = 3,
@@ -134,7 +133,29 @@ package cva5_config;
     } unit_id_enum_t;
     localparam unit_id_enum_t NON_WRITEBACK_ID = BR_ID;
 
+    //WB Group config
+    //  First index is write-back port
+    //  Second index is position within the write-back port (Priority selection, with highest priority for index 0)
+    //  See EXAMPLE_WB_GROUP_CONFIG below for an example of how to specify the configuration
     typedef unit_id_enum_t [MAX_NUM_UNITS-1:0][MAX_NUM_UNITS-1:0] wb_group_config_t;
+
+    //Convenience function for determining how many writeback units are in each writeback group
+    function int unsigned get_num_wb_units (input unit_id_enum_t [MAX_NUM_UNITS-1:0] ids);
+        get_num_wb_units = 0;
+        for (int i = 0; i < MAX_NUM_UNITS; i++)
+            if (ids[i] != NON_WRITEBACK_ID)
+                get_num_wb_units++;
+    endfunction
+
+    //Convenience function for turning the enum-based WB grouping into the units_t bit-vector representation
+    //used in decode stage to determine the writeback group for the current instruction
+    function units_t [MAX_NUM_UNITS-1:0] get_wb_units_type_representation(input wb_group_config_t ids);
+        get_wb_units_type_representation = '{default : '0};
+        for (int i = 0; i < MAX_NUM_UNITS; i++)
+            for (int j = 0; j < MAX_NUM_UNITS; j++)
+                if (ids[i][j] != NON_WRITEBACK_ID)
+                    get_wb_units_type_representation[i][ids[i][j]] = 1;
+    endfunction
 
     typedef struct packed {
         //ISA options
@@ -192,24 +213,19 @@ package cva5_config;
         };
     endfunction
 
-
-    //WB config
-    //ALU requires its own WB port
-    //LS unit must be the first unit on its writeback port (LS unit does not use ack signal for timing considerations)
+    ////////////////////////////////////////////////////
+    //Example Config
+    //  ALU requires its own WB port
+    //  LS unit must be the first unit on its writeback port (LS unit does not use ack signal for timing considerations)
+    //  Index in group is the priority order (highest priority for index zero)
+    //  For optimal resource usage, there should be no holes in the write-back unit ordering
+    //    (i.e. if a unit is often not included, either remove from the WB config or place at the end of a writeback group)
     localparam wb_group_config_t EXAMPLE_WB_GROUP_CONFIG = '{
         0 : '{0: ALU_ID, default : NON_WRITEBACK_ID},
         1 : '{0: LS_ID, default : NON_WRITEBACK_ID},
         2 : '{0: MUL_ID, 1: DIV_ID, 2: CSR_ID, 3: CUSTOM_ID, default : NON_WRITEBACK_ID},
         default : '{default : NON_WRITEBACK_ID}
     };
-
-    //Convenience function for determining how many writeback units are in each writeback group 
-    function int unsigned get_num_wb_units (input unit_id_enum_t [MAX_NUM_UNITS-1:0] ids);
-        get_num_wb_units = 0;
-        for (int i = 0; i < MAX_NUM_UNITS; i++)
-            if (ids[i] != NON_WRITEBACK_ID)
-                get_num_wb_units++;
-    endfunction
 
     localparam cpu_config_t EXAMPLE_CONFIG = '{
         //ISA options
@@ -322,8 +338,6 @@ package cva5_config;
         NUM_WB_GROUPS : 3,
         WB_GROUP : EXAMPLE_WB_GROUP_CONFIG
     };
-
-
 
     ////////////////////////////////////////////////////
     //Bus Options

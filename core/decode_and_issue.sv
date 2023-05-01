@@ -79,8 +79,7 @@ module decode_and_issue
 
     common_instruction_t decode_instruction;//rs1_addr, rs2_addr, fn3, fn7, rd_addr, upper/lower opcode
 
-    logic uses_rs [REGFILE_READ_PORTS];
-    logic uses_rd;
+    logic decode_uses_rs [REGFILE_READ_PORTS];
 
     rs_addr_t decode_rs_addr [REGFILE_READ_PORTS];
     logic [$clog2(CONFIG.NUM_WB_GROUPS)-1:0] decode_wb_group;
@@ -116,36 +115,44 @@ module decode_and_issue
     ////////////////////////////////////////////////////
     //Register File Support
     always_comb begin
-        uses_rd = |unit_uses_rd;
-        uses_rs = '{default: 0};
+        decode_uses_rd = |unit_uses_rd;
+        decode_uses_rs = '{default: 0};
         for (int i = 0; i < MAX_NUM_UNITS; i++)
             for (int j = 0; j < REGFILE_READ_PORTS; j++)
-                uses_rs[j] |= unit_uses_rs[i][j];
+                decode_uses_rs[j] |= unit_uses_rs[i][j];
     end
 
     ////////////////////////////////////////////////////
-    //Renamer Support
+    //WB Group Determination
+    localparam units_t [MAX_NUM_UNITS-1:0] WB_UNITS_TYPE_REP  = get_wb_units_type_representation(CONFIG.WB_GROUP);
+    logic [CONFIG.NUM_WB_GROUPS-1:0] uses_wb_group;
+    
     always_comb begin
-        decode_wb_group = $clog2(CONFIG.NUM_WB_GROUPS)'(CONFIG.NUM_WB_GROUPS - 1);
-        if (unit_needed[ALU_ID])
-            decode_wb_group = 0;
-        else if (unit_needed[LS_ID] )
-            decode_wb_group = 1;
+        for (int i = 0; i < CONFIG.NUM_WB_GROUPS; i++)
+            uses_wb_group[i] = |(unit_needed & WB_UNITS_TYPE_REP[i]);
     end
 
+    one_hot_to_integer #(.C_WIDTH(CONFIG.NUM_WB_GROUPS))
+    wb_group_one_hot_block (
+        .one_hot (uses_wb_group),
+        .int_out (decode_wb_group)
+    );
+
+    ////////////////////////////////////////////////////
+    //Renamer Support
     assign renamer.rd_addr = decode_instruction.rd_addr;
     assign renamer.rs_addr = decode_rs_addr;
-    assign renamer.uses_rd = uses_rd;
+    assign renamer.uses_rd = decode_uses_rd;
     assign renamer.rd_wb_group = decode_wb_group;
     assign renamer.id = decode.id;
 
     ////////////////////////////////////////////////////
     //Decode ID Support
-    assign decode_uses_rd = uses_rd;
     assign decode_rd_addr = decode_instruction.rd_addr;
     assign decode_phys_rd_addr = renamer.phys_rd_addr;
     assign decode_phys_rs_addr = renamer.phys_rs_addr;
     assign decode_rs_wb_group = renamer.rs_wb_group;
+
     ////////////////////////////////////////////////////
     //Issue
     always_ff @(posedge clk) begin
@@ -164,8 +171,8 @@ module decode_and_issue
             issue.is_multicycle <= ~unit_needed[ALU_ID];
             issue.id <= decode.id;
             issue.exception_unit <= decode_exception_unit;
-            issue_uses_rs <= uses_rs;
-            issue.uses_rd <= uses_rd;
+            issue_uses_rs <= decode_uses_rs;
+            issue.uses_rd <= decode_uses_rd;
         end
     end
 
@@ -209,6 +216,7 @@ module decode_and_issue
     
     assign rf.single_cycle_or_flush = (instruction_issued_with_rd & |issue.rd_addr & ~issue.is_multicycle) | (issue.stage_valid & issue.uses_rd & |issue.rd_addr & gc.fetch_flush);
     
+    ////////////////////////////////////////////////////
     //Constant ALU:
     //  provides LUI, AUIPC, JAL, JALR results for ALU
     //  provides PC+4 for BRANCH unit and ifence in GC unit
