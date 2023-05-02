@@ -101,7 +101,7 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
     };
     ////////////////////////////////////////////////////
     //Store Queue
-    assign sq.push = lsq.push & lsq.data_in.store;
+    assign sq.push = lsq.push & (lsq.data_in.store | lsq.data_in.cache_op);
     assign sq.pop = lsq.store_pop;
     assign sq.data_in = lsq.data_in;
 
@@ -132,6 +132,7 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
         addr : lq.data_out.addr,
         load : 1,
         store : 0,
+        cache_op : 0,
         be : 'x,
         fn3 : lq.data_out.fn3,
         data_in : 'x,
@@ -142,6 +143,7 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
         addr : sq.data_out.addr,
         load : 0,
         store : 1,
+        cache_op : sq.data_out.cache_op,
         be : sq.data_out.be,
         fn3 : 'x,
         data_in : sq.data_out.data,

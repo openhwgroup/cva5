@@ -49,6 +49,8 @@ package nexys_config;
         },
         INCLUDE_IFENCE : 0,
         INCLUDE_AMO : 0,
+        INCLUDE_CBO : 0,
+
         //CSR constants
         CSRS : '{
             MACHINE_IMPLEMENTATION_ID : 0,

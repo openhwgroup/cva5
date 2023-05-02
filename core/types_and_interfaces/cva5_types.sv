@@ -107,6 +107,7 @@ package cva5_types;
         logic [31:0] addr;
         logic load;
         logic store;
+        logic cache_op;
         logic [3:0] be;
         logic [2:0] fn3;
         logic [31:0] data;
@@ -117,6 +118,7 @@ package cva5_types;
     typedef struct packed {
         logic [31:0] addr;
         logic [3:0] be;
+        logic cache_op;
         logic [31:0] data;
     } sq_entry_t;
 
@@ -141,6 +143,7 @@ package cva5_types;
         logic [31:0] addr;
         logic load;
         logic store;
+        logic cache_op;
         logic [3:0] be;
         logic [2:0] fn3;
         logic [31:0] data_in;

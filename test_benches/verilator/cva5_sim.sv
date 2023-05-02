@@ -545,7 +545,7 @@ module cva5_sim
 
         //Misc Issue stats
         stats[ISSUE_OPERAND_STALL_FOR_BRANCH_STAT] = stats[ISSUE_OPERANDS_NOT_READY_STAT] & `ISSUE_P.unit_needed_issue_stage[BR_ID];
-        stats[ISSUE_STORE_WITH_FORWARDED_DATA_STAT] = `ISSUE_P.issue_to[LS_ID] & `LS_P.is_store_r & `LS_P.rs2_inuse;
+        stats[ISSUE_STORE_WITH_FORWARDED_DATA_STAT] = `ISSUE_P.issue_to[LS_ID] & `LS_P.issue_attr.is_store & `LS_P.rs2_inuse;
         stats[ISSUE_DIVIDER_RESULT_REUSE_STAT] = `ISSUE_P.issue_to[DIV_ID] & `DIV_P.div_op_reuse;
 
         //Issue Stall Source

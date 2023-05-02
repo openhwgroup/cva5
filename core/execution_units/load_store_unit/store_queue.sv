@@ -125,6 +125,7 @@ module store_queue
         .new_ram_data('{
             addr : sq.data_in.addr,
             be : sq.data_in.be,
+            cache_op : sq.data_in.cache_op,
             data : '0
         }),
         .ram_data_out(output_entry)
@@ -253,6 +254,7 @@ module store_queue
     assign sq.data_out = '{
         addr : output_entry_r.addr,
         be : output_entry_r.be,
+        cache_op : output_entry_r.cache_op,
         data : sq_data_out
     };
 

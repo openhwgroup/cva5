@@ -68,6 +68,7 @@ module dcache
         logic [31:0] addr;
         logic [3:0] be;
         logic [31:0] data;
+        logic cache_op;
         logic uncacheable;
     } store_stage2_t;
     store_stage2_t stage2_store;
@@ -167,8 +168,8 @@ module dcache
     end
 
     always_comb begin
-        store_state_next[STORE_IDLE] = (store_state[STORE_IDLE] & ~store_request) | (store_l1_arb_ack & ~store_request);
-        store_state_next[STORE_L1_REQUEST] = (store_state[STORE_L1_REQUEST] & ~store_l1_arb_ack) | store_request;
+        store_state_next[STORE_IDLE] = (store_state[STORE_IDLE] & (~store_request | (store_request & ls_store.cache_op))) | (store_l1_arb_ack & ~store_request);
+        store_state_next[STORE_L1_REQUEST] = (store_state[STORE_L1_REQUEST] & ~store_l1_arb_ack) | (store_request & ~ls_store.cache_op);
     end
     assign store_ready = (store_state[STORE_IDLE] | store_l1_arb_ack) & (load_state[LOAD_IDLE] | load_hit);
 
@@ -180,6 +181,7 @@ module dcache
             stage2_store.uncacheable <= uncacheable_store;
             stage2_store.be <= ls_store.be;
             stage2_store.data <= ls_store.data_in;
+            stage2_store.cache_op <= ls_store.cache_op;
         end
     end
 
@@ -189,7 +191,7 @@ module dcache
     fifo_interface #(.DATA_TYPE(logic)) request_order();
 
     assign request_order.data_in = load_request;
-    assign request_order.push = load_request | store_request;
+    assign request_order.push = load_request | (store_request & ~ls_store.cache_op);
     assign request_order.potential_push = request_order.push;
 
     assign request_order.pop = l1_request.ack | load_hit;
@@ -241,6 +243,7 @@ module dcache
         .store_addr (ls_store.addr),
         .store_addr_r (stage2_store.addr),
         .store_req (store_request),
+        .cache_op_req (ls_store.cache_op),
         .load_tag_hit (load_hit),
         .load_tag_hit_way (load_tag_hit_way),
         .store_tag_hit (store_hit),

@@ -48,6 +48,7 @@ module dcache_tag_banks
         input logic[31:0] store_addr,
         input logic[31:0] store_addr_r,
         input logic store_req,
+        input logic cache_op_req,
 
         output logic load_tag_hit,
         output logic store_tag_hit,
@@ -76,7 +77,7 @@ module dcache_tag_banks
     ////////////////////////////////////////////////////
     //Implementation
     always_ff @ (posedge clk) load_req_r <= load_req;
-    always_ff @ (posedge clk) store_req_r <= store_req;
+    always_ff @ (posedge clk) store_req_r <= store_req & ~cache_op_req;
 
     assign external_inv = extern_inv & CONFIG.DCACHE.USE_EXTERNAL_INVALIDATIONS;
 
@@ -93,7 +94,7 @@ module dcache_tag_banks
         dual_port_bram #(.WIDTH($bits(dtag_entry_t)), .LINES(CONFIG.DCACHE.LINES)) dtag_bank ( 
             .clk (clk),
             .en_a (store_req | (miss_req & miss_way[i]) | external_inv),
-            .wen_a ((miss_req & miss_way[i]) | external_inv),
+            .wen_a ((miss_req & miss_way[i]) | external_inv | (store_req & cache_op_req)),
             .addr_a (porta_addr),
             .data_in_a (new_tagline),
             .data_out_a (tag_line_a[i]),

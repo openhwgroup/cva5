@@ -153,42 +153,44 @@ module load_store_unit
     //Decode
     assign instruction = decode_stage.instruction;
 
-    assign unit_needed = decode_stage.instruction inside {LB, LH, LW, LBU, LHU, SB, SH, SW, FENCE};
+    assign unit_needed = decode_stage.instruction inside {LB, LH, LW, LBU, LHU, SB, SH, SW, FENCE} | (CONFIG.INCLUDE_CBO & decode_stage.instruction inside {CBO_INVAL, CBO_CLEAN, CBO_FLUSH});
     always_comb begin
         uses_rs = '0;
-        uses_rs[RS1] = decode_stage.instruction inside {LB, LH, LW, LBU, LHU, SB, SH, SW};
+        uses_rs[RS1] = decode_stage.instruction inside {LB, LH, LW, LBU, LHU, SB, SH, SW} | (CONFIG.INCLUDE_CBO & decode_stage.instruction inside {CBO_INVAL, CBO_CLEAN, CBO_FLUSH});
         uses_rs[RS2] = CONFIG.INCLUDE_FORWARDING_TO_STORES ? 0 : decode_stage.instruction inside {SB, SH, SW};
         uses_rd = decode_stage.instruction inside {LB, LH, LW, LBU, LHU};
     end
 
-    amo_details_t amo;
-    amo_details_t amo_r;
-    logic is_load;
-    logic is_store;
-    logic is_load_r;
-    logic is_store_r;
-    logic is_fence_r;
-    logic [2:0] fn3_r;
-    logic [11:0] ls_offset_r;
+    ////////////////////////////////////////////////////
+    //LS specific decode support
+    typedef struct packed{
+        logic is_load;
+        logic is_store;
+        logic is_fence;
+        logic is_cbo;
+        logic [11:0] offset;
+    } ls_attr_t;
+    ls_attr_t decode_attr;
+    ls_attr_t issue_attr;
 
-    assign amo.is_amo =  CONFIG.INCLUDE_AMO & (instruction.upper_opcode == AMO_T);
-    assign amo.op = CONFIG.INCLUDE_AMO ? decode_stage.instruction[31:27] : '0;
-    assign amo.is_lr = CONFIG.INCLUDE_AMO & (amo.op == AMO_LR_FN5);
-    assign amo.is_sc = CONFIG.INCLUDE_AMO & (amo.op == AMO_SC_FN5);
+    logic [11:0] load_offset;
+    logic [11:0] store_offset;
+    assign load_offset = decode_stage.instruction[31:20];
+    assign store_offset = {decode_stage.instruction[31:25], decode_stage.instruction[11:7]};
 
-    assign is_load = (instruction.upper_opcode inside {LOAD_T, AMO_T}) & !(amo.is_amo & amo.is_sc); //LR and AMO_ops perform a read operation as well
-    assign is_store = (instruction.upper_opcode == STORE_T) | (amo.is_amo & amo.is_sc);//Used for LS unit and for ID tracking
-    assign decode_is_store = is_store;
+
+    assign decode_attr = '{
+        is_load : decode_stage.instruction inside {LB, LH, LW, LBU, LHU},
+        is_store : decode_stage.instruction inside {SB, SH, SW},
+        is_fence : decode_stage.instruction inside {FENCE},
+        is_cbo : CONFIG.INCLUDE_CBO & decode_stage.instruction inside {CBO_INVAL, CBO_CLEAN, CBO_FLUSH},
+        offset : decode_stage.instruction[5] ? store_offset : ((CONFIG.INCLUDE_CBO & decode_stage.instruction[2]) ? '0 :load_offset)
+    };
+    assign decode_is_store = decode_attr.is_store | decode_attr.is_cbo;
 
     always_ff @(posedge clk) begin
-        if (issue_stage_ready) begin
-            ls_offset_r <= decode_stage.instruction[5] ? {decode_stage.instruction[31:25], decode_stage.instruction[11:7]} : decode_stage.instruction[31:20];
-            is_load_r <= is_load;
-            is_store_r <= is_store;
-            is_fence_r <= (instruction.upper_opcode == FENCE_T);
-            amo_r <= amo;
-            fn3_r <= amo.is_amo ? LS_W_fn3 : instruction.fn3;
-        end
+        if (issue_stage_ready)
+            issue_attr <= decode_attr;
     end
 
     typedef struct packed{
@@ -215,14 +217,14 @@ module load_store_unit
     generate if (CONFIG.INCLUDE_M_MODE) begin : gen_ls_exceptions
         logic new_exception;
         always_comb begin
-            case(fn3_r)
+            case(issue_stage.fn3)
                 LS_H_fn3, L_HU_fn3 : unaligned_addr = virtual_address[0];
                 LS_W_fn3 : unaligned_addr = |virtual_address[1:0];
                 default : unaligned_addr = 0;
             endcase
         end
 
-        assign new_exception = unaligned_addr & issue.new_request & ~is_fence_r;
+        assign new_exception = unaligned_addr & issue.new_request & ~issue_attr.is_fence;
         always_ff @(posedge clk) begin
             if (rst)
                 exception.valid <= 0;
@@ -232,7 +234,7 @@ module load_store_unit
 
         always_ff @(posedge clk) begin
             if (new_exception & ~exception.valid) begin
-                exception.code <= is_store_r ? STORE_AMO_ADDR_MISSALIGNED : LOAD_ADDR_MISSALIGNED;
+                exception.code <= issue_attr.is_store ? STORE_AMO_ADDR_MISSALIGNED : LOAD_ADDR_MISSALIGNED;
                 exception.tval <= virtual_address;
                 exception.id <= issue.id;
             end
@@ -256,12 +258,12 @@ module load_store_unit
 
     ////////////////////////////////////////////////////
     //TLB interface
-    assign virtual_address = rf[RS1] + 32'(signed'(ls_offset_r));
+    assign virtual_address = rf[RS1] + 32'(signed'(issue_attr.offset));
 
     assign tlb.virtual_address = virtual_address;
     assign tlb.new_request = tlb_on & issue.new_request;
     assign tlb.execute = 0;
-    assign tlb.rnw = is_load_r & ~is_store_r;
+    assign tlb.rnw = issue_attr.is_load & ~issue_attr.is_store;
 
     ////////////////////////////////////////////////////
     //Byte enable generation
@@ -271,7 +273,7 @@ module load_store_unit
     //  SB: specific byte
     always_comb begin
         be = 0;
-        case(fn3_r[1:0])
+        case(issue_stage.fn3[1:0])
             LS_B_fn3[1:0] : be[virtual_address[1:0]] = 1;
             LS_H_fn3[1:0] : begin
                 be[virtual_address[1:0]] = 1;
@@ -285,17 +287,18 @@ module load_store_unit
     //Load Store Queue
     assign lsq.data_in = '{
         addr : tlb_on ? tlb.physical_address : virtual_address,
-        fn3 : fn3_r,
+        fn3 : issue_stage.fn3,
         be : be,
         data : rf[RS2],
-        load : is_load_r,
-        store : is_store_r,
+        load : issue_attr.is_load,
+        store : issue_attr.is_store,
+        cache_op : issue_attr.is_cbo,
         id : issue.id,
         id_needed : rd_attributes.id
     };
 
     assign lsq.potential_push = issue.possible_issue;
-    assign lsq.push = issue.new_request & ~unaligned_addr & (~tlb_on | tlb.done) & ~is_fence_r;
+    assign lsq.push = issue.new_request & ~unaligned_addr & (~tlb_on | tlb.done) & ~issue_attr.is_fence;
 
     load_store_queue  # (.CONFIG(CONFIG)) lsq_block (
         .clk (clk),
@@ -341,7 +344,7 @@ module load_store_unit
         if (rst)
             fence_hold <= 0;
         else
-            fence_hold <= (fence_hold & ~load_store_status.idle) | (issue.new_request & is_fence_r);
+            fence_hold <= (fence_hold & ~load_store_status.idle) | (issue.new_request & issue_attr.is_fence);
     end
 
     ////////////////////////////////////////////////////
@@ -463,7 +466,7 @@ module load_store_unit
                 .sc_complete (sc_complete),
                 .sc_success (sc_success),
                 .clear_reservation (clear_reservation),
-                .amo (amo_r),
+                .amo (),
                 .uncacheable_load (uncacheable_load),
                 .uncacheable_store (uncacheable_store),
                 .is_load (sel_load),

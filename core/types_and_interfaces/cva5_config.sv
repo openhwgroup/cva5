@@ -165,6 +165,7 @@ package cva5_config;
 
         bit INCLUDE_IFENCE; //local mem operations only
         bit INCLUDE_AMO;
+        bit INCLUDE_CBO; //Data cache invalidation operations
 
         //Units
         units_t INCLUDE_UNIT;
@@ -246,7 +247,8 @@ package cva5_config;
 
         INCLUDE_IFENCE : 1,
         INCLUDE_AMO : 0,
-
+        INCLUDE_CBO : 0,
+        
         //CSR constants
         CSRS : '{
             MACHINE_IMPLEMENTATION_ID : 0,
