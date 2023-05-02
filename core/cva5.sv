@@ -52,51 +52,6 @@ module cva5
         );
 
     ////////////////////////////////////////////////////
-    //Unit ID Assignment
-    //Generate Issue IDs based on configuration options
-    //Then assigned to a struct for ease in passing to sub modules
-
-    //Units with writeback
-    localparam int unsigned ALU_UNIT_ID = 32'd0;
-    localparam int unsigned LS_UNIT_ID = 32'd1;
-    localparam int unsigned CSR_UNIT_ID = LS_UNIT_ID + int'(CONFIG.INCLUDE_CSRS);
-    localparam int unsigned MUL_UNIT_ID = CSR_UNIT_ID + int'(CONFIG.INCLUDE_MUL);
-    localparam int unsigned DIV_UNIT_ID = MUL_UNIT_ID + int'(CONFIG.INCLUDE_DIV);
-    localparam int unsigned CUSTOM_UNIT_ID = DIV_UNIT_ID + int'(CONFIG.INCLUDE_CUSTOM);
-    //Non-writeback units
-    localparam int unsigned BRANCH_UNIT_ID = CUSTOM_UNIT_ID + 1;
-    localparam int unsigned IEC_UNIT_ID = BRANCH_UNIT_ID + 1;
-
-    //Total number of units
-    localparam int unsigned NUM_UNITS = IEC_UNIT_ID + 1; 
-
-    localparam unit_id_param_t UNIT_IDS = '{
-        ALU : ALU_UNIT_ID,
-        LS : LS_UNIT_ID,
-        CSR : CSR_UNIT_ID,
-        MUL : MUL_UNIT_ID,
-        DIV : DIV_UNIT_ID,
-        CUSTOM : CUSTOM_UNIT_ID,
-        BR : BRANCH_UNIT_ID,
-        IEC : IEC_UNIT_ID
-    };
-
-    ////////////////////////////////////////////////////
-    //Writeback Port Assignment
-    //
-    localparam int unsigned NUM_WB_UNITS_GROUP_1 = 1;//ALU
-    localparam int unsigned ALU_UNIT_WB1_ID = 32'd0;
-
-    localparam int unsigned NUM_WB_UNITS_GROUP_2 = 1;//LS
-    localparam int unsigned LS_UNIT_WB2_ID = 32'd0;
-
-    localparam int unsigned NUM_WB_UNITS_GROUP_3 = int'(CONFIG.INCLUDE_CSRS) + int'(CONFIG.INCLUDE_MUL) + int'(CONFIG.INCLUDE_DIV) + int'(CONFIG.INCLUDE_CUSTOM);
-    localparam int unsigned DIV_UNIT_WB3_ID = 32'd0;
-    localparam int unsigned MUL_UNIT_WB3_ID = 32'd0 + int'(CONFIG.INCLUDE_DIV);
-    localparam int unsigned CSR_UNIT_WB3_ID = 32'd0 + int'(CONFIG.INCLUDE_MUL)+ int'(CONFIG.INCLUDE_DIV);
-    localparam int unsigned CUSTOM_UNIT_WB3_ID = 32'd0 + int'(CONFIG.INCLUDE_MUL)+ int'(CONFIG.INCLUDE_DIV) + int'(CONFIG.INCLUDE_CSRS);
-
-    ////////////////////////////////////////////////////
     //Connecting Signals
     l1_arbiter_request_interface l1_request[L1_CONNECTIONS-1:0]();
     l1_arbiter_return_interface l1_response[L1_CONNECTIONS-1:0]();
@@ -115,20 +70,16 @@ module cva5
     issue_packet_t issue;
     register_file_issue_interface #(.NUM_WB_GROUPS(CONFIG.NUM_WB_GROUPS)) rf_issue();
 
-    logic [NUM_UNITS-1:0] unit_needed;
-    logic [NUM_UNITS-1:0][REGFILE_READ_PORTS-1:0] unit_uses_rs;
-    logic [NUM_UNITS-1:0] unit_uses_rd;
+    logic [MAX_NUM_UNITS-1:0] unit_needed;
+    logic [MAX_NUM_UNITS-1:0][REGFILE_READ_PORTS-1:0] unit_uses_rs;
+    logic [MAX_NUM_UNITS-1:0] unit_uses_rd;
 
     logic [31:0] constant_alu;
 
-    unit_issue_interface unit_issue [NUM_UNITS-1:0]();
+    unit_issue_interface unit_issue [MAX_NUM_UNITS-1:0]();
 
     exception_packet_t  ls_exception;
     logic ls_exception_is_store;
-
-    unit_writeback_interface unit_wb1 [NUM_WB_UNITS_GROUP_1]();
-    unit_writeback_interface unit_wb2 [NUM_WB_UNITS_GROUP_2]();
-    unit_writeback_interface unit_wb3 [NUM_WB_UNITS_GROUP_3 == 0 ? 1 : NUM_WB_UNITS_GROUP_3]();
 
     mmu_interface immu();
     mmu_interface dmmu();
@@ -170,6 +121,7 @@ module cva5
     logic retire_port_valid [RETIRE_PORTS];
     logic [LOG2_RETIRE_PORTS : 0] retire_count;
         //Writeback
+    unit_writeback_interface unit_wb [MAX_NUM_UNITS]();
     wb_packet_t wb_packet [CONFIG.NUM_WB_GROUPS];
     phys_addr_t wb_phys_addr [CONFIG.NUM_WB_GROUPS];
          //Exception
@@ -286,7 +238,6 @@ module cva5
         .iwishbone (iwishbone),
         .icache_on ('1),
         .tlb (itlb), 
-        .tlb_on (tlb_on),
         .l1_request (l1_request[L1_ICACHE_ID]), 
         .l1_response (l1_response[L1_ICACHE_ID]), 
         .exception (1'b0)
@@ -357,10 +308,8 @@ module cva5
     ////////////////////////////////////////////////////
     //Decode/Issue
     decode_and_issue #(
-        .CONFIG (CONFIG),
-        .NUM_UNITS (NUM_UNITS),
-        .UNIT_IDS (UNIT_IDS)
-        )
+        .CONFIG (CONFIG)
+    )
     decode_and_issue_block (
         .clk (clk),
         .rst (rst),
@@ -419,12 +368,12 @@ module cva5
         .decode_stage (decode),
         .issue_stage (issue),
         .issue_stage_ready (issue_stage_ready),
-        .unit_needed (unit_needed[UNIT_IDS.BR]),
-        .uses_rs (unit_uses_rs[UNIT_IDS.BR]),
-        .uses_rd (unit_uses_rd[UNIT_IDS.BR]),
+        .unit_needed (unit_needed[BR_ID]),
+        .uses_rs (unit_uses_rs[BR_ID]),
+        .uses_rd (unit_uses_rd[BR_ID]),
         .rf (rf_issue.data),
         .constant_alu (constant_alu),
-        .issue (unit_issue[UNIT_IDS.BR]),
+        .issue (unit_issue[BR_ID]),
         .br_results (br_results),
         .branch_flush (branch_flush),
         .exception (exception[BR_EXCEPTION])
@@ -437,14 +386,14 @@ module cva5
         .decode_stage (decode),
         .issue_stage (issue),
         .issue_stage_ready (issue_stage_ready),
-        .unit_needed (unit_needed[UNIT_IDS.ALU]),
-        .uses_rs (unit_uses_rs[UNIT_IDS.ALU]),
-        .uses_rd (unit_uses_rd[UNIT_IDS.ALU]),
+        .unit_needed (unit_needed[ALU_ID]),
+        .uses_rs (unit_uses_rs[ALU_ID]),
+        .uses_rd (unit_uses_rd[ALU_ID]),
         .rf (rf_issue.data),
         .constant_alu (constant_alu),
         .issue_rs_addr (issue_rs_addr),
-        .issue (unit_issue[UNIT_IDS.ALU]), 
-        .wb (unit_wb1[ALU_UNIT_WB1_ID])
+        .issue (unit_issue[ALU_ID]), 
+        .wb (unit_wb[ALU_ID])
     );
 
     load_store_unit #(.CONFIG(CONFIG))
@@ -455,16 +404,16 @@ module cva5
         .decode_stage (decode),
         .issue_stage (issue),
         .issue_stage_ready (issue_stage_ready),
-        .unit_needed (unit_needed[UNIT_IDS.LS]),
-        .uses_rs (unit_uses_rs[UNIT_IDS.LS]),
-        .uses_rd (unit_uses_rd[UNIT_IDS.LS]),
+        .unit_needed (unit_needed[LS_ID]),
+        .uses_rs (unit_uses_rs[LS_ID]),
+        .uses_rd (unit_uses_rd[LS_ID]),
         .decode_is_store (decode_is_store),
         .instruction_issued_with_rd (instruction_issued_with_rd),
         .issue_rs_addr (issue_rs_addr),
         .issue_rd_wb_group (issue_rd_wb_group),
         .rs2_inuse (rf_issue.inuse[RS2]),
         .rf (rf_issue.data),
-        .issue (unit_issue[UNIT_IDS.LS]),
+        .issue (unit_issue[LS_ID]),
         .dcache_on (1'b1), 
         .clear_reservation (1'b0), 
         .tlb (dtlb),
@@ -481,7 +430,7 @@ module cva5
         .store_retire (store_retire),
         .exception (exception[LS_EXCEPTION]),
         .load_store_status(load_store_status),
-        .wb (unit_wb2[LS_UNIT_WB2_ID])
+        .wb (unit_wb[LS_ID])
     );
 
     generate if (CONFIG.INCLUDE_S_MODE) begin : gen_dtlb_dmmu
@@ -512,7 +461,7 @@ module cva5
     end
     endgenerate
 
-    generate if (CONFIG.INCLUDE_CSRS) begin : gen_csrs
+    generate if (CONFIG.INCLUDE_UNIT.CSR) begin : gen_csrs
         csr_unit # (.CONFIG(CONFIG))
         csr_unit_block (
             .clk(clk),
@@ -521,12 +470,12 @@ module cva5
             .issue_stage (issue),
             .issue_stage_ready (issue_stage_ready),
             .issue_rs_addr (issue_rs_addr),
-            .unit_needed (unit_needed[UNIT_IDS.CSR]),
-            .uses_rs (unit_uses_rs[UNIT_IDS.CSR]),
-            .uses_rd (unit_uses_rd[UNIT_IDS.CSR]),
+            .unit_needed (unit_needed[CSR_ID]),
+            .uses_rs (unit_uses_rs[CSR_ID]),
+            .uses_rd (unit_uses_rd[CSR_ID]),
             .rf (rf_issue.data),
-            .issue (unit_issue[UNIT_IDS.CSR]), 
-            .wb (unit_wb3[CSR_UNIT_WB3_ID]),
+            .issue (unit_issue[CSR_ID]), 
+            .wb (unit_wb[CSR_ID]),
             .current_privilege(current_privilege),
             .interrupt_taken(interrupt_taken),
             .interrupt_pending(interrupt_pending),
@@ -555,12 +504,12 @@ module cva5
         .decode_stage (decode),
         .issue_stage (issue),
         .issue_stage_ready (issue_stage_ready),
-        .unit_needed (unit_needed[UNIT_IDS.IEC]),
-        .uses_rs (unit_uses_rs[UNIT_IDS.IEC]),
-        .uses_rd (unit_uses_rd[UNIT_IDS.IEC]),
+        .unit_needed (unit_needed[IEC_ID]),
+        .uses_rs (unit_uses_rs[IEC_ID]),
+        .uses_rd (unit_uses_rd[IEC_ID]),
         .constant_alu (constant_alu),
         .rf (rf_issue.data),
-        .issue (unit_issue[UNIT_IDS.IEC]),
+        .issue (unit_issue[IEC_ID]),
         .branch_flush (branch_flush),
         .exception (exception),
         .exception_target_pc (exception_target_pc),
@@ -580,23 +529,23 @@ module cva5
         .post_issue_count (post_issue_count)
     );
 
-    generate if (CONFIG.INCLUDE_MUL) begin : gen_mul
+    generate if (CONFIG.INCLUDE_UNIT.MUL) begin : gen_mul
         mul_unit mul_unit_block (
             .clk (clk),
             .rst (rst),
             .decode_stage (decode),
             .issue_stage (issue),
             .issue_stage_ready (issue_stage_ready),
-            .unit_needed (unit_needed[UNIT_IDS.MUL]),
-            .uses_rs (unit_uses_rs[UNIT_IDS.MUL]),
-            .uses_rd (unit_uses_rd[UNIT_IDS.MUL]),
+            .unit_needed (unit_needed[MUL_ID]),
+            .uses_rs (unit_uses_rs[MUL_ID]),
+            .uses_rd (unit_uses_rd[MUL_ID]),
             .rf (rf_issue.data),
-            .issue (unit_issue[UNIT_IDS.MUL]),
-            .wb (unit_wb3[MUL_UNIT_WB3_ID])
+            .issue (unit_issue[MUL_ID]),
+            .wb (unit_wb[MUL_ID])
         );
     end endgenerate
 
-    generate if (CONFIG.INCLUDE_DIV) begin : gen_div
+    generate if (CONFIG.INCLUDE_UNIT.DIV) begin : gen_div
         div_unit div_unit_block (
             .clk (clk),
             .rst (rst),
@@ -606,69 +555,48 @@ module cva5
             .issue_stage (issue),
             .issue_stage_ready (issue_stage_ready),
             .issue_rs_addr (issue_rs_addr),
-            .unit_needed (unit_needed[UNIT_IDS.DIV]),
-            .uses_rs (unit_uses_rs[UNIT_IDS.DIV]),
-            .uses_rd (unit_uses_rd[UNIT_IDS.DIV]),
+            .unit_needed (unit_needed[DIV_ID]),
+            .uses_rs (unit_uses_rs[DIV_ID]),
+            .uses_rd (unit_uses_rd[DIV_ID]),
             .rf (rf_issue.data),
-            .issue (unit_issue[UNIT_IDS.DIV]), 
-            .wb (unit_wb3[DIV_UNIT_WB3_ID])
+            .issue (unit_issue[DIV_ID]), 
+            .wb (unit_wb[DIV_ID])
         );
     end endgenerate
 
 
-    generate if (CONFIG.INCLUDE_CUSTOM) begin : gen_custom
+    generate if (CONFIG.INCLUDE_UNIT.CUSTOM) begin : gen_custom
         custom_unit custom_unit_block (
             .clk (clk),
             .rst (rst),
             .decode_stage (decode),
-            .unit_needed (unit_needed[UNIT_IDS.CUSTOM]),
-            .uses_rs (unit_uses_rs[UNIT_IDS.CUSTOM]),
-            .uses_rd (unit_uses_rd[UNIT_IDS.CUSTOM]),
+            .unit_needed (unit_needed[CUSTOM_ID]),
+            .uses_rs (unit_uses_rs[CUSTOM_ID]),
+            .uses_rd (unit_uses_rd[CUSTOM_ID]),
             .issue_stage (issue),
             .issue_stage_ready (issue_stage_ready),
             .rf (rf_issue.data),
-            .issue (unit_issue[UNIT_IDS.CUSTOM]), 
-            .wb (unit_wb3[CUSTOM_UNIT_WB3_ID])
+            .issue (unit_issue[CUSTOM_ID]), 
+            .wb (unit_wb[CUSTOM_ID])
         );
     end endgenerate
 
     ////////////////////////////////////////////////////
     //Writeback
-    //First writeback port: ALU
-    //Second writeback port: LS, CSR, [MUL], [DIV]
-    writeback #(
-        .CONFIG (CONFIG),
-        .NUM_WB_UNITS (NUM_WB_UNITS_GROUP_1)
-    )
-    writeback_block1 (
-        .clk (clk),
-        .rst (rst),
-        .wb_packet (wb_packet[0]),
-        .unit_wb (unit_wb1)
-    );
-    writeback #(
-        .CONFIG (CONFIG),
-        .NUM_WB_UNITS (NUM_WB_UNITS_GROUP_2)
-    )
-    writeback_block2 (
-        .clk (clk),
-        .rst (rst),
-        .wb_packet (wb_packet[1]),
-        .unit_wb (unit_wb2)
-    );
-
-    generate if (NUM_WB_UNITS_GROUP_3 > 0) begin : gen_wb3
+    generate for (genvar i = 0; i < CONFIG.NUM_WB_GROUPS; i++) begin : gen_wb
         writeback #(
             .CONFIG (CONFIG),
-            .NUM_WB_UNITS (NUM_WB_UNITS_GROUP_3)
+            .NUM_WB_UNITS (get_num_wb_units(CONFIG.WB_GROUP[i])),
+            .WB_INDEX (CONFIG.WB_GROUP[i])
         )
-        writeback_block3 (
+        writeback_block (
             .clk (clk),
             .rst (rst),
-            .wb_packet (wb_packet[2]),
-            .unit_wb (unit_wb3)
+            .wb_packet (wb_packet[i]),
+            .unit_wb (unit_wb)
         );
     end endgenerate
+
     ////////////////////////////////////////////////////
     //End of Implementation
     ////////////////////////////////////////////////////

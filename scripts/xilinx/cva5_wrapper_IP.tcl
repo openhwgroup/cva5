@@ -117,14 +117,14 @@ if {[string equal [get_filesets -quiet sources_1] ""]} {
 #import_files -fileset [get_filesets sources_1] $origin_dir/l2_arbiter
 #import_files -fileset [get_filesets sources_1] $origin_dir/local_memory
 
-import_files -norecurse $origin_dir/../../core/xilinx/cva5_wrapper_xilinx.sv -force
+import_files -norecurse $origin_dir/../../core/common_components/vendor_support/xilinx/cva5_wrapper_xilinx.sv -force
 import_files -norecurse $origin_dir/../../l2_arbiter/l2_external_interfaces.sv -force
 import_files -norecurse $origin_dir/../../local_memory/local_memory_interface.sv -force
-import_files -norecurse $origin_dir/../../core/external_interfaces.sv -force
-import_files -norecurse $origin_dir/../../core/cva5_config.sv -force
-import_files -norecurse $origin_dir/../../core/riscv_types.sv -force
-import_files -norecurse $origin_dir/../../core/cva5_types.sv -force
-import_files -norecurse $origin_dir/../../core/csr_types.sv -force
+import_files -norecurse $origin_dir/../../core/types_and_interfaces/external_interfaces.sv -force
+import_files -norecurse $origin_dir/../../core/types_and_interfaces/cva5_config.sv -force
+import_files -norecurse $origin_dir/../../core/types_and_interfaces/riscv_types.sv -force
+import_files -norecurse $origin_dir/../../core/types_and_interfaces/cva5_types.sv -force
+import_files -norecurse $origin_dir/../../core/types_and_interfaces/csr_types.sv -force
 import_files -norecurse $origin_dir/../../l2_arbiter/l2_config_and_types.sv -force
 
 # Set IP repository paths

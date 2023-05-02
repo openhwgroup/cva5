@@ -29,9 +29,7 @@ module decode_and_issue
     import opcodes::*;
 
     # (
-        parameter cpu_config_t CONFIG = EXAMPLE_CONFIG,
-        parameter NUM_UNITS = 7,
-        parameter unit_id_param_t UNIT_IDS = EXAMPLE_UNIT_IDS
+        parameter cpu_config_t CONFIG = EXAMPLE_CONFIG
     )
 
     (
@@ -47,9 +45,9 @@ module decode_and_issue
         //Renamer
         renamer_interface.decode renamer,
 
-        input logic [NUM_UNITS-1:0] unit_needed,
-        input logic [NUM_UNITS-1:0][REGFILE_READ_PORTS-1:0] unit_uses_rs,
-        input logic [NUM_UNITS-1:0] unit_uses_rd,
+        input logic [MAX_NUM_UNITS-1:0] unit_needed,
+        input logic [MAX_NUM_UNITS-1:0][REGFILE_READ_PORTS-1:0] unit_uses_rs,
+        input logic [MAX_NUM_UNITS-1:0] unit_uses_rd,
 
         output logic decode_uses_rd,
         output rs_addr_t decode_rd_addr,
@@ -70,7 +68,7 @@ module decode_and_issue
 
         output logic [31:0] constant_alu,
 
-        unit_issue_interface.decode unit_issue [NUM_UNITS-1:0],
+        unit_issue_interface.decode unit_issue [MAX_NUM_UNITS-1:0],
 
         input gc_outputs_t gc,
         input logic [1:0] current_privilege,
@@ -81,27 +79,21 @@ module decode_and_issue
 
     common_instruction_t decode_instruction;//rs1_addr, rs2_addr, fn3, fn7, rd_addr, upper/lower opcode
 
-    logic uses_rs [REGFILE_READ_PORTS];
-    logic uses_rd;
+    logic decode_uses_rs [REGFILE_READ_PORTS];
 
     rs_addr_t decode_rs_addr [REGFILE_READ_PORTS];
+    logic [$clog2(CONFIG.NUM_WB_GROUPS)-1:0] decode_wb_group;
 
-    logic issue_valid;
-    logic operands_ready;
-
-    logic [NUM_UNITS-1:0] unit_needed_issue_stage;
-    logic [NUM_UNITS-1:0] unit_ready;
-    logic [NUM_UNITS-1:0] issue_ready;
-    logic [NUM_UNITS-1:0] issue_to;
+    logic issue_hold;
+    logic [REGFILE_READ_PORTS-1:0] operand_ready;
+    logic [MAX_NUM_UNITS-1:0] unit_needed_issue_stage;
+    logic [MAX_NUM_UNITS-1:0] issue_to;
 
     logic [$clog2(CONFIG.NUM_WB_GROUPS)-1:0] issue_rs_wb_group [REGFILE_READ_PORTS];
     logic issue_uses_rs [REGFILE_READ_PORTS];
 
     logic pre_issue_exception_pending;
     logic illegal_instruction_pattern;
-    logic illegal_instruction_pattern_r;
-
-    logic [REGFILE_READ_PORTS-1:0] rs_conflict;
 
     genvar i;
     ////////////////////////////////////////////////////
@@ -109,8 +101,8 @@ module decode_and_issue
 
     //Can move data into issue stage if:
     // there is no instruction currently in the issue stage, or
-    // an instruction could issue (issue_flush, issue_hold and whether the instruction is valid are not needed in this check)
-    assign issue_stage_ready = ((~issue.stage_valid) | (issue_valid & |issue_ready)) & ~gc.issue_hold;
+    // an instruction could issue (ignoring gc.fetch_flush)
+    assign issue_stage_ready = (~issue.stage_valid) | (|issue_to);
     assign decode_advance = decode.valid & issue_stage_ready;
 
     //Instruction aliases
@@ -123,37 +115,44 @@ module decode_and_issue
     ////////////////////////////////////////////////////
     //Register File Support
     always_comb begin
-        uses_rd = |unit_uses_rd;
-        uses_rs = '{default: 0};
-        for (int i = 0; i < NUM_UNITS; i++)
+        decode_uses_rd = |unit_uses_rd;
+        decode_uses_rs = '{default: 0};
+        for (int i = 0; i < MAX_NUM_UNITS; i++)
             for (int j = 0; j < REGFILE_READ_PORTS; j++)
-                uses_rs[j] |= unit_uses_rs[i][j];
+                decode_uses_rs[j] |= unit_uses_rs[i][j];
     end
 
     ////////////////////////////////////////////////////
-    //Renamer Support
-    logic [$clog2(CONFIG.NUM_WB_GROUPS)-1:0] renamer_wb_group;
+    //WB Group Determination
+    localparam units_t [MAX_NUM_UNITS-1:0] WB_UNITS_TYPE_REP  = get_wb_units_type_representation(CONFIG.WB_GROUP);
+    logic [CONFIG.NUM_WB_GROUPS-1:0] uses_wb_group;
+    
     always_comb begin
-        renamer_wb_group = $clog2(CONFIG.NUM_WB_GROUPS)'(CONFIG.NUM_WB_GROUPS - 1);
-        if (unit_needed[UNIT_IDS.ALU])
-            renamer_wb_group = 0;
-        else if (unit_needed[UNIT_IDS.LS] )
-            renamer_wb_group = 1;
+        for (int i = 0; i < CONFIG.NUM_WB_GROUPS; i++)
+            uses_wb_group[i] = |(unit_needed & WB_UNITS_TYPE_REP[i]);
     end
+
+    one_hot_to_integer #(.C_WIDTH(CONFIG.NUM_WB_GROUPS))
+    wb_group_one_hot_block (
+        .one_hot (uses_wb_group),
+        .int_out (decode_wb_group)
+    );
+
+    ////////////////////////////////////////////////////
+    //Renamer Support
     assign renamer.rd_addr = decode_instruction.rd_addr;
     assign renamer.rs_addr = decode_rs_addr;
-    assign renamer.uses_rd = uses_rd;
-
-    assign renamer.rd_wb_group = renamer_wb_group;
+    assign renamer.uses_rd = decode_uses_rd;
+    assign renamer.rd_wb_group = decode_wb_group;
     assign renamer.id = decode.id;
 
     ////////////////////////////////////////////////////
     //Decode ID Support
-    assign decode_uses_rd = uses_rd;
     assign decode_rd_addr = decode_instruction.rd_addr;
     assign decode_phys_rd_addr = renamer.phys_rd_addr;
     assign decode_phys_rs_addr = renamer.phys_rs_addr;
     assign decode_rs_wb_group = renamer.rs_wb_group;
+
     ////////////////////////////////////////////////////
     //Issue
     always_ff @(posedge clk) begin
@@ -168,12 +167,12 @@ module decode_and_issue
             issue_rs_wb_group <= renamer.rs_wb_group;
             issue.rd_addr <= decode_instruction.rd_addr;
             issue.phys_rd_addr <= renamer.phys_rd_addr;
-            issue_rd_wb_group <= renamer_wb_group;
-            issue.is_multicycle <= ~unit_needed[UNIT_IDS.ALU];
+            issue_rd_wb_group <= decode_wb_group;
+            issue.is_multicycle <= ~unit_needed[ALU_ID];
             issue.id <= decode.id;
             issue.exception_unit <= decode_exception_unit;
-            issue_uses_rs <= uses_rs;
-            issue.uses_rd <= uses_rd;
+            issue_uses_rs <= decode_uses_rs;
+            issue.uses_rd <= decode_uses_rd;
         end
     end
 
@@ -190,24 +189,23 @@ module decode_and_issue
     end
 
     ////////////////////////////////////////////////////
-    //Unit ready
-    generate for (i=0; i<NUM_UNITS; i++)
-        assign unit_ready[i] = unit_issue[i].ready;
+    //Issue Determination
+    assign issue_hold = gc.issue_hold | pre_issue_exception_pending;
+
+    generate for (i=0; i<REGFILE_READ_PORTS; i++)
+        assign operand_ready[i] = ~rf.inuse[i] | (rf.inuse[i] & ~issue_uses_rs[i]);
     endgenerate
 
     ////////////////////////////////////////////////////
-    //Issue Determination
-    generate for (i=0; i<REGFILE_READ_PORTS; i++)
-        assign rs_conflict[i] = rf.inuse[i] & issue_uses_rs[i];
-    endgenerate
-    assign operands_ready = ~|rs_conflict;
+    //Unit EX signals
+    generate for (i = 0; i < MAX_NUM_UNITS; i++) begin : gen_unit_issue_signals
+        assign unit_issue[i].possible_issue = issue.stage_valid & unit_needed_issue_stage[i] & unit_issue[i].ready;
+        assign issue_to[i] = unit_issue[i].possible_issue & (&operand_ready) & ~issue_hold;
+        assign unit_issue[i].new_request = issue_to[i] & ~gc.fetch_flush;
+        assign unit_issue[i].id = issue.id;
+    end endgenerate
 
-    assign issue_ready = unit_needed_issue_stage & unit_ready;
-    assign issue_valid = issue.stage_valid & operands_ready & ~gc.issue_hold & ~pre_issue_exception_pending;
-
-    assign issue_to = {NUM_UNITS{issue_valid & ~gc.fetch_flush}} & issue_ready;
-
-    assign instruction_issued = issue_valid & ~gc.fetch_flush & |issue_ready;
+    assign instruction_issued = |issue_to & ~gc.fetch_flush;
     assign instruction_issued_with_rd = instruction_issued & issue.uses_rd;
 
     ////////////////////////////////////////////////////
@@ -218,6 +216,7 @@ module decode_and_issue
     
     assign rf.single_cycle_or_flush = (instruction_issued_with_rd & |issue.rd_addr & ~issue.is_multicycle) | (issue.stage_valid & issue.uses_rd & |issue.rd_addr & gc.fetch_flush);
     
+    ////////////////////////////////////////////////////
     //Constant ALU:
     //  provides LUI, AUIPC, JAL, JALR results for ALU
     //  provides PC+4 for BRANCH unit and ifence in GC unit
@@ -227,41 +226,30 @@ module decode_and_issue
     end
 
     ////////////////////////////////////////////////////
-    //Unit EX signals
-    generate for (i = 0; i < NUM_UNITS; i++) begin : gen_unit_issue_signals
-        assign unit_issue[i].possible_issue = issue.stage_valid & unit_needed_issue_stage[i] & unit_issue[i].ready;
-        assign unit_issue[i].new_request = issue_to[i];
-        assign unit_issue[i].id = issue.id;
-    end endgenerate
-
-    ////////////////////////////////////////////////////
     //Illegal Instruction check
     generate if (CONFIG.INCLUDE_M_MODE) begin : gen_decode_exceptions
+    logic new_exception;
+    exception_code_t ecode;
+    exception_code_t ecall_code;
 
+    //ECALL and EBREAK captured here, but seperated out when ecode is set
     assign illegal_instruction_pattern = ~|unit_needed;
-    always_ff @(posedge clk) begin
-        if (rst)
-            illegal_instruction_pattern_r <= 0;
-        else if (issue_stage_ready)
-            illegal_instruction_pattern_r <= illegal_instruction_pattern;
-    end
 
     //TODO: Consider ways of parameterizing so that any exception generating unit
     //can be automatically added to this expression
     always_comb begin
         unique case (1'b1)
-            unit_needed[UNIT_IDS.LS] : decode_exception_unit = LS_EXCEPTION;
-            unit_needed[UNIT_IDS.BR] : decode_exception_unit = BR_EXCEPTION;
+            unit_needed[LS_ID] : decode_exception_unit = LS_EXCEPTION;
+            unit_needed[BR_ID] : decode_exception_unit = BR_EXCEPTION;
             default : decode_exception_unit = PRE_ISSUE_EXCEPTION;
         endcase
-        if (illegal_instruction_pattern)
+        if (~decode.fetch_metadata.ok)
             decode_exception_unit = PRE_ISSUE_EXCEPTION;
     end
 
     ////////////////////////////////////////////////////
     //ECALL/EBREAK
     //The type of call instruction is depedent on the current privilege level
-    exception_code_t ecall_code;
     always_comb begin
         case (current_privilege)
             USER_PRIVILEGE : ecall_code = ECALL_U;
@@ -271,19 +259,26 @@ module decode_and_issue
         endcase
     end
 
+    always_ff @(posedge clk) begin
+        if (issue_stage_ready) begin
+            ecode <=
+                    decode.instruction inside {ECALL} ? ecall_code :
+                    decode.instruction inside {EBREAK} ? BREAK :
+                    illegal_instruction_pattern ? ILLEGAL_INST :
+                    decode.fetch_metadata.error_code; //(~decode.fetch_metadata.ok)
+        end
+    end
+
     ////////////////////////////////////////////////////
     //Exception generation (ecall/ebreak/illegal instruction/propagated fetch error)
-    logic new_exception;
-    exception_code_t ecode;
-
     always_ff @(posedge clk) begin
         if (rst)
             pre_issue_exception_pending <= 0;
         else if (issue_stage_ready)
-            pre_issue_exception_pending <= illegal_instruction_pattern | (~decode.fetch_metadata.ok) | decode.instruction inside {ECALL, EBREAK};
+            pre_issue_exception_pending <= illegal_instruction_pattern | (~decode.fetch_metadata.ok);
     end
 
-    assign new_exception = issue.stage_valid & pre_issue_exception_pending & ~(gc.issue_hold | gc.fetch_flush);
+    assign new_exception = issue.stage_valid & pre_issue_exception_pending & ~(gc.issue_hold | gc.fetch_flush | exception.valid);
 
     always_ff @(posedge clk) begin
         if (rst)
@@ -291,18 +286,6 @@ module decode_and_issue
         else
             exception.valid <= (exception.valid | new_exception) & ~exception.ack;
     end
-
-    logic is_ecall_r;
-    always_ff @(posedge clk) begin
-        if (issue_stage_ready)
-            is_ecall_r <= (decode_instruction.upper_opcode == SYSTEM_T) & (decode.instruction[31:20] == ECALL_imm);
-    end
-
-    assign ecode =
-        illegal_instruction_pattern_r ? ILLEGAL_INST :
-        is_ecall_r ? ecall_code :
-        ~issue.fetch_metadata.ok ? issue.fetch_metadata.error_code :
-        BREAK;
 
     always_ff @(posedge clk) begin
         if (new_exception) begin

@@ -25,14 +25,15 @@ if {[string equal [get_filesets -quiet sources_1] ""]} {
 }
 
 #import sources needed for blackbox packaging
+import_files -norecurse $sources_dir/examples/nexys/nexys_config.sv
 import_files -norecurse $sources_dir/examples/nexys/nexys_wrapper.sv
 import_files -norecurse $sources_dir/l2_arbiter/l2_external_interfaces.sv
 import_files -norecurse $sources_dir/local_memory/local_memory_interface.sv
-import_files -norecurse $sources_dir/core/external_interfaces.sv
-import_files -norecurse $sources_dir/core/cva5_config.sv
-import_files -norecurse $sources_dir/core/riscv_types.sv
-import_files -norecurse $sources_dir/core/cva5_types.sv
-import_files -norecurse $sources_dir/core/csr_types.sv
+import_files -norecurse $sources_dir/core/types_and_interfaces/external_interfaces.sv
+import_files -norecurse $sources_dir/core/types_and_interfaces/cva5_config.sv
+import_files -norecurse $sources_dir/core/types_and_interfaces/riscv_types.sv
+import_files -norecurse $sources_dir/core/types_and_interfaces/cva5_types.sv
+import_files -norecurse $sources_dir/core/types_and_interfaces/csr_types.sv
 import_files -norecurse $sources_dir/l2_arbiter/l2_config_and_types.sv
 
 # Set IP repository paths

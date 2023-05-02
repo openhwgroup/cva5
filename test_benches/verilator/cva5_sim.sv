@@ -483,7 +483,7 @@ module cva5_sim
 
     //Issue phys_rd to unit mem
     //Used for determining what outputs an operand stall is waiting on
-    logic [`ISSUE_P.NUM_UNITS-1:0] rd_addr_table [32];
+    logic [MAX_NUM_UNITS-1:0] rd_addr_table [32];
 
     always_ff @(posedge clk) begin
         if (cpu.instruction_issued_with_rd)
@@ -501,6 +501,11 @@ module cva5_sim
         assign dcache_miss = `DCACHE_P.line_complete;
         assign darb_stall = cpu.l1_request[L1_DCACHE_ID].request & ~cpu.l1_request[L1_DCACHE_ID].ack;
     end endgenerate
+
+    logic [MAX_NUM_UNITS-1:0] unit_ready;
+    generate for (i=0; i<MAX_NUM_UNITS; i++)
+        assign unit_ready[i] = cpu.unit_issue[i].ready;
+    endgenerate
 
     always_comb begin
         stats = '{default: '0};
@@ -522,9 +527,9 @@ module cva5_sim
         base_no_instruction_stall = ~`ISSUE_P.issue.stage_valid | cpu.gc.fetch_flush;
             base_no_id_sub_stall = (`METADATA_P.post_issue_count == MAX_IDS);
             base_flush_sub_stall = cpu.gc.fetch_flush;
-        base_unit_busy_stall = `ISSUE_P.issue.stage_valid & ~|`ISSUE_P.issue_ready;
-        base_operands_stall = `ISSUE_P.issue.stage_valid & ~`ISSUE_P.operands_ready;
-        base_hold_stall = `ISSUE_P.issue.stage_valid & (cpu.gc.issue_hold | `ISSUE_P.pre_issue_exception_pending);
+        base_unit_busy_stall = `ISSUE_P.issue.stage_valid & ~|(`ISSUE_P.unit_needed_issue_stage & unit_ready);
+        base_operands_stall = `ISSUE_P.issue.stage_valid & ~(&`ISSUE_P.operand_ready);
+        base_hold_stall = `ISSUE_P.issue.stage_valid & `ISSUE_P.issue_hold;
 
         stall_source_count = 4'(base_no_instruction_stall) + 4'(base_unit_busy_stall) + 4'(base_operands_stall) + 4'(base_hold_stall);
         single_source_issue_stall = (stall_source_count == 1);
@@ -539,15 +544,15 @@ module cva5_sim
         stats[ISSUE_MULTI_SOURCE_STAT] = (base_no_instruction_stall | base_unit_busy_stall | base_operands_stall | base_hold_stall) & ~single_source_issue_stall;
 
         //Misc Issue stats
-        stats[ISSUE_OPERAND_STALL_FOR_BRANCH_STAT] = stats[ISSUE_OPERANDS_NOT_READY_STAT] & `ISSUE_P.unit_needed_issue_stage[`ISSUE_P.UNIT_IDS.BR];
-        stats[ISSUE_STORE_WITH_FORWARDED_DATA_STAT] = `ISSUE_P.issue_to[`ISSUE_P.UNIT_IDS.LS] & `LS_P.is_store_r & `LS_P.rs2_inuse;
-        stats[ISSUE_DIVIDER_RESULT_REUSE_STAT] = `ISSUE_P.issue_to[`ISSUE_P.UNIT_IDS.DIV] & `DIV_P.div_op_reuse;
+        stats[ISSUE_OPERAND_STALL_FOR_BRANCH_STAT] = stats[ISSUE_OPERANDS_NOT_READY_STAT] & `ISSUE_P.unit_needed_issue_stage[BR_ID];
+        stats[ISSUE_STORE_WITH_FORWARDED_DATA_STAT] = `ISSUE_P.issue_to[LS_ID] & `LS_P.issue_attr.is_store & `LS_P.rs2_inuse;
+        stats[ISSUE_DIVIDER_RESULT_REUSE_STAT] = `ISSUE_P.issue_to[DIV_ID] & `DIV_P.div_op_reuse;
 
         //Issue Stall Source
         for (int i = 0; i < REGFILE_READ_PORTS; i++) begin
-            stats[ISSUE_OPERAND_STALL_ON_LOAD_STAT] |= `ISSUE_P.issue.stage_valid & rd_addr_table[`ISSUE_P.issue_rs_addr[i]][`ISSUE_P.UNIT_IDS.LS] & `ISSUE_P.rs_conflict[i] ;
-            stats[ISSUE_OPERAND_STALL_ON_MULTIPLY_STAT] |= EXAMPLE_CONFIG.INCLUDE_MUL & `ISSUE_P.issue.stage_valid & rd_addr_table[`ISSUE_P.issue_rs_addr[i]][`ISSUE_P.UNIT_IDS.MUL] & `ISSUE_P.rs_conflict[i] ;
-            stats[ISSUE_OPERAND_STALL_ON_DIVIDE_STAT] |= EXAMPLE_CONFIG.INCLUDE_DIV & `ISSUE_P.issue.stage_valid & rd_addr_table[`ISSUE_P.issue_rs_addr[i]][`ISSUE_P.UNIT_IDS.DIV] & `ISSUE_P.rs_conflict[i] ;
+            stats[ISSUE_OPERAND_STALL_ON_LOAD_STAT] |= `ISSUE_P.issue.stage_valid & rd_addr_table[`ISSUE_P.issue_rs_addr[i]][LS_ID] & ~`ISSUE_P.operand_ready[i] ;
+            stats[ISSUE_OPERAND_STALL_ON_MULTIPLY_STAT] |= EXAMPLE_CONFIG.INCLUDE_UNIT.MUL & `ISSUE_P.issue.stage_valid & rd_addr_table[`ISSUE_P.issue_rs_addr[i]][MUL_ID] & ~`ISSUE_P.operand_ready[i] ;
+            stats[ISSUE_OPERAND_STALL_ON_DIVIDE_STAT] |= EXAMPLE_CONFIG.INCLUDE_UNIT.DIV & `ISSUE_P.issue.stage_valid & rd_addr_table[`ISSUE_P.issue_rs_addr[i]][DIV_ID] & ~`ISSUE_P.operand_ready[i] ;
         end
 
         //LS Stats
@@ -612,8 +617,8 @@ module cva5_sim
 
     assign NUM_RETIRE_PORTS = RETIRE_PORTS;
     generate for (genvar i = 0; i < RETIRE_PORTS; i++) begin
-        assign retire_ports_pc[i] = cpu.id_block.pc_table[cpu.retire_ids[i]];
-        assign retire_ports_instruction[i] = cpu.id_block.instruction_table[cpu.retire_ids[i]];
+        assign retire_ports_pc[i] = cpu.id_block.pc_table.ram[cpu.retire_ids[i]];
+        assign retire_ports_instruction[i] = cpu.id_block.instruction_table.ram[cpu.retire_ids[i]];
         assign retire_ports_valid[i] = cpu.retire_port_valid[i];
     end endgenerate
 

@@ -58,7 +58,7 @@ module renamer
 
     logic [5:0] clear_index;
 
-    fifo_interface #(.DATA_WIDTH($bits(phys_addr_t))) free_list ();
+    fifo_interface #(.DATA_TYPE(phys_addr_t)) free_list ();
 
     logic rename_valid;
     logic rollback;
@@ -83,7 +83,7 @@ module renamer
 
     ////////////////////////////////////////////////////
     //Free list FIFO
-    register_free_list #(.DATA_WIDTH($bits(phys_addr_t)), .FIFO_DEPTH(32)) free_list_fifo (
+    register_free_list #(.DATA_TYPE(phys_addr_t), .FIFO_DEPTH(32)) free_list_fifo (
         .clk (clk),
         .rst (rst),
         .fifo (free_list),
@@ -106,7 +106,7 @@ module renamer
         previous_wb_group : spec_table_previous_r.wb_group
     };
 
-    lutram_1w_1r #(.WIDTH($bits(renamer_metadata_t)), .DEPTH(MAX_IDS))
+    lutram_1w_1r #(.DATA_TYPE(renamer_metadata_t), .DEPTH(MAX_IDS))
     inuse_table (
         .clk (clk),
         .waddr (issue.id),
@@ -168,7 +168,7 @@ module renamer
     assign spec_table_read_addr[1+:REGFILE_READ_PORTS] = decode.rs_addr;
 
     lutram_1w_mr #(
-        .WIDTH($bits(spec_table_t)),
+        .DATA_TYPE(spec_table_t),
         .DEPTH(32),
         .NUM_READ_PORTS(REGFILE_READ_PORTS+1)
     )

@@ -27,6 +27,7 @@ module nexys_wrapper
 	import cva5_config::*;
 	import cva5_types::*;
 	import l2_config_and_types::*;
+	import nexys_config::*;
 
 	(
         input logic clk,
@@ -74,108 +75,6 @@ module nexys_wrapper
 	    input logic [1:0] m_axi_bresp,
 	    input logic [5:0] m_axi_bid
     );
-
-    localparam cpu_config_t NEXYS_CONFIG = '{
-        //ISA options
-        INCLUDE_M_MODE : 1,
-        INCLUDE_S_MODE : 0,
-        INCLUDE_U_MODE : 0,
-        INCLUDE_MUL : 1,
-        INCLUDE_DIV : 1,
-        INCLUDE_IFENCE : 0,
-        INCLUDE_CSRS : 1,
-        INCLUDE_AMO : 0,
-        INCLUDE_CUSTOM : 0,
-        //CSR constants
-        CSRS : '{
-            MACHINE_IMPLEMENTATION_ID : 0,
-            CPU_ID : 0,
-            RESET_VEC : 32'h80000000,
-            RESET_MTVEC : 32'h80000000,
-            NON_STANDARD_OPTIONS : '{
-                COUNTER_W : 33,
-                MCYCLE_WRITEABLE : 0,
-                MINSTR_WRITEABLE : 0,
-                MTVEC_WRITEABLE : 1,
-                INCLUDE_MSCRATCH : 0,
-                INCLUDE_MCAUSE : 1,
-                INCLUDE_MTVAL : 1
-            }
-        },
-        //Memory Options
-        SQ_DEPTH : 8,
-        INCLUDE_FORWARDING_TO_STORES : 1,
-        INCLUDE_ICACHE : 1,
-        ICACHE_ADDR : '{
-            L : 32'h80000000, 
-            H : 32'h87FFFFFF
-        },
-        ICACHE : '{
-            LINES : 256,
-            LINE_W : 8,
-            WAYS : 2,
-            USE_EXTERNAL_INVALIDATIONS : 0,
-            USE_NON_CACHEABLE : 0,
-            NON_CACHEABLE : '{
-				L : 32'h88000000, 
-				H : 32'h8FFFFFFF
-            }
-        },
-        ITLB : '{
-            WAYS : 2,
-            DEPTH : 64
-        },
-        INCLUDE_DCACHE : 1,
-        DCACHE_ADDR : '{
-            L : 32'h80000000, 
-            H : 32'h8FFFFFFF
-        },
-        DCACHE : '{
-            LINES : 512,
-            LINE_W : 8,
-            WAYS : 1,
-            USE_EXTERNAL_INVALIDATIONS : 0,
-            USE_NON_CACHEABLE : 1,
-            NON_CACHEABLE : '{
-				L : 32'h88000000, 
-				H : 32'h8FFFFFFF
-            }
-        },
-        DTLB : '{
-            WAYS : 2,
-            DEPTH : 64
-        },
-        INCLUDE_ILOCAL_MEM : 0,
-        ILOCAL_MEM_ADDR : '{
-            L : 32'h80000000, 
-            H : 32'h8FFFFFFF
-        },
-        INCLUDE_DLOCAL_MEM : 0,
-        DLOCAL_MEM_ADDR : '{
-            L : 32'h80000000,
-            H : 32'h8FFFFFFF
-        },
-        INCLUDE_IBUS : 0,
-        IBUS_ADDR : '{
-            L : 32'h00000000, 
-            H : 32'hFFFFFFFF
-        },
-        INCLUDE_PERIPHERAL_BUS : 0,
-        PERIPHERAL_BUS_ADDR : '{
-            L : 32'h00000000,
-            H : 32'hFFFFFFFF
-        },
-        PERIPHERAL_BUS_TYPE : AXI_BUS,
-        //Branch Predictor Options
-        INCLUDE_BRANCH_PREDICTOR : 1,
-        BP : '{
-            WAYS : 2,
-            ENTRIES : 512,
-            RAS_ENTRIES : 8
-        },
-        //Writeback Options
-        NUM_WB_GROUPS : 3
-    };
 
     //Unused outputs
     local_memory_interface instruction_bram ();

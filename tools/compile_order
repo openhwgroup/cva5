@@ -1,98 +1,89 @@
-core/cva5_config.sv
-core/riscv_types.sv
-core/csr_types.sv  
-core/cva5_types.sv  
-core/opcodes.sv  
+core/types_and_interfaces/cva5_config.sv
+core/types_and_interfaces/riscv_types.sv
+core/types_and_interfaces/csr_types.sv
+core/types_and_interfaces/cva5_types.sv
+core/types_and_interfaces/opcodes.sv
 
-l2_arbiter/l2_config_and_types.sv 
+l2_arbiter/l2_config_and_types.sv
 l2_arbiter/l2_interfaces.sv
 l2_arbiter/l2_external_interfaces.sv
-local_memory/local_memory_interface.sv 
+local_memory/local_memory_interface.sv
 local_memory/local_mem.sv
 
-core/internal_interfaces.sv  
-core/external_interfaces.sv  
+core/types_and_interfaces/internal_interfaces.sv
+core/types_and_interfaces/external_interfaces.sv
 
-core/lutrams/lutram_1w_1r.sv
-core/lutrams/lutram_1w_mr.sv
+core/common_components/lutram_1w_1r.sv
+core/common_components/lutram_1w_mr.sv
+core/common_components/dual_port_bram.sv
+core/common_components/set_clr_reg_with_rst.sv
+core/common_components/one_hot_to_integer.sv
+core/common_components/cycler.sv
+core/common_components/lfsr.sv
+core/common_components/cva5_fifo.sv
+core/common_components/priority_encoder.sv
+core/common_components/toggle_memory.sv
+core/common_components/toggle_memory_set.sv
 
-core/set_clr_reg_with_rst.sv
-core/one_hot_occupancy.sv 
-core/binary_occupancy.sv 
-core/one_hot_to_integer.sv  
-core/cycler.sv  
-core/lfsr.sv
-core/cva5_fifo.sv  
-core/shift_counter.sv
-core/priority_encoder.sv
+core/common_components/vendor_support/intel/intel_byte_enable_ram.sv
+core/common_components/vendor_support/xilinx/xilinx_byte_enable_ram.sv
+core/common_components/byte_en_bram.sv
 
-core/toggle_memory.sv
-core/toggle_memory_set.sv
+core/execution_units/csr_unit.sv
+core/execution_units/gc_unit.sv
 
-core/intel/intel_byte_enable_ram.sv
-core/xilinx/xilinx_byte_enable_ram.sv
-core/byte_en_BRAM.sv 
+core/execution_units/branch_comparator.sv
+core/execution_units/branch_unit.sv
 
-core/csr_unit.sv  
-core/gc_unit.sv  
+core/execution_units/barrel_shifter.sv
+core/execution_units/alu_unit.sv
 
-core/branch_comparator.sv
-core/branch_unit.sv  
+core/memory_sub_units/local_mem_sub_unit.sv
+core/memory_sub_units/axi_master.sv
+core/memory_sub_units/avalon_master.sv
+core/memory_sub_units/wishbone_master.sv
 
-core/barrel_shifter.sv  
-core/alu_unit.sv  
+core/execution_units/load_store_unit/dcache_tag_banks.sv
+core/execution_units/load_store_unit/amo_alu.sv
+core/execution_units/load_store_unit/dcache.sv
+core/execution_units/load_store_unit/addr_hash.sv
+core/execution_units/load_store_unit/store_queue.sv
+core/execution_units/load_store_unit/load_store_queue.sv
+core/execution_units/load_store_unit/load_store_unit.sv
 
-core/local_mem_sub_unit.sv
-core/axi_master.sv  
-core/avalon_master.sv  
-core/wishbone_master.sv  
+core/execution_units/mul_unit.sv
 
+core/execution_units/custom_unit.sv
 
-core/tag_bank.sv  
-core/dcache_tag_banks.sv  
-core/amo_alu.sv  
-core/dcache.sv  
-core/addr_hash.sv
-core/store_queue.sv
-core/load_store_queue.sv
-core/load_store_unit.sv  
+core/common_components/clz.sv
+core/execution_units/div_core.sv
+core/execution_units/div_unit.sv
 
-core/icache_tag_banks.sv  
-core/icache.sv  
+core/fetch_stage/ras.sv
+core/fetch_stage/branch_predictor.sv
+core/fetch_stage/icache_tag_banks.sv
+core/fetch_stage/icache.sv
+core/fetch_stage/fetch.sv
 
-core/clz.sv
-core/div_core.sv
-core/div_unit.sv  
+core/instruction_metadata_and_id_management.sv
 
-core/tlb_lut_ram.sv  
-core/mmu.sv  
+core/tlb_lut_ram.sv
+core/mmu.sv
 
-core/mul_unit.sv  
-
-core/custom_unit.sv  
-
-core/ras.sv  
-core/branch_predictor_ram.sv
-core/branch_predictor.sv  
-core/fetch.sv
-
-core/illegal_instruction_checker.sv
 core/decode_and_issue.sv
 
 core/register_free_list.sv
 core/renamer.sv
 core/register_file.sv
+
 core/writeback.sv
+
+core/l1_arbiter.sv
 
 l2_arbiter/l2_fifo.sv
 l2_arbiter/l2_reservation_logic.sv
 l2_arbiter/l2_round_robin.sv
 l2_arbiter/l2_arbiter.sv
-core/axi_to_arb.sv  
-
-core/instruction_metadata_and_id_management.sv
-
-core/l1_arbiter.sv  
+l2_arbiter/axi_to_arb.sv
 
 core/cva5.sv
-
