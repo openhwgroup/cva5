@@ -237,6 +237,14 @@ package fpu_types;
         id_t                id;
     } fp_div_inputs_t;
 
+    typedef enum logic[2:0] {
+        NEG_TWO = 3'b011,
+        NEG_ONE = 3'b001,
+        ZERO = 3'b000,
+        POS_ONE = 3'b101,
+        POS_TWO = 3'b111
+    } q_t;
+
     typedef struct packed{
         logic [FLEN-1:0]    rs1;
         id_t                id;

@@ -124,6 +124,12 @@ core/fpu/fp_sign_inj.sv
 core/fpu/fp_div.sv
 core/fpu/fp_div_core.sv
 core/fpu/fp_special_case_detection.sv
+core/fpu/divider/sz_module.sv
+core/fpu/divider/q_lookup.sv
+core/fpu/divider/on_the_fly.sv
+core/fpu/divider/full_adder.sv
+core/fpu/divider/carry_save_shift.sv
+core/fpu/divider/fp_div_radix4.sv
 core/div_algorithms/fp_div_quick_clz.sv
 core/div_algorithms/fp_div_radix2.sv
 core/div_algorithms/fp_div_radix2_shortened.sv

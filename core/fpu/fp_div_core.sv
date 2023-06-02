@@ -134,12 +134,12 @@ module fp_div_core
     assign div_shortened.divisor   = {rs2_frac, 2'b0};
     assign div_shortened.start     = start_algorithm_r & ~early_terminate;     //start div if no special cases
     assign div_shortened.divisor_is_zero = rs2_is_zero;
-    fp_div_radix2_shortened #(.DIV_WIDTH(FRAC_WIDTH+3)) div_mantissa_shortened (.clk(clk), .rst(rst), .div(div_shortened));
+    fp_div_radix4 #(.DIV_WIDTH(FRAC_WIDTH+3)) div_mantissa_shortened (.clk(clk), .rst(rst), .div(div_shortened));
 
     //assign {result_hidden, result_frac, grs[2:1]} = div.quotient[0+:FRAC_WIDTH+3];
     //assign grs[0] = |div.remainder;
     assign {result_hidden, result_frac, grs[2:1]} = div_shortened.quotient;
-    assign grs[0] = |div_shortened.remainder;
+    assign grs[0] = div_shortened.remainder[0];//|div_shortened.remainder;
 
     //exponent handling
     generate if (ENABLE_SUBNORMAL) begin
