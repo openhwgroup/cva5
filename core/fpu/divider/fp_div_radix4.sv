@@ -71,7 +71,7 @@ module fp_div_radix4
     logic[QUOTIENT_WIDTH-1:0] next_quotient_m;
 
     //Assertion detection
-    logic decremented_neg_2;
+    logic decremented_invalid;
     logic bad_quotient_digit;
     logic not_in_table;
 
@@ -110,14 +110,15 @@ module fp_div_radix4
         div.remainder[0] = ~is_zero;
 
         muxed_q = current_q;
-        decremented_neg_2 = 0;
+        decremented_invalid = 0;
         if (counter_full & is_negative) begin
             unique case (current_q)
                 POS_TWO: muxed_q = POS_ONE;
                 POS_ONE: muxed_q = ZERO;
                 ZERO: muxed_q = NEG_ONE;
                 NEG_ONE: muxed_q = NEG_TWO;
-                default: decremented_neg_2 = 1; //For assertions only
+                NEG_TWO: muxed_q = NEG_THREE;
+                default: decremented_invalid = 1; //For assertions only
             endcase
         end
     end
@@ -153,7 +154,7 @@ module fp_div_radix4
 
     //Assertions
     decrement_bad_quotient_assertion:
-        assert property (@(posedge clk) disable iff (rst) (!(decremented_neg_2)))
+        assert property (@(posedge clk) disable iff (rst) (!(decremented_invalid)))
         else $error("Invalid decrement of quotient digit");
 
     decoding_bad_digit_assertion:

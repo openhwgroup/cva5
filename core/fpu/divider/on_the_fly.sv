@@ -53,6 +53,7 @@ module on_the_fly
                 qin = 2'b00;
                 qmin = 2'b11;
             end
+            NEG_THREE,
             POS_ONE: begin
                 qin = 2'b01;
                 qmin = 2'b00;
@@ -66,7 +67,7 @@ module on_the_fly
     end
 
     always_comb begin
-        if (q == NEG_TWO || q == NEG_ONE)
+        if (q == NEG_TWO || q == NEG_ONE || q == NEG_THREE)
             next_Q = {current_QM[WIDTH-3:0], qin};
         else
             next_Q = {current_Q[WIDTH-3:0], qin};

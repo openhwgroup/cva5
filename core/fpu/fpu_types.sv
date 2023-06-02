@@ -238,6 +238,7 @@ package fpu_types;
     } fp_div_inputs_t;
 
     typedef enum logic[2:0] {
+        NEG_THREE = 3'b010, //Only reached by subtraction when last quotient digit is -2
         NEG_TWO = 3'b011,
         NEG_ONE = 3'b001,
         ZERO = 3'b000,
