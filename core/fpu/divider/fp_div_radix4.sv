@@ -32,7 +32,7 @@ module fp_div_radix4
     unsigned_division_interface.divider div
 );
 
-    localparam COUNTER_WIDTH = $clog2((1+DIV_WIDTH)/2+2);
+    localparam COUNTER_WIDTH = $clog2((1+DIV_WIDTH)/2+3);
     localparam QUOTIENT_WIDTH = 2*((1+DIV_WIDTH)/2)+2;
     localparam DECIMAL_WIDTH = DIV_WIDTH+1;
     localparam RESIDUE_WIDTH = DIV_WIDTH+3;

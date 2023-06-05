@@ -193,6 +193,7 @@ interface tlb_interface;
 endinterface
 
 interface load_store_queue_interface;
+    import taiga_config::*;
     import riscv_types::*;
     import taiga_types::*;
 

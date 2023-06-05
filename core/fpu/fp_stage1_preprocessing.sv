@@ -116,7 +116,7 @@ module fp_stage1_preprocessing
             end
 
             logic[63:0] clz_arr;
-            logic[$clog2(FRAC_WIDTH)-1:0] clz_count;
+            logic[5:0] clz_count;
             assign clz_arr = {shift_arr, {(64-FRAC_WIDTH-1){1'b1}}};
 
             clz_tree frac_clz (//Hopefully this gets optimized given that the lower bits are set to 1 if they aren't used
@@ -132,8 +132,7 @@ module fp_stage1_preprocessing
                 if (~single)
                     prenormalize_shift[$clog2(FRAC_WIDTH)-1:0] = shift_amount[$clog2(FRAC_WIDTH)-1:0];
                 exponent_add = '0;
-                exponent_add[$clog2(FRAC_WIDTH)-1:0] = clz_count;
-    
+                exponent_add[5:0] = clz_count;
             end
 
         end
