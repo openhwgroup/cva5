@@ -189,8 +189,7 @@ module fp_add_madd_fused
     (* use_dsp = "no" *) grs_t                          grs_add;
     logic output_zero;
     logic same_expo;
-    logic result_frac_all_0s;
-    logic grs_add_all_0s;
+    logic result_zero;
 
     //LUT adder
     assign adder_in1 = {1'b0, rs1_frac[1], rs1_grs[1]};
@@ -206,33 +205,24 @@ module fp_add_madd_fused
 
 
     assign same_expo = ~|expo_diff[2] | (expo_diff[2] == 1 & rs2_frac[2][FRAC_WIDTH+1]); //asserted if input expo_diff==0; or if FMA_ADD input expo_diff==1 and rs2's safe bit==1
-    assign result_frac_all_0s = ~|result_frac[1];
-    assign grs_add_all_0s = ~|grs;
-    assign output_zero = same_expo & (result_frac_all_0s & grs_add_all_0s);
+    assign output_zero = same_expo & result_zero;
     assign result_sign[1] = output_zero & (subtract[2]) ?
                             zero_result_sign[2] :
                             (~r_adder_carry_out & subtract[2]) ^ rs1_sign[2];
     assign {result_expo_overflow[1], result_expo[1]} = output_zero ? '0 : {rs1_expo_overflow[2], rs1_expo[2]};
 
     //calculate clz and write-back
-    generate if (FRAC_WIDTH+2 <= 32) begin
-        localparam left_shift_amt_bias = (32 - (FRAC_WIDTH + 1));
-        clz frac_clz (
-            .clz_input (32'(result_frac[1])),
-            .clz (clz_with_prepended_0s[4:0])
-        );
-        assign left_shift_amt = (clz_with_prepended_0s & {EXPO_WIDTH{~output_special_case[1]}}) - (left_shift_amt_bias & {EXPO_WIDTH{~output_special_case[1]}});
-    end else begin
-        localparam left_shift_amt_bias_if_result_frac_not_all_0s = (64 - (FRAC_WIDTH + 1));
-        localparam left_shift_amt_bias_if_result_frac_all_0s = -(FRAC_WIDTH) + left_shift_amt_bias_if_result_frac_not_all_0s;
-        clz_tree frac_clz (
-            .clz_input (result_frac_all_0s ? 64'(grs[GRS_WIDTH-1-:HALF_GRS_WIDTH]) : 64'(result_frac[1])),
-            .clz (clz_with_prepended_0s[5:0])
-        );
-
-        assign left_shift_amt_offset = result_frac_all_0s ? left_shift_amt_bias_if_result_frac_all_0s : left_shift_amt_bias_if_result_frac_not_all_0s;
-        assign left_shift_amt = (clz_with_prepended_0s & {EXPO_WIDTH{~output_special_case[1] & ~output_zero}}) - (left_shift_amt_offset & {EXPO_WIDTH{~output_special_case[1] & ~output_zero}});
-    end endgenerate
+    logic[$clog2(FRAC_WIDTH+1+GRS_WIDTH)-1:0] clz_count;
+    clz_tree #(.WIDTH(FRAC_WIDTH+1+GRS_WIDTH)) shift_clz (
+        .clz_input({result_frac[1][FRAC_WIDTH:0], grs}),
+        .clz(clz_count),
+        .zero(result_zero)
+    );
+    always_comb begin
+        left_shift_amt = '0;
+        if (~output_zero & ~output_special_case[1])
+            left_shift_amt[$clog2(FRAC_WIDTH+1+GRS_WIDTH)-1:0] = clz_count;
+    end
 
     assign output_special_case[0] = output_inf[1] | output_QNaN[1];
     always_comb begin

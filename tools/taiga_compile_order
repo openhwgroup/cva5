@@ -100,7 +100,6 @@ core/register_file.sv
 core/writeback.sv
 
 
-core/fpu/pre_normalize.sv
 core/fpu/swap.sv
 core/fpu/unsigned_multiplier.sv
 core/fpu/fp_mul_madd_fused.sv
