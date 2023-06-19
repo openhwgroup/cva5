@@ -20,31 +20,18 @@
  *             Chris Keilbart <ckeilbar@sfu.ca>
  */
 
-module fp_mv_f2i
-    import taiga_config::*;
-    import fpu_types::*;
-    import riscv_types::*;
-    import taiga_types::*;
-
+module full_adder
 (
-    input logic clk,
-    input logic advance,
-    unit_issue_interface.unit issue,
-    input fp_mv_f2i_inputs_t fp_mv_f2i_inputs,
-    unit_writeback_interface.unit wb
+    input logic a,
+    input logic b,
+    input logic cin,
+    output logic sum,
+    output logic cout
 );
-    logic done;
-    id_t id;
-    logic[FLEN_F-1:0] rd;
 
-    always_ff @(posedge clk) begin
-        done <= issue.new_request;
-        id <= issue.id;
-        rd <= fp_mv_f2i_inputs.rs1;
-    end
+    logic[1:0] wide_sum;
+    assign wide_sum = a + b + cin;
+    assign sum = wide_sum[0];
+    assign cout = wide_sum[1];
 
-    //This instruction is meant to transfer single precision numbers, so in reduced precision only the single precision bits are used
-    assign wb.rd = {{(XLEN-FLEN_F){1'b0}}, rd};
-    assign wb.done = done;
-    assign wb.id = id;
 endmodule

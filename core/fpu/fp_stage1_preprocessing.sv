@@ -115,25 +115,25 @@ module fp_stage1_preprocessing
                     shift_arr = {hidden_double, in.d.frac};
             end
 
-            logic[63:0] clz_arr;
-            logic[$clog2(FRAC_WIDTH)-1:0] clz_count;
-            assign clz_arr = {shift_arr, {(64-FRAC_WIDTH-1){1'b1}}};
+            logic[FRAC_WIDTH+1:0] clz_arr;
+            logic[$clog2(FRAC_WIDTH+2)-1:0] clz_count;
+            assign clz_arr = {shift_arr, 1'b1};
 
-            clz_tree frac_clz (//Hopefully this gets optimized given that the lower bits are set to 1 if they aren't used
+            clz_tree #(.WIDTH(FRAC_WIDTH+2)) frac_clz (
                 .clz_input(clz_arr),
-                .clz (clz_count)
+                .clz(clz_count),
+                .zero()
             );
 
-            logic[5:0] shift_amount;
+            logic[$clog2(FRAC_WIDTH+2)-1:0] shift_amount;
             always_comb begin //TODO: Edge case where frac widths are close for singles that aren't enabled (MAX_SHIFTS)
-                shift_amount = {6{single | prenormalize}} & clz_count;
+                shift_amount = single | prenormalize ? clz_count : '0;
                 {prenormalize_hidden, prenormalize_frac} = shift_arr << shift_amount;
                 prenormalize_shift = '0;
                 if (~single)
                     prenormalize_shift[$clog2(FRAC_WIDTH)-1:0] = shift_amount[$clog2(FRAC_WIDTH)-1:0];
                 exponent_add = '0;
-                exponent_add[$clog2(FRAC_WIDTH)-1:0] = clz_count;
-    
+                exponent_add[$clog2(FRAC_WIDTH+2)-1:0] = clz_count;
             end
 
         end

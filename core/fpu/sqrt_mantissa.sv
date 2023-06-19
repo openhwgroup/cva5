@@ -22,6 +22,7 @@
 
 
 module sqrt_mantissa
+    import taiga_config::*;
 #(
     ITERATION = 50
 )(

@@ -87,10 +87,6 @@ module fp_div_core
         end
     end
 
-    //pre-normalize
-    //pre_normalize rs1_pre_normalize(.rs2(rs1), .rs2_hidden_bit(rs1_hidden_bit), .enable(1'b1), .left_shift_amt(rs1_left_shift_amt), .frac_normalized(rs1_frac));
-    //pre_normalize rs2_pre_normalize(.rs2(rs2), .rs2_hidden_bit(rs2_hidden_bit), .enable(1'b1), .left_shift_amt(rs2_left_shift_amt), .frac_normalized(rs2_frac));
-
     //unpack
     assign rs1_sign    = rs1[FLEN-1];
     assign rs2_sign    = rs2[FLEN-1];
@@ -134,12 +130,12 @@ module fp_div_core
     assign div_shortened.divisor   = {rs2_frac, 2'b0};
     assign div_shortened.start     = start_algorithm_r & ~early_terminate;     //start div if no special cases
     assign div_shortened.divisor_is_zero = rs2_is_zero;
-    fp_div_radix2_shortened #(.DIV_WIDTH(FRAC_WIDTH+3)) div_mantissa_shortened (.clk(clk), .rst(rst), .div(div_shortened));
+    fp_div_radix4 #(.DIV_WIDTH(FRAC_WIDTH+3)) div_mantissa_shortened (.clk(clk), .rst(rst), .div(div_shortened));
 
     //assign {result_hidden, result_frac, grs[2:1]} = div.quotient[0+:FRAC_WIDTH+3];
     //assign grs[0] = |div.remainder;
     assign {result_hidden, result_frac, grs[2:1]} = div_shortened.quotient;
-    assign grs[0] = |div_shortened.remainder;
+    assign grs[0] = div_shortened.remainder[0];//|div_shortened.remainder;
 
     //exponent handling
     generate if (ENABLE_SUBNORMAL) begin
@@ -157,21 +153,10 @@ module fp_div_core
         assign result_expo = right_shift ? result_expo_intermediate_neg[EXPO_WIDTH:0] : result_expo_intermediate[1][EXPO_WIDTH:0];
     end endgenerate
 
-    // calculate CLZ
-    logic [EXPO_WIDTH-1:0] clz_with_prepended_0s, left_shift_amt;
-    generate if (FRAC_WIDTH+2 <= 32) begin
-        clz frac_clz (
-            .clz_input (32'({result_hidden, result_frac})),
-            .clz (clz_with_prepended_0s[4:0])
-        );
-        assign left_shift_amt = clz_with_prepended_0s - (32 - (FRAC_WIDTH + 1));
-    end else begin
-        clz_tree frac_clz (
-            .clz_input (64'({result_hidden, result_frac})),
-            .clz (clz_with_prepended_0s[5:0])
-        );
-        assign left_shift_amt = clz_with_prepended_0s - (64 - (FRAC_WIDTH + 1));
-    end endgenerate
+    // calculate CLZ -> because 0.5 < result < 2, the shift amount is either 0 or 1
+    logic[EXPO_WIDTH-1:0] left_shift_amt;
+    assign left_shift_amt[EXPO_WIDTH-1:1] = '0;
+    assign left_shift_amt[0] = ~result_hidden;
 
     logic advance;
     assign advance = ~fp_wb.done | fp_wb.ack;

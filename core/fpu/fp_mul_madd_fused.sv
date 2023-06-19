@@ -167,22 +167,12 @@ module fp_mul_madd_fused
 
     ////////////////////////////////////////////////////
     //Output
-    //pre-calculate clz for left shift
-    generate if (FRAC_WIDTH+2 <= 32) begin
-        localparam left_shift_amt_bias = (32 - (FRAC_WIDTH + 1));
-        clz frac_clz (
-            .clz_input (32'(result_frac[1])),
-            .clz (clz_with_prepended_0s[4:0])
-        );
-        assign left_shift_amt = (clz_with_prepended_0s & {EXPO_WIDTH{~output_special_case[1]}}) - (left_shift_amt_bias & {EXPO_WIDTH{~output_special_case[1]}});
-    end else begin
-        localparam left_shift_amt_bias = (64 - (FRAC_WIDTH + 1));
-        clz_tree frac_clz (
-            .clz_input (64'(result_frac[1])),
-            .clz (clz_with_prepended_0s[5:0])
-        );
-        assign left_shift_amt = (clz_with_prepended_0s & {EXPO_WIDTH{~output_special_case[1]}}) - (left_shift_amt_bias & {EXPO_WIDTH{~output_special_case[1]}});
-    end endgenerate
+    //pre-calculate clz for left shift -> because inputs are normalized, the leading 1 is in one of two places
+    always_comb begin
+        left_shift_amt = '0;
+        if (~output_special_case[1])
+            left_shift_amt[0] = ~result_frac[1][FRAC_WIDTH];
+    end
 
     //Special case handling
     assign output_special_case[0] = output_inf[2] | output_QNaN[2] | output_zero[2];
