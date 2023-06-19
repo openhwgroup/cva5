@@ -100,7 +100,7 @@ module cva5_fifo
         end
 
         assign fifo.valid = inflight_count[LOG2_FIFO_DEPTH];
-        assign fifo.full = fifo.valid & ~|inflight_count[LOG2_FIFO_DEPTH-1:0];
+        assign fifo.full = inflight_count == -FIFO_DEPTH[LOG2_FIFO_DEPTH:0];
 
         lfsr #(.WIDTH(LOG2_FIFO_DEPTH), .NEEDS_RESET(1))
         lfsr_read_index (
