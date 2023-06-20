@@ -201,10 +201,10 @@ module axi_to_arb
 
     //write channel
     logic write_request;
+    logic write_in_progress_r;
     assign write_request = l2.wr_data_valid & l2.request_valid & (~l2.rnw | amo_write_ready);
     assign axi_awvalid = write_request & ~write_in_progress_r;
 
-    logic write_in_progress_r;
     always_ff @ (posedge clk) begin
         if (rst)
             write_in_progress_r <= 0;
