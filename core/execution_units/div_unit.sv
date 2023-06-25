@@ -67,8 +67,6 @@ module div_unit
     typedef struct packed{
         logic remainder_op;
         logic negate_result;
-        logic divisor_is_zero;
-        logic reuse_result;
         id_t id;
     } div_attributes_t;
     div_attributes_t wb_attr;
@@ -78,6 +76,8 @@ module div_unit
         logic [XLEN-1:0] unsigned_divisor;
         logic [$clog2(32)-1:0] dividend_CLZ;
         logic [$clog2(32)-1:0] divisor_CLZ;
+        logic divisor_is_zero;
+        logic reuse_result;
         div_attributes_t attr;
     } div_fifo_inputs_t;
 
@@ -174,11 +174,11 @@ module div_unit
         unsigned_divisor : unsigned_divisor,
         dividend_CLZ : divisor_is_zero ? '0 : dividend_CLZ,
         divisor_CLZ : divisor_CLZ,
+        divisor_is_zero : divisor_is_zero,
+        reuse_result : div_op_reuse,
         attr : '{
             remainder_op : issue_stage.fn3[1],
             negate_result : (issue_stage.fn3[1] ? negate_remainder : (negate_quotient & ~divisor_is_zero)),
-            divisor_is_zero : divisor_is_zero,
-            reuse_result : div_op_reuse,
             id : issue.id
         }
     };
@@ -189,8 +189,8 @@ module div_unit
 
     ////////////////////////////////////////////////////
     //Control Signals
-    assign div_core.start = input_fifo.pop & ~input_fifo.data_out.attr.reuse_result;
-    assign div_done = div_core.done | (input_fifo.pop & input_fifo.data_out.attr.reuse_result);
+    assign div_core.start = input_fifo.pop & ~input_fifo.data_out.reuse_result;
+    assign div_done = div_core.done | (input_fifo.pop & input_fifo.data_out.reuse_result);
 
     //If more than one cycle, set in_progress so that multiple div.start signals are not sent to the div unit.
     set_clr_reg_with_rst #(.SET_OVER_CLR(1), .WIDTH(1), .RST_VALUE('0))
@@ -211,7 +211,7 @@ module div_unit
     assign div_core.divisor = input_fifo.data_out.unsigned_divisor;
     assign div_core.dividend_CLZ = input_fifo.data_out.dividend_CLZ;
     assign div_core.divisor_CLZ = input_fifo.data_out.divisor_CLZ;
-    assign div_core.divisor_is_zero = input_fifo.data_out.attr.divisor_is_zero;
+    assign div_core.divisor_is_zero = input_fifo.data_out.divisor_is_zero;
     
     div_core #(.DIV_WIDTH(32)) 
     divider_block (

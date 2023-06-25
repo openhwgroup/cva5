@@ -138,13 +138,11 @@ module branch_unit
     end
     ////////////////////////////////////////////////////
 
-    logic jal;
     logic jalr;
     logic jal_or_jalr;
     logic br_use_signed;
     always_ff @(posedge clk) begin
         if (issue_stage_ready) begin
-            jal <= decode_stage.instruction[3];
             jalr <= (~decode_stage.instruction[3] & decode_stage.instruction[2]);
             jal_or_jalr <= decode_stage.instruction[2];
             br_use_signed <= !(instruction.fn3 inside {BLTU_fn3, BGEU_fn3});

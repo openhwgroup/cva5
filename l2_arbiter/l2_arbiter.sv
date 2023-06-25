@@ -230,7 +230,7 @@ module l2_arbiter
             //Arbiter side
             assign inv_response_fifos[i].push = reserv_valid & reserv_store  & ~reserv_id_v[i];
             assign inv_response_fifos[i].potential_push = reserv_valid & reserv_store  & ~reserv_id_v[i];
-            assign inv_response_fifos[i].data_in = requests[i].addr;
+            assign inv_response_fifos[i].data_in = reserv_request.addr;
         end
     endgenerate
 
