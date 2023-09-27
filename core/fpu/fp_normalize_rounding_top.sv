@@ -228,8 +228,6 @@ module fp_normalize_rounding_top
 
     ////////////////////////////////////////////////////
     //Shared rounding
-    logic [FRAC_WIDTH+1:0]       hidden_round_frac_roundup;
-    logic [FRAC_WIDTH:0]         frac_round_intermediate;
     logic                        roundup;
     logic                        frac_overflow;
     logic                        sign_out;
@@ -239,7 +237,6 @@ module fp_normalize_rounding_top
     logic                        hidden_round;
     logic [4:0]                  fflags, fflags_out;
     logic                        overflowExp, underflowExp;
-    logic frac_overflow_debug;
     logic advance_round;
     logic round_d2s;
 
@@ -250,10 +247,6 @@ module fp_normalize_rounding_top
     end
 
     //compute mantissa overflow due to rounding in parallel with roundup addition
-    assign hidden_round_frac_roundup = {hidden_round, frac, roundup};
-    assign frac_overflow = &hidden_round_frac_roundup;
-    assert property (@(posedge clk) (frac_overflow|frac_overflow_debug) -> (frac_overflow_debug == frac_overflow));
-
     assign roundup = round_packet_r.roundup;
     assign sign_out = round_packet_r.data[FLEN-1];
     assign expo = round_packet_r.data[FLEN-2-:EXPO_WIDTH];
@@ -263,8 +256,7 @@ module fp_normalize_rounding_top
     assign fflags = round_packet_r.fflags;
     assign round_d2s = round_packet_r.d2s;
 
-    assign {frac_overflow_debug, frac_round_intermediate} = {hidden_round, frac} + (FRAC_WIDTH+1)'(roundup);
-    assign frac_out = frac_round_intermediate[FRAC_WIDTH-1:0] >> frac_overflow;
+    assign {frac_overflow, frac_out} = frac + (FRAC_WIDTH)'(roundup);
     assign overflowExp = (frac_overflow & &expo[EXPO_WIDTH-1:1]) | expo_overflow_round;
     assign expo_out = expo + EXPO_WIDTH'(frac_overflow);
     assign underflowExp = ~(hidden_round) & |frac_out & fflags[0]; //Underflow only occurs if inexact

@@ -205,7 +205,7 @@ module fp_add_madd_fused
 
 
     assign same_expo = ~|expo_diff[2] | (expo_diff[2] == 1 & rs2_frac[2][FRAC_WIDTH+1]); //asserted if input expo_diff==0; or if FMA_ADD input expo_diff==1 and rs2's safe bit==1
-    assign output_zero = same_expo & result_zero;
+    assign output_zero = same_expo & result_zero & ~result_frac[1][FRAC_WIDTH+1];
     assign result_sign[1] = output_zero & (subtract[2]) ?
                             zero_result_sign[2] :
                             (~r_adder_carry_out & subtract[2]) ^ rs1_sign[2];
