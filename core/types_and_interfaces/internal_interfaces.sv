@@ -326,7 +326,7 @@ interface unsigned_sqrt_interface #(parameter DATA_WIDTH = 32);
     modport sqrt (output remainder, result, done, input radicand, start);
 endinterface
 
-interface renamer_interface #(parameter NUM_WB_GROUPS = 3, parameter READ_PORTS);
+interface renamer_interface #(parameter NUM_WB_GROUPS = 3, parameter READ_PORTS = 2);
     import riscv_types::*;
     import cva5_types::*;
 

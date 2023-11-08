@@ -159,7 +159,6 @@ module fp_div
     
     always_ff @(posedge clk) begin
         if (issue.new_request) begin
-            result_sign <= args.rs1.d.sign ^ args.rs2.d.sign;
             wb.id <= issue.id;
             wb.rm <= args.rm;
             wb.d2s <= args.single;

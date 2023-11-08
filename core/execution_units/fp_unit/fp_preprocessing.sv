@@ -112,8 +112,6 @@ module fp_preprocessing
     logic rs1_boxed, rs2_boxed;
     fp_shift_amt_t rs1_norm_shift, rs1_norm_shift_r;
     fp_shift_amt_t rs2_norm_shift, rs2_norm_shift_r;
-    logic rs1_norm_hidden;
-    logic rs2_norm_hidden;
     frac_d_t rs1_norm_frac, rs1_norm_frac_r;
     frac_d_t rs2_norm_frac, rs2_norm_frac_r;
 
@@ -132,7 +130,6 @@ module fp_preprocessing
         .hidden_double(hidden_double[0]),
         .hidden_single(hidden_single[0]),
         .prenormalize_shift(rs1_norm_shift),
-        .prenormalize_hidden(rs1_norm_hidden),
         .prenormalize_frac(rs1_norm_frac)
     );
 
@@ -146,7 +143,6 @@ module fp_preprocessing
         .hidden_double(hidden_double[1]),
         .hidden_single(),
         .prenormalize_shift(rs2_norm_shift),
-        .prenormalize_hidden(rs2_norm_hidden),
         .prenormalize_frac(rs2_norm_frac)
     );
 
@@ -160,7 +156,6 @@ module fp_preprocessing
         .hidden_double(),
         .hidden_single(),
         .prenormalize_shift(),
-        .prenormalize_hidden(),
         .prenormalize_frac()
     );
     
@@ -180,7 +175,7 @@ module fp_preprocessing
 
 
     //Swap calculation
-    logic[EXPO_WIDTH:0] expo_diff, expo_diff_r;    
+    logic[EXPO_WIDTH:0] expo_diff;    
     logic swap, swap_r;
     logic rs1_smaller_mantissa;
     expo_d_t rs1_expo_padded;
@@ -212,10 +207,8 @@ module fp_preprocessing
     end
 
     always_ff @ (posedge clk) begin
-        if (accept_request) begin
-            expo_diff_r <= expo_diff;
+        if (accept_request)
             swap_r <= swap;
-        end
     end
 
     /////////////////////////////////////////////
@@ -225,7 +218,6 @@ module fp_preprocessing
     fp_t rs2_norm;
     fp_t rs1_swapped;
     fp_t rs2_swapped;
-    fp_shift_amt_t rs1_swapped_shift;
     fp_shift_amt_t rs2_swapped_shift;
     logic rs1_swapped_hidden;
     logic rs2_swapped_hidden;
@@ -242,11 +234,11 @@ module fp_preprocessing
         if (swap_r) begin
             {rs1_swapped, rs2_swapped} = {rs2_norm, rs1_norm};
             {rs1_swapped_hidden, rs2_swapped_hidden} = {hidden_r[1], hidden_r[0]};
-            {rs1_swapped_shift, rs2_swapped_shift} = {rs2_norm_shift_r, rs1_norm_shift_r};
+            rs2_swapped_shift = rs1_norm_shift_r;
         end else begin
             {rs1_swapped, rs2_swapped} = {rs1_norm, rs2_norm};
             {rs1_swapped_hidden, rs2_swapped_hidden} = {hidden_r[0], hidden_r[1]};
-            {rs1_swapped_shift, rs2_swapped_shift} = {rs1_norm_shift_r, rs2_norm_shift_r};
+            rs2_swapped_shift = rs2_norm_shift_r;
         end
     end
 

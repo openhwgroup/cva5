@@ -42,7 +42,6 @@ module fp_rs_preprocess
 
         //Pre normalization
         output fp_shift_amt_t prenormalize_shift,
-        output logic prenormalize_hidden,
         output frac_d_t prenormalize_frac
     );
 
@@ -87,26 +86,27 @@ module fp_rs_preprocess
     //Done by shifting to set the implicit leading 1 (required by many execution units for subnormal numbers)
     //Does CLZ + shift in one cycle
     logic[EXPO_WIDTH_F-1:0] exponent_add;
-    logic[FRAC_WIDTH:0] shift_arr;
+    logic[FRAC_WIDTH-1:0] shift_arr;
+    logic clz_hidden;
     logic[FRAC_WIDTH+1:0] clz_arr;
     logic[$clog2(FRAC_WIDTH+2)-1:0] clz_count;
 
     //Set up the array for shifting
     always_comb begin
         if (single) begin
+            clz_hidden = hidden_single;
             shift_arr = '0;
-            shift_arr[FRAC_WIDTH] = hidden_single;
             if (is_boxed)
                 shift_arr[FRAC_WIDTH-1 -: FRAC_WIDTH_F] = in.s.frac;
-            else //TODO: Does this matter?
-                shift_arr[FRAC_WIDTH-1] = 1;
         end
-        else
-            shift_arr = {hidden_double, in.d.frac};
+        else begin
+            clz_hidden = hidden_double;
+            shift_arr = in.d.frac;
+        end
     end
 
     //Check leading zero to get shift count
-    assign clz_arr = {shift_arr, 1'b1}; //Pad to ensure the count is always accurate
+    assign clz_arr = {clz_hidden, shift_arr, 1'b1}; //Pad to ensure the count is always accurate
     clz #(.WIDTH(FRAC_WIDTH+2)) frac_clz (
         .clz_input(clz_arr),
         .clz(clz_count),
@@ -115,7 +115,7 @@ module fp_rs_preprocess
     
     //Do the normalization shift
     always_comb begin
-        {prenormalize_hidden, prenormalize_frac} = shift_arr << clz_count;
+        prenormalize_frac = shift_arr << clz_count;
         prenormalize_shift = '0;
         if (~single)
             prenormalize_shift[$clog2(FRAC_WIDTH)-1:0] = clz_count[$clog2(FRAC_WIDTH)-1:0];

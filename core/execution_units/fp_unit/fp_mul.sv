@@ -137,15 +137,15 @@ module fp_mul
     //Second half of the multiplication
     //Exponent logic depends on the presence of subnormal numbers
     logic[EXPO_WIDTH+1:0] signed_expo;
-    logic[EXPO_WIDTH+1:0] neg_signed_expo;
+    logic[EXPO_WIDTH:0] neg_signed_expo;
     logic[EXPO_WIDTH:0] intermediate_expo;
     logic intermediate_expo_is_zero;
 
     //Negative intermediate expo -> subnormal result
     //To normalize a subnormal result, the exponent is set to abs(intermediate expo), and the frac is right shifted for the same amount. Normalization handles driving the expo_norm to 0
     assign signed_expo = {1'b0, rs1_expo[1]} + ({1'b0, rs2_expo[1]} - {1'b0, rs2_prenormalize_shift_amt[1]}) - {2'b0, {(EXPO_WIDTH-1){1'b1}}};
-    assign neg_signed_expo = -signed_expo;
-    assign intermediate_expo = signed_expo[EXPO_WIDTH+1] ? neg_signed_expo[EXPO_WIDTH:0] : signed_expo[EXPO_WIDTH:0];
+    assign neg_signed_expo = -signed_expo[EXPO_WIDTH:0];
+    assign intermediate_expo = signed_expo[EXPO_WIDTH+1] ? neg_signed_expo : signed_expo[EXPO_WIDTH:0];
     assign intermediate_expo_is_zero = ~|signed_expo;
 
     //Pipelining

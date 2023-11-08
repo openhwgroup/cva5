@@ -69,9 +69,6 @@ module fp_add
     logic[FRAC_WIDTH+1:0] rs2_frac[0:0];
     grs_t rs1_grs[1:0];
     grs_t temp_rs2_grs;
-    logic same_expo[2:0];
-    //Is the MSB of expo diff always 0?
-    assign same_expo[0] = ~|args.expo_diff | (args.expo_diff == 1 & rs2_frac[0][FRAC_WIDTH+1]);
     
     always_comb begin
         if (~args.swap) begin
@@ -137,7 +134,6 @@ module fp_add
             subtract[1] <= subtract[0];
             zero_result_sign[1] <= zero_result_sign[0];
 
-            same_expo[1] <= same_expo[0];
             rs1_sign[1] <= rs1_sign[0];
             rs1_expo[1] <= rs1_expo[0];
             rs1_expo_overflow[1] <= rs1_expo_overflow[0];
@@ -202,7 +198,6 @@ module fp_add
             subtract[2] <= subtract[1];
             zero_result_sign[2] <= zero_result_sign[1];
 
-            same_expo[2] <= same_expo[1];
             rs1_sign[2] <= rs1_sign[1];
             rs1_expo[2] <= rs1_expo[1];
             result_expo_zero <= ~|rs1_expo[1];
