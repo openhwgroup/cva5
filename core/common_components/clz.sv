@@ -1,5 +1,5 @@
 /*
- * Copyright © 2018 Eric Matthews,  Lesley Shannon
+ * Copyright © 2023 Chris Keilbart, Lesley Shannon
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,48 +17,62 @@
  * Reconfigurable Computing Lab, Simon Fraser University.
  *
  * Author(s):
- *             Eric Matthews <ematthew@sfu.ca>
+ *             Chris Keilbart <ckeilbar@sfu.ca>
  */
 
 module clz
-        (
-        input logic [31:0] clz_input,
-        output logic [4:0] clz
-        );
 
-    logic [1:0] low_order_clz [7:0];
-    logic [7:0] sub_clz;
+    #(
+        parameter WIDTH = 32
+    )
+    (
+        input logic[WIDTH-1:0] clz_input,
+        output logic[$clog2(WIDTH)-1:0] clz,
+        output logic zero
+    );
 
-    logic [1:0] upper_lower [3:0];
-    //////////////////////////////////////////
-    /* CLZ in groups of 4-bits (optimized for 6-input LUTs)
-     *  Upper 3 bits of CLZ calculated directly from the subgroups
-     *  Lower order bits [1:0] determined for each subgroup
-     *  Lower order bits muxed with neighbor before final 4-1 mux using highest order bits [4:3]
-     */
-    //////////////////////////////////////////
+    //Based on "Design of Leading Zero Counters on FPGAs" by Perri et al. 2022 (which is optimized for 6-input LUTs)
 
-    //31-28 index: 0, 3-0 index: 7
-    const logic [1:0] clz_low_table [8] = '{2'd3, 2'd2, 2'd1, 2'd1, 2'd0, 2'd0, 2'd0, 2'd0};
-    always_comb begin
-        for (int i=0; i<8; i++) begin
-            sub_clz[7-i] = ~|clz_input[(i*4) +: 4];
-            low_order_clz[7-i] = clz_low_table[clz_input[(i*4) + 1 +: 3]];
+    //It is possible to unroll this and implement it without recursion
+    //However, this significantly hurts readability especially with regards to the clz signal
+
+    localparam TREE_WIDTH = 2**$clog2(WIDTH);
+    localparam TREE_CLZ_WIDTH = $clog2(WIDTH)-1;
+    localparam HALF_TREE_WIDTH = TREE_WIDTH/2;
+    localparam WIDTH_DIFFERENCE = TREE_WIDTH - WIDTH;
+
+    generate if (WIDTH == 2) begin : gen_base_case
+            //Base case
+            assign zero = ~(clz_input[1] | clz_input[0]);
+            assign clz[0] = ~clz_input[1] & clz_input[0];
         end
+        else begin : gen_recursive
+            logic[TREE_WIDTH-1:0] padded_input;
+            if (WIDTH_DIFFERENCE != 0) //Pad input on right if width is not a power of 2
+                assign padded_input = {clz_input, {WIDTH_DIFFERENCE{1'b0}}};
+            else
+                assign padded_input = clz_input;
+            logic[TREE_CLZ_WIDTH-1:0] upper_clz;
+            logic[TREE_CLZ_WIDTH-1:0] lower_clz;
+            logic upper_zero;
+            logic lower_zero;
+            assign zero = upper_zero & lower_zero;
+            assign clz[$clog2(WIDTH)-1] = upper_zero;
 
-        clz[4] = &sub_clz[3:0]; //upper 16 all zero
-        clz[3] = clz[4] ? &sub_clz[5:4] : &sub_clz[1:0];//upper 24 zero, or first 8 zero
-        clz[2] =
-            (sub_clz[0] & ~sub_clz[1]) |
-            (&sub_clz[2:0] & ~sub_clz[3]) |
-            (&sub_clz[4:0] & ~sub_clz[5]) |
-            (&sub_clz[6:0]);
+            clz #(.WIDTH(HALF_TREE_WIDTH)) upper_tree (
+                .clz_input(padded_input[TREE_WIDTH-1:HALF_TREE_WIDTH]),
+                .clz(upper_clz),
+                .zero(upper_zero)
+            );
+            clz #(.WIDTH(HALF_TREE_WIDTH)) lower_tree (
+                .clz_input(padded_input[HALF_TREE_WIDTH-1:0]),
+                .clz(lower_clz),
+                .zero(lower_zero)
+            );
 
-        for (int i=0; i<8; i+=2) begin
-            upper_lower[i/2] = low_order_clz[{i[2:1],  sub_clz[i]}];
+            for (genvar i = 0; i < TREE_CLZ_WIDTH; i++) //Combine tree outputs
+                assign clz[i] = (~upper_zero & upper_clz[i]) | (upper_zero & lower_clz[i]);
         end
-
-        clz[1:0] = upper_lower[clz[4:3]];
-    end
+    endgenerate
 
 endmodule

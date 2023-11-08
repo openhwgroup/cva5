@@ -28,6 +28,7 @@ module cva5
     import l2_config_and_types::*;
     import riscv_types::*;
     import cva5_types::*;
+    import fpu_types::*;
 
     #(
         parameter cpu_config_t CONFIG = EXAMPLE_CONFIG
@@ -49,7 +50,7 @@ module cva5
 
         input interrupt_t s_interrupt,
         input interrupt_t m_interrupt
-        );
+    );
 
     ////////////////////////////////////////////////////
     //Connecting Signals
@@ -68,11 +69,14 @@ module cva5
     ras_interface ras();
 
     issue_packet_t issue;
-    register_file_issue_interface #(.NUM_WB_GROUPS(CONFIG.NUM_WB_GROUPS)) rf_issue();
+    register_file_issue_interface #(.NUM_WB_GROUPS(CONFIG.NUM_WB_GROUPS), .READ_PORTS(REGFILE_READ_PORTS), .DATA_WIDTH(32)) rf_issue();
+    register_file_issue_interface #(.NUM_WB_GROUPS(2), .READ_PORTS(3), .DATA_WIDTH(FLEN)) fp_rf_issue();
 
     logic [MAX_NUM_UNITS-1:0] unit_needed;
     logic [MAX_NUM_UNITS-1:0][REGFILE_READ_PORTS-1:0] unit_uses_rs;
+    logic [1:0][2:0] fp_unit_uses_rs;
     logic [MAX_NUM_UNITS-1:0] unit_uses_rd;
+    logic [1:0] fp_unit_uses_rd;
 
     logic [31:0] constant_alu;
 
@@ -106,28 +110,39 @@ module cva5
     logic decode_advance;
     decode_packet_t decode;   
     logic decode_uses_rd;
+    logic fp_decode_uses_rd;
     rs_addr_t decode_rd_addr;
     exception_sources_t decode_exception_unit;
     logic decode_is_store;
     phys_addr_t decode_phys_rd_addr;
+    phys_addr_t fp_decode_phys_rd_addr;
     phys_addr_t decode_phys_rs_addr [REGFILE_READ_PORTS];
+    phys_addr_t fp_decode_phys_rs_addr [3];
     logic [$clog2(CONFIG.NUM_WB_GROUPS)-1:0] decode_rs_wb_group [REGFILE_READ_PORTS];
+    logic fp_decode_rs_wb_group [3];
+    logic [2:0] dyn_rm;
 
         //ID freeing
     retire_packet_t wb_retire;
+    retire_packet_t fp_wb_retire;
     retire_packet_t store_retire;
     id_t retire_ids [RETIRE_PORTS];
     id_t retire_ids_next [RETIRE_PORTS];
     logic retire_port_valid [RETIRE_PORTS];
     logic [LOG2_RETIRE_PORTS : 0] retire_count;
         //Writeback
-    unit_writeback_interface unit_wb [MAX_NUM_UNITS]();
+    unit_writeback_interface #(.DATA_WIDTH(32)) unit_wb [MAX_NUM_UNITS]();
+    unit_writeback_interface #(.DATA_WIDTH(FLEN)) fp_unit_wb [2]();
     wb_packet_t wb_packet [CONFIG.NUM_WB_GROUPS];
+    fp_wb_packet_t fp_wb_packet [2];
     phys_addr_t wb_phys_addr [CONFIG.NUM_WB_GROUPS];
+    phys_addr_t fp_wb_phys_addr [2];
+    logic [4:0] fflag_wmask;
          //Exception
     logic [31:0] oldest_pc;
 
-    renamer_interface #(.NUM_WB_GROUPS(CONFIG.NUM_WB_GROUPS)) decode_rename_interface ();
+    renamer_interface #(.NUM_WB_GROUPS(CONFIG.NUM_WB_GROUPS), .READ_PORTS(REGFILE_READ_PORTS)) decode_rename_interface ();
+    renamer_interface #(.NUM_WB_GROUPS(2), .READ_PORTS(3)) fp_decode_rename_interface ();
 
     //Global Control
     exception_interface exception [NUM_EXCEPTION_SOURCES]();
@@ -150,11 +165,15 @@ module cva5
     //Decode Unit and Fetch Unit
     logic issue_stage_ready;
     phys_addr_t issue_phys_rs_addr [REGFILE_READ_PORTS];
+    phys_addr_t fp_issue_phys_rs_addr [3];
     rs_addr_t issue_rs_addr [REGFILE_READ_PORTS];
+    rs_addr_t fp_issue_rs_addr [3];
     logic [$clog2(CONFIG.NUM_WB_GROUPS)-1:0] issue_rd_wb_group;
+    logic fp_issue_rd_wb_group;
     logic illegal_instruction;
     logic instruction_issued;
     logic instruction_issued_with_rd;
+    logic fp_instruction_issued_with_rd;
 
     ////////////////////////////////////////////////////
     //Implementation
@@ -195,16 +214,22 @@ module cva5
         .decode (decode),
         .decode_advance (decode_advance),
         .decode_uses_rd (decode_uses_rd),
+        .fp_decode_uses_rd (fp_decode_uses_rd),
         .decode_rd_addr (decode_rd_addr),
         .decode_phys_rd_addr (decode_phys_rd_addr),
+        .fp_decode_phys_rd_addr (fp_decode_phys_rd_addr),
         .decode_exception_unit (decode_exception_unit),
         .decode_is_store (decode_is_store),
         .issue (issue),
         .instruction_issued (instruction_issued),
         .instruction_issued_with_rd (instruction_issued_with_rd),
+        .fp_instruction_issued_with_rd (fp_instruction_issued_with_rd),
         .wb_packet (wb_packet),
+        .fp_wb_packet (fp_wb_packet),
         .wb_phys_addr (wb_phys_addr),
+        .fp_wb_phys_addr (fp_wb_phys_addr),
         .wb_retire (wb_retire),
+        .fp_wb_retire (fp_wb_retire),
         .store_retire (store_retire),
         .retire_ids (retire_ids),
         .retire_ids_next (retire_ids_next),
@@ -293,7 +318,7 @@ module cva5
 
     ////////////////////////////////////////////////////
     //Renamer
-    renamer #(.CONFIG(CONFIG)) 
+    renamer #(.NUM_WB_GROUPS(CONFIG.NUM_WB_GROUPS), .READ_PORTS(REGFILE_READ_PORTS), .RENAME_ZERO(0)) 
     renamer_block (
         .clk (clk),
         .rst (rst),
@@ -307,9 +332,7 @@ module cva5
 
     ////////////////////////////////////////////////////
     //Decode/Issue
-    decode_and_issue #(
-        .CONFIG (CONFIG)
-    )
+    decode_and_issue #(.CONFIG(CONFIG))
     decode_and_issue_block (
         .clk (clk),
         .rst (rst),
@@ -318,22 +341,34 @@ module cva5
         .decode_advance (decode_advance),
         .unit_needed (unit_needed),
         .unit_uses_rs (unit_uses_rs),
+        .fp_unit_uses_rs (fp_unit_uses_rs),
         .unit_uses_rd (unit_uses_rd),
+        .fp_unit_uses_rd (fp_unit_uses_rd),
         .renamer (decode_rename_interface),
+        .fp_renamer (fp_decode_rename_interface),
         .decode_uses_rd (decode_uses_rd),
+        .fp_decode_uses_rd (fp_decode_uses_rd),
         .decode_rd_addr (decode_rd_addr),
         .decode_exception_unit (decode_exception_unit),
         .decode_phys_rd_addr (decode_phys_rd_addr),
+        .fp_decode_phys_rd_addr (fp_decode_phys_rd_addr),
         .decode_phys_rs_addr (decode_phys_rs_addr),
+        .fp_decode_phys_rs_addr (fp_decode_phys_rs_addr),
         .decode_rs_wb_group (decode_rs_wb_group),
+        .fp_decode_rs_wb_group (fp_decode_rs_wb_group),
         .instruction_issued (instruction_issued),
         .instruction_issued_with_rd (instruction_issued_with_rd),
+        .fp_instruction_issued_with_rd (fp_instruction_issued_with_rd),
         .issue (issue),
         .issue_rs_addr (issue_rs_addr),
+        .fp_issue_rs_addr (fp_issue_rs_addr),
         .issue_stage_ready (issue_stage_ready),
         .issue_phys_rs_addr (issue_phys_rs_addr),
+        .fp_issue_phys_rs_addr (fp_issue_phys_rs_addr),
         .issue_rd_wb_group (issue_rd_wb_group),
+        .fp_issue_rd_wb_group (fp_issue_rd_wb_group),
         .rf (rf_issue),
+        .fp_rf (fp_rf_issue),
         .constant_alu (constant_alu),
         .unit_issue (unit_issue),
         .gc (gc),
@@ -343,7 +378,7 @@ module cva5
 
     ////////////////////////////////////////////////////
     //Register File
-    register_file #(.CONFIG(CONFIG))
+    register_file #(.NUM_WB_GROUPS(CONFIG.NUM_WB_GROUPS), .READ_PORTS(REGFILE_READ_PORTS), .PORT_ZERO_IS_SINGLE_CYCLE(1), .USE_ZERO(0), .WB_PACKET_TYPE(wb_packet_t))
     register_file_block (
         .clk (clk),
         .rst (rst),
@@ -406,13 +441,20 @@ module cva5
         .issue_stage_ready (issue_stage_ready),
         .unit_needed (unit_needed[LS_ID]),
         .uses_rs (unit_uses_rs[LS_ID]),
+        .fp_uses_rs (fp_unit_uses_rs[0]),
         .uses_rd (unit_uses_rd[LS_ID]),
+        .fp_uses_rd (fp_unit_uses_rd[0]),
         .decode_is_store (decode_is_store),
         .instruction_issued_with_rd (instruction_issued_with_rd),
+        .fp_instruction_issued_with_rd (fp_instruction_issued_with_rd),
         .issue_rs_addr (issue_rs_addr),
+        .fp_issue_rs_addr (fp_issue_rs_addr),
         .issue_rd_wb_group (issue_rd_wb_group),
+        .fp_issue_rd_wb_group (fp_issue_rd_wb_group),
         .rs2_inuse (rf_issue.inuse[RS2]),
+        .fp_rs2_inuse (fp_rf_issue.inuse[RS2]),
         .rf (rf_issue.data),
+        .fp_rf (fp_rf_issue.data),
         .issue (unit_issue[LS_ID]),
         .dcache_on (1'b1), 
         .clear_reservation (1'b0), 
@@ -427,10 +469,12 @@ module cva5
         .dwishbone (dwishbone),                                       
         .data_bram (data_bram),
         .wb_packet (wb_packet),
+        .fp_wb_packet (fp_wb_packet),
         .store_retire (store_retire),
         .exception (exception[LS_EXCEPTION]),
         .load_store_status(load_store_status),
-        .wb (unit_wb[LS_ID])
+        .wb (unit_wb[LS_ID]),
+        .fp_wb (fp_unit_wb[0])
     );
 
     generate if (CONFIG.INCLUDE_S_MODE) begin : gen_dtlb_dmmu
@@ -477,6 +521,8 @@ module cva5
             .issue (unit_issue[CSR_ID]), 
             .wb (unit_wb[CSR_ID]),
             .current_privilege(current_privilege),
+            .fflag_wmask (fflag_wmask),
+            .dyn_rm (dyn_rm),
             .interrupt_taken(interrupt_taken),
             .interrupt_pending(interrupt_pending),
             .processing_csr(processing_csr),
@@ -489,7 +535,6 @@ module cva5
             .mret(mret),
             .sret(sret),
             .epc(epc),
-            .wb_retire (wb_retire),
             .retire_ids(retire_ids),
             .retire_count (retire_count),
             .s_interrupt(s_interrupt),
@@ -519,8 +564,6 @@ module cva5
         .mret(mret),
         .sret(sret),
         .epc(epc),
-        .wb_retire (wb_retire),
-        .retire_ids (retire_ids),
         .retire_ids_next (retire_ids_next),
         .interrupt_taken(interrupt_taken),
         .interrupt_pending(interrupt_pending),
@@ -585,16 +628,72 @@ module cva5
     //Writeback
     generate for (genvar i = 0; i < CONFIG.NUM_WB_GROUPS; i++) begin : gen_wb
         writeback #(
-            .CONFIG (CONFIG),
             .NUM_WB_UNITS (get_num_wb_units(CONFIG.WB_GROUP[i])),
             .WB_INDEX (CONFIG.WB_GROUP[i])
         )
         writeback_block (
-            .clk (clk),
-            .rst (rst),
             .wb_packet (wb_packet[i]),
             .unit_wb (unit_wb)
         );
+    end endgenerate
+
+    ////////////////////////////////////////////////////
+    //FPU
+    generate if (CONFIG.INCLUDE_UNIT.FPU) begin : gen_fpu
+
+        fp_writeback fp_writeback_block (
+            .unit_wb (fp_unit_wb),
+            .wb_packet (fp_wb_packet)
+        );
+
+        fpu_top #(.CONFIG(CONFIG))
+        fpu_block (
+            .clk (clk),
+            .rst (rst),
+            .decode_stage (decode),
+            .unit_needed (unit_needed[FPU_ID]),
+            .uses_rs (unit_uses_rs[FPU_ID]),
+            .fp_uses_rs (fp_unit_uses_rs[1]),
+            .uses_rd (unit_uses_rd[FPU_ID]),
+            .fp_uses_rd (fp_unit_uses_rd[1]),
+            .issue_stage_ready (issue_stage_ready),
+            .dyn_rm (dyn_rm),
+            .int_rf (rf_issue.data),
+            .fp_rf (fp_rf_issue.data),
+            .issue (unit_issue[FPU_ID]),
+            .int_wb (unit_wb[FPU_ID]),
+            .fp_wb (fp_unit_wb[1]),
+            .fflags (fflag_wmask)
+        );
+
+        register_file #(.NUM_WB_GROUPS(2), .READ_PORTS(3), .USE_ZERO(1), .PORT_ZERO_IS_SINGLE_CYCLE(0), .WB_PACKET_TYPE(fp_wb_packet_t))
+        fp_register_file_block (
+            .clk (clk),
+            .rst (rst),
+            .gc (gc),
+            .decode_phys_rs_addr (fp_decode_phys_rs_addr),
+            .decode_phys_rd_addr (fp_decode_phys_rd_addr),
+            .decode_rs_wb_group (fp_decode_rs_wb_group),
+            .decode_advance (decode_advance),
+            .decode_uses_rd (fp_decode_uses_rd),
+            .decode_rd_addr ('x),
+            .rf_issue (fp_rf_issue),
+            .commit (fp_wb_packet),
+            .wb_phys_addr (fp_wb_phys_addr)
+        );
+
+        renamer #(.NUM_WB_GROUPS(2), .READ_PORTS(3), .RENAME_ZERO(1)) 
+        fp_renamer_block (
+            .clk (clk),
+            .rst (rst),
+            .gc (gc),
+            .decode_advance (decode_advance),
+            .decode (fp_decode_rename_interface),
+            .issue (issue),
+            .instruction_issued_with_rd (fp_instruction_issued_with_rd),
+            .wb_retire (fp_wb_retire)
+        );
+
     end endgenerate
 
     ////////////////////////////////////////////////////

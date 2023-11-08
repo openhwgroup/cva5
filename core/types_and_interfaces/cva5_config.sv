@@ -33,7 +33,7 @@ package cva5_config;
     ////////////////////////////////////////////////////
     //CSR Options
     typedef struct packed {
-        int unsigned  COUNTER_W; //CSR counter width (33-64 bits): 48-bits --> 32 days @ 100MHz
+        int unsigned COUNTER_W; //CSR counter width (33-64 bits): 48-bits --> 32 days @ 100MHz
         bit MCYCLE_WRITEABLE;
         bit MINSTR_WRITEABLE;
         bit MTVEC_WRITEABLE;
@@ -107,12 +107,13 @@ package cva5_config;
     //   - unit_id_enum_t
     //ensuring that the bit index in units_t matches the enum value in unit_id_enum_t
     //Additionally, writeback units must be grouped before non-writeback units
-    localparam MAX_NUM_UNITS = 8;
+    localparam MAX_NUM_UNITS = 9;
     typedef struct packed {
         bit IEC;
         bit BR;
         //End of Write-Back Units
         bit CUSTOM;
+        bit FPU;
         bit CSR;
         bit DIV;
         bit MUL;
@@ -121,10 +122,11 @@ package cva5_config;
     } units_t;
 
     typedef enum bit [$clog2(MAX_NUM_UNITS)-1:0] {
-        IEC_ID = 7,
-        BR_ID = 6,
+        IEC_ID = 8,
+        BR_ID = 7,
         //End of Write-Back Units (insert new writeback units here)
-        CUSTOM_ID = 5,
+        CUSTOM_ID = 6,
+        FPU_ID = 5,
         CSR_ID = 4,
         DIV_ID = 3,
         MUL_ID = 2,
@@ -224,7 +226,7 @@ package cva5_config;
     localparam wb_group_config_t EXAMPLE_WB_GROUP_CONFIG = '{
         0 : '{0: ALU_ID, default : NON_WRITEBACK_ID},
         1 : '{0: LS_ID, default : NON_WRITEBACK_ID},
-        2 : '{0: MUL_ID, 1: DIV_ID, 2: CSR_ID, 3: CUSTOM_ID, default : NON_WRITEBACK_ID},
+        2 : '{0: MUL_ID, 1: DIV_ID, 2: CSR_ID, 3: FPU_ID, 4: CUSTOM_ID, default : NON_WRITEBACK_ID},
         default : '{default : NON_WRITEBACK_ID}
     };
 
@@ -240,6 +242,7 @@ package cva5_config;
             MUL : 1,
             DIV : 1,
             CSR : 1,
+            FPU : 1,
             CUSTOM : 0,
             BR : 1,
             IEC : 1
@@ -349,17 +352,28 @@ package cva5_config;
     ////////////////////////////////////////////////////
     //ID limit
     //MAX_IDS restricted to a power of 2
-    localparam MAX_IDS = 16; //8 sufficient for rv32im configs
+    localparam MAX_IDS = 16; //8 sufficient for rv32imd configs
 
     ////////////////////////////////////////////////////
     //Number of commit ports
     localparam RETIRE_PORTS = 2; //min 1. (Non-powers of two supported) > 1 is recommended to allow stores to commit sooner
     localparam REGFILE_READ_PORTS = 2; //min 2, for RS1 and RS2. (Non-powers of two supported)
-    typedef enum bit {
+    typedef enum {
         RS1 = 0,
-        RS2 = 1
-    } rs1_index_t;
+        RS2 = 1,
+        RS3 = 2
+    } rs_index_t;
 
+    ////////////////////////////////////////////////////
+    //FP number widths
+    localparam EXPO_WIDTH = 11; //11 is compliant
+    localparam FRAC_WIDTH = 52; //52 is compliant
+    localparam EXPO_WIDTH_F = 8; //8 is compliant
+    localparam FRAC_WIDTH_F = 23; //23 is compliant
+    localparam GRS_WIDTH = FRAC_WIDTH*2; //Should be FRAC_WIDTH*2 for full compliance
+    //Do not change these values, they are derived from the previous
+    localparam FLEN = 1+EXPO_WIDTH+FRAC_WIDTH; //Single precision (32 bits)
+    localparam FLEN_F = 1+EXPO_WIDTH_F+FRAC_WIDTH_F; //Double precision (64 bits)
 
     ////////////////////////////////////////////////////
     //Exceptions

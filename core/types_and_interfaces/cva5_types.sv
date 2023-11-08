@@ -70,8 +70,10 @@ package cva5_types;
 
         rs_addr_t rd_addr;
         phys_addr_t phys_rd_addr;
+        phys_addr_t fp_phys_rd_addr;
 
         logic uses_rd;
+        logic fp_uses_rd;
         logic is_multicycle;
         id_t id;
         exception_sources_t exception_unit;
@@ -113,6 +115,9 @@ package cva5_types;
         logic [31:0] data;
         id_t id;
         id_t id_needed;
+        logic fp;
+        logic double;
+        logic [FLEN-1:0] fp_data;
     } lsq_entry_t;
 
     typedef struct packed {
@@ -120,6 +125,9 @@ package cva5_types;
         logic [3:0] be;
         logic cache_op;
         logic [31:0] data;
+        logic fp;
+        logic double;
+        logic [FLEN-1:0] fp_data;
     } sq_entry_t;
 
     typedef struct packed {
@@ -133,6 +141,12 @@ package cva5_types;
         logic valid;
         logic [31:0] data;
     } wb_packet_t;
+
+    typedef struct packed {
+        id_t id;
+        logic valid;
+        logic[FLEN-1:0] data;
+    } fp_wb_packet_t;
 
     typedef struct packed{
         id_t id;
@@ -148,6 +162,8 @@ package cva5_types;
         logic [2:0] fn3;
         logic [31:0] data_in;
         id_t id;
+        logic fp_hold;
+        logic fp_done;
     } data_access_shared_inputs_t;
 
     typedef enum  {

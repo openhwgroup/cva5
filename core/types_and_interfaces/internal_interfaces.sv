@@ -64,8 +64,7 @@ interface unit_issue_interface;
     modport unit (output ready, input possible_issue, new_request, id);
 endinterface
 
-interface unit_writeback_interface #(parameter type PAYLOAD_TYPE = logic);
-    import riscv_types::*;
+interface unit_writeback_interface #(parameter DATA_WIDTH = 32);
     import cva5_types::*;
 
     //Handshaking
@@ -73,7 +72,7 @@ interface unit_writeback_interface #(parameter type PAYLOAD_TYPE = logic);
     logic done;
 
     id_t id;
-    logic [31:0] rd;
+    logic [DATA_WIDTH-1:0] rd;
 
     modport unit (input ack, output done, id, rd);
     modport wb (output ack, input done, id, rd);
@@ -316,21 +315,31 @@ interface unsigned_division_interface #(parameter DATA_WIDTH = 32);
     modport divider (output remainder, quotient, done, input dividend, dividend_CLZ, divisor, divisor_CLZ, divisor_is_zero, start);
 endinterface
 
-interface renamer_interface #(parameter NUM_WB_GROUPS = 3);
-    import cva5_config::*;
+interface unsigned_sqrt_interface #(parameter DATA_WIDTH = 32);
+    logic start;
+    logic [DATA_WIDTH-1:0] radicand;
+    logic [DATA_WIDTH-1:0] remainder;
+    logic [DATA_WIDTH-1:0] result;
+    logic done;
+
+    modport requester (input remainder, result, done, output radicand, start);
+    modport sqrt (output remainder, result, done, input radicand, start);
+endinterface
+
+interface renamer_interface #(parameter NUM_WB_GROUPS = 3, parameter READ_PORTS);
     import riscv_types::*;
     import cva5_types::*;
 
     rs_addr_t rd_addr;
-    rs_addr_t rs_addr [REGFILE_READ_PORTS];
+    rs_addr_t rs_addr [READ_PORTS];
     logic [$clog2(NUM_WB_GROUPS)-1:0] rd_wb_group;
     logic uses_rd;
     id_t id;
 
-    phys_addr_t phys_rs_addr [REGFILE_READ_PORTS];
+    phys_addr_t phys_rs_addr [READ_PORTS];
     phys_addr_t phys_rd_addr;
 
-    logic [$clog2(NUM_WB_GROUPS)-1:0] rs_wb_group [REGFILE_READ_PORTS];
+    logic [$clog2(NUM_WB_GROUPS)-1:0] rs_wb_group [READ_PORTS];
 
     modport renamer (
         input rd_addr, rs_addr, rd_wb_group, uses_rd, id,
@@ -342,16 +351,14 @@ interface renamer_interface #(parameter NUM_WB_GROUPS = 3);
     );
 endinterface
 
-interface register_file_issue_interface #(parameter NUM_WB_GROUPS = 3);
-    import cva5_config::*;
-    import riscv_types::*;
+interface register_file_issue_interface #(parameter NUM_WB_GROUPS = 3, parameter DATA_WIDTH = 32, parameter READ_PORTS = 2);
     import cva5_types::*;
 
     //read interface
-    phys_addr_t phys_rs_addr [REGFILE_READ_PORTS];
-    logic [$clog2(NUM_WB_GROUPS)-1:0] rs_wb_group [REGFILE_READ_PORTS];
-    logic [31:0] data [REGFILE_READ_PORTS];
-    logic inuse [REGFILE_READ_PORTS];
+    phys_addr_t phys_rs_addr [READ_PORTS];
+    logic [$clog2(NUM_WB_GROUPS)-1:0] rs_wb_group [READ_PORTS];
+    logic [DATA_WIDTH-1:0] data [READ_PORTS];
+    logic inuse [READ_PORTS];
 
     //issue write interface
     phys_addr_t phys_rd_addr;
@@ -364,5 +371,38 @@ interface register_file_issue_interface #(parameter NUM_WB_GROUPS = 3);
     modport issue (
         output phys_rs_addr, phys_rd_addr, single_cycle_or_flush, rs_wb_group,
         input data, inuse
+    );
+endinterface
+
+interface fp_intermediate_wb_interface;
+    import cva5_types::*;
+    import fpu_types::*;
+
+    logic ack;
+
+    id_t id;
+    logic done;
+    fp_t rd;
+    logic expo_overflow;
+    fflags_t fflags;
+    rm_t rm;
+    logic carry;
+    logic safe;
+    logic hidden;
+    grs_t grs;
+    fp_shift_amt_t clz;
+    logic right_shift;
+    fp_shift_amt_t right_shift_amt;
+    logic subnormal;
+    logic ignore_max_expo;
+    logic d2s;
+
+    modport unit (
+        input ack,
+        output id, done, rd, expo_overflow, fflags, rm, hidden, grs, clz, carry, safe, subnormal, right_shift, right_shift_amt, ignore_max_expo, d2s
+    );
+    modport wb (
+        output ack,
+        input id, done, rd, expo_overflow, fflags, rm, hidden, grs, clz, carry, safe, subnormal, right_shift, right_shift_amt, ignore_max_expo, d2s
     );
 endinterface

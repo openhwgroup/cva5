@@ -71,7 +71,7 @@ package riscv_types;
         LS_B_fn3 = 3'b000,
         LS_H_fn3 = 3'b001,
         LS_W_fn3 = 3'b010,
-        //unused 011
+        LS_D_fn3 = 3'b011,
         L_BU_fn3 = 3'b100,
         L_HU_fn3 = 3'b101
         //unused 110

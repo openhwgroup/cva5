@@ -27,7 +27,9 @@ module renamer
     import cva5_types::*;
 
     # (
-        parameter cpu_config_t CONFIG = EXAMPLE_CONFIG
+        parameter NUM_WB_GROUPS = 2,
+        parameter READ_PORTS = 2,
+        parameter RENAME_ZERO = 0 //If set, will use issue.fp_uses_rd instead of issue.uses_rd (in addition to what the name implies)
     )
 
     (
@@ -47,11 +49,11 @@ module renamer
         input retire_packet_t wb_retire
     );
     //////////////////////////////////////////
-    typedef struct packed{
+    typedef struct packed {
         rs_addr_t rd_addr;
         phys_addr_t spec_phys_addr;
         phys_addr_t previous_phys_addr;
-        logic [$clog2(CONFIG.NUM_WB_GROUPS)-1:0] previous_wb_group;
+        logic [$clog2(NUM_WB_GROUPS)-1:0] previous_wb_group;
     } renamer_metadata_t;
     renamer_metadata_t inuse_table_input;
     renamer_metadata_t inuse_table_output;
@@ -68,10 +70,10 @@ module renamer
     //Zero register is never renamed
     //If a renamed destination is flushed in the issue stage, state is rolled back
     //When an instruction reaches the retire stage it either commits or reverts its renaming depending on whether the instruction retires or is discarded
-    assign rename_valid = (~gc.fetch_flush) & decode_advance & decode.uses_rd & |decode.rd_addr;
+    assign rename_valid = (~gc.fetch_flush) & decode_advance & decode.uses_rd & (RENAME_ZERO | |decode.rd_addr);
 
     //Revert physcial address assignment on a flush
-    assign rollback = gc.fetch_flush & issue.stage_valid & issue.uses_rd & |issue.rd_addr;
+    assign rollback = gc.fetch_flush & issue.stage_valid & (RENAME_ZERO ? issue.fp_uses_rd : issue.uses_rd) & (RENAME_ZERO | |issue.rd_addr);
 
     //counter for indexing through memories for post-reset clearing/initialization
     lfsr #(.WIDTH(6), .NEEDS_RESET(0))
@@ -120,12 +122,12 @@ module renamer
     //Speculative rd-to-phys Table
     //On rollback restore the previous contents
     //During post reset init, initialize rd_to_phys with in-use list (lower 32 registers)
-    typedef struct packed{
+    typedef struct packed {
         phys_addr_t phys_addr;
-        logic [$clog2(CONFIG.NUM_WB_GROUPS)-1:0] wb_group;
+        logic [$clog2(NUM_WB_GROUPS)-1:0] wb_group;
     } spec_table_t;
-    rs_addr_t spec_table_read_addr [REGFILE_READ_PORTS+1];
-    spec_table_t spec_table_read_data [REGFILE_READ_PORTS+1];
+    rs_addr_t spec_table_read_addr [READ_PORTS+1];
+    spec_table_t spec_table_read_data [READ_PORTS+1];
 
     spec_table_t spec_table_next;
     spec_table_t spec_table_next_mux [4];
@@ -135,7 +137,7 @@ module renamer
     rs_addr_t spec_table_write_index;
     rs_addr_t spec_table_write_index_mux [4];
 
-    assign spec_table_update =  rename_valid | rollback | gc.init_clear | (wb_retire.valid & gc.writeback_supress);
+    assign spec_table_update = rename_valid | rollback | gc.init_clear | (wb_retire.valid & gc.writeback_supress);
 
     logic [1:0] spec_table_sel;
     
@@ -165,12 +167,12 @@ module renamer
     assign spec_table_next = spec_table_next_mux[spec_table_sel];
 
     assign spec_table_read_addr[0] = spec_table_write_index;
-    assign spec_table_read_addr[1+:REGFILE_READ_PORTS] = decode.rs_addr;
+    assign spec_table_read_addr[1+:READ_PORTS] = decode.rs_addr;
 
     lutram_1w_mr #(
         .DATA_TYPE(spec_table_t),
         .DEPTH(32),
-        .NUM_READ_PORTS(REGFILE_READ_PORTS+1)
+        .NUM_READ_PORTS(READ_PORTS+1)
     )
     spec_table_ram (
         .clk(clk),
@@ -188,11 +190,11 @@ module renamer
 
     ////////////////////////////////////////////////////
     //Renamed Outputs
-    generate for (genvar i = 0; i < REGFILE_READ_PORTS; i++) begin : gen_renamed_addrs
+    generate for (genvar i = 0; i < READ_PORTS; i++) begin : gen_renamed_addrs
         assign decode.phys_rs_addr[i] = spec_table_read_data[i+1].phys_addr;
         assign decode.rs_wb_group[i] = spec_table_read_data[i+1].wb_group;
     end endgenerate
-    assign decode.phys_rd_addr = |decode.rd_addr ? free_list.data_out : '0;
+    assign decode.phys_rd_addr = RENAME_ZERO | |decode.rd_addr ? free_list.data_out : '0;
 
     ////////////////////////////////////////////////////
     //End of Implementation
@@ -201,10 +203,10 @@ module renamer
     ////////////////////////////////////////////////////
     //Assertions
     rename_rd_zero_assertion:
-        assert property (@(posedge clk) disable iff (rst) (decode.rd_addr == 0) |-> (decode.phys_rd_addr == 0)) else $error("rd zero renamed");
+        assert property (@(posedge clk) disable iff (rst || RENAME_ZERO) (decode.rd_addr == 0) |-> (decode.phys_rd_addr == 0)) else $error("rd zero renamed");
 
-    for (genvar i = 0; i < REGFILE_READ_PORTS; i++) begin : rename_rs_zero_assertion
-        assert property (@(posedge clk) disable iff (rst) (decode.rs_addr[i] == 0) |-> (decode.phys_rs_addr[i] == 0)) else $error("rs zero renamed");
+    for (genvar i = 0; i < READ_PORTS; i++) begin : rename_rs_zero_assertion
+        assert property (@(posedge clk) disable iff (rst || RENAME_ZERO) (decode.rs_addr[i] == 0) |-> (decode.phys_rs_addr[i] == 0)) else $error("rs zero renamed");
     end
 
 endmodule

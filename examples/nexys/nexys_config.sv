@@ -28,7 +28,7 @@ package nexys_config;
     localparam wb_group_config_t NEXYS_WB_GROUP_CONFIG = '{
         0 : '{0: ALU_ID, default : NON_WRITEBACK_ID},
         1 : '{0: LS_ID, default : NON_WRITEBACK_ID},
-        2 : '{0: MUL_ID, 1: DIV_ID, 2: CSR_ID, 3: CUSTOM_ID, default : NON_WRITEBACK_ID},
+        2 : '{0: MUL_ID, 1: DIV_ID, 2: CSR_ID, 3: FPU_ID, 4: CUSTOM_ID, default : NON_WRITEBACK_ID},
         default : '{default : NON_WRITEBACK_ID}
     };
 
@@ -43,6 +43,7 @@ package nexys_config;
             MUL : 1,
             DIV : 1,
             CSR : 1,
+            FPU : 0,
             CUSTOM : 0,
             BR : 1,
             IEC : 1

@@ -28,9 +28,7 @@ module toggle_memory_set
     # (
         parameter DEPTH = 64,
         parameter NUM_WRITE_PORTS = 3,
-        parameter NUM_READ_PORTS = 2,
-        parameter WRITE_INDEX_FOR_RESET = 0,
-        parameter READ_INDEX_FOR_RESET = 0
+        parameter NUM_READ_PORTS = 2
     )
     (
         input logic clk,
