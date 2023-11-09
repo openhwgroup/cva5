@@ -29,7 +29,7 @@ module register_file
     #(
         parameter NUM_WB_GROUPS = 2,
         parameter READ_PORTS = 2,
-        parameter PORT_ZERO_IS_SINGLE_CYCLE = 1,
+        parameter PORT_ZERO_ABSENT = 0,
         parameter USE_ZERO = 0,
         parameter type WB_PACKET_TYPE = wb_packet_t
     )
@@ -54,6 +54,7 @@ module register_file
         input WB_PACKET_TYPE commit [NUM_WB_GROUPS],
         input phys_addr_t wb_phys_addr [NUM_WB_GROUPS]
     );
+    localparam TOGGLE_PORTS = NUM_WB_GROUPS+1+32'(PORT_ZERO_ABSENT);
     localparam DATA_WIDTH = $bits(commit[0].data);
     typedef logic [DATA_WIDTH-1:0] rs_data_t [READ_PORTS];
     rs_data_t regfile_rs_data [NUM_WB_GROUPS];
@@ -65,8 +66,8 @@ module register_file
 
     phys_addr_t inuse_read_addr [READ_PORTS*2];
     logic inuse [READ_PORTS*2];
-    logic toggle [1+NUM_WB_GROUPS];
-    phys_addr_t toggle_addr [1+NUM_WB_GROUPS];
+    logic toggle [TOGGLE_PORTS];
+    phys_addr_t toggle_addr [TOGGLE_PORTS];
     ////////////////////////////////////////////////////
     //Implementation
 
@@ -85,17 +86,16 @@ module register_file
         toggle[0] = decode_advance & decode_uses_rd & (USE_ZERO | |decode_rd_addr) & ~gc.fetch_flush;
         toggle_addr[0] = decode_phys_rd_addr;
 
-        toggle[1] = PORT_ZERO_IS_SINGLE_CYCLE ? rf_issue.single_cycle_or_flush : commit[0].valid & (USE_ZERO | |wb_phys_addr[0]);
-        toggle_addr[1] = PORT_ZERO_IS_SINGLE_CYCLE ? rf_issue.phys_rd_addr : wb_phys_addr[0];
-
-        for (int i = 1; i < NUM_WB_GROUPS; i++) begin
-            toggle[i+1] = commit[i].valid & (USE_ZERO | |wb_phys_addr[i]);
-            toggle_addr[i+1] = wb_phys_addr[i];
+        toggle[1] = rf_issue.single_cycle_or_flush;
+        toggle_addr[1] = rf_issue.phys_rd_addr;
+        for (int i = 1; i < NUM_WB_GROUPS+PORT_ZERO_ABSENT; i++) begin
+            toggle[i+1] = commit[i-PORT_ZERO_ABSENT].valid & (USE_ZERO | |wb_phys_addr[i-PORT_ZERO_ABSENT]);
+            toggle_addr[i+1] = wb_phys_addr[i-PORT_ZERO_ABSENT];
         end
     end
     toggle_memory_set # (
         .DEPTH (64),
-        .NUM_WRITE_PORTS (1+NUM_WB_GROUPS),
+        .NUM_WRITE_PORTS (TOGGLE_PORTS),
         .NUM_READ_PORTS (READ_PORTS*2)
     ) id_inuse_toggle_mem_set
     (

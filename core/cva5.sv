@@ -378,7 +378,7 @@ module cva5
 
     ////////////////////////////////////////////////////
     //Register File
-    register_file #(.NUM_WB_GROUPS(CONFIG.NUM_WB_GROUPS), .READ_PORTS(REGFILE_READ_PORTS), .PORT_ZERO_IS_SINGLE_CYCLE(1), .USE_ZERO(0), .WB_PACKET_TYPE(wb_packet_t))
+    register_file #(.NUM_WB_GROUPS(CONFIG.NUM_WB_GROUPS), .READ_PORTS(REGFILE_READ_PORTS), .PORT_ZERO_ABSENT(0), .USE_ZERO(0), .WB_PACKET_TYPE(wb_packet_t))
     register_file_block (
         .clk (clk),
         .rst (rst),
@@ -666,7 +666,7 @@ module cva5
             .fflags (fflag_wmask)
         );
 
-        register_file #(.NUM_WB_GROUPS(2), .READ_PORTS(3), .USE_ZERO(1), .PORT_ZERO_IS_SINGLE_CYCLE(0), .WB_PACKET_TYPE(fp_wb_packet_t))
+        register_file #(.NUM_WB_GROUPS(2), .READ_PORTS(3), .USE_ZERO(1), .PORT_ZERO_ABSENT(1), .WB_PACKET_TYPE(fp_wb_packet_t))
         fp_register_file_block (
             .clk (clk),
             .rst (rst),
