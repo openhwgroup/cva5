@@ -67,7 +67,6 @@ module decode_and_issue
         output logic fp_instruction_issued_with_rd,
         output issue_packet_t issue,
         output rs_addr_t issue_rs_addr [REGFILE_READ_PORTS],
-        output rs_addr_t fp_issue_rs_addr [3],
         output phys_addr_t issue_phys_rs_addr [REGFILE_READ_PORTS],
         output phys_addr_t fp_issue_phys_rs_addr [3],
         output logic [$clog2(CONFIG.NUM_WB_GROUPS)-1:0] issue_rd_wb_group,
@@ -198,7 +197,6 @@ module decode_and_issue
             issue.fn3 <= decode_instruction.fn3;
             issue.opcode <= decode.instruction[6:0];
             issue_rs_addr <= decode_rs_addr;
-            fp_issue_rs_addr <= fp_decode_rs_addr;
             issue_phys_rs_addr <= renamer.phys_rs_addr;
             fp_issue_phys_rs_addr <= fp_renamer.phys_rs_addr;
             issue_rs_wb_group <= renamer.rs_wb_group;

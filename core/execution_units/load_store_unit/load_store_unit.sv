@@ -52,7 +52,6 @@ module load_store_unit
         input logic rs2_inuse,
         input logic fp_rs2_inuse,
         input rs_addr_t issue_rs_addr [REGFILE_READ_PORTS],
-        input rs_addr_t fp_issue_rs_addr [3],
         input logic [$clog2(CONFIG.NUM_WB_GROUPS)-1:0] issue_rd_wb_group,
         input logic fp_issue_rd_wb_group,
         input logic [31:0] rf [REGFILE_READ_PORTS],
@@ -224,11 +223,12 @@ module load_store_unit
     } rd_attributes_t;
     rd_attributes_t rd_attributes;
 
-    lutram_1w_1r #(.DATA_TYPE(rd_attributes_t), .DEPTH(32))
+    //Store FP instructions in 32-64
+    lutram_1w_1r #(.DATA_TYPE(rd_attributes_t), .DEPTH(64))
     rd_to_id_table (
         .clk(clk),
-        .waddr(issue_stage.rd_addr),
-        .raddr(fp_instruction_issued_with_rd ? fp_issue_rs_addr[RS2] : issue_rs_addr[RS2]),
+        .waddr({fp_instruction_issued_with_rd, issue_stage.rd_addr}),
+        .raddr({issue_attr.is_fpu, issue_rs_addr[RS2]}),
         .ram_write(instruction_issued_with_rd | fp_instruction_issued_with_rd),
         .new_ram_data('{
             id : issue_stage.id,

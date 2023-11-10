@@ -167,7 +167,6 @@ module cva5
     phys_addr_t issue_phys_rs_addr [REGFILE_READ_PORTS];
     phys_addr_t fp_issue_phys_rs_addr [3];
     rs_addr_t issue_rs_addr [REGFILE_READ_PORTS];
-    rs_addr_t fp_issue_rs_addr [3];
     logic [$clog2(CONFIG.NUM_WB_GROUPS)-1:0] issue_rd_wb_group;
     logic fp_issue_rd_wb_group;
     logic illegal_instruction;
@@ -361,7 +360,6 @@ module cva5
         .fp_instruction_issued_with_rd (fp_instruction_issued_with_rd),
         .issue (issue),
         .issue_rs_addr (issue_rs_addr),
-        .fp_issue_rs_addr (fp_issue_rs_addr),
         .issue_stage_ready (issue_stage_ready),
         .issue_phys_rs_addr (issue_phys_rs_addr),
         .fp_issue_phys_rs_addr (fp_issue_phys_rs_addr),
@@ -448,7 +446,6 @@ module cva5
         .instruction_issued_with_rd (instruction_issued_with_rd),
         .fp_instruction_issued_with_rd (fp_instruction_issued_with_rd),
         .issue_rs_addr (issue_rs_addr),
-        .fp_issue_rs_addr (fp_issue_rs_addr),
         .issue_rd_wb_group (issue_rd_wb_group),
         .fp_issue_rd_wb_group (fp_issue_rd_wb_group),
         .rs2_inuse (rf_issue.inuse[RS2]),
