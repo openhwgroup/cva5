@@ -104,6 +104,7 @@ module sim_stats
         $display("  Divide : %-d (%.2f%%)", instruction_mix_stat_count[DIV_STAT], to_percent(instruction_mix_stat_count[DIV_STAT],instructions_retired - instruction_mix_stat_count[DIV_STAT]));
         $display("  Load : %-d (%.2f%%)", instruction_mix_stat_count[LOAD_STAT], to_percent(instruction_mix_stat_count[LOAD_STAT],instructions_retired - instruction_mix_stat_count[LOAD_STAT]));
         $display("  Store : %-d (%.2f%%)", instruction_mix_stat_count[STORE_STAT], to_percent(instruction_mix_stat_count[STORE_STAT],instructions_retired - instruction_mix_stat_count[STORE_STAT]));
+        $display("  FPU : %-d (%.2f%%)", instruction_mix_stat_count[FPU_STAT], to_percent(instruction_mix_stat_count[FPU_STAT],instructions_retired - instruction_mix_stat_count[FPU_STAT]));
         $display("  Misc : %-d (%.2f%%)", instruction_mix_stat_count[MISC_STAT], to_percent(instruction_mix_stat_count[MISC_STAT],instructions_retired - instruction_mix_stat_count[MISC_STAT]));
         $display("");
     endfunction

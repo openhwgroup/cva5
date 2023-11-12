@@ -240,6 +240,7 @@ package cva5_types;
         DIV_STAT,
         LOAD_STAT,
         STORE_STAT,
+        FPU_STAT,
         MISC_STAT
     } instruction_mix_stats_t;
 
