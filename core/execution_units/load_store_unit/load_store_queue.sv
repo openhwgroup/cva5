@@ -46,6 +46,7 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
         input retire_packet_t store_retire
     );
     localparam LOG2_SQ_DEPTH = $clog2(CONFIG.SQ_DEPTH);
+    localparam DOUBLE_MIN_WIDTH = FLEN >= 32 ? 32 : FLEN;
 
     typedef struct packed {
         logic [31:0] addr;
@@ -65,8 +66,7 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
     logic load_pop;
     logic load_addr_bit_3;
     logic [2:0] load_fn3;
-    logic load_fp_hold;
-    logic load_fp_done;
+    fp_ls_op_t load_type;
     logic store_pop;
     logic store_addr_bit_3;
     logic [31:0] store_data;
@@ -140,70 +140,92 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
     //A store will be selected only if no loads are ready
 
     generate
-    if (CONFIG.INCLUDE_UNIT.FPU && FLEN > 32) begin : gen_fp_split
-        //On the first pop of a double, the load/store on the upper 32 bits is done and the request is held
-        //The second pop loads/stores the lower 32 bits and actually pops the queue
-        //Double precision operations are always aligned on 8 byte boundaries
-        logic load_p2;
+    if (CONFIG.INCLUDE_UNIT.FPU) begin : gen_fpu_split
+        if (FLEN > 32) begin : gen_load_split
+            //Double precision loads are done across two cycles, higher word first
+            logic load_p2;
+            logic load_fp_hold;
+
+            assign load_fp_hold = ~load_p2 & lq.data_out.double;
+            assign load_pop = lsq.load_pop & ~load_fp_hold;
+            assign load_addr_bit_3 = load_fp_hold | lq.data_out.addr[2];
+            assign load_fn3 = lq.data_out.fp ? LS_W_fn3 : lq.data_out.fn3;
+           
+            always_comb begin
+                if (~lq.data_out.fp)
+                    load_type = INT_DONE;
+                else if (~lq.data_out.double)
+                    load_type = SINGLE_DONE;
+                else if (load_p2)
+                    load_type = DOUBLE_DONE;
+                else
+                    load_type = DOUBLE_HOLD;
+            end
+
+            always_ff @(posedge clk) begin
+                if (rst)
+                    load_p2 <= 0;
+                else if (lsq.load_pop)
+                    load_p2 <= load_fp_hold;
+                end
+        end else begin : gen_no_load_split
+            //All loads are single cycle (load only the upper word)
+            assign load_pop = lsq.load_pop;
+            assign load_addr_bit_3 = lq.data_out.addr[2] | lq.data_out.double;
+            assign load_fn3 = lq.data_out.fp ? LS_W_fn3 : lq.data_out.fn3;
+            always_comb begin
+                if (lq.data_out.double)
+                    load_type = DOUBLE_DONE;
+                else if (lq.data_out.fp)
+                    load_type = SINGLE_DONE;
+                else
+                    load_type = INT_DONE;
+            end
+        end
+
+        ////////////////////////////////////////////////////
+        //Stores
+        //Mux between integer stores, single precision stores, and double precision stores
+        //Double precision stores take 2 cycles, with the lowest 32 bits on the first cycle (even if FLEN <= 32)
+        //This is because some functions load double-precision data as integers and operate on them
+        //Therefore, reduced FP numbers must be stored as if they were full size
         logic store_p2;
         logic store_fp_hold;
-        logic store_fp_done;
-        
-        assign load_pop = lsq.load_pop & ~load_fp_hold;
-        assign load_addr_bit_3 = load_fp_hold | lq.data_out.addr[2];
-        assign load_fn3 = lq.data_out.fp ? LS_W_fn3 : lq.data_out.fn3;
-        assign load_fp_hold = ~load_p2 & lq.data_out.double;
-        assign load_fp_done = load_p2 | (lq.data_out.fp & ~lq.data_out.double);
 
-        assign store_pop = lsq.store_pop & ~store_fp_hold;
-        assign store_addr_bit_3 = store_fp_hold | sq.data_out.addr[2];
         assign store_fp_hold = ~store_p2 & sq.data_out.double;
-        assign store_fp_done = store_p2 | (sq.data_out.fp & ~sq.data_out.double);
-
-        always_comb begin
-            if (store_fp_hold)
-                store_data = {{(64-FLEN){1'b1}}, sq.data_out.fp_data[FLEN-1:32]};
-            else if (store_fp_done)
-                store_data = sq.data_out.fp_data[31:0];
-            else
-                store_data = sq.data_out.data;
-        end
+        assign store_pop = lsq.store_pop & ~store_fp_hold;
+        assign store_addr_bit_3 = sq.data_out.double ? store_p2 : sq.data_out.addr[2]; 
 
         always_ff @(posedge clk) begin
-            if (rst) begin
-                load_p2 <= 0;
+            if (rst)
                 store_p2 <= 0;
-            end
-            else begin
-                if (lsq.load_pop)
-                    load_p2 <= load_fp_hold;
-                if (lsq.store_pop)
-                    store_p2 <= store_fp_hold;
-            end
+            else if (lsq.store_pop)
+                store_p2 <= store_fp_hold;
         end
 
-    end else if (CONFIG.INCLUDE_UNIT.FPU && FLEN <= 32) begin : gen_fp_no_split
-        //There are FP memory operations but none need to be split
-        assign load_pop = lsq.load_pop;
-        assign load_addr_bit_3 = lq.data_out.addr[2];
-        assign load_fn3 = lq.data_out.fp ? LS_W_fn3 : lq.data_out.fn3;
-        assign load_fp_hold = 0;
-        assign load_fp_done = lq.data_out.fp;
-        assign store_pop = lsq.store_pop;
-        assign store_addr_bit_3 = sq.data_out.addr[2];
-        assign store_data = sq.data_out.fp ? {{(32-FLEN){1'b1}}, sq.data_out.fp_data} : sq.data_out.data;
-    end
-    else begin : gen_no_fpu_splitting
+        always_comb begin
+            store_data = '0;
+            if (sq.data_out.fp & ~sq.data_out.double) //Store single in upper bits
+                store_data[31-:FLEN_F] = sq.data_out.fp_data[FLEN_F-1:0];
+            else if (store_fp_hold) //First cycle of double - store lower bits (may just be 0)
+                store_data = 32'(sq.data_out.fp_data[DOUBLE_MIN_WIDTH-1:0]) << 64-FLEN;
+            else if (store_p2) //Second cycle of double - store upper bits
+                store_data[31-:DOUBLE_MIN_WIDTH] = sq.data_out.fp_data[FLEN-1-:DOUBLE_MIN_WIDTH];
+            else //Not FP
+                store_data = sq.data_out.data;
+        end
+    end else begin : gen_no_fpu
+        //Plain integer memory operations
         assign load_pop = lsq.load_pop;
         assign load_addr_bit_3 = lq.data_out.addr[2];
         assign load_fn3 = lq.data_out.fn3;
-        assign load_fp_hold = 0;
-        assign load_fp_done = 0;
+        assign load_type = INT_DONE;
         assign store_pop = lsq.store_pop;
         assign store_addr_bit_3 = sq.data_out.addr[2];
         assign store_data = sq.data_out.data;
     end
     endgenerate
+
     logic load_blocked;
     assign load_blocked = (lq.data_out.store_collision & (lq.data_out.sq_index != sq_oldest));
 
@@ -219,8 +241,7 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
         fn3 : load_fn3,
         data_in : 'x,
         id : lq.data_out.id,
-        fp_hold : load_fp_hold,
-        fp_done : load_fp_done
+        fp_op : load_type
     };
 
     assign lsq.store_data_out = '{
@@ -232,8 +253,7 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
         fn3 : 'x,
         data_in : store_data,
         id : 'x,
-        fp_hold : 'x,
-        fp_done : 'x
+        fp_op : fp_ls_op_t'('x)
     };
 
     assign lsq.sq_empty = sq.empty;

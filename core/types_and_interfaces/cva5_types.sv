@@ -153,6 +153,13 @@ package cva5_types;
         logic valid;
     } retire_packet_t;
 
+    typedef enum logic[1:0] {
+        INT_DONE,
+        SINGLE_DONE,
+        DOUBLE_HOLD,
+        DOUBLE_DONE
+    } fp_ls_op_t;
+
     typedef struct packed {
         logic [31:0] addr;
         logic load;
@@ -162,8 +169,7 @@ package cva5_types;
         logic [2:0] fn3;
         logic [31:0] data_in;
         id_t id;
-        logic fp_hold;
-        logic fp_done;
+        fp_ls_op_t fp_op;
     } data_access_shared_inputs_t;
 
     typedef enum  {

@@ -146,8 +146,7 @@ module load_store_unit
         logic [1:0] final_mux_sel;
         id_t id;
         logic [NUM_SUB_UNITS_W-1:0] subunit_id;
-        logic fp_hold;
-        logic fp_done;
+        fp_ls_op_t fp_op;
     } load_attributes_t;
     load_attributes_t  wb_attr;
 
@@ -415,8 +414,7 @@ module load_store_unit
         final_mux_sel : final_mux_sel,
         id : lsq.load_data_out.id,
         subunit_id : subunit_id,
-        fp_hold : lsq.load_data_out.fp_hold,
-        fp_done : lsq.load_data_out.fp_done
+        fp_op : lsq.load_data_out.fp_op
     };
     assign load_attributes.push = sub_unit_load_issue;
     assign load_attributes.potential_push = load_attributes.push;
@@ -553,21 +551,28 @@ module load_store_unit
     //FP buffering first load result
     logic[FLEN-1:0] fp_result;
     generate if (CONFIG.INCLUDE_UNIT.FPU && FLEN > 32) begin : gen_fp_load_buffering
-        logic[FLEN-32-1:0] saved_msb;
+        logic[31:0] saved_msb;
         always_ff @(posedge clk) begin
             if (rst)
                 saved_msb <= '1;
             else begin
-                if (load_complete & wb_attr.fp_hold)
-                    saved_msb <= unit_muxed_load_data[FLEN-32-1:0];
-                else if (load_complete & wb_attr.fp_done)
-                    saved_msb <= '1; //NaN boxing for SP
+                if (load_complete & wb_attr.fp_op == DOUBLE_HOLD)
+                    saved_msb <= unit_muxed_load_data;
+                else if (load_complete) //Boxing
+                    saved_msb <= '1;
             end
-        end 
-        assign fp_result = {saved_msb, unit_muxed_load_data};
+        end
+        always_comb begin
+            fp_result = '1;
+            fp_result[FLEN-1-:32] = saved_msb;
+            if (wb_attr.fp_op == SINGLE_DONE)
+                fp_result[FLEN_F-1:0] = unit_muxed_load_data[31-:FLEN_F];
+            else
+                fp_result[FLEN-33:0] = unit_muxed_load_data[31-:FLEN-32];
+        end
     end else if (CONFIG.INCLUDE_UNIT.FPU) begin : gen_fpu_no_buffering
         //No buffering ever required - all results are final
-        assign fp_result = unit_muxed_load_data[FLEN-1:0];
+        assign fp_result = wb_attr.fp_op == SINGLE_DONE ? {{(FLEN-FLEN_F){1'b1}}, unit_muxed_load_data[31-:FLEN_F]} : unit_muxed_load_data[31-:FLEN];
     end
     else begin : gen_no_fpu
         assign fp_result = 'x;
@@ -576,13 +581,13 @@ module load_store_unit
     ////////////////////////////////////////////////////
     //Output bank
     assign wb.rd = final_load_data;
-    assign wb.done = (load_complete & ~(wb_attr.fp_hold | wb_attr.fp_done)) | (load_exception_complete & ~exception_is_fp);
+    assign wb.done = (load_complete & (~CONFIG.INCLUDE_UNIT.FPU | wb_attr.fp_op == INT_DONE)) | (load_exception_complete & ~exception_is_fp);
     //TODO: exceptions seemingly clobber load data if it appears on the same cycle
     assign wb.id = load_exception_complete ? exception.id : wb_attr.id;
 
     //TODO: outside not equipped for FP exceptions on this port?
     assign fp_wb.rd = fp_result;
-    assign fp_wb.done = (load_complete & wb_attr.fp_done) | (load_exception_complete & exception_is_fp);
+    assign fp_wb.done = (load_complete & (wb_attr.fp_op == SINGLE_DONE | wb_attr.fp_op == DOUBLE_DONE)) | (load_exception_complete & exception_is_fp);
     assign fp_wb.id = load_exception_complete ? exception.id : wb_attr.id;
 
     ////////////////////////////////////////////////////
