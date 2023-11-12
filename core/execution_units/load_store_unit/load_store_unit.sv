@@ -585,7 +585,6 @@ module load_store_unit
     //TODO: exceptions seemingly clobber load data if it appears on the same cycle
     assign wb.id = load_exception_complete ? exception.id : wb_attr.id;
 
-    //TODO: outside not equipped for FP exceptions on this port?
     assign fp_wb.rd = fp_result;
     assign fp_wb.done = (load_complete & (wb_attr.fp_op == SINGLE_DONE | wb_attr.fp_op == DOUBLE_DONE)) | (load_exception_complete & exception_is_fp);
     assign fp_wb.id = load_exception_complete ? exception.id : wb_attr.id;

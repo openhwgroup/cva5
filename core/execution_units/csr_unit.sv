@@ -724,6 +724,11 @@ generate if (CONFIG.INCLUDE_UNIT.FPU) begin : gen_csr_fp
         endcase
     end
 
+    //Older versions of the spec mandated an illegal instruction exception if an instruction
+    //with the dynamic rounding mode was issued and the frm register contained an invalid 
+    //rounding mode. This has since been changed to "reserved" behaviour, meaning we do not 
+    //have to do anything special. In this case, fp_roundup would default to rne
+
     always_ff @(posedge clk) begin
         if (rst) begin
             frm <= '0;
@@ -732,16 +737,14 @@ generate if (CONFIG.INCLUDE_UNIT.FPU) begin : gen_csr_fp
         else begin
             //Explicit writes
             if (commit) begin
-                //TODO: instructions with bad rounding modes should cause an illegal instruction exception
-                //TODO: is it possible for the wmask to be set at the same time?
                 case (fcsr_write_type)
-                    WRITE_FFLAGS : fflags <= next_csr[4:0] | fflag_wmask;
-                    WRITE_FRM : {frm, fflags} <= {next_csr[2:0], fflags | fflag_wmask};
-                    WRITE_BOTH : {frm, fflags} <= {next_csr[7:5], next_csr[4:0] | fflag_wmask};
+                    WRITE_FFLAGS : fflags <= next_csr[4:0];
+                    WRITE_FRM : frm <= next_csr[2:0];
+                    WRITE_BOTH : {frm, fflags} <= next_csr[7:0];
                     default;
                 endcase
             end
-            else //Implicit writes
+            else //Implicit writes (can never overlap explicit writes)
                 fflags <= fflags | fflag_wmask;
         end
     end
