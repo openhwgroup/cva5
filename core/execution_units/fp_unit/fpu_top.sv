@@ -179,25 +179,26 @@
     assign pkt.rm = &rm_r ? dyn_rm : rm_r;
 
     always_ff @(posedge clk) begin
-        if (issue_stage_ready) begin //TODO: use simpler decoding that doesn't look at the full mask, just the discerning bits
+        if (issue_stage_ready) begin
             //Only the instructions that convert their arguments from s->d
             is_single <= decode_stage.instruction inside {SP_FMADD, SP_FMSUB, SP_FNMSUB, SP_FNMADD, SP_FADD, SP_FSUB, SP_FMUL, SP_FDIV, SP_FSQRT, SP_FMIN, SP_FMAX, SP_FCVT_S_W, SP_FCVT_S_WU, DP_FCVT_D_S, SP_FCVT_W_S, SP_FCVT_WU_S, SP_FEQ, SP_FLT, SP_FLE, SP_FCLASS};
-            is_fma <= decode_stage.instruction inside {SP_FMADD, SP_FMSUB, SP_FNMSUB, SP_FNMADD, DP_FMADD, DP_FMSUB, DP_FNMSUB, DP_FNMADD};
-            is_fmul <= decode_stage.instruction inside {SP_FMUL, DP_FMUL};
-            is_fadd <= decode_stage.instruction inside {SP_FADD, SP_FSUB, DP_FADD, DP_FSUB};
-            is_div <= decode_stage.instruction inside {SP_FDIV, DP_FDIV};
-            is_sqrt <= decode_stage.instruction inside {SP_FSQRT, DP_FSQRT};
-            is_i2f <= decode_stage.instruction inside {SP_FCVT_S_W, SP_FCVT_S_WU, DP_FCVT_D_W, DP_FCVT_D_WU};
-            is_mv_f2i <= decode_stage.instruction inside {SP_FMV_X_W};
-            is_s2d <= decode_stage.instruction inside {DP_FCVT_D_S};
-            is_d2s <= decode_stage.instruction inside {DP_FCVT_S_D};
-            is_minmax <= decode_stage.instruction inside {SP_FMIN, SP_FMAX, DP_FMIN, DP_FMAX};
-            is_sign_inj <= decode_stage.instruction inside {SP_FSGNJ, SP_FSGNJN, SP_FSGNJX, DP_FSGNJ, DP_FSGNJN, DP_FSGNJX};
-            is_sign_inj_single <= decode_stage.instruction inside {SP_FSGNJ, SP_FSGNJN, SP_FSGNJX};
-            is_f2i <= decode_stage.instruction inside {SP_FCVT_W_S, SP_FCVT_WU_S, DP_FCVT_W_D, DP_FCVT_WU_D};
-            is_mv_i2f <= decode_stage.instruction inside {SP_FMV_W_X};
-            is_fcmp <= decode_stage.instruction inside {SP_FEQ, SP_FLT, SP_FLE, DP_FEQ, DP_FLT, DP_FLE};
-            is_class <= decode_stage.instruction inside {SP_FCLASS, DP_FCLASS};
+            //Partial decoding to distinguish instructions from each other
+            is_fma <= ~decode_stage.instruction[4];
+            is_fmul <= decode_stage.instruction[4] & decode_stage.instruction[31:27] inside {5'b0??10};
+            is_fadd <= decode_stage.instruction[4] & decode_stage.instruction[31:27] inside {5'b0000?};
+            is_div <= decode_stage.instruction[4] & decode_stage.instruction[31:27] inside {5'b00?11};
+            is_sqrt <= decode_stage.instruction[4] & decode_stage.instruction[31:27] inside {5'b01?1?};
+            is_i2f <= decode_stage.instruction[4] & decode_stage.instruction[31:27] inside {5'b1?01?};
+            is_mv_f2i <= decode_stage.instruction[4] & decode_stage.instruction[31:27] inside {5'b1110?} & ~decode_stage.instruction[12];
+            is_s2d <= decode_stage.instruction[4] & decode_stage.instruction[31:27] inside {5'b01?0?} & ~decode_stage.instruction[20];
+            is_d2s <= decode_stage.instruction[4] & decode_stage.instruction[31:27] inside {5'b01?0?} & decode_stage.instruction[20];
+            is_minmax <= decode_stage.instruction[4] & decode_stage.instruction[31:27] inside {5'b0?1?1};
+            is_sign_inj <= decode_stage.instruction[4] & decode_stage.instruction[31:27] inside {5'b0?1?0};
+            is_sign_inj_single <= ~decode_stage.instruction[25];
+            is_f2i <= decode_stage.instruction[4] & decode_stage.instruction[31:27] inside {5'b1?00?};
+            is_mv_i2f <= decode_stage.instruction[4] & decode_stage.instruction[31:27] inside {5'b1?11?};
+            is_fcmp <= decode_stage.instruction[4] & decode_stage.instruction[31:27] inside {5'b10???};
+            is_class <= decode_stage.instruction[4] & decode_stage.instruction[31:27] inside {5'b1110?} & decode_stage.instruction[12];
             //Double duty for both FADD and FMA
             add <= decode_stage.instruction[4] ? ~decode_stage.instruction[27] : decode_stage.instruction[3:2] inside {2'b00, 2'b10};
             neg_mul <= decode_stage.instruction[3];

@@ -23,6 +23,7 @@
 
 module fp_div_sqrt_wrapper
 
+    import cva5_config::*;
     import fpu_types::*;
 
     (
@@ -69,8 +70,10 @@ module fp_div_sqrt_wrapper
             wb.carry = sqrt_wb.carry;
             wb.safe = sqrt_wb.safe;
             wb.hidden = sqrt_wb.hidden;
-            //TODO: collapse the sticky
-            wb.grs = sqrt_wb.grs;
+            //Collapse sticky - this saves a wide 2:1 mux
+            wb.grs[GRS_WIDTH-1-:2] = sqrt_wb.grs[GRS_WIDTH-1-:2];
+            wb.grs[GRS_WIDTH-3] = |sqrt_wb.grs[GRS_WIDTH-3:0];
+            wb.grs[GRS_WIDTH-4:0] = '0;
             wb.clz = sqrt_wb.clz;
             wb.right_shift = sqrt_wb.right_shift;
             wb.right_shift_amt = sqrt_wb.right_shift_amt;
@@ -87,8 +90,10 @@ module fp_div_sqrt_wrapper
             wb.carry = div_wb.carry;
             wb.safe = div_wb.safe;
             wb.hidden = div_wb.hidden;
-            //TODO: collapse the sticky
-            wb.grs = div_wb.grs;
+            //Collapse sticky - this saves a wide 2:1 mux
+            wb.grs[GRS_WIDTH-1-:3] = div_wb.grs[GRS_WIDTH-1-:3]; //Preserve MSB sticky because there can be a left shift of 1
+            wb.grs[GRS_WIDTH-4] = |div_wb.grs[GRS_WIDTH-4:0];
+            wb.grs[GRS_WIDTH-5:0] = '0;
             wb.clz = div_wb.clz;
             wb.right_shift = div_wb.right_shift;
             wb.right_shift_amt = div_wb.right_shift_amt;
