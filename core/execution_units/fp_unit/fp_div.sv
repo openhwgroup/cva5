@@ -155,7 +155,15 @@ module fp_div
     ////////////////////////////////////////////////////
     //Output management
     //Either return the early execute values on cycle 1, or the regular values once the divider finishes
-    assign wb.done = div.done | early_exit;
+    logic div_hold;
+    assign wb.done = div.done | div_hold | early_exit;
+
+    always_ff @(posedge clk) begin
+        if (rst)
+            div_hold <= 0;
+        else
+            div_hold <= ~wb.ack & (div.done | div_hold);
+    end
     
     always_ff @(posedge clk) begin
         if (issue.new_request) begin

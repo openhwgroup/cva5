@@ -143,7 +143,15 @@ module fp_sqrt
     ////////////////////////////////////////////////////
     //Output management
     //Either return the early execute values on cycle 1, or the regular values once the square root finishes
-    assign wb.done = sqrt.done | early_exit;
+    logic sqrt_hold;
+    assign wb.done = sqrt.done | sqrt_hold | early_exit;
+
+    always_ff @(posedge clk) begin
+        if (rst)
+            sqrt_hold <= 0;
+        else
+            sqrt_hold <= ~wb.ack & (sqrt.done | sqrt_hold);
+    end
     
     always_ff @(posedge clk) begin
         if (issue.new_request) begin
