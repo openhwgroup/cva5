@@ -85,11 +85,12 @@ module fp_normalize_rounding_top
         fp_t data;
         logic expo_overflow;
         logic hidden;
-        logic roundup;
+        rm_t rm;
         fflags_t fflags;
-        fp_t result_if_overflow;
         logic d2s;
-        logic tiny;
+        logic round_lsb;
+        logic[2:0] round_grs;
+        logic[1:0] tiny_rs;
     } fp_round_packet_t;
 
     ////////////////////////////////////////////////////
@@ -251,19 +252,14 @@ module fp_normalize_rounding_top
     ////////////////////////////////////////////////////
     //Shifting and Roundup
     //Extremely wide right shifter, output is flipped for left shifts
-    //Also calculates the roundup bit
+    //Extracts the bits used for determining rounding
     logic[SHIFT_WIDTH-1:0] shift_intermediate;
     logic[SHIFT_WIDTH-1:0] shift_final;
     grs_t grs_norm;
     frac_d_t frac_norm;
-    logic roundup_norm;
-    logic roundup_tiny;
-    fp_t result_if_overflow;
-    logic[2:0] round_grs;
-    logic[2:0] round_grs_tiny;
-    logic round_inexact;
     logic round_lsb;
-    logic round_lsb_tiny;
+    logic[2:0] round_grs;
+    logic[1:0] tiny_rs;
 
     assign shift_intermediate = shift_packet.shifter_in >> shift_packet.shift_amt;
     assign shift_final = shift_packet.right_shift ? shift_intermediate : reverse(shift_intermediate);
@@ -289,39 +285,17 @@ module fp_normalize_rounding_top
             round_lsb = frac_norm[FRAC_WIDTH-FRAC_WIDTH_F];
             round_grs[2:1] = frac_norm[FRAC_WIDTH-FRAC_WIDTH_F-1-:2];
             round_grs[0] = |frac_norm[FRAC_WIDTH-FRAC_WIDTH_F-3:0] | |grs_norm | set_sticky;
-            round_lsb_tiny = frac_norm[FRAC_WIDTH-FRAC_WIDTH_F-1];
-            round_grs_tiny[2:1] = frac_norm[FRAC_WIDTH-FRAC_WIDTH_F-2-:2];
-            round_grs_tiny[0] = |frac_norm[FRAC_WIDTH-FRAC_WIDTH_F-4:0] | |grs_norm | set_sticky;
+            tiny_rs[1] = frac_norm[FRAC_WIDTH-FRAC_WIDTH_F-3];
+            tiny_rs[0] = |frac_norm[FRAC_WIDTH-FRAC_WIDTH_F-4:0] | |grs_norm | set_sticky;
         end
         else begin
             round_lsb = frac_norm[0];
             round_grs[2:1] = grs_norm[GRS_WIDTH-1-:2];
             round_grs[0] = |grs_norm[GRS_WIDTH-3:0] | set_sticky;
-            round_lsb_tiny = grs_norm[GRS_WIDTH-1];
-            round_grs_tiny[2:1] = grs_norm[GRS_WIDTH-2-:2];
-            round_grs_tiny[0] = |grs_norm[GRS_WIDTH-4:0] | set_sticky;
+            tiny_rs[1] = grs_norm[GRS_WIDTH-3];
+            tiny_rs[0] = |grs_norm[GRS_WIDTH-4:0] | set_sticky;
         end
     end
-
-    //Roundup calculation
-    assign round_inexact = |round_grs;
-    fp_roundup real_round (
-        .sign(shift_packet.sign_norm),
-        .rm(shift_packet.rm),
-        .grs(round_grs),
-        .lsb(round_lsb),
-        .roundup(roundup_norm),
-        .result_if_overflow(result_if_overflow)
-    );
-
-    fp_roundup tininess_round (
-        .sign(shift_packet.sign_norm),
-        .rm(shift_packet.rm),
-        .grs(round_grs_tiny),
-        .lsb(round_lsb_tiny),
-        .roundup(roundup_tiny),
-        .result_if_overflow()
-    );
 
     //Advance logic
     assign advance_round = wb.ack | ~round_packet.valid;
@@ -334,29 +308,25 @@ module fp_normalize_rounding_top
         if (advance_round) begin
             round_packet.hidden <= shift_final[GRS_WIDTH+FRAC_WIDTH];
             round_packet.id <= shift_packet.id;
+            round_packet.rm <= shift_packet.rm;
             round_packet.d2s <= shift_packet.d2s;
-            round_packet.roundup <= roundup_norm;
+            round_packet.round_lsb <= round_lsb;
+            round_packet.round_grs <= round_grs;
+            round_packet.tiny_rs <= tiny_rs;
             round_packet.data.d.sign <= shift_packet.sign_norm;
             round_packet.fflags.nv <= shift_packet.fflags.nv;
             round_packet.fflags.dz <= shift_packet.fflags.dz;
             round_packet.fflags.of <= shift_packet.fflags.of;
             round_packet.fflags.uf <= shift_packet.fflags.uf;
-            round_packet.fflags.nx <= shift_packet.fflags.nx | round_inexact;
-            round_packet.tiny <= roundup_tiny & round_lsb_tiny;
+            round_packet.fflags.nx <= shift_packet.fflags.nx | |round_grs;
 
             if (shift_packet.d2s) begin
                 round_packet.expo_overflow <= shift_packet.sp_overflow;
-                //Convert dp overflow value to sp
-                round_packet.result_if_overflow.s.box <= '1;
-                round_packet.result_if_overflow.s.sign <= result_if_overflow.d.sign;
-                round_packet.result_if_overflow.s.expo <= result_if_overflow.d.expo[EXPO_WIDTH_F-1:0];
-                round_packet.result_if_overflow.s.frac <= result_if_overflow.d.frac[FRAC_WIDTH_F-1:0];
                 round_packet.data.d.expo <= {{(EXPO_WIDTH-EXPO_WIDTH_F){1'b1}}, shift_packet.sp_expo}; //Allow the roundup to propagate to overflow
                 round_packet.data.d.frac <= {frac_norm[FRAC_WIDTH-1-:FRAC_WIDTH_F], {(FRAC_WIDTH-FRAC_WIDTH_F){1'b1}}};
             end
             else begin
                 round_packet.expo_overflow <= shift_packet.expo_overflow_norm;
-                round_packet.result_if_overflow <= result_if_overflow;
                 round_packet.data.d.expo <= shift_packet.expo_norm;
                 round_packet.data.d.frac <= frac_norm;
             end
@@ -365,15 +335,36 @@ module fp_normalize_rounding_top
 
     ////////////////////////////////////////////////////
     //Rounding
-    //Perform the rounding by adding the roundup from the previous cycle
+    //Perform the rounding by adding based on the saved bits from the previous cycle
     //Also detects overflow
     logic frac_overflow;
     frac_d_t frac_out;
     expo_d_t expo_out;
     logic overflow_exp;
     fp_t rd;
+    logic roundup;
+    logic roundup_tiny;
+    fp_t result_if_overflow;
 
-    assign {frac_overflow, frac_out} = round_packet.data.d.frac + (FRAC_WIDTH)'(round_packet.roundup);
+    fp_roundup real_round (
+        .sign(round_packet.data.d.sign),
+        .rm(round_packet.rm),
+        .grs(round_packet.round_grs),
+        .lsb(round_packet.round_lsb),
+        .roundup(roundup),
+        .result_if_overflow(result_if_overflow)
+    );
+
+    fp_roundup tininess_round (
+        .sign(round_packet.data.d.sign),
+        .rm(round_packet.rm),
+        .grs({round_packet.round_grs[1], round_packet.tiny_rs}),
+        .lsb(round_packet.round_grs[2]),
+        .roundup(roundup_tiny),
+        .result_if_overflow()
+    );
+
+    assign {frac_overflow, frac_out} = round_packet.data.d.frac + (FRAC_WIDTH)'(roundup);
     assign expo_out = round_packet.data.d.expo + EXPO_WIDTH'(frac_overflow);
 
     //Compute exponent overflow due to rounding in parallel with roundup addition
@@ -384,8 +375,17 @@ module fp_normalize_rounding_top
     assign wb.done = round_packet.valid;
     assign wb.rd = rd.raw;
     always_comb begin
-        if (overflow_exp)
-            rd = round_packet.result_if_overflow;
+        if (overflow_exp) begin
+            //Convert dp overflow value to sp
+            if (round_packet.d2s) begin
+                rd.s.box = '1;
+                rd.s.sign = result_if_overflow.d.sign;
+                rd.s.expo = result_if_overflow.d.expo[EXPO_WIDTH_F-1:0];
+                rd.s.frac = result_if_overflow.d.frac[FRAC_WIDTH_F-1:0];
+            end
+            else
+                rd = result_if_overflow;
+        end
         else if (round_packet.d2s) begin
             rd.s.box = '1;
             rd.s.sign = round_packet.data.d.sign;
@@ -403,7 +403,7 @@ module fp_normalize_rounding_top
     assign fflags.dz = round_packet.fflags.dz;
     assign fflags.of = round_packet.fflags.of | ~round_packet.fflags.nv & overflow_exp;
     //Underflow only occurs if inexact
-    assign fflags.uf = round_packet.fflags.uf | (~round_packet.fflags.nv & round_packet.fflags.nx & ~round_packet.hidden & (~frac_overflow | ~round_packet.tiny));
+    assign fflags.uf = round_packet.fflags.uf | (~round_packet.fflags.nv & round_packet.fflags.nx & ~round_packet.hidden & (~frac_overflow | ~(round_packet.round_grs[2] & roundup_tiny)));
     //Overflow is inexact
     assign fflags.nx = round_packet.fflags.nx | ~round_packet.fflags.nv & overflow_exp;
 

@@ -272,10 +272,18 @@ module fp_preprocessing
 
     //FADD
     logic[EXPO_WIDTH:0] expo_diff_issued;
+    logic[EXPO_WIDTH:0] double_expo_diff;
+    logic[EXPO_WIDTH:0] double_expo_diff_r;
+
+    //Precalculate the double exponent difference, saves time in the next cycle (because the hidden bits don't need to be included)
+    assign double_expo_diff = (rs1.d.expo + {{(EXPO_WIDTH-1){1'b0}}, ~hidden_double[0]}) - (rs2.d.expo + {{(EXPO_WIDTH-1){1'b0}}, ~hidden_double[1]});
 
     always_comb begin
-        expo_diff_issued = (rs1_r.d.expo + {{(EXPO_WIDTH-1){1'b0}}, ~hidden_r[0]}) - (rs2_r.d.expo + {{(EXPO_WIDTH-1){1'b0}}, ~hidden_r[1]});
-        if (expo_diff_issued[EXPO_WIDTH])
+        if (single_r)
+            expo_diff_issued = rs1_r.d.expo - rs2_r.d.expo;
+        else
+            expo_diff_issued = double_expo_diff_r;
+        if (swap_r)
             expo_diff_issued = -expo_diff_issued;
     end
 
@@ -302,6 +310,7 @@ module fp_preprocessing
             is_fadd_r <= pkt.is_fadd;
             add_r <= pkt.add;
             neg_mul_r <= pkt.neg_mul;
+            double_expo_diff_r <= double_expo_diff;
         end
     end
 

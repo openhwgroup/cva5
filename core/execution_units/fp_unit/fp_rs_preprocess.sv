@@ -96,8 +96,7 @@ module fp_rs_preprocess
         if (single) begin
             clz_hidden = hidden_single;
             shift_arr = '0;
-            if (is_boxed)
-                shift_arr[FRAC_WIDTH-1 -: FRAC_WIDTH_F] = in.s.frac;
+            shift_arr[FRAC_WIDTH-1 -: FRAC_WIDTH_F] = in.s.frac;
         end
         else begin
             clz_hidden = hidden_double;
