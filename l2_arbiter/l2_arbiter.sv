@@ -38,19 +38,20 @@ module l2_arbiter
 
     //FIFO interfaces
     fifo_interface #(.DATA_TYPE(l2_request_t)) input_fifos [L2_NUM_PORTS-1:0]();
-    fifo_interface #(.DATA_TYPE(logic[31:0])) input_data_fifos [L2_NUM_PORTS-1:0]();
+    fifo_interface #(.DATA_TYPE(l2_data_request_t)) input_data_fifos [L2_NUM_PORTS-1:0]();
     fifo_interface #(.DATA_TYPE(logic[29:0])) inv_response_fifos [L2_NUM_PORTS-1:0]();
     fifo_interface #(.DATA_TYPE(l2_return_data_t)) returndata_fifos [L2_NUM_PORTS-1:0]();
 
 
     fifo_interface #(.DATA_TYPE(l2_mem_request_t)) mem_addr_fifo();
-    fifo_interface #(.DATA_TYPE(logic[31:0])) mem_data_fifo();
+    fifo_interface #(.DATA_TYPE(l2_data_request_t)) mem_data_fifo();
 
     fifo_interface #(.DATA_TYPE(l2_data_attributes_t)) data_attributes();
     fifo_interface #(.DATA_TYPE(l2_mem_return_data_t)) mem_returndata_fifo();
 
     l2_mem_request_t mem_addr_fifo_data_out;
     l2_request_t requests_in[L2_NUM_PORTS-1:0];
+    l2_data_request_t data_requests_in[L2_NUM_PORTS-1:0];
 
     logic advance;
     l2_request_t arb_request;
@@ -70,7 +71,7 @@ module l2_arbiter
     l2_data_attributes_t new_attr;
     l2_data_attributes_t current_attr;
 
-    logic [31:0] input_data [L2_NUM_PORTS-1:0];
+    l2_data_request_t input_data [L2_NUM_PORTS-1:0];
 
     l2_mem_return_data_t mem_return_data;
     l2_return_data_t return_data  [L2_NUM_PORTS-1:0];
@@ -93,11 +94,10 @@ module l2_arbiter
 
             //Repack input attributes
             assign requests_in[i].addr = request[i].addr;
-			assign requests_in[i].be = request[i].be;
-			assign requests_in[i].rnw = request[i].rnw;
-			assign requests_in[i].is_amo = request[i].is_amo;
-			assign requests_in[i].amo_type_or_burst_size = request[i].amo_type_or_burst_size;
-			assign requests_in[i].sub_id = request[i].sub_id;
+            assign requests_in[i].rnw = request[i].rnw;
+            assign requests_in[i].is_amo = request[i].is_amo;
+            assign requests_in[i].amo_type_or_burst_size = request[i].amo_type_or_burst_size;
+            assign requests_in[i].sub_id = request[i].sub_id;
             assign input_fifos[i].data_in = requests_in[i];
 
             assign input_fifos[i].pop = input_fifos[i].valid & arb.grantee_v[i] & ~mem_addr_fifo.full;
@@ -121,12 +121,14 @@ module l2_arbiter
             assign input_data_fifos[i].push = request[i].wr_data_push;
             assign input_data_fifos[i].potential_push = request[i].wr_data_push;
 
-            assign input_data_fifos[i].data_in = request[i].wr_data;
+            assign data_requests_in[i].data = request[i].wr_data;
+            assign data_requests_in[i].be = request[i].wr_data_be;
+            assign input_data_fifos[i].data_in = data_requests_in[i];
 
             assign request[i].data_full = input_data_fifos[i].full;
 
             //FIFO instantiation
-            cva5_fifo #(.DATA_TYPE(logic[31:0]), .FIFO_DEPTH(L2_INPUT_FIFO_DEPTHS)) input_data_fifo (.*, .fifo(input_data_fifos[i]));
+            cva5_fifo #(.DATA_TYPE(l2_data_request_t), .FIFO_DEPTH(L2_INPUT_FIFO_DEPTHS)) input_data_fifo (.*, .fifo(input_data_fifos[i]));
 
             //Arbiter FIFO side
             assign input_data_fifos[i].pop = (data_attributes.valid && (current_attr.id == i) && ~mem_data_fifo.full);
@@ -152,7 +154,6 @@ module l2_arbiter
     assign arb_request = requests[arb.grantee_i];
 
     assign mem_request.addr =  arb_request.addr;
-    assign mem_request.be =  arb_request.be;
     assign mem_request.rnw =  arb_request.rnw;
     assign mem_request.is_amo =  arb_request.is_amo;
     assign mem_request.amo_type_or_burst_size =  arb_request.amo_type_or_burst_size;
@@ -162,11 +163,10 @@ module l2_arbiter
 
     //unpack memory request attributes
     assign mem_addr_fifo_data_out = mem_addr_fifo.data_out;
-	assign mem.addr = mem_addr_fifo_data_out.addr;
-	assign mem.rnw = mem_addr_fifo_data_out.rnw;
-	assign mem.be = mem_addr_fifo_data_out.be;
-	assign mem.is_amo = mem_addr_fifo_data_out.is_amo;
-	assign mem.amo_type_or_burst_size = mem_addr_fifo_data_out.amo_type_or_burst_size;
+    assign mem.addr = mem_addr_fifo_data_out.addr;
+    assign mem.rnw = mem_addr_fifo_data_out.rnw;
+    assign mem.is_amo = mem_addr_fifo_data_out.is_amo;
+    assign mem.amo_type_or_burst_size = mem_addr_fifo_data_out.amo_type_or_burst_size;
     assign mem.id = mem_addr_fifo_data_out.id;
 
     cva5_fifo #(.DATA_TYPE(l2_mem_request_t), .FIFO_DEPTH(L2_MEM_ADDR_FIFO_DEPTH))  input_fifo (.*, .fifo(mem_addr_fifo));
@@ -261,14 +261,17 @@ module l2_arbiter
 
     assign write_done = data_attributes.valid & ~mem_data_fifo.full & (burst_count == current_attr.burst_size);
 
-    cva5_fifo #(.DATA_TYPE(logic[31:0]), .FIFO_DEPTH(L2_MEM_ADDR_FIFO_DEPTH))  mem_data (.*, .fifo(mem_data_fifo));
+    cva5_fifo #(.DATA_TYPE(l2_data_request_t), .FIFO_DEPTH(L2_MEM_ADDR_FIFO_DEPTH))  mem_data (.*, .fifo(mem_data_fifo));
 
     assign mem_data_fifo.push = data_attributes.valid & ~mem_data_fifo.full & ~current_attr.abort_request;
     assign mem_data_fifo.potential_push = data_attributes.valid & ~mem_data_fifo.full & ~current_attr.abort_request;
 
     assign mem_data_fifo.data_in = input_data[current_attr.id];
 
-    assign mem.wr_data = mem_data_fifo.data_out;
+    l2_data_request_t mem_data_request;
+    assign mem_data_request = mem_data_fifo.data_out;
+    assign mem.wr_data = mem_data_request.data;
+    assign mem.wr_data_be = mem_data_request.be;
     assign mem.wr_data_valid = mem_data_fifo.valid;
     assign mem_data_fifo.pop = mem.wr_data_read;
 
