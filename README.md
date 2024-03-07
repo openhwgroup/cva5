@@ -1,6 +1,6 @@
 # CVA5
 
-CVA5 is a 32-bit RISC-V processor designed for FPGAs supporting the Multiply/Divide and Atomic extensions (RV32IMA).  The processor is written in SystemVerilog and has been designed to be both highly extensible and highly configurable.
+CVA5 is a 32-bit RISC-V processor designed for FPGAs supporting the Multiply/Divide and Double-precision Floating-Point extensions (RV32IMD).  The processor is written in SystemVerilog and has been designed to be both highly extensible and highly configurable.
 
 
 The CVA5 is derived from the Taiga Project from Simon Fraser University.

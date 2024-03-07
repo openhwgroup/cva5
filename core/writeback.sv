@@ -23,111 +23,57 @@
 module writeback
 
     import cva5_config::*;
-    import riscv_types::*;
     import cva5_types::*;
     
     # (
-        parameter cpu_config_t CONFIG = EXAMPLE_CONFIG,
-        parameter int unsigned NUM_UNITS [CONFIG.NUM_WB_GROUPS] = '{1, 4},
-        parameter int unsigned NUM_WB_UNITS = 5
+        parameter int unsigned NUM_WB_UNITS = 5,
+        parameter unit_id_enum_t [MAX_NUM_UNITS-1:0] WB_INDEX = '{0: ALU_ID, 1: MUL_ID, 2: DIV_ID, 3: LS_ID, 4: CSR_ID, 5: FPU_ID, default: NON_WRITEBACK_ID}
     )
 
     (
-        input logic clk,
-        input logic rst,
         //Unit writeback
-        unit_writeback_interface.wb unit_wb[NUM_WB_UNITS],
+        unit_writeback_interface.wb unit_wb[MAX_NUM_UNITS],
         //WB output
-        output wb_packet_t wb_packet [CONFIG.NUM_WB_GROUPS],
-        //Snoop interface (LS unit)
-        output wb_packet_t wb_snoop
+        output wb_packet_t wb_packet
     );
 
-    //Writeback
-    logic [NUM_WB_UNITS-1:0] unit_ack [CONFIG.NUM_WB_GROUPS];
     //aliases for write-back-interface signals
-    id_t [NUM_WB_UNITS-1:0] unit_instruction_id [CONFIG.NUM_WB_GROUPS];
-    logic [NUM_WB_UNITS-1:0] unit_done [CONFIG.NUM_WB_GROUPS];
+    id_t [NUM_WB_UNITS-1:0] unit_instruction_id;
+    logic [NUM_WB_UNITS-1:0] unit_done;
+    logic [31:0] unit_rd [NUM_WB_UNITS];
+    logic [NUM_WB_UNITS-1:0] unit_ack;
 
-    typedef logic [XLEN-1:0] unit_rd_t [NUM_WB_UNITS];
-    unit_rd_t unit_rd [CONFIG.NUM_WB_GROUPS];
-    //Per-ID muxes for commit buffer
-    logic [$clog2(NUM_WB_UNITS)-1:0] unit_sel [CONFIG.NUM_WB_GROUPS];
+    localparam int unsigned LOG2_NUM_WB_UNITS = (NUM_WB_UNITS == 1) ? 1 : $clog2(NUM_WB_UNITS);
+    logic [LOG2_NUM_WB_UNITS-1:0] unit_sel;
 
-    typedef int unsigned unit_count_t [CONFIG.NUM_WB_GROUPS];
-
-    function unit_count_t get_cumulative_unit_count();
-        unit_count_t counts;
-        int unsigned cumulative_count = 0;
-        for (int i = 0; i < CONFIG.NUM_WB_GROUPS; i++) begin
-            counts[i] = cumulative_count;
-            cumulative_count += NUM_UNITS[i];
-        end
-        return counts;
-    endfunction
-
-    localparam unit_count_t CUMULATIVE_NUM_UNITS = get_cumulative_unit_count();
-
-    genvar i, j;
     ////////////////////////////////////////////////////
     //Implementation
     //Re-assigning interface inputs to array types so that they can be dynamically indexed
-    generate
-        for (i = 0; i < CONFIG.NUM_WB_GROUPS; i++) begin : gen_wb_group_unpacking
-            for (j = 0; j < NUM_UNITS[i]; j++) begin : gen_wb_unit_unpacking
-                assign unit_instruction_id[i][j] = unit_wb[CUMULATIVE_NUM_UNITS[i] + j].id;
-                assign unit_done[i][j] = unit_wb[CUMULATIVE_NUM_UNITS[i] + j].done;
-                assign unit_wb[CUMULATIVE_NUM_UNITS[i] + j].ack = unit_ack[i][j];
-            end
-        end
-    endgenerate
-
-    //As units are selected for commit ports based on their unit ID,
-    //for each additional commit port one unit can be skipped for the commit mux
-    generate
-        for (i = 0; i < CONFIG.NUM_WB_GROUPS; i++) begin : gen_wb_port_grouping
-            for (j = 0; j < NUM_UNITS[i]; j++) begin : gen_wb_unit_grouping
-                assign unit_rd[i][j] = unit_wb[CUMULATIVE_NUM_UNITS[i] + j].rd;
-            end
-        end
-    endgenerate
+    generate for (genvar i = 0; i < NUM_WB_UNITS; i++) begin : gen_wb_unit_unpacking
+        assign unit_instruction_id[i] = unit_wb[WB_INDEX[i]].id;
+        assign unit_done[i] = unit_wb[WB_INDEX[i]].done;
+        assign unit_rd[i] = unit_wb[WB_INDEX[i]].rd;
+        assign unit_wb[WB_INDEX[i]].ack = unit_ack[i];
+    end endgenerate
 
     ////////////////////////////////////////////////////
     //Unit select for register file
     //Iterating through all commit ports:
     //   Search for complete units (in fixed unit order)
     //   Assign to a commit port, mask that unit and commit port
-    generate for (i = 0; i < CONFIG.NUM_WB_GROUPS; i++) begin : gen_wb_mux
-        priority_encoder
-            #(.WIDTH(NUM_UNITS[i]))
-        unit_done_encoder
-        (
-            .priority_vector (unit_done[i][NUM_UNITS[i]-1 : 0]),
-            .encoded_result (unit_sel[i][NUM_UNITS[i] == 1 ? 0 : ($clog2(NUM_UNITS[i])-1) : 0])
-        );
-        assign wb_packet[i].valid = |unit_done[i];
-        assign wb_packet [i].id = unit_instruction_id[i][unit_sel[i]];
-        assign wb_packet[i].data = unit_rd[i][unit_sel[i]];
+    priority_encoder #(.WIDTH(NUM_WB_UNITS))
+    unit_done_encoder
+    (
+        .priority_vector (unit_done),
+        .encoded_result (unit_sel)
+    );
+    assign wb_packet = '{
+        valid : |unit_done,
+        id : unit_instruction_id[unit_sel],
+        data : unit_rd[unit_sel]
+    };
 
-        assign unit_ack[i] = NUM_WB_UNITS'(wb_packet[i].valid) << unit_sel[i];
-    end endgenerate
-
-    ////////////////////////////////////////////////////
-    //Store Forwarding Support
-    //TODO: support additional writeback groups
-    //currently limited to one writeback group with the
-    //assumption that writeback group zero has single-cycle
-    //operation
-    always_ff @ (posedge clk) begin
-        if (rst)
-            wb_snoop.valid <= 0;
-        else
-            wb_snoop.valid <= wb_packet[1].valid;
-    end
-    always_ff @ (posedge clk) begin
-        wb_snoop.data <= wb_packet[1].data;
-        wb_snoop.id <= wb_packet[1].id;
-    end
+    assign unit_ack = NUM_WB_UNITS'(wb_packet.valid) << unit_sel;
 
     ////////////////////////////////////////////////////
     //End of Implementation
