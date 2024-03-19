@@ -25,7 +25,6 @@ interface l2_requester_interface;
 
     //l2_request_t request;
     logic [29:0] addr;
-    logic [3:0] be;
     logic rnw;
     logic is_amo;
     logic [4:0] amo_type_or_burst_size;
@@ -42,6 +41,7 @@ interface l2_requester_interface;
     logic con_valid;
 
     logic [31:0] wr_data;
+    logic [3:0] wr_data_be;
     logic wr_data_push;
     logic data_full;
 
@@ -50,26 +50,26 @@ interface l2_requester_interface;
     logic rd_data_valid;
     logic rd_data_ack;
 
-    modport master (output addr, be, rnw, is_amo, amo_type_or_burst_size, sub_id,
+    modport master (output addr, rnw, is_amo, amo_type_or_burst_size, sub_id,
             output request_push, input request_full,
             input inv_addr, inv_valid, output  inv_ack,
             input con_result, con_valid,
-            output wr_data, wr_data_push, input data_full,
+            output wr_data, wr_data_be, wr_data_push, input data_full,
             input rd_data, rd_sub_id, rd_data_valid, output rd_data_ack);
 
-    modport slave (input addr, be, rnw, is_amo, amo_type_or_burst_size, sub_id,
+    modport slave (input addr, rnw, is_amo, amo_type_or_burst_size, sub_id,
             input request_push, output request_full,
             output inv_addr, inv_valid, input  inv_ack,
             output con_result, con_valid,
-            input wr_data, wr_data_push, output data_full,
+            input wr_data, wr_data_be, wr_data_push, output data_full,
             output rd_data, rd_sub_id, rd_data_valid, input rd_data_ack);
 
 `ifdef __CVA5_FORMAL__
-    modport formal (input addr, be, rnw, is_amo, amo_type_or_burst_size, sub_id,
+    modport formal (input addr, rnw, is_amo, amo_type_or_burst_size, sub_id,
                           request_push, output request_full,
                           inv_addr, inv_valid, input  inv_ack,
                           con_result, con_valid,
-                          wr_data, wr_data_push, output data_full,
+                          wr_data, wr_data_be, wr_data_push, output data_full,
                           rd_data, rd_sub_id, rd_data_valid, input rd_data_ack);
 `endif
 
@@ -81,7 +81,6 @@ interface l2_memory_interface;
     localparam L2_ID_W = $clog2(L2_NUM_PORTS) + L2_SUB_ID_W;
 
     logic [29:0] addr;
-    logic [3:0] be;
     logic rnw;
     logic is_amo;
     logic [4:0] amo_type_or_burst_size;
@@ -93,6 +92,7 @@ interface l2_memory_interface;
     logic abort_request;
 
     logic [31:0] wr_data;
+    logic [3:0] wr_data_be;
     logic wr_data_valid;
     logic wr_data_read;
 
@@ -100,20 +100,20 @@ interface l2_memory_interface;
     logic  [L2_ID_W-1:0] rd_id;
     logic rd_data_valid;
 
-    modport master (output addr, be, rnw, is_amo, amo_type_or_burst_size, id,
+    modport master (output addr, rnw, is_amo, amo_type_or_burst_size, id,
             output request_valid, abort_request, input request_pop,
-            output wr_data, wr_data_valid, input wr_data_read,
+            output wr_data, wr_data_be, wr_data_valid, input wr_data_read,
             input rd_data, rd_id, rd_data_valid);
 
-    modport slave (input addr, be, rnw, is_amo, amo_type_or_burst_size, id,
+    modport slave (input addr, rnw, is_amo, amo_type_or_burst_size, id,
             input request_valid, abort_request, output request_pop,
-            input wr_data, wr_data_valid, output wr_data_read,
+            input wr_data, wr_data_be, wr_data_valid, output wr_data_read,
             output rd_data, rd_id, rd_data_valid);
 
 `ifdef __CVA5_FORMAL__
-    modport formal (input addr, be, rnw, is_amo, amo_type_or_burst_size, id,
+    modport formal (input addr, rnw, is_amo, amo_type_or_burst_size, id,
                          request_valid, abort_request, output request_pop,
-                         wr_data, wr_data_valid, output wr_data_read,
+                         wr_data, wr_data_be, wr_data_valid, output wr_data_read,
                          rd_data, rd_id, rd_data_valid);
 `endif
 

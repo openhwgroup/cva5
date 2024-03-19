@@ -77,7 +77,6 @@ module axi_l2_test # (
 
 		//L2 interface
 	   	input logic [29:0] addr,
-		input logic [3:0] be,
 		input logic rnw,
 		input logic is_amo,
 		input logic [4:0] amo_type_or_burst_size,
@@ -94,6 +93,7 @@ module axi_l2_test # (
 		output logic con_valid,
 
 		input logic [31:0] wr_data,
+		input logic [3:0] wr_data_be,
 		input logic wr_data_push,
 		output logic data_full,
 
@@ -222,7 +222,6 @@ module axi_l2_test # (
     //    assign m_axi.bresp = bus_axi_bresp;
 
     assign l2[0].addr = addr;
-    assign l2[0].be = be;
     assign l2[0].rnw = rnw;
     assign l2[0].is_amo = is_amo;
     assign l2[0].amo_type_or_burst_size = amo_type_or_burst_size;
@@ -239,6 +238,7 @@ module axi_l2_test # (
     assign con_valid = l2[0].con_valid;
 
     assign l2[0].wr_data = wr_data;
+    assign l2[0].wr_data_be = wr_data_be;
     assign l2[0].wr_data_push = wr_data_push;
     assign data_full = l2[0].data_full;
 

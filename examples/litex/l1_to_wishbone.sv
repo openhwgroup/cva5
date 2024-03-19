@@ -38,9 +38,12 @@ module l1_to_wishbone
     localparam MAX_REQUESTS = 32;
 
     fifo_interface #(.DATA_TYPE(l2_request_t)) request_fifo ();
-    fifo_interface #(.DATA_TYPE(logic[31:0])) data_fifo ();
+    fifo_interface #(.DATA_TYPE(l2_data_request_t)) data_fifo ();
 
     l2_request_t request;
+
+    l2_data_request_t data_request_in;
+    l2_data_request_t data_request;
 
     logic request_complete;
     ////////////////////////////////////////////////////
@@ -51,7 +54,6 @@ module l1_to_wishbone
     //Repack input attributes
     assign request_fifo.data_in = '{
         addr : cpu.addr,
-        be : cpu.be,
         rnw : cpu.rnw,
         is_amo : cpu.is_amo,
         amo_type_or_burst_size : cpu.amo_type_or_burst_size,
@@ -62,10 +64,14 @@ module l1_to_wishbone
     assign request_fifo.pop = request_complete;
     assign request = request_fifo.data_out;
 
+    assign data_request_in.data = cpu.wr_data;
+    assign data_request_in.be = cpu.wr_data_be;
+
     assign data_fifo.push = cpu.wr_data_push;
     assign data_fifo.potential_push = cpu.wr_data_push;
     assign data_fifo.pop = wishbone.we & wishbone.ack;
-    assign data_fifo.data_in = cpu.wr_data;
+    assign data_fifo.data_in = data_request_in;
+    assign data_request = data_fifo.data_out;
 
     cva5_fifo #(.DATA_TYPE(l2_request_t), .FIFO_DEPTH(MAX_REQUESTS))
     request_fifo_block (
@@ -73,7 +79,7 @@ module l1_to_wishbone
         .rst (rst), 
         .fifo (request_fifo)
     );
-    cva5_fifo #(.DATA_TYPE(logic[31:0]), .FIFO_DEPTH(MAX_REQUESTS))
+    cva5_fifo #(.DATA_TYPE(l2_data_request_t), .FIFO_DEPTH(MAX_REQUESTS))
     data_fifo_block (
         .clk (clk), 
         .rst (rst), 
@@ -99,10 +105,10 @@ module l1_to_wishbone
 
     assign wishbone.adr[29:5] = request.addr[29:5];
     assign wishbone.adr[4:0] = (request.addr[4:0] & ~burst_size) | (burst_count & burst_size);
-    assign wishbone.sel = request.rnw ? '1 : request.be;
+    assign wishbone.sel = request.rnw ? '1 : data_request.be;
     assign wishbone.we = ~request.rnw;
 
-    assign wishbone.dat_w = data_fifo.data_out;
+    assign wishbone.dat_w = data_request.data;
 
     assign wishbone.stb = request_fifo.valid;
     assign wishbone.cyc = request_fifo.valid;

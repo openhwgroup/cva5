@@ -48,12 +48,16 @@ package l2_config_and_types;
 
     typedef struct packed{
         logic [29:0] addr;
-        logic [3:0] be;
         logic rnw;
         logic is_amo;
         logic [4:0] amo_type_or_burst_size;
         logic [L2_SUB_ID_W-1:0] sub_id;
     } l2_request_t;
+
+    typedef struct packed{
+        logic [31:0] data;
+        logic [3:0] be;
+    } l2_data_request_t;
 
     typedef struct packed{
         logic [29:0] addr;
