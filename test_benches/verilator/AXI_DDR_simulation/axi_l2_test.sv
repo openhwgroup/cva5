@@ -186,8 +186,6 @@ module axi_l2_test # (
     avalon_interface m_avalon();
     wishbone_interface dwishbone();
 
-    trace_outputs_t tr;
-
     l2_requester_interface l2[L2_NUM_PORTS-1:0]();
     l2_memory_interface mem();
 

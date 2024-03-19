@@ -105,7 +105,8 @@ struct addr_calculation_parameters{
 		queue<AXI_write_data_channel_signals> w_data_channel_queue;
 		//Write Response Queue
 		queue<AXI_write_response_channel_signals> w_res_channel_queue;
-
+		//Order Queue
+		queue<int> order_queue;
 		unsigned starting_location = 0x80000000;
 };
 

@@ -36,7 +36,7 @@ module  local_mem
         
         localparam LINES = (RAM_SIZE/4)*1024; //RAM width is 32-bits, so for RAM_SIZE in KB, divide by 4 and multiply by 1024.
 
-        byte_en_BRAM #(LINES, preload_file, USE_PRELOAD_FILE) inst_data_ram (
+        byte_en_bram #(LINES, preload_file, USE_PRELOAD_FILE) inst_data_ram (
             .clk(clk),
             .addr_a(portA.addr[$clog2(LINES)- 1:0]),
             .en_a(portA.en),

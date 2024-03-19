@@ -2,15 +2,21 @@
 #include <iostream>
 #include <fstream>
 #include "verilated.h"
-#include "verilated_vcd_c.h"
+#include "verilated_fst_c.h"
+#include "svdpi.h"
+#include "Vcva5_sim__Dpi.h"
 #include "Vcva5_sim.h"
 #include "CVA5Tracer.h"
 
 CVA5Tracer *cva5Tracer;
-
+char* csv_log_name;
 //For time index on assertions
  double sc_time_stamp () {
             return cva5Tracer->get_cycle_count();
+}
+
+const char* cva5_csv_log_file_name () {
+    return csv_log_name;
 }
 
 //#define TRACE_ON
@@ -42,11 +48,8 @@ int main(int argc, char **argv) {
     	exit(EXIT_FAILURE);
     }
 
-
-
     logFile.open (argv[1]);
     sigFile.open (argv[2]);
-    //printf("HW INIT:%s \n", argv[3]);
     programFile.open (argv[3]);
 
     if (!logFile.is_open()) {
@@ -58,6 +61,12 @@ int main(int argc, char **argv) {
     	exit(EXIT_FAILURE);
     }
 
+    char default_csv = '\0';
+    if (argv[6]) {
+        csv_log_name = argv[6];
+    } else {
+        csv_log_name = &default_csv; 
+    }
 	// Create an instance of our module under test
     cva5Tracer = new CVA5Tracer(programFile);
     cva5Tracer->set_log_file(&logFile);
@@ -93,8 +102,8 @@ int main(int argc, char **argv) {
 	}
 
 	cout << "--------------------------------------------------------------\n";
-	cout << "   Simulation Completed  " << cva5Tracer->get_cycle_count() << " cycles.\n";
-    cva5Tracer->print_stats();
+	cout << "   Simulation Completed\n";
+	cout << "--------------------------------------------------------------\n";
 
 	logFile.close();
 	sigFile.close();

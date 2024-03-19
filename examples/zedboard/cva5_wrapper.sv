@@ -243,7 +243,7 @@ module cva5_wrapper (
     endgenerate
 
     //arm proc(.*);
-    byte_en_BRAM #(MEM_LINES, "/home/ematthew/Research/RISCV/software2/riscv-tools/riscv-tests/benchmarks/fft.riscv.hw_init", 1) inst_data_ram (
+    byte_en_bram #(MEM_LINES, "/home/ematthew/Research/RISCV/software2/riscv-tools/riscv-tests/benchmarks/fft.riscv.hw_init", 1) inst_data_ram (
             .clk(clk),
             .addr_a(instruction_bram.addr[$clog2(MEM_LINES)- 1:0]),
             .en_a(instruction_bram.en),
