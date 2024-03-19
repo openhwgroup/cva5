@@ -2,6 +2,7 @@ core/types_and_interfaces/cva5_config.sv
 core/types_and_interfaces/riscv_types.sv
 core/types_and_interfaces/csr_types.sv
 core/types_and_interfaces/cva5_types.sv
+core/types_and_interfaces/fpu_types.sv
 core/types_and_interfaces/opcodes.sv
 
 l2_arbiter/l2_config_and_types.sv
@@ -59,6 +60,28 @@ core/common_components/clz.sv
 core/execution_units/div_core.sv
 core/execution_units/div_unit.sv
 
+core/execution_units/fp_unit/fp_roundup.sv
+core/execution_units/fp_unit/fp_special_case_detection.sv
+core/execution_units/fp_unit/fp_rs_preprocess.sv
+core/execution_units/fp_unit/fp_preprocessing.sv
+core/execution_units/fp_unit/fp_sticky_tracking.sv
+core/execution_units/fp_unit/fp_add.sv
+core/execution_units/fp_unit/fp_mul.sv
+core/execution_units/fp_unit/fp_madd_wrapper.sv
+core/execution_units/fp_unit/divider/q_lookup.sv
+core/execution_units/fp_unit/divider/on_the_fly.sv
+core/execution_units/fp_unit/divider/carry_save_shift.sv
+core/execution_units/fp_unit/divider/fp_div_core.sv
+core/execution_units/fp_unit/fp_div.sv
+core/execution_units/fp_unit/fp_sqrt_core.sv
+core/execution_units/fp_unit/fp_sqrt.sv
+core/execution_units/fp_unit/fp_div_sqrt_wrapper.sv
+core/execution_units/fp_unit/fp_wb2int_misc.sv
+core/execution_units/fp_unit/fp_wb2fp_misc.sv
+core/execution_units/fp_unit/fp_prenormalize.sv
+core/execution_units/fp_unit/fp_normalize_rounding_top.sv
+core/execution_units/fp_unit/fpu_top.sv
+
 core/fetch_stage/ras.sv
 core/fetch_stage/branch_predictor.sv
 core/fetch_stage/icache_tag_banks.sv
@@ -76,6 +99,7 @@ core/register_free_list.sv
 core/renamer.sv
 core/register_file.sv
 
+core/fp_writeback.sv
 core/writeback.sv
 
 core/l1_arbiter.sv

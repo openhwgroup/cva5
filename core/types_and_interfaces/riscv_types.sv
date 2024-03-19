@@ -52,7 +52,14 @@ package riscv_types;
         FENCE_T = 5'b00011,
         AMO_T = 5'b01011,
         SYSTEM_T = 5'b11100,
-        //end of RV32I
+        FPU_LOAD_T = 5'b00001,
+        FPU_STORE_T = 5'b01001,
+        FPU_MADD_T = 5'b10000,
+        FPU_MSUB_T = 5'b10001,
+        FPU_NMSUB_T = 5'b10010,
+        FPU_NMADD_T = 5'b10011,
+        FPU_OP_T = 5'b10100,
+        //end of RV32IMD
         CUSTOM_T = 5'b11110
     } opcodes_trimmed_t;
 
@@ -71,7 +78,7 @@ package riscv_types;
         LS_B_fn3 = 3'b000,
         LS_H_fn3 = 3'b001,
         LS_W_fn3 = 3'b010,
-        //unused 011
+        LS_D_fn3 = 3'b011,
         L_BU_fn3 = 3'b100,
         L_HU_fn3 = 3'b101
         //unused 110
@@ -283,4 +290,39 @@ package riscv_types;
         logic [XLEN-1:0] t5;
         logic [XLEN-1:0] t6;
     } simulation_named_regfile;
+
+    typedef struct packed{
+        logic [FLEN-1:0] ft0;
+        logic [FLEN-1:0] ft1;
+        logic [FLEN-1:0] ft2;
+        logic [FLEN-1:0] ft3;
+        logic [FLEN-1:0] ft4;
+        logic [FLEN-1:0] ft5;
+        logic [FLEN-1:0] ft6;
+        logic [FLEN-1:0] ft7;
+        logic [FLEN-1:0] fs0;
+        logic [FLEN-1:0] fs1;
+        logic [FLEN-1:0] fa0;
+        logic [FLEN-1:0] fa1;
+        logic [FLEN-1:0] fa2;
+        logic [FLEN-1:0] fa3;
+        logic [FLEN-1:0] fa4;
+        logic [FLEN-1:0] fa5;
+        logic [FLEN-1:0] fa6;
+        logic [FLEN-1:0] fa7;
+        logic [FLEN-1:0] fs2;
+        logic [FLEN-1:0] fs3;
+        logic [FLEN-1:0] fs4;
+        logic [FLEN-1:0] fs5;
+        logic [FLEN-1:0] fs6;
+        logic [FLEN-1:0] fs7;
+        logic [FLEN-1:0] fs8;
+        logic [FLEN-1:0] fs9;
+        logic [FLEN-1:0] fs10;
+        logic [FLEN-1:0] fs11;
+        logic [FLEN-1:0] ft8;
+        logic [FLEN-1:0] ft9;
+        logic [FLEN-1:0] ft10;
+        logic [FLEN-1:0] ft11;
+    } fp_simulation_named_regfile;
 endpackage

@@ -41,8 +41,6 @@ module l1_to_wishbone
     fifo_interface #(.DATA_TYPE(l2_data_request_t)) data_fifo ();
 
     l2_request_t request;
-
-    l2_data_request_t data_request_in;
     l2_data_request_t data_request;
 
     logic request_complete;
@@ -64,13 +62,13 @@ module l1_to_wishbone
     assign request_fifo.pop = request_complete;
     assign request = request_fifo.data_out;
 
-    assign data_request_in.data = cpu.wr_data;
-    assign data_request_in.be = cpu.wr_data_be;
-
     assign data_fifo.push = cpu.wr_data_push;
     assign data_fifo.potential_push = cpu.wr_data_push;
     assign data_fifo.pop = wishbone.we & wishbone.ack;
-    assign data_fifo.data_in = data_request_in;
+    assign data_fifo.data_in = '{
+        data : cpu.wr_data,
+        be : cpu_wr_data_be
+    };
     assign data_request = data_fifo.data_out;
 
     cva5_fifo #(.DATA_TYPE(l2_request_t), .FIFO_DEPTH(MAX_REQUESTS))

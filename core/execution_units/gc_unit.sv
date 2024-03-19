@@ -64,8 +64,6 @@ module gc_unit
         input logic [31:0] epc,
 
         //Retire
-        input retire_packet_t wb_retire,
-        input id_t retire_ids [RETIRE_PORTS],
         input id_t retire_ids_next [RETIRE_PORTS],
         input logic [$clog2(NUM_EXCEPTION_SOURCES)-1:0] current_exception_unit,
 

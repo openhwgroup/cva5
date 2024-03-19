@@ -23,18 +23,14 @@
 module writeback
 
     import cva5_config::*;
-    import riscv_types::*;
     import cva5_types::*;
     
     # (
-        parameter cpu_config_t CONFIG = EXAMPLE_CONFIG,
         parameter int unsigned NUM_WB_UNITS = 5,
-        parameter unit_id_enum_t [MAX_NUM_UNITS-1:0] WB_INDEX = '{0: ALU_ID, 1: MUL_ID, 2: DIV_ID, 3: LS_ID, 4: CSR_ID, default: NON_WRITEBACK_ID}
+        parameter unit_id_enum_t [MAX_NUM_UNITS-1:0] WB_INDEX = '{0: ALU_ID, 1: MUL_ID, 2: DIV_ID, 3: LS_ID, 4: CSR_ID, 5: FPU_ID, default: NON_WRITEBACK_ID}
     )
 
     (
-        input logic clk,
-        input logic rst,
         //Unit writeback
         unit_writeback_interface.wb unit_wb[MAX_NUM_UNITS],
         //WB output

@@ -38,7 +38,7 @@ module l1_to_axi
     localparam MAX_REQUESTS = 16;
 
     fifo_interface #(.DATA_TYPE(l2_request_t)) request_fifo ();
-    fifo_interface #(.DATA_TYPE(logic[31:0])) data_fifo ();
+    fifo_interface #(.DATA_TYPE(l2_data_request_t)) data_fifo ();
 
     l2_request_t request;
     logic write_request;
@@ -59,7 +59,6 @@ module l1_to_axi
     //Repack input attributes
     assign request_fifo.data_in = '{
         addr : cpu.addr,
-        be : cpu.be,
         rnw : cpu.rnw,
         is_amo : cpu.is_amo,
         amo_type_or_burst_size : cpu.amo_type_or_burst_size,
@@ -73,7 +72,10 @@ module l1_to_axi
     assign data_fifo.push = cpu.wr_data_push;
     assign data_fifo.potential_push = cpu.wr_data_push;
     assign data_fifo.pop = write_pop;
-    assign data_fifo.data_in = cpu.wr_data;
+    assign data_fifo.data_in = '{
+        data : cpu.wr_data,
+        be : cpu.wr_data_be
+    };
 
     cva5_fifo #(.DATA_TYPE(l2_request_t), .FIFO_DEPTH(MAX_REQUESTS))
     request_fifo_block (
@@ -81,7 +83,7 @@ module l1_to_axi
         .rst (rst), 
         .fifo (request_fifo)
     );
-    cva5_fifo #(.DATA_TYPE(logic[31:0]), .FIFO_DEPTH(MAX_REQUESTS))
+    cva5_fifo #(.DATA_TYPE(l2_data_request_t), .FIFO_DEPTH(MAX_REQUESTS))
     data_fifo_block (
         .clk (clk), 
         .rst (rst), 
@@ -122,8 +124,8 @@ module l1_to_axi
     assign write_request = (~request.rnw) & request_fifo.valid & data_fifo.valid;
     assign axi.awvalid = write_request & ~aw_complete_r;
 
-    assign axi.wdata = data_fifo.data_out;
-    assign axi.wstrb = request.be;
+    assign axi.wdata = data_fifo.data_out.data;
+    assign axi.wstrb = data_fifo.data_out.be;
     assign axi.wvalid = write_request & ~w_complete_r;
     assign axi.wlast = axi.wvalid;
 

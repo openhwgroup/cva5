@@ -64,9 +64,9 @@ package csr_types;
         logic I; //Base
         logic H;
         logic G;
-        logic F;
+        logic F; //Single precision
         logic E;
-        logic D;
+        logic D; //Double precision
         logic C;
         logic B;
         logic A; //Atomic

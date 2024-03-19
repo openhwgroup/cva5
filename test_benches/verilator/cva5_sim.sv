@@ -570,8 +570,9 @@ module cva5_sim
                 instruction_mix_stats[i][BR_STAT] = cpu.retire_port_valid[i] & (retire_ports_instruction[i][6:2] inside {BRANCH_T, JAL_T, JALR_T});
                 instruction_mix_stats[i][MUL_STAT] = cpu.retire_port_valid[i] & (retire_ports_instruction[i][6:2] inside {ARITH_T}) & is_mul[i];
                 instruction_mix_stats[i][DIV_STAT] = cpu.retire_port_valid[i] & (retire_ports_instruction[i][6:2] inside {ARITH_T}) & is_div[i];
-                instruction_mix_stats[i][LOAD_STAT] = cpu.retire_port_valid[i] & (retire_ports_instruction[i][6:2] inside {LOAD_T, AMO_T});// & retire_ports_instruction[i][14:12] inside {LS_B_fn3, L_BU_fn3};
-                instruction_mix_stats[i][STORE_STAT] = cpu.retire_port_valid[i] & (retire_ports_instruction[i][6:2] inside {STORE_T, AMO_T});
+                instruction_mix_stats[i][LOAD_STAT] = cpu.retire_port_valid[i] & (retire_ports_instruction[i][6:2] inside {LOAD_T, FPU_LOAD_T, AMO_T});// & retire_ports_instruction[i][14:12] inside {LS_B_fn3, L_BU_fn3};
+                instruction_mix_stats[i][STORE_STAT] = cpu.retire_port_valid[i] & (retire_ports_instruction[i][6:2] inside {STORE_T, FPU_STORE_T, AMO_T});
+                instruction_mix_stats[i][FPU_STAT] = cpu.retire_port_valid[i] & (retire_ports_instruction[i][6:2] inside {FPU_MADD_T, FPU_MSUB_T, FPU_NMSUB_T, FPU_NMADD_T, FPU_OP_T});
                 instruction_mix_stats[i][MISC_STAT] = cpu.retire_port_valid[i] & (retire_ports_instruction[i][6:2] inside {SYSTEM_T, FENCE_T});
         end
     end
@@ -612,6 +613,32 @@ module cva5_sim
             end
         end
         assign sim_registers_unamed[31-i] = sim_registers_unamed_groups[translation[i].wb_group][i];
+    end
+    endgenerate
+
+    //FPU
+    logic [31:0][FLEN-1:0] fp_sim_registers_unamed_groups[2];
+    logic [31:0][FLEN-1:0] fp_sim_registers_unamed;
+    fp_simulation_named_regfile fp_sim_register;
+    typedef struct packed{
+        phys_addr_t fp_phys_addr;
+        logic fp_wb_group;
+    } fp_spec_table_t;
+    fp_spec_table_t fp_translation [32];
+
+    generate if (EXAMPLE_CONFIG.INCLUDE_UNIT.FPU) begin : gen_fp_reg_file_sim
+        for (i = 0; i < 32; i++) begin
+            for (j = 0; j < 2; j++) begin
+                if (FPGA_VENDOR == XILINX) begin
+                    assign fp_translation[i] = cpu.gen_fpu.fp_renamer_block.spec_table_ram.xilinx_gen.ram[i];
+                    assign fp_sim_registers_unamed_groups[j][i] = cpu.gen_fpu.fp_register_file_block.register_file_gen[j].register_file_bank.xilinx_gen.ram[fp_translation[i].fp_phys_addr];
+                end else if (FPGA_VENDOR == INTEL) begin
+                    assign fp_translation[i] = cpu.gen_fpu.fp_renamer_block.spec_table_ram.intel_gen.lutrams[0].write_port.ram[i];
+                    assign fp_sim_registers_unamed_groups[j][i] = cpu.gen_fpu.fp_register_file_block.register_file_gen[j].register_file_bank.intel_gen.lutrams[0].write_port.ram[fp_translation[i].fp_phys_addr];
+                end
+            end
+            assign fp_sim_registers_unamed[31-i] = fp_sim_registers_unamed_groups[fp_translation[i].fp_wb_group][i];
+        end
     end
     endgenerate
 

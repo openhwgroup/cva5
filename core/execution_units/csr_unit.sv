@@ -52,6 +52,10 @@ module csr_unit
 
         //Privilege
         output logic [1:0] current_privilege,
+        
+        //FP
+        input logic [4:0] fflag_wmask, //Always valid
+        output logic [2:0] dyn_rm,
 
         //GC
         input logic interrupt_taken,
@@ -76,7 +80,6 @@ module csr_unit
         output logic [31:0] epc,
 
         //Retire
-        input retire_packet_t wb_retire,
         input id_t retire_ids [RETIRE_PORTS],
         input logic [LOG2_RETIRE_PORTS : 0] retire_count,
 
@@ -122,6 +125,7 @@ module csr_unit
     logic [31:0] selected_csr_r;
 
     logic [31:0] updated_csr;
+    logic [31:0] next_csr;
 
     function logic mwrite_en (input csr_addr_t addr);
         return mwrite & sub_write_en[addr.sub_addr];
@@ -259,15 +263,18 @@ module csr_unit
         swrite <= CONFIG.INCLUDE_S_MODE && commit && (csr_inputs_r.addr.rw_bits != CSR_READ_ONLY && csr_inputs_r.addr.privilege == SUPERVISOR_PRIVILEGE);
     end
 
+    always_comb begin
+        case (csr_inputs_r.op)
+            CSR_RW : next_csr = csr_inputs_r.data;
+            CSR_RS : next_csr = selected_csr | csr_inputs_r.data;
+            CSR_RC : next_csr = selected_csr & ~csr_inputs_r.data;
+            default : next_csr = csr_inputs_r.data;
+        endcase
+    end
+
     always_ff @(posedge clk) begin
-        if (commit) begin
-            case (csr_inputs_r.op)
-                CSR_RW : updated_csr = csr_inputs_r.data;
-                CSR_RS : updated_csr = selected_csr | csr_inputs_r.data;
-                CSR_RC : updated_csr = selected_csr & ~csr_inputs_r.data;
-                default : updated_csr = csr_inputs_r.data;
-            endcase
-        end
+        if (commit)
+            updated_csr <= next_csr;
     end
 
     ////////////////////////////////////////////////////
@@ -286,7 +293,9 @@ module csr_unit
         I:1,
         M:(CONFIG.INCLUDE_UNIT.MUL && CONFIG.INCLUDE_UNIT.DIV),
         S:(CONFIG.INCLUDE_S_MODE),
-        U:(CONFIG.INCLUDE_U_MODE)
+        U:(CONFIG.INCLUDE_U_MODE),
+        F:(CONFIG.INCLUDE_UNIT.FPU),
+        D:(CONFIG.INCLUDE_UNIT.FPU)
     };
 
     ////////////////////////////////////////////////////
@@ -688,6 +697,59 @@ endgenerate
             minst_ret <= minst_ret_input_next + COUNTER_W'(minst_ret_inc);
     end
 
+    ////////////////////////////////////////////////////
+    //Floating-Point status register
+    //Contains 5 exception flags (invalid, inexact, overflow, underflow, divide by zero)
+    //Also contains dynamic rounding mode (round to zero, round to +infinity, round to -infinity, round to nearest ties to even, round to nearest ties away)
+    //These fields can be accessed individually or simultaneously through different addresses
+    logic[2:0] frm;
+    logic[4:0] fflags;
+    assign dyn_rm = frm;
+
+generate if (CONFIG.INCLUDE_UNIT.FPU) begin : gen_csr_fp
+    typedef enum logic[1:0] {
+        WRITE_NONE = 2'b00,
+        WRITE_FFLAGS = 2'b01,
+        WRITE_FRM = 2'b10,
+        WRITE_BOTH = 2'b11
+    } fcsr_write_t;
+    fcsr_write_t fcsr_write_type;
+    
+    always_comb begin
+        case (csr_inputs_r.addr) inside
+            FFLAGS : fcsr_write_type = WRITE_FFLAGS;
+            FRM : fcsr_write_type = WRITE_FRM;
+            FCSR : fcsr_write_type = WRITE_BOTH;
+            default : fcsr_write_type = WRITE_NONE;
+        endcase
+    end
+
+    //Older versions of the spec mandated an illegal instruction exception if an instruction
+    //with the dynamic rounding mode was issued and the frm register contained an invalid 
+    //rounding mode. This has since been changed to "reserved" behaviour, meaning we do not 
+    //have to do anything special. In this case, fp_roundup would default to rne
+
+    always_ff @(posedge clk) begin
+        if (rst) begin
+            frm <= '0;
+            fflags <= '0;
+        end
+        else begin
+            //Explicit writes
+            if (commit) begin
+                case (fcsr_write_type)
+                    WRITE_FFLAGS : fflags <= next_csr[4:0];
+                    WRITE_FRM : frm <= next_csr[2:0];
+                    WRITE_BOTH : {frm, fflags} <= next_csr[7:0];
+                    default;
+                endcase
+            end
+            else //Implicit writes (can never overlap explicit writes)
+                fflags <= fflags | fflag_wmask;
+        end
+    end
+
+end endgenerate
 
     ////////////////////////////////////////////////////
     //CSR mux
@@ -751,9 +813,9 @@ endgenerate
 
             //User status
             //Floating point
-            FFLAGS : selected_csr = '0;
-            FRM : selected_csr = '0;
-            FCSR : selected_csr = '0;
+            FFLAGS : selected_csr = CONFIG.INCLUDE_UNIT.FPU ? {27'b0, fflags} : '0;
+            FRM : selected_csr = CONFIG.INCLUDE_UNIT.FPU ? {29'b0, frm} : '0;
+            FCSR : selected_csr = CONFIG.INCLUDE_UNIT.FPU ? {24'b0, frm, fflags} : '0;
             //User Counter Timers
             CYCLE : selected_csr = mcycle[31:0];
             TIME : selected_csr = mcycle[31:0];

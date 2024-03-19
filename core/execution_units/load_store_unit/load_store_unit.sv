@@ -25,6 +25,7 @@ module load_store_unit
     import cva5_config::*;
     import riscv_types::*;
     import cva5_types::*;
+    import fpu_types::*;
     import opcodes::*;
 
     # (
@@ -39,16 +40,22 @@ module load_store_unit
         input decode_packet_t decode_stage,
         output logic unit_needed,
         output logic [REGFILE_READ_PORTS-1:0] uses_rs,
+        output logic [2:0] fp_uses_rs,
         output logic uses_rd,
+        output logic fp_uses_rd,
         output logic decode_is_store,
 
         input issue_packet_t issue_stage,
         input logic issue_stage_ready,
         input logic instruction_issued_with_rd,
+        input logic fp_instruction_issued_with_rd,
         input logic rs2_inuse,
+        input logic fp_rs2_inuse,
         input rs_addr_t issue_rs_addr [REGFILE_READ_PORTS],
         input logic [$clog2(CONFIG.NUM_WB_GROUPS)-1:0] issue_rd_wb_group,
+        input logic fp_issue_rd_wb_group,
         input logic [31:0] rf [REGFILE_READ_PORTS],
+        input logic[FLEN-1:0] fp_rf[3],
 
         unit_issue_interface.unit issue,
 
@@ -70,13 +77,15 @@ module load_store_unit
 
         //Writeback-Store Interface
         input wb_packet_t wb_packet [CONFIG.NUM_WB_GROUPS],
+        input fp_wb_packet_t fp_wb_packet [2],
 
         //Retire release
         input retire_packet_t store_retire,
 
         exception_interface.unit exception,
         output load_store_status_t load_store_status,
-        unit_writeback_interface.unit wb
+        unit_writeback_interface.unit wb,
+        unit_writeback_interface.unit fp_wb
     );
 
     localparam NUM_SUB_UNITS = int'(CONFIG.INCLUDE_DLOCAL_MEM) + int'(CONFIG.INCLUDE_PERIPHERAL_BUS) + int'(CONFIG.INCLUDE_DCACHE);
@@ -127,6 +136,7 @@ module load_store_unit
 
     logic unaligned_addr;
     logic load_exception_complete;
+    logic exception_is_fp;
     logic fence_hold;
 
     typedef struct packed{
@@ -136,6 +146,7 @@ module load_store_unit
         logic [1:0] final_mux_sel;
         id_t id;
         logic [NUM_SUB_UNITS_W-1:0] subunit_id;
+        fp_ls_op_t fp_op;
     } load_attributes_t;
     load_attributes_t  wb_attr;
 
@@ -153,12 +164,19 @@ module load_store_unit
     //Decode
     assign instruction = decode_stage.instruction;
 
-    assign unit_needed = decode_stage.instruction inside {LB, LH, LW, LBU, LHU, SB, SH, SW, FENCE} | (CONFIG.INCLUDE_CBO & decode_stage.instruction inside {CBO_INVAL, CBO_CLEAN, CBO_FLUSH});
+    assign unit_needed = instruction inside {LB, LH, LW, LBU, LHU, SB, SH, SW, FENCE} | 
+        (CONFIG.INCLUDE_CBO & instruction inside {CBO_INVAL, CBO_CLEAN, CBO_FLUSH}) | 
+        (CONFIG.INCLUDE_UNIT.FPU & instruction inside {SP_FLW, SP_FSW, DP_FLD, DP_FSD});
     always_comb begin
         uses_rs = '0;
-        uses_rs[RS1] = decode_stage.instruction inside {LB, LH, LW, LBU, LHU, SB, SH, SW} | (CONFIG.INCLUDE_CBO & decode_stage.instruction inside {CBO_INVAL, CBO_CLEAN, CBO_FLUSH});
-        uses_rs[RS2] = CONFIG.INCLUDE_FORWARDING_TO_STORES ? 0 : decode_stage.instruction inside {SB, SH, SW};
-        uses_rd = decode_stage.instruction inside {LB, LH, LW, LBU, LHU};
+        uses_rs[RS1] = instruction inside {LB, LH, LW, LBU, LHU, SB, SH, SW} | 
+            (CONFIG.INCLUDE_CBO & instruction inside {CBO_INVAL, CBO_CLEAN, CBO_FLUSH}) | 
+            (CONFIG.INCLUDE_UNIT.FPU & instruction inside {SP_FLW, SP_FSW, DP_FLD, DP_FSD});
+        uses_rs[RS2] = CONFIG.INCLUDE_FORWARDING_TO_STORES ? 0 : instruction inside {SB, SH, SW};
+        uses_rd = instruction inside {LB, LH, LW, LBU, LHU};
+        fp_uses_rs = '0;
+        fp_uses_rs[RS2] = ~CONFIG.INCLUDE_FORWARDING_TO_STORES & CONFIG.INCLUDE_UNIT.FPU & instruction inside {SP_FSW, DP_FSD};
+        fp_uses_rd = CONFIG.INCLUDE_UNIT.FPU & instruction inside {SP_FLW, DP_FLD};
     end
 
     ////////////////////////////////////////////////////
@@ -168,6 +186,8 @@ module load_store_unit
         logic is_store;
         logic is_fence;
         logic is_cbo;
+        logic is_fpu;
+        logic is_double;
         logic [11:0] offset;
     } ls_attr_t;
     ls_attr_t decode_attr;
@@ -175,16 +195,18 @@ module load_store_unit
 
     logic [11:0] load_offset;
     logic [11:0] store_offset;
-    assign load_offset = decode_stage.instruction[31:20];
-    assign store_offset = {decode_stage.instruction[31:25], decode_stage.instruction[11:7]};
+    assign load_offset = instruction[31:20];
+    assign store_offset = {instruction[31:25], instruction[11:7]};
 
 
     assign decode_attr = '{
-        is_load : decode_stage.instruction inside {LB, LH, LW, LBU, LHU},
-        is_store : decode_stage.instruction inside {SB, SH, SW},
-        is_fence : decode_stage.instruction inside {FENCE},
-        is_cbo : CONFIG.INCLUDE_CBO & decode_stage.instruction inside {CBO_INVAL, CBO_CLEAN, CBO_FLUSH},
-        offset : decode_stage.instruction[5] ? store_offset : ((CONFIG.INCLUDE_CBO & decode_stage.instruction[2]) ? '0 :load_offset)
+        is_load : instruction inside {LB, LH, LW, LBU, LHU} | CONFIG.INCLUDE_UNIT.FPU & instruction inside {SP_FLW, DP_FLD},
+        is_store : instruction inside {SB, SH, SW} | CONFIG.INCLUDE_UNIT.FPU & instruction inside {SP_FSW, DP_FSD},
+        is_fence : instruction inside {FENCE},
+        is_cbo : CONFIG.INCLUDE_CBO & instruction inside {CBO_INVAL, CBO_CLEAN, CBO_FLUSH},
+        is_fpu : CONFIG.INCLUDE_UNIT.FPU & instruction inside {SP_FLW, SP_FSW, DP_FLD, DP_FSD},
+        is_double : CONFIG.INCLUDE_UNIT.FPU & instruction inside {DP_FLD, DP_FSD},
+        offset : instruction[5] ? store_offset : ((CONFIG.INCLUDE_CBO & instruction[2]) ? '0 : load_offset)
     };
     assign decode_is_store = decode_attr.is_store | decode_attr.is_cbo;
 
@@ -196,18 +218,21 @@ module load_store_unit
     typedef struct packed{
         id_t id;
         logic [$clog2(CONFIG.NUM_WB_GROUPS)-1:0] wb_group;
+        logic fp_wb_group;
     } rd_attributes_t;
     rd_attributes_t rd_attributes;
 
-    lutram_1w_1r #(.DATA_TYPE(rd_attributes_t), .DEPTH(32))
+    //Store FP instructions in 32-64
+    lutram_1w_1r #(.DATA_TYPE(rd_attributes_t), .DEPTH(64))
     rd_to_id_table (
         .clk(clk),
-        .waddr(issue_stage.rd_addr),
-        .raddr(issue_rs_addr[RS2]),
-        .ram_write(instruction_issued_with_rd),
+        .waddr({fp_instruction_issued_with_rd, issue_stage.rd_addr}),
+        .raddr({issue_attr.is_fpu, issue_rs_addr[RS2]}),
+        .ram_write(instruction_issued_with_rd | fp_instruction_issued_with_rd),
         .new_ram_data('{
             id : issue_stage.id,
-            wb_group : issue_rd_wb_group
+            wb_group : issue_rd_wb_group,
+            fp_wb_group : fp_issue_rd_wb_group
         }),
         .ram_data_out(rd_attributes)
     );
@@ -217,11 +242,16 @@ module load_store_unit
     generate if (CONFIG.INCLUDE_M_MODE) begin : gen_ls_exceptions
         logic new_exception;
         always_comb begin
-            case(issue_stage.fn3)
-                LS_H_fn3, L_HU_fn3 : unaligned_addr = virtual_address[0];
-                LS_W_fn3 : unaligned_addr = |virtual_address[1:0];
-                default : unaligned_addr = 0;
-            endcase
+            if (issue_stage.fn3 == LS_H_fn3 | issue_stage.fn3 == L_HU_fn3)
+                unaligned_addr = virtual_address[0];
+            else if (issue_stage.fn3 == LS_W_fn3)
+                unaligned_addr = |virtual_address[1:0];
+            //Double-precision operations raise if not aligned on 8 byte boundary even though they are decomposed into 4 byte operations
+            //This is because the operation might straddle two memory regions
+            else if (CONFIG.INCLUDE_UNIT.FPU & issue_stage.fn3 == LS_D_fn3)
+                unaligned_addr = |virtual_address[2:0];
+            else
+                unaligned_addr = 0;
         end
 
         assign new_exception = unaligned_addr & issue.new_request & ~issue_attr.is_fence;
@@ -230,6 +260,13 @@ module load_store_unit
                 exception.valid <= 0;
             else
                 exception.valid <= (exception.valid & ~exception.ack) | new_exception;
+        end
+
+        always_ff @(posedge clk) begin
+            if (rst)
+                exception_is_fp <= 0;
+            else if (new_exception)
+                exception_is_fp <= CONFIG.INCLUDE_UNIT.FPU & issue_attr.is_fpu;
         end
 
         always_ff @(posedge clk) begin
@@ -294,7 +331,10 @@ module load_store_unit
         store : issue_attr.is_store,
         cache_op : issue_attr.is_cbo,
         id : issue.id,
-        id_needed : rd_attributes.id
+        id_needed : rd_attributes.id,
+        fp : issue_attr.is_fpu,
+        double : issue_attr.is_double,
+        fp_data : fp_rf[RS2]
     };
 
     assign lsq.potential_push = issue.possible_issue;
@@ -306,7 +346,9 @@ module load_store_unit
         .gc (gc),
         .lsq (lsq),
         .store_forward_wb_group (rs2_inuse ? rd_attributes.wb_group : '0),
+        .fp_store_forward_wb_group ({fp_rs2_inuse & rd_attributes.fp_wb_group, fp_rs2_inuse & ~rd_attributes.fp_wb_group}),
         .wb_packet (wb_packet),
+        .fp_wb_packet (fp_wb_packet),
         .store_retire (store_retire)
     );
     assign shared_inputs = sel_load ? lsq.load_data_out : lsq.store_data_out;
@@ -368,10 +410,11 @@ module load_store_unit
     assign load_attributes.data_in = '{
         is_signed : ~|lsq.load_data_out.fn3[2:1],
         byte_addr : lsq.load_data_out.addr[1:0],
-        sign_sel : lsq.load_data_out.addr[1:0] | {1'b0, lsq.load_data_out.fn3[0]},//halfwrord
+        sign_sel : lsq.load_data_out.addr[1:0] | {1'b0, lsq.load_data_out.fn3[0]},//halfword
         final_mux_sel : final_mux_sel,
         id : lsq.load_data_out.id,
-        subunit_id : subunit_id
+        subunit_id : subunit_id,
+        fp_op : lsq.load_data_out.fp_op
     };
     assign load_attributes.push = sub_unit_load_issue;
     assign load_attributes.potential_push = load_attributes.push;
@@ -505,11 +548,46 @@ module load_store_unit
         endcase
     end
 
+    //FP buffering first load result
+    logic[FLEN-1:0] fp_result;
+    generate if (CONFIG.INCLUDE_UNIT.FPU && FLEN > 32) begin : gen_fp_load_buffering
+        logic[31:0] saved_msb;
+        always_ff @(posedge clk) begin
+            if (rst)
+                saved_msb <= '1;
+            else begin
+                if (load_complete & wb_attr.fp_op == DOUBLE_HOLD)
+                    saved_msb <= unit_muxed_load_data;
+                else if (load_complete) //Boxing
+                    saved_msb <= '1;
+            end
+        end
+        always_comb begin
+            fp_result = '1;
+            fp_result[FLEN-1-:32] = saved_msb;
+            if (wb_attr.fp_op == SINGLE_DONE)
+                fp_result[FLEN_F-1:0] = unit_muxed_load_data[31-:FLEN_F];
+            else
+                fp_result[FLEN-33:0] = unit_muxed_load_data[31-:FLEN-32];
+        end
+    end else if (CONFIG.INCLUDE_UNIT.FPU) begin : gen_fpu_no_buffering
+        //No buffering ever required - all results are final
+        assign fp_result = wb_attr.fp_op == SINGLE_DONE ? {{(FLEN-FLEN_F){1'b1}}, unit_muxed_load_data[31-:FLEN_F]} : unit_muxed_load_data[31-:FLEN];
+    end
+    else begin : gen_no_fpu
+        assign fp_result = 'x;
+    end endgenerate
+
     ////////////////////////////////////////////////////
     //Output bank
     assign wb.rd = final_load_data;
-    assign wb.done = load_complete | load_exception_complete;
+    assign wb.done = (load_complete & (~CONFIG.INCLUDE_UNIT.FPU | wb_attr.fp_op == INT_DONE)) | (load_exception_complete & ~exception_is_fp);
+    //TODO: exceptions seemingly clobber load data if it appears on the same cycle
     assign wb.id = load_exception_complete ? exception.id : wb_attr.id;
+
+    assign fp_wb.rd = fp_result;
+    assign fp_wb.done = (load_complete & (wb_attr.fp_op == SINGLE_DONE | wb_attr.fp_op == DOUBLE_DONE)) | (load_exception_complete & exception_is_fp);
+    assign fp_wb.id = load_exception_complete ? exception.id : wb_attr.id;
 
     ////////////////////////////////////////////////////
     //End of Implementation

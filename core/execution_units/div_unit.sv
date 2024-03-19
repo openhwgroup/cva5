@@ -151,9 +151,16 @@ module div_unit
     //Note: If this becomes the critical path, we can use the one's complemented input instead.
     //It will potentially overestimate (only when the input is a negative power-of-two), and
     //the divisor width will need to be increased by one to safely handle the case where the divisor CLZ is overestimated
-    clz dividend_clz_block (.clz_input(unsigned_dividend), .clz(dividend_CLZ));
-    clz divisor_clz_block (.clz_input(unsigned_divisor), .clz(divisor_CLZ));
-    assign divisor_is_zero = (&divisor_CLZ) & ~rf[RS2][0];
+    clz #(.WIDTH(32)) dividend_clz_block (
+        .clz_input(unsigned_dividend),
+        .clz(dividend_CLZ),
+        .zero()
+    );
+    clz #(.WIDTH(32)) divisor_clz_block (
+        .clz_input(unsigned_divisor),
+        .clz(divisor_CLZ),
+        .zero(divisor_is_zero)
+    );
 
     ////////////////////////////////////////////////////
     //Input FIFO

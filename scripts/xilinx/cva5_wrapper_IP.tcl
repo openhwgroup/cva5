@@ -125,6 +125,7 @@ import_files -norecurse $origin_dir/../../core/types_and_interfaces/cva5_config.
 import_files -norecurse $origin_dir/../../core/types_and_interfaces/riscv_types.sv -force
 import_files -norecurse $origin_dir/../../core/types_and_interfaces/cva5_types.sv -force
 import_files -norecurse $origin_dir/../../core/types_and_interfaces/csr_types.sv -force
+import_files -norecurse $origin_dir/../../core/types_and_interfaces/fpu_types.sv -force
 import_files -norecurse $origin_dir/../../l2_arbiter/l2_config_and_types.sv -force
 
 # Set IP repository paths
