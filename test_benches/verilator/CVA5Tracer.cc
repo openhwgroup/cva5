@@ -51,7 +51,7 @@ bool CVA5Tracer::has_terminated() {
 
 
 bool CVA5Tracer::has_stalled() {
-    if (!tb->instruction_issued) {
+    if (!tb->retire_ports_valid[0]) {
         if (stall_count > stall_limit) {
             stall_count = 0;
             std::cout << "\n\nError!!!!\n";
@@ -70,31 +70,6 @@ bool CVA5Tracer::store_queue_empty() {
     return tb->store_queue_empty;
 }
 
-void CVA5Tracer::reset_stats() {
-    for (int i=0; i < numEvents; i++)
-         event_counters[i] = 0;
-}
-
-
-void CVA5Tracer::update_stats() {
-    if (collect_stats) {
-        for (int i=0; i < numEvents; i++)
-            event_counters[i] += tb->cva5_events[i];
-    }
-}
-
-
-void CVA5Tracer::print_stats() {
-	std::cout << "   CVA5 trace stats\n";
-	std::cout << "--------------------------------------------------------------\n";
-    for (int i=0; i < numEvents; i++)
-       std::cout << "    " << eventNames[i] << ":" << event_counters[i] << std::endl;
-
-	std::cout << "--------------------------------------------------------------\n\n";
-}
-
-
-
 void CVA5Tracer::reset() {
     tb->clk = 0;
     tb->rst = 1;
@@ -103,10 +78,7 @@ void CVA5Tracer::reset() {
     }
 
     tb->rst = 0;
-    reset_stats();
     std::cout << "DONE System reset \n" << std::flush;
-
-
 }
 
 void CVA5Tracer::set_log_file(std::ofstream* logFile) {
@@ -154,26 +126,13 @@ void CVA5Tracer::tick() {
             verilatorWaveformTracer->dump(vluint32_t(cycle_count));
         #endif
 
-        if (check_if_instruction_retired(BENCHMARK_START_COLLECTION_NOP)) {
-            reset_stats();
-            collect_stats = true;
-        }
-        else if (check_if_instruction_retired(BENCHMARK_RESUME_COLLECTION_NOP)) {
-            collect_stats = true;
-        }
-        else if (check_if_instruction_retired(BENCHMARK_END_COLLECTION_NOP)) {
-            collect_stats = false;
-        }
-
-
         tb->clk = 1;
         tb->eval();
         axi_ddr->step();
-        update_stats();
         update_UART();
         update_memory();
 
-	#ifdef TRACE_ON
+	#ifdef PC_TRACE_ON
         for (int i =0; i < tb->NUM_RETIRE_PORTS; i++) {
             if (logPC && tb->retire_ports_valid[i]) {
             	*pcFile << std::hex << tb->retire_ports_pc[i] << std::endl;
@@ -186,7 +145,7 @@ void CVA5Tracer::tick() {
 
 void CVA5Tracer::start_tracer(const char *trace_file) {
 	#ifdef TRACE_ON
-		verilatorWaveformTracer = new VerilatedVcdC;
+		verilatorWaveformTracer = new VerilatedFstC;
 		tb->trace(verilatorWaveformTracer, 99);
 		verilatorWaveformTracer->open(trace_file);
 	#endif

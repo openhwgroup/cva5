@@ -74,15 +74,29 @@ module litex_wrapper
         input logic idbus_err
     );
 
+
+    localparam wb_group_config_t MINIMAL_WB_GROUP_CONFIG = '{
+        0 : '{0: ALU_ID, default : NON_WRITEBACK_ID},
+        1 : '{0: LS_ID, 1: CSR_ID, default : NON_WRITEBACK_ID},
+        default : '{default : NON_WRITEBACK_ID}
+    };
+
     localparam cpu_config_t MINIMAL_CONFIG = '{
         //ISA options
         INCLUDE_M_MODE : 1,
         INCLUDE_S_MODE : 0,
         INCLUDE_U_MODE : 0,
-        INCLUDE_MUL : 0,
-        INCLUDE_DIV : 0,
+        INCLUDE_UNIT : '{
+            ALU : 1,
+            LS : 1,
+            MUL : 0,
+            DIV : 0,
+            CSR : 1,
+            CUSTOM : 0,
+            BR : 1,
+            IEC : 1
+        },
         INCLUDE_IFENCE : 0,
-        INCLUDE_CSRS : 1,
         INCLUDE_AMO : 0,
         //CSR constants
         CSRS : '{
@@ -102,6 +116,7 @@ module litex_wrapper
         },
         //Memory Options
         SQ_DEPTH : 2,
+        INCLUDE_FORWARDING_TO_STORES : 0,
         INCLUDE_ICACHE : 0,
         ICACHE_ADDR : '{
             L: 32'h40000000,
@@ -171,7 +186,15 @@ module litex_wrapper
             RAS_ENTRIES : 8
         },
         //Writeback Options
-        NUM_WB_GROUPS : 2
+        NUM_WB_GROUPS : 2,
+        WB_GROUP : MINIMAL_WB_GROUP_CONFIG
+    };
+
+    localparam wb_group_config_t STANDARD_WB_GROUP_CONFIG = '{
+        0 : '{0: ALU_ID, default : NON_WRITEBACK_ID},
+        1 : '{0: LS_ID, default : NON_WRITEBACK_ID},
+        2 : '{0: MUL_ID, 1: DIV_ID, 2: CSR_ID, 3: CUSTOM_ID, default : NON_WRITEBACK_ID},
+        default : '{default : NON_WRITEBACK_ID}
     };
 
     localparam cpu_config_t STANDARD_CONFIG = '{
@@ -179,10 +202,17 @@ module litex_wrapper
         INCLUDE_M_MODE : 1,
         INCLUDE_S_MODE : 0,
         INCLUDE_U_MODE : 0,
-        INCLUDE_MUL : 1,
-        INCLUDE_DIV : 1,
+        INCLUDE_UNIT : '{
+            ALU : 1,
+            LS : 1,
+            MUL : 1,
+            DIV : 1,
+            CSR : 1,
+            CUSTOM : 0,
+            BR : 1,
+            IEC : 1
+        },
         INCLUDE_IFENCE : 0,
-        INCLUDE_CSRS : 1,
         INCLUDE_AMO : 0,
         //CSR constants
         CSRS : '{
@@ -202,6 +232,7 @@ module litex_wrapper
         },
         //Memory Options
         SQ_DEPTH : 4,
+        INCLUDE_FORWARDING_TO_STORES : 1,
         INCLUDE_ICACHE : 1,
         ICACHE_ADDR : '{
             L : 32'h00000000, 
@@ -271,7 +302,8 @@ module litex_wrapper
             RAS_ENTRIES : 8
         },
         //Writeback Options
-        NUM_WB_GROUPS : 2
+        NUM_WB_GROUPS : 3,
+        WB_GROUP : STANDARD_WB_GROUP_CONFIG
     };
 
     function cpu_config_t config_select (input integer variant);
@@ -290,7 +322,6 @@ module litex_wrapper
     avalon_interface m_avalon();
     local_memory_interface instruction_bram();
     local_memory_interface data_bram();
-    trace_outputs_t tr;
     interrupt_t s_interrupt;
 
     //L2 to Wishbone

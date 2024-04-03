@@ -32,7 +32,7 @@ module register_free_list
     import cva5_types::*;
     
     #(
-        parameter DATA_WIDTH = 70, 
+        parameter type DATA_TYPE = logic,
         parameter FIFO_DEPTH = 4
     )
     (
@@ -45,7 +45,7 @@ module register_free_list
     localparam LOG2_FIFO_DEPTH = $clog2(FIFO_DEPTH);
 
     //Force FIFO depth to next power of 2
-    (* ramstyle = "MLAB, no_rw_check" *) logic [DATA_WIDTH-1:0] lut_ram [(2**LOG2_FIFO_DEPTH)];
+    (* ramstyle = "MLAB, no_rw_check" *) logic [$bits(DATA_TYPE)-1:0] lut_ram [(2**LOG2_FIFO_DEPTH)];
     logic [LOG2_FIFO_DEPTH-1:0] write_index;
     logic [LOG2_FIFO_DEPTH-1:0] read_index;
     logic [LOG2_FIFO_DEPTH:0] inflight_count;

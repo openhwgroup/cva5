@@ -37,13 +37,10 @@ module l1_to_wishbone
 
     localparam MAX_REQUESTS = 32;
 
-    fifo_interface #(.DATA_WIDTH($bits(l2_request_t))) request_fifo ();
-    fifo_interface #(.DATA_WIDTH($bits(l2_data_request_t))) data_fifo ();
+    fifo_interface #(.DATA_TYPE(l2_request_t)) request_fifo ();
+    fifo_interface #(.DATA_TYPE(l2_data_request_t)) data_fifo ();
 
-    l2_request_t request_in;
     l2_request_t request;
-
-    l2_data_request_t data_request_in;
     l2_data_request_t data_request;
 
     logic request_complete;
@@ -53,34 +50,34 @@ module l1_to_wishbone
     assign cpu.data_full = data_fifo.full;
 
     //Repack input attributes
-    assign request_in.addr = cpu.addr;
-    assign request_in.rnw = cpu.rnw;
-    assign request_in.is_amo = cpu.is_amo;
-    assign request_in.amo_type_or_burst_size = cpu.amo_type_or_burst_size;
-    assign request_in.sub_id = cpu.sub_id;
-
+    assign request_fifo.data_in = '{
+        addr : cpu.addr,
+        rnw : cpu.rnw,
+        is_amo : cpu.is_amo,
+        amo_type_or_burst_size : cpu.amo_type_or_burst_size,
+        sub_id : cpu.sub_id
+    };
     assign request_fifo.push = cpu.request_push;
     assign request_fifo.potential_push = cpu.request_push;
     assign request_fifo.pop = request_complete;
-    assign request_fifo.data_in = request_in;
     assign request = request_fifo.data_out;
-
-    assign data_request_in.data = cpu.wr_data;
-    assign data_request_in.be = cpu.wr_data_be;
 
     assign data_fifo.push = cpu.wr_data_push;
     assign data_fifo.potential_push = cpu.wr_data_push;
     assign data_fifo.pop = wishbone.we & wishbone.ack;
-    assign data_fifo.data_in = data_request_in;
+    assign data_fifo.data_in = '{
+        data : cpu.wr_data,
+        be : cpu_wr_data_be
+    };
     assign data_request = data_fifo.data_out;
 
-    cva5_fifo #(.DATA_WIDTH($bits(l2_request_t)), .FIFO_DEPTH(MAX_REQUESTS))
+    cva5_fifo #(.DATA_TYPE(l2_request_t), .FIFO_DEPTH(MAX_REQUESTS))
     request_fifo_block (
         .clk (clk), 
         .rst (rst), 
         .fifo (request_fifo)
     );
-    cva5_fifo #(.DATA_WIDTH($bits(l2_data_request_t)), .FIFO_DEPTH(MAX_REQUESTS))
+    cva5_fifo #(.DATA_TYPE(l2_data_request_t), .FIFO_DEPTH(MAX_REQUESTS))
     data_fifo_block (
         .clk (clk), 
         .rst (rst), 

@@ -36,7 +36,7 @@ axi_ddr_sim::axi_ddr_sim(string filepath, uint32_t starting_memory_location, int
     //Parse the uniform pages
     uint32_t page_index = starting_memory_location/PAGE_SIZE;
     for (; page_index < max_pages; page_index++){
-     ddr_page page;
+     ddr_page page {};
         for(int data_index = 0; data_index < PAGE_SIZE/4; data_index++){
             getline(input_memory_file, line);
             //Read 32-bit number represented through hexidecimals
@@ -63,7 +63,7 @@ axi_ddr_sim::axi_ddr_sim(ifstream & input_memory_file, Vcva5_sim * tb){
     bool not_finished = true;
     uint32_t page_index = starting_location/PAGE_SIZE;
     for (; page_index < max_pages; page_index++){
-     ddr_page page;
+     ddr_page page {};
 
         for(int data_index = 0; data_index < PAGE_SIZE/4; data_index++){
             not_finished = (bool)getline(input_memory_file, line);
@@ -90,23 +90,24 @@ axi_ddr_sim::axi_ddr_sim(ifstream & input_memory_file, Vcva5_sim * tb){
 
 int axi_ddr_sim::get_data(uint32_t data_address){
     uint32_t starting_address = (data_address / PAGE_SIZE) * PAGE_SIZE;
-    if(ddr_pages.count(starting_address)){ //If page exists
-        return ddr_pages[starting_address].return_data(data_address%PAGE_SIZE/4);
-    }
-    else{//If it doesn't, instantiate a new page
-        ddr_page page;
+    if(!ddr_pages.count(starting_address)){ //If page does not exist
+        ddr_page page {};
         ddr_pages.insert(pair<uint32_t,ddr_page>(starting_address, page));
-        assert(ddr_pages.count(starting_address)); //Check if it was intialized
-        return ddr_pages[starting_address].return_data(data_address%PAGE_SIZE/4);
+        assert(ddr_pages.count(starting_address));
     }
+    return ddr_pages[starting_address].return_data(data_address%PAGE_SIZE/4);
 }
 
 void  axi_ddr_sim::set_data(uint32_t data_address, uint32_t set_data, uint32_t byte_enable){
     uint32_t data = get_data(data_address);
     uint32_t starting_address = (data_address / PAGE_SIZE) * PAGE_SIZE;
+    if(!ddr_pages.count(starting_address)){ //If page does not exist
+        ddr_page page {};
+        ddr_pages.insert(pair<uint32_t,ddr_page>(starting_address, page));
+        assert(ddr_pages.count(starting_address)); //Check if it was intialized
+    }
     data = (data & ~byte_enable) | (set_data & byte_enable);
     ddr_pages[starting_address].write_data(data_address%PAGE_SIZE/4, data);
-
 };
 
 
@@ -119,6 +120,7 @@ void axi_ddr_sim::parse_input_signals(){
     if(tb->ddr_axi_awvalid && wr_ad_channel_queue.size() < MAX_INFLIGHT_WR_REQ){
         AXI_write_address_channel_signals elem{tb->ddr_axi_awaddr, tb->ddr_axi_awlen, tb->ddr_axi_awsize, tb->ddr_axi_awburst,tb->ddr_axi_awcache,tb->ddr_axi_awid};
         wr_ad_channel_queue.push(elem);
+        order_queue.push(1);
     }
     //If the master has write data
     if(tb->ddr_axi_wvalid){
@@ -129,6 +131,7 @@ void axi_ddr_sim::parse_input_signals(){
      if(tb->ddr_axi_arvalid && rd_ad_channel_queue.size() < MAX_INFLIGHT_RD_REQ){
         AXI_read_address_channel_signals elem{tb->ddr_axi_araddr, tb->ddr_axi_arlen, tb->ddr_axi_arsize, tb->ddr_axi_arburst, tb->ddr_axi_arcache, tb->ddr_axi_arid};
         rd_ad_channel_queue.push(elem);
+        order_queue.push(0);
      }
 }
 
@@ -152,7 +155,7 @@ void axi_ddr_sim::parse_output_signals(){
     tb->ddr_axi_wready = 1;
 
     //Write Req
-    if(wr_ad_channel_queue.size() < MAX_INFLIGHT_WR_REQ)
+    if((wr_ad_channel_queue.size() < MAX_INFLIGHT_WR_REQ))
         tb->ddr_axi_awready = 1;
     else
         tb->ddr_axi_awready = 0;
@@ -207,7 +210,7 @@ void axi_ddr_sim::parse_output_signals(){
 }
 
 void axi_ddr_sim::handle_read_req(){
-    if(rd_ad_channel_queue.size() > 0 ){
+    if(rd_ad_channel_queue.size() > 0 && (order_queue.front() == 0)){
         if(current_read_parameters.delay_cycles_left == 0){
             AXI_read_data_channel_signals elem;
             elem.rid = rd_ad_channel_queue.front().arid;
@@ -233,9 +236,15 @@ void axi_ddr_sim::handle_read_req(){
             if(current_read_parameters.number_of_bursts_left == 0){
                 elem.rlast = 1;
                 rd_ad_channel_queue.pop();
+                order_queue.pop();
             }
             else
                 elem.rlast = 0;
+                
+            if ((current_read_parameters.address >> 24) == 0x88)  {
+                elem.rdata = 0xFFFFFF21;
+            }
+
             r_data_channel_queue.push(elem);
         }
         else{
@@ -248,8 +257,8 @@ void axi_ddr_sim::handle_read_req(){
 void axi_ddr_sim::handle_write_req(){
     //cout << "w_data_channel_queue size: " << w_data_channel_queue.size() << endl;
     //cout << "current_write_parameters.number_of_bursts_left: " << current_write_parameters.number_of_bursts_left << endl;
-    if(w_data_channel_queue.size() > 0 && current_write_parameters.number_of_bursts_left > 0){
-            if(current_write_parameters.delay_cycles_left == 0){
+    if(w_data_channel_queue.size() > 0 && current_write_parameters.number_of_bursts_left > 0 && (order_queue.front() == 1)){
+        if(current_write_parameters.delay_cycles_left == 0){
             AXI_write_data_channel_signals elem = w_data_channel_queue.front();
             w_data_channel_queue.pop();
             //Calculate Byte Enable
@@ -293,6 +302,7 @@ void axi_ddr_sim::handle_write_req(){
                 resp_elem.bid = elem.wid;
                 resp_elem.bresp = 0;
                 wr_ad_channel_queue.pop();
+                order_queue.pop();
                 w_res_channel_queue.push(resp_elem);
             }
         }
@@ -305,7 +315,7 @@ void axi_ddr_sim::handle_write_req(){
 
 void axi_ddr_sim::update_current_read_parameters(){
     //If I can serve a new read request
-    if(rd_ad_channel_queue.size() > 0 && current_read_parameters.number_of_bursts_left == 0){
+    if(rd_ad_channel_queue.size() > 0 && current_read_parameters.number_of_bursts_left == 0 && (order_queue.front() == 0)){
         current_read_parameters.address = rd_ad_channel_queue.front().araddr;
         current_read_parameters.number_of_bursts_left = rd_ad_channel_queue.front().arlen +1;
         current_read_parameters.delay_cycles_left = read_distribution(generator);
@@ -328,7 +338,7 @@ void axi_ddr_sim::update_current_read_parameters(){
 
 void axi_ddr_sim::update_current_write_parameters(){
     //If I can serve a new read request
-    if(wr_ad_channel_queue.size() > 0 && current_write_parameters.number_of_bursts_left == 0){
+    if(wr_ad_channel_queue.size() > 0 && current_write_parameters.number_of_bursts_left == 0 && (order_queue.front() == 1)){
         current_write_parameters.address = wr_ad_channel_queue.front().awaddr;
         current_write_parameters.number_of_bursts_left = wr_ad_channel_queue.front().awlen +1;
         current_write_parameters.delay_cycles_left = write_distribution(generator);

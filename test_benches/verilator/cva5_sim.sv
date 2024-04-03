@@ -167,12 +167,7 @@ module cva5_sim
         output logic [31:0] retire_ports_instruction [RETIRE_PORTS],
         output logic [31:0] retire_ports_pc [RETIRE_PORTS],
         output logic retire_ports_valid [RETIRE_PORTS],
-        output logic store_queue_empty,
-
-        output logic instruction_issued,
-        output logic cva5_events [0:$bits(cva5_trace_events_t)-1],
-        output logic [31:0] instruction_pc_dec,
-        output logic [31:0] instruction_data_dec
+        output logic store_queue_empty
     );
 
     logic [3:0] WRITE_COUNTER_MAX;
@@ -236,8 +231,6 @@ module cva5_sim
     avalon_interface m_avalon();
     wishbone_interface dwishbone();
     wishbone_interface iwishbone();
-
-    trace_outputs_t tr;
 
     l2_requester_interface l2[L2_NUM_PORTS-1:0]();
     l2_memory_interface mem();
@@ -431,15 +424,168 @@ module cva5_sim
 
     ////////////////////////////////////////////////////
     //Trace Interface
-    assign instruction_pc_dec = tr.instruction_pc_dec;
-    assign instruction_data_dec = tr.instruction_data_dec;
-    assign instruction_issued = tr.events.instruction_issued_dec;
-    logic [$bits(cva5_trace_events_t)-1:0] cva5_events_packed;
-    assign cva5_events_packed = tr.events;
+    localparam BENCHMARK_START_COLLECTION_NOP = 32'h00C00013;
+    localparam BENCHMARK_END_COLLECTION_NOP = 32'h00D00013;
+
+    logic start_collection;
+    logic end_collection;
+
+    //NOP detection
     always_comb begin
-        foreach(cva5_events_packed[i])
-            cva5_events[$bits(cva5_trace_events_t)-1-i] = cva5_events_packed[i];
+        start_collection = 0;
+        end_collection = 0;
+        foreach(retire_ports_valid[i]) begin
+            start_collection |= retire_ports_valid[i] & (retire_ports_instruction[i] == BENCHMARK_START_COLLECTION_NOP);
+            end_collection |= retire_ports_valid[i] & (retire_ports_instruction[i] == BENCHMARK_END_COLLECTION_NOP);
+        end
     end
+
+    //Hierarchy paths for major components 
+    `define FETCH_P cpu.fetch_block
+    `define ICACHE_P cpu.fetch_block.gen_fetch_icache.i_cache
+    `define BRANCH_P cpu.branch_unit_block
+    `define ISSUE_P cpu.decode_and_issue_block
+    `define RENAME_P cpu.renamer_block
+    `define METADATA_P cpu.id_block
+    `define LS_P cpu.load_store_unit_block
+    `define DIV_P cpu.gen_div.div_unit_block
+    `define LSQ_P cpu.load_store_unit_block.lsq_block
+    `define DCACHE_P cpu.load_store_unit_block.gen_ls_dcache.data_cache
+
+    stats_t stats_enum;
+    instruction_mix_stats_t instruction_mix_enum;
+    localparam NUM_STATS = stats_enum.num();
+    localparam NUM_INSTRUCTION_MIX_STATS = instruction_mix_enum.num();
+
+    logic stats [NUM_STATS];
+    logic is_mul [RETIRE_PORTS];
+    logic is_div [RETIRE_PORTS];
+    logic [NUM_INSTRUCTION_MIX_STATS-1:0] instruction_mix_stats [RETIRE_PORTS];
+
+    logic icache_hit;
+    logic icache_miss;
+    logic iarb_stall;
+    logic dcache_hit;
+    logic dcache_miss;
+    logic darb_stall;
+
+    //Issue stalls
+    logic base_no_instruction_stall;
+    logic base_no_id_sub_stall;
+    logic base_flush_sub_stall;
+    logic base_unit_busy_stall;
+    logic base_operands_stall;
+    logic base_hold_stall;
+    logic single_source_issue_stall;
+
+    logic [3:0] stall_source_count;
+    ///////////////
+
+    //Issue phys_rd to unit mem
+    //Used for determining what outputs an operand stall is waiting on
+    logic [MAX_NUM_UNITS-1:0] rd_addr_table [32];
+
+    always_ff @(posedge clk) begin
+        if (cpu.instruction_issued_with_rd)
+            rd_addr_table[`ISSUE_P.issue.rd_addr] <= `ISSUE_P.unit_needed_issue_stage;
+    end
+
+    generate if (EXAMPLE_CONFIG.INCLUDE_ICACHE) begin
+        assign icache_hit = `ICACHE_P.tag_hit;
+        assign icache_miss = `ICACHE_P.second_cycle & ~`ICACHE_P.tag_hit;
+        assign iarb_stall = `ICACHE_P.request_r & ~cpu.l1_request[L1_ICACHE_ID].ack;
+    end endgenerate
+
+    generate if (EXAMPLE_CONFIG.INCLUDE_DCACHE) begin
+        assign dcache_hit = `DCACHE_P.load_hit;
+        assign dcache_miss = `DCACHE_P.line_complete;
+        assign darb_stall = cpu.l1_request[L1_DCACHE_ID].request & ~cpu.l1_request[L1_DCACHE_ID].ack;
+    end endgenerate
+
+    logic [MAX_NUM_UNITS-1:0] unit_ready;
+    generate for (i=0; i<MAX_NUM_UNITS; i++)
+        assign unit_ready[i] = cpu.unit_issue[i].ready;
+    endgenerate
+
+    always_comb begin
+        stats = '{default: '0};
+        //Fetch
+        stats[FETCH_EARLY_BR_CORRECTION_STAT] = `FETCH_P.early_branch_flush;
+        stats[FETCH_SUB_UNIT_STALL_STAT] = `METADATA_P.pc_id_available & ~`FETCH_P.units_ready;
+        stats[FETCH_ID_STALL_STAT] = ~`METADATA_P.pc_id_available;
+        stats[FETCH_IC_HIT_STAT] = icache_hit;
+        stats[FETCH_IC_MISS_STAT] = icache_miss;
+        stats[FETCH_IC_ARB_STALL_STAT] = iarb_stall;
+
+        //Branch predictor
+        stats[FETCH_BP_BR_CORRECT_STAT] = `BRANCH_P.instruction_is_completing & ~`BRANCH_P.is_return_ex & ~`BRANCH_P.branch_flush;
+        stats[FETCH_BP_BR_MISPREDICT_STAT] = `BRANCH_P.instruction_is_completing & ~`BRANCH_P.is_return_ex & `BRANCH_P.branch_flush;
+        stats[FETCH_BP_RAS_CORRECT_STAT] = `BRANCH_P.instruction_is_completing & `BRANCH_P.is_return_ex & ~`BRANCH_P.branch_flush;
+        stats[FETCH_BP_RAS_MISPREDICT_STAT] = `BRANCH_P.instruction_is_completing & `BRANCH_P.is_return_ex & `BRANCH_P.branch_flush;
+
+        //Issue stalls
+        base_no_instruction_stall = ~`ISSUE_P.issue.stage_valid | cpu.gc.fetch_flush;
+            base_no_id_sub_stall = (`METADATA_P.post_issue_count == MAX_IDS);
+            base_flush_sub_stall = cpu.gc.fetch_flush;
+        base_unit_busy_stall = `ISSUE_P.issue.stage_valid & ~|(`ISSUE_P.unit_needed_issue_stage & unit_ready);
+        base_operands_stall = `ISSUE_P.issue.stage_valid & ~(&`ISSUE_P.operand_ready);
+        base_hold_stall = `ISSUE_P.issue.stage_valid & `ISSUE_P.issue_hold;
+
+        stall_source_count = 4'(base_no_instruction_stall) + 4'(base_unit_busy_stall) + 4'(base_operands_stall) + 4'(base_hold_stall);
+        single_source_issue_stall = (stall_source_count == 1);
+
+        //Issue stall determination
+        stats[ISSUE_NO_INSTRUCTION_STAT] = base_no_instruction_stall & single_source_issue_stall;
+        stats[ISSUE_NO_ID_STAT] = base_no_instruction_stall & base_no_id_sub_stall & single_source_issue_stall;
+        stats[ISSUE_FLUSH_STAT] = base_no_instruction_stall & base_flush_sub_stall & single_source_issue_stall;
+        stats[ISSUE_UNIT_BUSY_STAT] = base_unit_busy_stall & single_source_issue_stall;
+        stats[ISSUE_OPERANDS_NOT_READY_STAT] = base_operands_stall & single_source_issue_stall;
+        stats[ISSUE_HOLD_STAT] = base_hold_stall & single_source_issue_stall;
+        stats[ISSUE_MULTI_SOURCE_STAT] = (base_no_instruction_stall | base_unit_busy_stall | base_operands_stall | base_hold_stall) & ~single_source_issue_stall;
+
+        //Misc Issue stats
+        stats[ISSUE_OPERAND_STALL_FOR_BRANCH_STAT] = stats[ISSUE_OPERANDS_NOT_READY_STAT] & `ISSUE_P.unit_needed_issue_stage[BR_ID];
+        stats[ISSUE_STORE_WITH_FORWARDED_DATA_STAT] = `ISSUE_P.issue_to[LS_ID] & `LS_P.issue_attr.is_store & `LS_P.rs2_inuse;
+        stats[ISSUE_DIVIDER_RESULT_REUSE_STAT] = `ISSUE_P.issue_to[DIV_ID] & `DIV_P.div_op_reuse;
+
+        //Issue Stall Source
+        for (int i = 0; i < REGFILE_READ_PORTS; i++) begin
+            stats[ISSUE_OPERAND_STALL_ON_LOAD_STAT] |= `ISSUE_P.issue.stage_valid & rd_addr_table[`ISSUE_P.issue_rs_addr[i]][LS_ID] & ~`ISSUE_P.operand_ready[i] ;
+            stats[ISSUE_OPERAND_STALL_ON_MULTIPLY_STAT] |= EXAMPLE_CONFIG.INCLUDE_UNIT.MUL & `ISSUE_P.issue.stage_valid & rd_addr_table[`ISSUE_P.issue_rs_addr[i]][MUL_ID] & ~`ISSUE_P.operand_ready[i] ;
+            stats[ISSUE_OPERAND_STALL_ON_DIVIDE_STAT] |= EXAMPLE_CONFIG.INCLUDE_UNIT.DIV & `ISSUE_P.issue.stage_valid & rd_addr_table[`ISSUE_P.issue_rs_addr[i]][DIV_ID] & ~`ISSUE_P.operand_ready[i] ;
+        end
+
+        //LS Stats
+        stats[LSU_LOAD_BLOCKED_BY_STORE_STAT] = `LSQ_P.lq.valid & `LSQ_P.load_blocked;
+        stats[LSU_SUB_UNIT_STALL_STAT] = (`LS_P.lsq.load_valid | `LS_P.lsq.store_valid) & ~`LS_P.sub_unit_ready;
+        stats[LSU_DC_HIT_STAT] = dcache_hit;
+        stats[LSU_DC_MISS_STAT] = dcache_miss;
+        stats[LSU_DC_ARB_STALL_STAT] = darb_stall;
+
+        //Retire Instruction Mix
+        for (int i = 0; i < RETIRE_PORTS; i++) begin
+                is_mul[i] = retire_ports_instruction[i][25] & ~retire_ports_instruction[i][14];
+                is_div[i] = retire_ports_instruction[i][25] & retire_ports_instruction[i][14];
+                instruction_mix_stats[i][ALU_STAT] = cpu.retire_port_valid[i] & (retire_ports_instruction[i][6:2] inside {ARITH_T, ARITH_IMM_T, AUIPC_T, LUI_T}) & ~(is_mul[i] | is_div[i]);
+                instruction_mix_stats[i][BR_STAT] = cpu.retire_port_valid[i] & (retire_ports_instruction[i][6:2] inside {BRANCH_T, JAL_T, JALR_T});
+                instruction_mix_stats[i][MUL_STAT] = cpu.retire_port_valid[i] & (retire_ports_instruction[i][6:2] inside {ARITH_T}) & is_mul[i];
+                instruction_mix_stats[i][DIV_STAT] = cpu.retire_port_valid[i] & (retire_ports_instruction[i][6:2] inside {ARITH_T}) & is_div[i];
+                instruction_mix_stats[i][LOAD_STAT] = cpu.retire_port_valid[i] & (retire_ports_instruction[i][6:2] inside {LOAD_T, FPU_LOAD_T, AMO_T});// & retire_ports_instruction[i][14:12] inside {LS_B_fn3, L_BU_fn3};
+                instruction_mix_stats[i][STORE_STAT] = cpu.retire_port_valid[i] & (retire_ports_instruction[i][6:2] inside {STORE_T, FPU_STORE_T, AMO_T});
+                instruction_mix_stats[i][FPU_STAT] = cpu.retire_port_valid[i] & (retire_ports_instruction[i][6:2] inside {FPU_MADD_T, FPU_MSUB_T, FPU_NMSUB_T, FPU_NMADD_T, FPU_OP_T});
+                instruction_mix_stats[i][MISC_STAT] = cpu.retire_port_valid[i] & (retire_ports_instruction[i][6:2] inside {SYSTEM_T, FENCE_T});
+        end
+    end
+
+    sim_stats #(.NUM_OF_STATS(NUM_STATS), .NUM_INSTRUCTION_MIX_STATS(NUM_INSTRUCTION_MIX_STATS)) stats_block (
+        .clk (clk),
+        .rst (rst),
+        .start_collection (start_collection),
+        .end_collection (end_collection),
+        .stats (stats),
+        .instruction_mix_stats (instruction_mix_stats),
+        .retire_count (cpu.retire_count)
+    );
 
     ////////////////////////////////////////////////////
     //Performs the lookups to provide the speculative architectural register file with
@@ -448,7 +594,7 @@ module cva5_sim
     logic [31:0][31:0] sim_registers_unamed;
 
     simulation_named_regfile sim_register;
-   typedef struct packed{
+    typedef struct packed{
         phys_addr_t phys_addr;
         logic [$clog2(EXAMPLE_CONFIG.NUM_WB_GROUPS)-1:0] wb_group;
     } spec_table_t;
@@ -456,22 +602,50 @@ module cva5_sim
     genvar i, j;
     generate  for (i = 0; i < 32; i++) begin : gen_reg_file_sim
         for (j = 0; j < EXAMPLE_CONFIG.NUM_WB_GROUPS; j++) begin
-            if (FPGA_VENDOR == XILINX)
+            if (FPGA_VENDOR == XILINX) begin
                 assign translation[i] = cpu.renamer_block.spec_table_ram.xilinx_gen.ram[i];
-            else if (FPGA_VENDOR == INTEL)
+                assign sim_registers_unamed_groups[j][i] = 
+                cpu.register_file_block.register_file_gen[j].register_file_bank.xilinx_gen.ram[translation[i].phys_addr];
+            end else if (FPGA_VENDOR == INTEL) begin
                 assign translation[i] = cpu.renamer_block.spec_table_ram.intel_gen.lutrams[0].write_port.ram[i];
-
-            assign sim_registers_unamed_groups[j][i] = 
-            cpu.register_file_block.register_file_gen[j].reg_group.register_file_bank[translation[i].phys_addr];
+                assign sim_registers_unamed_groups[j][i] = 
+                cpu.register_file_block.register_file_gen[j].register_file_bank.intel_gen.lutrams[0].write_port.ram[translation[i].phys_addr];
+            end
         end
         assign sim_registers_unamed[31-i] = sim_registers_unamed_groups[translation[i].wb_group][i];
     end
     endgenerate
 
+    //FPU
+    logic [31:0][FLEN-1:0] fp_sim_registers_unamed_groups[2];
+    logic [31:0][FLEN-1:0] fp_sim_registers_unamed;
+    fp_simulation_named_regfile fp_sim_register;
+    typedef struct packed{
+        phys_addr_t fp_phys_addr;
+        logic fp_wb_group;
+    } fp_spec_table_t;
+    fp_spec_table_t fp_translation [32];
+
+    generate if (EXAMPLE_CONFIG.INCLUDE_UNIT.FPU) begin : gen_fp_reg_file_sim
+        for (i = 0; i < 32; i++) begin
+            for (j = 0; j < 2; j++) begin
+                if (FPGA_VENDOR == XILINX) begin
+                    assign fp_translation[i] = cpu.gen_fpu.fp_renamer_block.spec_table_ram.xilinx_gen.ram[i];
+                    assign fp_sim_registers_unamed_groups[j][i] = cpu.gen_fpu.fp_register_file_block.register_file_gen[j].register_file_bank.xilinx_gen.ram[fp_translation[i].fp_phys_addr];
+                end else if (FPGA_VENDOR == INTEL) begin
+                    assign fp_translation[i] = cpu.gen_fpu.fp_renamer_block.spec_table_ram.intel_gen.lutrams[0].write_port.ram[i];
+                    assign fp_sim_registers_unamed_groups[j][i] = cpu.gen_fpu.fp_register_file_block.register_file_gen[j].register_file_bank.intel_gen.lutrams[0].write_port.ram[fp_translation[i].fp_phys_addr];
+                end
+            end
+            assign fp_sim_registers_unamed[31-i] = fp_sim_registers_unamed_groups[fp_translation[i].fp_wb_group][i];
+        end
+    end
+    endgenerate
+
     assign NUM_RETIRE_PORTS = RETIRE_PORTS;
     generate for (genvar i = 0; i < RETIRE_PORTS; i++) begin
-        assign retire_ports_pc[i] = cpu.id_block.pc_table[cpu.retire_ids[i]];
-        assign retire_ports_instruction[i] = cpu.id_block.instruction_table[cpu.retire_ids[i]];
+        assign retire_ports_pc[i] = cpu.id_block.pc_table.ram[cpu.retire_ids[i]];
+        assign retire_ports_instruction[i] = cpu.id_block.instruction_table.ram[cpu.retire_ids[i]];
         assign retire_ports_valid[i] = cpu.retire_port_valid[i];
     end endgenerate
 

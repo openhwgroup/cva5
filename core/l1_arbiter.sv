@@ -50,7 +50,7 @@ module l1_arbiter
     logic [L1_CONNECTIONS-1:0] acks;
     logic [((L1_CONNECTIONS == 1) ? 0 : ($clog2(L1_CONNECTIONS)-1)) : 0] arb_sel;
 
-    logic push_ready;
+    logic fifos_full;
     logic request_exists;
     ////////////////////////////////////////////////////
     //Implementation
@@ -69,14 +69,14 @@ module l1_arbiter
     assign sc_success = CONFIG.INCLUDE_AMO & l2.con_result;
 
     //Arbiter can pop address FIFO at a different rate than the data FIFO, so check that both have space.
-    assign push_ready = ~(l2.request_full | l2.data_full);
+    assign fifos_full = l2.request_full | l2.data_full;
     assign request_exists = |requests;
 
-    assign l2.request_push = push_ready & request_exists;
+    assign l2.request_push = request_exists & ~fifos_full;
 
     ////////////////////////////////////////////////////
     //Dcache Specific
-    assign l2.wr_data_push = CONFIG.INCLUDE_DCACHE & (push_ready & l1_request[L1_DCACHE_ID].request & ~l1_request[L1_DCACHE_ID].rnw); //Assumes data cache has highest priority
+    assign l2.wr_data_push = l2.request_push & ~l2.rnw;
     assign l2.wr_data = l1_request[L1_DCACHE_ID].data;
     assign l2.wr_data_be = l1_request[L1_DCACHE_ID].be;
 
@@ -87,29 +87,38 @@ module l1_arbiter
     ////////////////////////////////////////////////////
     //Interface mapping
     generate for (genvar i = 0; i < L1_CONNECTIONS; i++) begin : gen_l2_requests
-        always_comb begin
-            l2_requests[i].addr = l1_request[i].addr[31:2];
-            l2_requests[i].rnw = l1_request[i].rnw;
-            l2_requests[i].is_amo = l1_request[i].is_amo;
-            l2_requests[i].amo_type_or_burst_size = l1_request[i].size;
-            l2_requests[i].sub_id = L2_SUB_ID_W'(i);
-        end
+        assign l2_requests[i] = '{
+            addr : l1_request[i].addr[31:2],
+            rnw : l1_request[i].rnw,
+            is_amo : l1_request[i].is_amo,
+            amo_type_or_burst_size : l1_request[i].size,
+            sub_id : L2_SUB_ID_W'(i)
+        };
     end endgenerate
 
     ////////////////////////////////////////////////////
     //Arbitration
-    priority_encoder
-        #(.WIDTH(L1_CONNECTIONS))
-    arb_encoder
-    (
-        .priority_vector (requests),
-        .encoded_result (arb_sel)
-    );
+    logic [$clog2(L1_CONNECTIONS)-1:0] state;
+    logic [$clog2(L1_CONNECTIONS)-1:0] muxes [L1_CONNECTIONS-1:0];
 
-    always_comb begin
-        acks = '0;
-        acks[arb_sel] = l2.request_push;
+    always_ff @(posedge clk) begin
+        if (rst)
+            state <= 0;
+        else if (l2.request_push)
+            state <= arb_sel;
     end
+    always_comb begin
+        for (int i = 0; i < L1_CONNECTIONS; i++) begin
+            muxes[i] = $clog2(L1_CONNECTIONS)'(i);
+            for (int j = 0; j < L1_CONNECTIONS; j++) begin
+                if (requests[(i + j) % L1_CONNECTIONS])
+                    muxes[i] = $clog2(L1_CONNECTIONS)'((i + j) % L1_CONNECTIONS);
+            end
+        end
+    end
+    assign arb_sel = muxes[state];
+
+    assign acks = L1_CONNECTIONS'(l2.request_push) << arb_sel;
 
     assign l2.addr = l2_requests[arb_sel].addr;
     assign l2.rnw = l2_requests[arb_sel].rnw;
@@ -119,7 +128,7 @@ module l1_arbiter
 
     generate for (genvar i = 0; i < L1_CONNECTIONS; i++) begin : gen_l1_responses
         assign l1_response[i].data = l2.rd_data;
-        assign l1_response[i].data_valid = l2.rd_data_valid && (l2.rd_sub_id == i);
+        assign l1_response[i].data_valid = l2.rd_data_valid & (l2.rd_sub_id == i);
     end endgenerate
 
 endmodule

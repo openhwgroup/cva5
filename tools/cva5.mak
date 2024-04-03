@@ -26,8 +26,8 @@ DDR_SIZE_GB = 4
 PAGE_SIZE_KB = 2
 MAX_READ_REQ = 8
 MAX_WRITE_REQ = $(MAX_READ_REQ)
-MIN_RD_DELAY = 1
-MAX_RD_DELAY = 1
+MIN_RD_DELAY = 15
+MAX_RD_DELAY = 30
 MIN_WR_DELAY = 1
 MAX_WR_DELAY = 1
 DELAY_SEED = 867583
@@ -55,7 +55,7 @@ CFLAGS = -g0 -O3 -std=c++14 -march=native -D$(ddr_size_def) -D$(page_size_def) -
 ################################################################################
 VERILATOR_LINT_IGNORE= -Wno-LITENDIAN -Wno-SYMRSVDWORD
 ifeq ($(TRACE_ENABLE), True)
-	VERILATOR_CFLAGS =  --trace --trace-structs --CFLAGS "$(CFLAGS)  -D TRACE_ON"
+	VERILATOR_CFLAGS =  --trace-fst --trace-structs --CFLAGS "$(CFLAGS)  -D TRACE_ON"
 else
 	VERILATOR_CFLAGS =   --CFLAGS  "$(CFLAGS)"
 endif
@@ -74,6 +74,7 @@ VERILATOR_LINT_IGNORE= -Wno-LITENDIAN -Wno-SYMRSVDWORD
 lint: 
 	verilator -cc $(CVA5_HW_SRCS) \
 	$(VERILATOR_DIR)/cva5_sim.sv \
+	$(CVA5_DIR)/test_benches/sim_stats.sv \
 	--top-module cva5_sim \
 	--lint-only
 
@@ -81,6 +82,7 @@ lint:
 lint-full:
 	verilator -cc $(CVA5_HW_SRCS) \
 	$(VERILATOR_DIR)/cva5_sim.sv \
+	$(CVA5_DIR)/test_benches/sim_stats.sv \
 	--top-module cva5_sim \
 	--lint-only -Wall
 
@@ -91,7 +93,7 @@ $(CVA5_SIM): $(CVA5_HW_SRCS) $(CVA5_SIM_SRCS)
 		-o cva5-sim \
 		$(VERILATOR_LINT_IGNORE) $(VERILATOR_CFLAGS) \
 		$(CVA5_SIM_SRCS) \
-		$(CVA5_HW_SRCS) $(VERILATOR_DIR)/cva5_sim.sv --top-module cva5_sim
+		$(CVA5_HW_SRCS) $(CVA5_DIR)/test_benches/sim_stats.sv $(CVA5_DIR)/examples/nexys/nexys_config.sv $(CVA5_DIR)/examples/nexys/l1_to_axi.sv $(CVA5_DIR)/examples/nexys/nexys_sim.sv --top-module cva5_sim
 	$(MAKE) -C $(CVA5_SIM_DIR) -f Vcva5_sim.mk
 
 .PHONY: clean-cva5-sim

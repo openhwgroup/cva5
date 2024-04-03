@@ -51,25 +51,34 @@ module instruction_metadata_and_id_management
         output decode_packet_t decode,
         input logic decode_advance,
         input logic decode_uses_rd,
+        input logic fp_decode_uses_rd,
         input rs_addr_t decode_rd_addr,
         input exception_sources_t decode_exception_unit,
+        input logic decode_is_store,
         //renamer
         input phys_addr_t decode_phys_rd_addr,
+        input phys_addr_t fp_decode_phys_rd_addr,
 
         //Issue stage
         input issue_packet_t issue,
         input logic instruction_issued,
         input logic instruction_issued_with_rd,
+        input logic fp_instruction_issued_with_rd,
 
         //WB
         input wb_packet_t wb_packet [CONFIG.NUM_WB_GROUPS],
-        output commit_packet_t commit_packet [CONFIG.NUM_WB_GROUPS],
+        input fp_wb_packet_t fp_wb_packet [2],
+        output phys_addr_t wb_phys_addr [CONFIG.NUM_WB_GROUPS],
+        output phys_addr_t fp_wb_phys_addr [2], 
 
         //Retirer
-        output retire_packet_t retire,
+        output retire_packet_t wb_retire,
+        output retire_packet_t fp_wb_retire,
+        output retire_packet_t store_retire,
         output id_t retire_ids [RETIRE_PORTS],
         output id_t retire_ids_next [RETIRE_PORTS],
         output logic retire_port_valid [RETIRE_PORTS],
+        output logic [LOG2_RETIRE_PORTS : 0] retire_count,
 
         //CSR
         output logic [LOG2_MAX_IDS:0] post_issue_count,
@@ -78,16 +87,19 @@ module instruction_metadata_and_id_management
         output logic [$clog2(NUM_EXCEPTION_SOURCES)-1:0] current_exception_unit
     );
     //////////////////////////////////////////
-    (* ramstyle = "MLAB, no_rw_check" *) logic [31:0] pc_table [MAX_IDS];
-    (* ramstyle = "MLAB, no_rw_check" *) logic [31:0] instruction_table [MAX_IDS];
-    (* ramstyle = "MLAB, no_rw_check" *) logic [0:0] valid_fetch_addr_table [MAX_IDS];
+    localparam NUM_WB_GROUPS = CONFIG.NUM_WB_GROUPS + 32'(CONFIG.INCLUDE_UNIT.FPU) + 32'(CONFIG.INCLUDE_UNIT.FPU);
+    logic [31:0] decode_pc;
+    logic [31:0] decode_instruction;
+    fetch_metadata_t decode_fetch_metadata;
 
-    (* ramstyle = "MLAB, no_rw_check" *) phys_addr_t phys_addr_table [MAX_IDS];
-    (* ramstyle = "MLAB, no_rw_check" *) logic [0:0] uses_rd_table [MAX_IDS];
-
-    (* ramstyle = "MLAB, no_rw_check" *) logic [$bits(fetch_metadata_t)-1:0] fetch_metadata_table [MAX_IDS];
-
-    (* ramstyle = "MLAB, no_rw_check" *) logic [$bits(exception_sources_t)-1:0] exception_unit_table [MAX_IDS];
+    typedef enum logic[1:0] {
+        NONE = 2'b00,
+        RD = 2'b01,
+        STORE = 2'b10,
+        FP_RD = 2'b11
+    } instruction_type_t;
+    instruction_type_t decode_type;
+    instruction_type_t retire_type [RETIRE_PORTS];
 
     id_t decode_id;
     id_t oldest_pre_issue_id;
@@ -99,60 +111,128 @@ module instruction_metadata_and_id_management
     logic [LOG2_MAX_IDS:0] post_issue_count_next;
     logic [LOG2_MAX_IDS:0] inflight_count;
 
-    retire_packet_t retire_next;
-    logic retire_port_valid_next [RETIRE_PORTS];
+    retire_packet_t wb_retire_next;
+    retire_packet_t fp_wb_retire_next;
+    retire_packet_t store_retire_next;
 
-    genvar i;
+    logic retire_port_valid_next [RETIRE_PORTS];
+    logic [LOG2_RETIRE_PORTS : 0] retire_count_next;
     ////////////////////////////////////////////////////
     //Implementation
 
     ////////////////////////////////////////////////////
     //Instruction Metadata
-    //PC table
-    //Number of read ports = 1 or 2 (decode stage + exception logic (if enabled))
-    always_ff @ (posedge clk) begin
-        if (pc_id_assigned)
-            pc_table[pc_id] <= if_pc;
-    end
+    //PC table(s)
+    lutram_1w_1r #(.DATA_TYPE(logic[31:0]), .DEPTH(MAX_IDS))
+    pc_table (
+        .clk(clk),
+        .waddr(pc_id),
+        .raddr(decode_id),
+        .ram_write(pc_id_assigned),
+        .new_ram_data(if_pc),
+        .ram_data_out(decode_pc)
+    );
+
+    generate if (CONFIG.INCLUDE_M_MODE) begin : gen_pc_id_exception_support
+    lutram_1w_1r #(.DATA_TYPE(logic[31:0]), .DEPTH(MAX_IDS))
+    pc_table_exception (
+        .clk(clk),
+        .waddr(pc_id),
+        .raddr(retire_ids_next[0]),
+        .ram_write(pc_id_assigned),
+        .new_ram_data(if_pc),
+        .ram_data_out(oldest_pc)
+    );
+    end endgenerate
 
     ////////////////////////////////////////////////////
     //Instruction table
-    //Number of read ports = 1 (decode stage)
-    always_ff @ (posedge clk) begin
-        if (fetch_complete)
-            instruction_table[fetch_id] <= fetch_instruction;
-    end
+    lutram_1w_1r #(.DATA_TYPE(logic[31:0]), .DEPTH(MAX_IDS))
+    instruction_table (
+        .clk(clk),
+        .waddr(fetch_id),
+        .raddr(decode_id),
+        .ram_write(fetch_complete),
+        .new_ram_data(fetch_instruction),
+        .ram_data_out(decode_instruction)
+    );
 
     ////////////////////////////////////////////////////
     //Valid fetched address table
-    //Number of read ports = 1 (decode stage)
-    always_ff @ (posedge clk) begin
-        if (fetch_complete)
-            fetch_metadata_table[fetch_id] <= fetch_metadata;
-    end
+    lutram_1w_1r #(.DATA_TYPE(fetch_metadata_t), .DEPTH(MAX_IDS))
+    fetch_metadata_table (
+        .clk(clk),
+        .waddr(fetch_id),
+        .raddr(decode_id),
+        .ram_write(fetch_complete),
+        .new_ram_data(fetch_metadata),
+        .ram_data_out(decode_fetch_metadata)
+    );
 
     ////////////////////////////////////////////////////
-    //Phys rd table
-    //Number of read ports = (NUM_WB_GROUPS - 1)  (ALU WB group uses issue_phys_rd_addr)
-    always_ff @ (posedge clk) begin
-        if (decode_advance)
-            phys_addr_table[decode_id] <= decode_phys_rd_addr;
-    end
-
-    ////////////////////////////////////////////////////
-    //Uses rd table
+    //Retire Instruction Type Table
     //Number of read ports = RETIRE_PORTS
-    always_ff @ (posedge clk) begin
-        if (decode_advance)
-            uses_rd_table[decode_id] <= decode_uses_rd & |decode_rd_addr;
+    always_comb begin
+        if (decode_uses_rd & |decode_rd_addr)
+            decode_type = RD;
+        else if (decode_is_store)
+            decode_type = STORE;
+        else if (fp_decode_uses_rd)
+            decode_type = FP_RD;
+        else
+            decode_type = NONE;
     end
+    lutram_1w_mr #(.DATA_TYPE(logic[1:0]), .DEPTH(MAX_IDS), .NUM_READ_PORTS(RETIRE_PORTS))
+    retire_instruction_type_table (
+        .clk(clk),
+        .waddr(decode_id),
+        .raddr(retire_ids_next),
+        .ram_write(decode_advance),
+        .new_ram_data(decode_type),
+        .ram_data_out(retire_type)
+    );
+
+    ////////////////////////////////////////////////////
+    //id_to_phys_rd_table
+    //Number of read ports = WB_GROUPS
+    id_t wb_ids [NUM_WB_GROUPS];
+    phys_addr_t wb_phys_addrs [NUM_WB_GROUPS];
+    always_comb begin
+        wb_ids[NUM_WB_GROUPS-2] = fp_wb_packet[0].id;
+        wb_ids[NUM_WB_GROUPS-1] = fp_wb_packet[1].id;
+        fp_wb_phys_addr[0] = wb_phys_addrs[NUM_WB_GROUPS-2];
+        fp_wb_phys_addr[1] = wb_phys_addrs[NUM_WB_GROUPS-1];
+        
+        for (int i = 0; i < CONFIG.NUM_WB_GROUPS; i++) begin
+            //This will overwrite the FP packets if the configuration does not include it
+            wb_ids[i] = wb_packet[i].id;
+            wb_phys_addr[i] = wb_phys_addrs[i];
+        end
+    end
+    
+    lutram_1w_mr #(.DATA_TYPE(phys_addr_t), .DEPTH(MAX_IDS), .NUM_READ_PORTS(NUM_WB_GROUPS))
+    id_to_phys_rd_table (
+        .clk(clk),
+        .waddr(decode_id),
+        .raddr(wb_ids),
+        .ram_write(decode_advance),
+        .new_ram_data(fp_decode_uses_rd ? fp_decode_phys_rd_addr : decode_phys_rd_addr),
+        .ram_data_out(wb_phys_addrs)
+    );
 
     ////////////////////////////////////////////////////
     //Exception unit table
-    always_ff @ (posedge clk) begin
-        if (decode_advance)
-            exception_unit_table[decode_id] <= decode_exception_unit;
-    end
+    generate if (CONFIG.INCLUDE_M_MODE) begin : gen_id_exception_support
+    lutram_1w_1r #(.DATA_TYPE(logic[$bits(exception_sources_t)-1:0]), .DEPTH(MAX_IDS))
+    exception_unit_table (
+        .clk(clk),
+        .waddr(decode_id),
+        .raddr(retire_ids_next[0]),
+        .ram_write(decode_advance),
+        .new_ram_data(decode_exception_unit),
+        .ram_data_out(current_exception_unit)
+    );
+    end endgenerate
 
     ////////////////////////////////////////////////////
     //ID Management
@@ -182,19 +262,18 @@ module instruction_metadata_and_id_management
     end
     //Retire IDs
     //Each retire port lags behind the previous one by one index (eg. [3, 2, 1, 0])
-     generate for (i = 0; i < RETIRE_PORTS; i++) begin :gen_retire_ids
+     generate for (genvar i = 0; i < RETIRE_PORTS; i++) begin :gen_retire_ids
         always_ff @ (posedge clk) begin
             if (rst)
                 retire_ids_next[i] <= LOG2_MAX_IDS'(i);
             else
-                retire_ids_next[i] <= retire_ids_next[i] + LOG2_MAX_IDS'(retire_next.count);
+                retire_ids_next[i] <= retire_ids_next[i] + LOG2_MAX_IDS'(retire_count_next);
         end
 
         always_ff @ (posedge clk) begin
             if (~gc.retire_hold)
                 retire_ids[i] <= retire_ids_next[i];
         end
-        
     end endgenerate
 
     //Represented as a negative value so that the MSB indicates that the decode stage is valid
@@ -216,7 +295,7 @@ module instruction_metadata_and_id_management
             pre_issue_count <= pre_issue_count_next;
     end
 
-    assign post_issue_count_next = post_issue_count + ID_COUNTER_W'(instruction_issued) - ID_COUNTER_W'(retire_next.count);
+    assign post_issue_count_next = post_issue_count + ID_COUNTER_W'(instruction_issued) - ID_COUNTER_W'(retire_count_next);
     always_ff @ (posedge clk) begin
         if (rst)
             post_issue_count <= 0;
@@ -238,19 +317,36 @@ module instruction_metadata_and_id_management
     //Non-writeback instructions not included as current instruction set
     //complete in their first cycle of the execute stage, or do not cause an
     //exception after that point
+
+    logic id_waiting_toggle [NUM_WB_GROUPS];
+    id_t id_waiting_toggle_addr [NUM_WB_GROUPS];
+    always_comb begin
+        id_waiting_toggle[0] = (instruction_issued_with_rd & issue.is_multicycle) | fp_instruction_issued_with_rd;
+        id_waiting_toggle_addr[0] = issue.id;
+
+        id_waiting_toggle[NUM_WB_GROUPS-2] = fp_wb_packet[0].valid;
+        id_waiting_toggle_addr[NUM_WB_GROUPS-2] = fp_wb_packet[0].id;
+        id_waiting_toggle[NUM_WB_GROUPS-1] = fp_wb_packet[1].valid;
+        id_waiting_toggle_addr[NUM_WB_GROUPS-1] = fp_wb_packet[1].id;
+
+        //This will overwrite the FP packets if the configuration does not include it
+        for (int i = 1; i < CONFIG.NUM_WB_GROUPS; i++) begin
+            id_waiting_toggle[i] = wb_packet[i].valid;
+            id_waiting_toggle_addr[i] = wb_packet[i].id;
+        end
+    end
+
     toggle_memory_set # (
         .DEPTH (MAX_IDS),
-        .NUM_WRITE_PORTS (2),
-        .NUM_READ_PORTS (RETIRE_PORTS),
-        .WRITE_INDEX_FOR_RESET (0),
-        .READ_INDEX_FOR_RESET (0)
+        .NUM_WRITE_PORTS (NUM_WB_GROUPS),
+        .NUM_READ_PORTS (RETIRE_PORTS)
     ) id_waiting_for_writeback_toggle_mem_set
     (
         .clk (clk),
         .rst (rst),
         .init_clear (gc.init_clear),
-        .toggle ('{(instruction_issued_with_rd & issue.is_multicycle), wb_packet[1].valid}),
-        .toggle_addr ('{issue.id, wb_packet[1].id}),
+        .toggle (id_waiting_toggle),
+        .toggle_addr (id_waiting_toggle_addr),
         .read_addr (retire_ids_next),
         .in_use (id_waiting_for_writeback)
     );
@@ -260,14 +356,9 @@ module instruction_metadata_and_id_management
     logic contiguous_retire;
     logic id_is_post_issue [RETIRE_PORTS];
     logic id_ready_to_retire [RETIRE_PORTS];
-    logic [LOG2_RETIRE_PORTS-1:0] phys_id_sel;
-    logic [RETIRE_PORTS-1:0] retire_id_uses_rd;
-    logic [RETIRE_PORTS-1:0] retire_id_waiting_for_writeback;
-
-     generate for (i = 0; i < RETIRE_PORTS; i++) begin : gen_retire_writeback
-        assign retire_id_uses_rd[i] = uses_rd_table[retire_ids_next[i]];
-        assign retire_id_waiting_for_writeback[i] = id_waiting_for_writeback[i];
-     end endgenerate
+    logic [LOG2_RETIRE_PORTS-1:0] retire_with_rd_sel;
+    logic [LOG2_RETIRE_PORTS-1:0] retire_with_fp_rd_sel;
+    logic [LOG2_RETIRE_PORTS-1:0] retire_with_store_sel;
 
     //Supports retiring up to RETIRE_PORTS instructions.  The retired block of instructions must be
     //contiguous and must start with the first retire port.  Additionally, only one register file writing 
@@ -275,40 +366,64 @@ module instruction_metadata_and_id_management
     //If an exception is pending, only retire a single intrustuction per cycle.  As such, the pending
     //exception will have to become the oldest instruction retire_ids[0] before it can retire.
     logic retire_with_rd_found;
+    logic retire_with_fp_rd_found;
+    logic retire_with_store_found;
     always_comb begin
         contiguous_retire = ~gc.retire_hold;
         retire_with_rd_found = 0;
+        retire_with_fp_rd_found = 0;
+        retire_with_store_found = 0;
+
+        retire_with_rd_sel = 0;
+        retire_with_fp_rd_sel = 0;
+        retire_with_store_sel = 0;
         for (int i = 0; i < RETIRE_PORTS; i++) begin
             id_is_post_issue[i] = post_issue_count > ID_COUNTER_W'(i);
 
             id_ready_to_retire[i] = (id_is_post_issue[i] & contiguous_retire & ~id_waiting_for_writeback[i]);
-            retire_port_valid_next[i] = id_ready_to_retire[i] & ~(retire_id_uses_rd[i] & retire_with_rd_found);
+            retire_port_valid_next[i] = id_ready_to_retire[i] & ~((retire_type[i] == RD & retire_with_rd_found) | (retire_type[i] == STORE & retire_with_store_found) | (retire_type[i] == FP_RD & retire_with_fp_rd_found));
      
-            retire_with_rd_found |= retire_port_valid_next[i] & retire_id_uses_rd[i];
+            retire_with_rd_found |= retire_port_valid_next[i] & retire_type[i] == RD;
+            retire_with_fp_rd_found |= retire_port_valid_next[i] & retire_type[i] == FP_RD;
+            retire_with_store_found |= retire_port_valid_next[i] & retire_type[i] == STORE;
             contiguous_retire &= retire_port_valid_next[i] & ~gc.exception_pending;
+
+            if (retire_port_valid_next[i] & retire_type[i] == RD)
+                retire_with_rd_sel = LOG2_RETIRE_PORTS'(i);
+            if (retire_port_valid_next[i] & retire_type[i] == FP_RD)
+                retire_with_fp_rd_sel = LOG2_RETIRE_PORTS'(i);
+            if (retire_port_valid_next[i] & retire_type[i] == STORE)
+                retire_with_store_sel = LOG2_RETIRE_PORTS'(i);
         end
     end
 
-    //retire_next packet
-    priority_encoder #(.WIDTH(RETIRE_PORTS))
-    phys_id_sel_encoder (
-        .priority_vector (retire_id_uses_rd),
-        .encoded_result (phys_id_sel)
-    );
-    assign retire_next.phys_id = retire_ids_next[phys_id_sel];
-    assign retire_next.valid = retire_with_rd_found;
+    //retire_next packets
+    assign wb_retire_next = '{
+        id : retire_ids_next[retire_with_rd_sel],
+        valid : retire_with_rd_found
+    };
+    assign fp_wb_retire_next = '{
+        id : retire_ids_next[retire_with_fp_rd_sel],
+        valid : retire_with_fp_rd_found
+    };
+    assign store_retire_next = '{
+        id : retire_ids_next[retire_with_store_sel],
+        valid : retire_with_store_found
+    };
 
     always_comb begin
-        retire_next.count = 0;
+        retire_count_next = 0;
         for (int i = 0; i < RETIRE_PORTS; i++) begin
-            retire_next.count += retire_port_valid_next[i];
+            retire_count_next += retire_port_valid_next[i];
         end
     end
 
     always_ff @ (posedge clk) begin
-        retire.valid <= retire_next.valid;
-        retire.phys_id <= retire_next.phys_id;
-        retire.count <= gc.writeback_supress ? '0 : retire_next.count;
+        wb_retire <= wb_retire_next;
+        fp_wb_retire <= fp_wb_retire_next;
+        store_retire <= store_retire_next;
+
+        retire_count <= gc.writeback_supress ? '0 : retire_count_next;
         for (int i = 0; i < RETIRE_PORTS; i++)
             retire_port_valid[i] <= retire_port_valid_next[i] & ~gc.writeback_supress;
     end
@@ -318,31 +433,14 @@ module instruction_metadata_and_id_management
     assign pc_id_available = ~inflight_count[LOG2_MAX_IDS];
 
     //Decode
-    assign decode.id = decode_id;
-    assign decode.valid = fetched_count_neg[LOG2_MAX_IDS];
-    assign decode.pc = pc_table[decode_id];
-    assign decode.instruction = instruction_table[decode_id];
-    assign decode.fetch_metadata = CONFIG.INCLUDE_M_MODE ? fetch_metadata_table[decode_id] : '{ok : 1, error_code : INST_ACCESS_FAULT};
-
-    //Writeback/Commit support
-    phys_addr_t commit_phys_addr [CONFIG.NUM_WB_GROUPS];
-    assign commit_phys_addr[0] = issue.phys_rd_addr;
-     generate for (i = 1; i < CONFIG.NUM_WB_GROUPS; i++) begin : gen_commit_phys_addr
-        assign commit_phys_addr[i] = phys_addr_table[wb_packet[i].id];
-     end endgenerate
-
-     generate for (i = 0; i < CONFIG.NUM_WB_GROUPS; i++) begin : gen_commit_packet
-        assign commit_packet[i].id = wb_packet[i].id;
-        assign commit_packet[i].phys_addr = commit_phys_addr[i];        
-        assign commit_packet[i].valid = wb_packet[i].valid & |commit_phys_addr[i];
-        assign commit_packet[i].data = wb_packet[i].data;
-     end endgenerate
-
-    //Exception Support
-     generate if (CONFIG.INCLUDE_M_MODE) begin : gen_id_exception_support
-        assign oldest_pc = pc_table[retire_ids_next[0]];
-        assign current_exception_unit = exception_unit_table[retire_ids_next[0]];
-     end endgenerate
+    localparam fetch_metadata_t ADDR_OK = '{ok : 1, error_code : INST_ADDR_MISSALIGNED};
+    assign decode = '{
+        id : decode_id,
+        valid : fetched_count_neg[LOG2_MAX_IDS],
+        pc : decode_pc,
+        instruction : decode_instruction,
+        fetch_metadata : CONFIG.INCLUDE_M_MODE ? decode_fetch_metadata : ADDR_OK
+    };
 
     ////////////////////////////////////////////////////
     //End of Implementation
