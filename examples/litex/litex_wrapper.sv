@@ -86,7 +86,9 @@ module litex_wrapper
         INCLUDE_M_MODE : 1,
         INCLUDE_S_MODE : 0,
         INCLUDE_U_MODE : 0,
+	INCLUDE_CBO    : 0,
         INCLUDE_UNIT : '{
+	    FPU : 0,
             ALU : 1,
             LS : 1,
             MUL : 0,
@@ -202,7 +204,9 @@ module litex_wrapper
         INCLUDE_M_MODE : 1,
         INCLUDE_S_MODE : 0,
         INCLUDE_U_MODE : 0,
+	INCLUDE_CBO    : 0,
         INCLUDE_UNIT : '{
+	    FPU : 0,
             ALU : 1,
             LS : 1,
             MUL : 1,
