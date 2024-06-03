@@ -67,7 +67,7 @@ module l1_to_wishbone
     assign data_fifo.pop = wishbone.we & wishbone.ack;
     assign data_fifo.data_in = '{
         data : cpu.wr_data,
-        be : cpu_wr_data_be
+        be : cpu.wr_data_be
     };
     assign data_request = data_fifo.data_out;
 
