@@ -59,7 +59,7 @@ module icache
 
     logic line_complete;
 
-    logic [31:0] data_out [CONFIG.ICACHE.WAYS-1:0];
+    logic [CONFIG.ICACHE.WAYS-1:0][31:0] data_out;
 
     logic linefill_in_progress;
     logic request_in_progress;
@@ -188,22 +188,20 @@ module icache
 
     ////////////////////////////////////////////////////
     //Data Banks
-    genvar i;
-    generate for (i=0; i < CONFIG.ICACHE.WAYS; i++) begin : idata_bank_gen
-        dual_port_bram #(.WIDTH(32), .LINES(CONFIG.ICACHE.LINES*CONFIG.ICACHE.LINE_W)) idata_bank (
-            .clk(clk),
-            .en_a(new_request),
-            .wen_a(0),
-            .addr_a(addr_utils.getDataLineAddr(new_request_addr)),
-            .data_in_a('0),
-            .data_out_a(data_out[i]),
-            .en_b(1),
-            .wen_b(tag_update_way[i] & l1_response.data_valid),
-            .addr_b(addr_utils.getDataLineAddr({second_cycle_addr[31:SCONFIG.SUB_LINE_ADDR_W+2], word_count, 2'b0})),
-            .data_in_b(l1_response.data),
-            .data_out_b()
-        );
-    end endgenerate
+    sdp_ram #(
+        .ADDR_WIDTH(SCONFIG.LINE_ADDR_W+SCONFIG.SUB_LINE_ADDR_W),
+        .NUM_COL(CONFIG.ICACHE.WAYS),
+        .COL_WIDTH(32),
+        .PIPELINE_DEPTH(0)
+    ) idata_bank (
+        .a_en(l1_response.data_valid),
+        .a_wbe(tag_update_way),
+        .a_wdata({CONFIG.ICACHE.WAYS{l1_response.data}}),
+        .a_addr(addr_utils.getDataLineAddr({second_cycle_addr[31:SCONFIG.SUB_LINE_ADDR_W+2], word_count, 2'b0})),
+        .b_en(new_request),
+        .b_addr(addr_utils.getDataLineAddr(new_request_addr)),
+        .b_rdata(data_out),
+    .*);
 
     ////////////////////////////////////////////////////
     //Miss data path
