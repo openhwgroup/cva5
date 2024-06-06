@@ -208,13 +208,14 @@ module gc_unit
         if (rst)
             ifence_in_progress <= 0;
         else
-            ifence_in_progress <= (ifence_in_progress & ~(next_state == PRE_ISSUE_FLUSH)) | (issue.new_request & gc_inputs.is_ifence);
+            ifence_in_progress <= (ifence_in_progress & ~(next_state == PRE_ISSUE_FLUSH)) | gc.fetch_ifence;
     end
 
     ////////////////////////////////////////////////////
     //GC Operation
     assign post_issue_idle = (post_issue_count == 0) & load_store_status.sq_empty;
     assign gc.fetch_flush = branch_flush | gc_pc_override;
+    assign gc.fetch_ifence = ifence_in_progress;
 
     always_ff @ (posedge clk) begin
         gc_fetch_hold <= next_state inside {PRE_CLEAR_STATE, INIT_CLEAR_STATE, POST_ISSUE_DRAIN, PRE_ISSUE_FLUSH};

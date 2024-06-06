@@ -33,7 +33,7 @@ module icache
     (
         input logic clk,
         input logic rst,
-        input gc_outputs_t gc,
+        input logic ifence,
         input logic icache_on,
         l1_arbiter_request_interface.master l1_request,
         l1_arbiter_return_interface.master l1_response,
@@ -45,6 +45,9 @@ module icache
     localparam bit [SCONFIG.SUB_LINE_ADDR_W-1:0] END_OF_LINE_COUNT = SCONFIG.SUB_LINE_ADDR_W'(CONFIG.ICACHE.LINE_W-1);
 
     cache_functions_interface #(.TAG_W(SCONFIG.TAG_W), .LINE_W(SCONFIG.LINE_ADDR_W), .SUB_LINE_W(SCONFIG.SUB_LINE_ADDR_W)) addr_utils();
+
+    logic ifence_in_progress;
+    logic[SCONFIG.LINE_ADDR_W-1:0] ifence_counter;
 
     logic tag_hit;
     logic [CONFIG.ICACHE.WAYS-1:0] tag_hit_way;
@@ -94,6 +97,29 @@ module icache
         .rst (rst), 
         .fifo (input_fifo)
     );
+
+    ////////////////////////////////////////////////////
+    //Instruction fence
+    generate if (CONFIG.INCLUDE_IFENCE) begin : gen_ifence
+        always_ff @(posedge clk) begin
+            if (rst) begin
+                ifence_counter <= '0;
+                ifence_in_progress <= 0;
+            end else begin
+                if (ifence)
+                    ifence_in_progress <= 1;
+                else if (&ifence_counter)
+                    ifence_in_progress <= 0;
+                if (ifence_in_progress)
+                    ifence_counter <= ifence_counter+1;
+            end
+        end
+
+    end else begin : gen_no_ifence
+        assign ifence_in_progress = 0;
+        assign ifence_counter = '0;
+    end endgenerate
+
     ////////////////////////////////////////////////////
     //Ready determination
     always_ff @ (posedge clk) begin
@@ -103,7 +129,7 @@ module icache
             request_in_progress <= (request_in_progress & ~fetch_sub.data_valid) | new_request;
     end
 
-    assign fetch_sub.ready = ~input_fifo.full;
+    assign fetch_sub.ready = ~input_fifo.full & ~ifence_in_progress;
 
     ////////////////////////////////////////////////////
     //General Control Logic
@@ -176,6 +202,8 @@ module icache
     icache_tag_banks (
         .clk(clk),
         .rst(rst), //clears the read_hit_allowed flag
+        .ifence(ifence_in_progress),
+        .ifence_addr(ifence_counter),
         .stage1_line_addr(addr_utils.getTagLineAddr(new_request_addr)),
         .stage2_line_addr(addr_utils.getTagLineAddr(second_cycle_addr)),
         .stage2_tag(addr_utils.getTag(second_cycle_addr)),

@@ -33,6 +33,8 @@ module itag_banks
     (
         input logic clk,
         input logic rst,
+        input logic ifence,
+        input logic[SCONFIG.LINE_ADDR_W-1:0] ifence_addr,
 
         input logic[SCONFIG.LINE_ADDR_W-1:0] stage1_line_addr,
         input logic[SCONFIG.LINE_ADDR_W-1:0] stage2_line_addr,
@@ -66,10 +68,10 @@ module itag_banks
         .COL_WIDTH(SCONFIG.TAG_W+1),
         .PIPELINE_DEPTH(0)
     ) itag_bank (
-        .a_en(update),
-        .a_wbe(update_way),
-        .a_wdata({CONFIG.ICACHE.WAYS{1'b1, stage2_tag}}),
-        .a_addr(stage2_line_addr),
+        .a_en(update | ifence),
+        .a_wbe(update_way | {CONFIG.ICACHE.WAYS{ifence}}),
+        .a_wdata({CONFIG.ICACHE.WAYS{~ifence, stage2_tag}}),
+        .a_addr(ifence ? ifence_addr : stage2_line_addr),
         .b_en(stage1_adv),
         .b_addr(stage1_line_addr),
         .b_rdata(tag_line),

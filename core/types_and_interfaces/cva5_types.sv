@@ -183,6 +183,7 @@ package cva5_types;
         logic fetch_hold;
         logic issue_hold;
         logic fetch_flush;
+        logic fetch_ifence;
         logic writeback_supress;
         logic retire_hold;
         logic sq_flush;

@@ -267,19 +267,38 @@ module fetch
     endgenerate
 
     generate if (CONFIG.INCLUDE_ICACHE) begin : gen_fetch_icache
+        ////////////////////////////////////////////////////
+        //Instruction fence
+        //A fence first prevents any new instructions from being issued then waits for inflight fetches to complete
+        //The fence signal can only be delivered to the icache once it is idle
+        //This logic will be optimized away when instruction fences aren't enabled as gc.fetch_ifence will be constant 0
+        logic ifence_pending;
+        logic ifence_start;
+        assign ifence_start = ifence_pending & ~|inflight_count_next;
+        
+        always_ff @(posedge clk) begin
+            if (rst)
+                ifence_pending <= 0;
+            else begin
+                if (gc.fetch_ifence)
+                    ifence_pending <= 1;
+                else if (~|inflight_count_next)
+                    ifence_pending <= 0;
+            end
+        end
+
         assign sub_unit_address_match[ICACHE_ID] = icache_addr_utils.address_range_check(tlb.physical_address);
         icache #(.CONFIG(CONFIG))
         i_cache (
             .clk (clk), 
             .rst (rst),
-            .gc (gc),
+            .ifence (ifence_start),
             .icache_on (icache_on),
             .l1_request (l1_request),
             .l1_response (l1_response),
             .fetch_sub (sub_unit[ICACHE_ID])
         );
-    end
-    endgenerate
+    end endgenerate
 
     assign units_ready = &unit_ready;
     assign address_valid = |sub_unit_address_match;
