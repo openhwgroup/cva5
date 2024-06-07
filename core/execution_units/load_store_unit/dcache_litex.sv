@@ -74,7 +74,7 @@ module dcache_litex
     logic stage1_done;
     logic stage0_advance_r;
 
-    assign write_outstanding = (current_state != IDLE) | (~stage1.rnw | stage1.amo);
+    assign write_outstanding = (current_state != IDLE) & (~stage1.rnw | stage1.amo);
 
     //Peeking avoids circular logic
     assign ls.ready = (current_state == IDLE) | (stage1_done & ~stage1.cbo & ~(db_wen & load_peek & load_addr_peek[31:DB_ADDR_LEN+2] == stage1.addr[31:DB_ADDR_LEN+2] & load_addr_peek[2+:DB_ADDR_LEN] == db_addr));
@@ -156,13 +156,12 @@ module dcache_litex
     logic[31:0] db_hit_entry;
     logic db_wen;
     logic[CONFIG.DCACHE.WAYS-1:0] db_way;
-    logic[3:0] db_wbe;
     logic[CONFIG.DCACHE.WAYS-1:0][3:0] db_wbe_full;
     logic[31:0] db_wdata;
 
     always_comb begin
         for (int i = 0; i < CONFIG.DCACHE.WAYS; i++)
-            db_wbe_full[i] = {4{db_way[i]}} & db_wbe;
+            db_wbe_full[i] = {4{db_way[i]}} & stage1.be;
     end
 
     logic[DB_ADDR_LEN-1:0] db_addr;
@@ -226,7 +225,7 @@ module dcache_litex
     always_comb begin
         unique case (current_state)
             IDLE : stage1_done = 0;
-            FIRST_CYCLE : stage1_done = ((~stage1.rnw | (stage1_is_sc & amo_unit.reservation_valid)) & l1_request.ack) | (stage1_is_sc & ~amo_unit.reservation_valid) | (stage1.rnw & hit & ~stage1.amo & ~stage1.uncacheable) | stage1.cbo;
+            FIRST_CYCLE : stage1_done = ((~stage1.rnw | (stage1_is_sc & amo_unit.reservation_valid)) & l1_request.ack) | (stage1_is_sc & ~amo_unit.reservation_valid) | (stage1.rnw & hit & (~stage1.amo | stage1_is_lr) & ~stage1.uncacheable) | stage1.cbo;
             REQUESTING_READ : stage1_done = 0;
             FILLING : stage1_done = return_done & (stage1_is_lr | ~stage1.amo);
             UNCACHEABLE_WAITING_READ : stage1_done = l1_response.data_valid & (stage1_is_lr | ~stage1.amo);
@@ -245,7 +244,6 @@ module dcache_litex
                 db_wen = 0;
                 db_wdata = 'x;
                 db_way = 'x;
-                db_wbe = 'x;
                 ls.data_valid = 0;
                 ls.data_out = 'x;
                 next_state = ls.new_request ? FIRST_CYCLE : IDLE;
@@ -259,16 +257,15 @@ module dcache_litex
                 db_wen = ~stage1.cbo & hit & ~stage1.uncacheable & (~stage1.rnw | (stage1_is_sc & amo_unit.reservation_valid));
                 db_wdata = stage1.data;
                 db_way = hit_ohot;
-                db_wbe = stage1.be;
-                ls.data_valid = (stage0_advance_r & stage1_is_sc) | (stage1.rnw & ~stage1.uncacheable & hit);
-                ls.data_out = stage1.amo ? {31'b0, ~amo_unit.reservation_valid} : db_hit_entry;
+                ls.data_valid = (stage0_advance_r & stage1_is_sc) | (stage1.rnw & ~stage1.uncacheable & hit & ~stage1_is_sc);
+                ls.data_out = stage1_is_sc ? {31'b0, ~amo_unit.reservation_valid} : db_hit_entry;
                 if (stage1_done)
                     next_state = ls.new_request ? FIRST_CYCLE : IDLE;
                 else if (stage1.uncacheable & l1_request.ack)
                     next_state = UNCACHEABLE_WAITING_READ;
-                else if (stage1.rnw & ~stage1.uncacheable & ~hit)
+                else if (stage1.rnw & ~stage1.uncacheable & ~hit & ~stage1_is_sc)
                     next_state = REQUESTING_READ;
-                else if (stage1.amo & hit & ~stage1.uncacheable)
+                else if (stage1.amo & hit & ~stage1.uncacheable & ~stage1_is_sc)
                     next_state = AMO_WRITE;
                 else
                     next_state = FIRST_CYCLE;
@@ -282,7 +279,6 @@ module dcache_litex
                 db_wen = 0;
                 db_wdata = 'x;
                 db_way = 'x;
-                db_wbe = 'x;
                 ls.data_valid = 0;
                 ls.data_out = 'x;
                 next_state = l1_request.ack ? FILLING : REQUESTING_READ;
@@ -296,7 +292,6 @@ module dcache_litex
                 db_wen = l1_response.data_valid;
                 db_wdata = l1_response.data;
                 db_way = replacement_way;
-                db_wbe = '1;
                 ls.data_valid = correct_word;
                 ls.data_out = l1_response.data;
                 if (return_done) begin
@@ -317,7 +312,6 @@ module dcache_litex
                 db_wen = 0;
                 db_wdata = 'x;
                 db_way = 'x;
-                db_wbe = 'x;
                 ls.data_valid = l1_response.data_valid;
                 ls.data_out = l1_response.data;
                 if (l1_response.data_valid) begin
@@ -338,7 +332,6 @@ module dcache_litex
                 db_wen = ~stage1.uncacheable;
                 db_wdata = amo_unit.rd;
                 db_way = hit_r ? hit_ohot_r : replacement_way;
-                db_wbe = stage1.be;
                 ls.data_valid = 0;
                 ls.data_out = 'x;
                 if (l1_request.ack)
