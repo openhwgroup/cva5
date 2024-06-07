@@ -261,9 +261,9 @@ module cva5_sim
     end endgenerate
 
     generate if (NEXYS_CONFIG.INCLUDE_DCACHE) begin
-        assign dcache_hit = `DCACHE_P.load_hit;
-        assign dcache_miss = `DCACHE_P.line_complete;
-        assign darb_stall = cpu.l1_request[L1_DCACHE_ID].request & ~cpu.l1_request[L1_DCACHE_ID].ack;
+        // assign dcache_hit = `DCACHE_P.load_hit;
+        // assign dcache_miss = `DCACHE_P.line_complete;
+        // assign darb_stall = cpu.l1_request[L1_DCACHE_ID].request & ~cpu.l1_request[L1_DCACHE_ID].ack;
     end endgenerate
 
     logic [MAX_NUM_UNITS-1:0] unit_ready;

@@ -77,6 +77,7 @@ module fetch
     addr_utils_interface #(CONFIG.IBUS_ADDR.L, CONFIG.IBUS_ADDR.H) ibus_addr_utils ();
 
     memory_sub_unit_interface sub_unit[NUM_SUB_UNITS-1:0]();
+    amo_interface unused();
 
     logic [NUM_SUB_UNITS-1:0] sub_unit_address_match;
     logic [NUM_SUB_UNITS-1:0] unit_ready;
@@ -249,6 +250,10 @@ module fetch
         local_mem_sub_unit i_local_mem (
             .clk (clk), 
             .rst (rst),
+            .write_outstanding (),
+            .amo (1'b0),
+            .amo_type ('x),
+            .amo_unit (unused),
             .unit (sub_unit[LOCAL_MEM_ID]),
             .local_mem (instruction_bram)
         );
@@ -260,6 +265,10 @@ module fetch
         wishbone_master iwishbone_bus (
             .clk (clk),
             .rst (rst),
+            .write_outstanding (),
+            .amo (1'b0),
+            .amo_type ('x),
+            .amo_unit (unused),
             .wishbone (iwishbone),
             .ls (sub_unit[BUS_ID])
         );

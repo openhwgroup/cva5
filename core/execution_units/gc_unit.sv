@@ -136,6 +136,7 @@ module gc_unit
     logic gc_fetch_hold;
     logic gc_issue_hold;
     logic gc_fetch_flush;
+    logic gc_fetch_ifence;
     logic gc_writeback_supress;
     logic gc_retire_hold;
     logic gc_tlb_flush;
@@ -208,14 +209,13 @@ module gc_unit
         if (rst)
             ifence_in_progress <= 0;
         else
-            ifence_in_progress <= (ifence_in_progress & ~(next_state == PRE_ISSUE_FLUSH)) | gc.fetch_ifence;
+            ifence_in_progress <= (ifence_in_progress & ~(next_state == PRE_ISSUE_FLUSH)) | (issue.new_request & gc_inputs.is_ifence);
     end
 
     ////////////////////////////////////////////////////
     //GC Operation
     assign post_issue_idle = (post_issue_count == 0) & load_store_status.sq_empty;
     assign gc.fetch_flush = branch_flush | gc_pc_override;
-    assign gc.fetch_ifence = ifence_in_progress;
 
     always_ff @ (posedge clk) begin
         gc_fetch_hold <= next_state inside {PRE_CLEAR_STATE, INIT_CLEAR_STATE, POST_ISSUE_DRAIN, PRE_ISSUE_FLUSH};
@@ -225,6 +225,7 @@ module gc_unit
         gc_init_clear <= next_state inside {INIT_CLEAR_STATE};
         gc_tlb_flush <= next_state inside {INIT_CLEAR_STATE, TLB_CLEAR_STATE};
         gc_sq_flush <= state inside {POST_ISSUE_DISCARD} & next_state inside {IDLE_STATE};
+        gc_fetch_ifence <= issue.new_request & gc_inputs.is_ifence;
     end
     //work-around for verilator BLKANDNBLK signal optimizations
     assign gc.fetch_hold = gc_fetch_hold;
@@ -234,6 +235,7 @@ module gc_unit
     assign gc.init_clear = gc_init_clear;
     assign gc.tlb_flush = CONFIG.INCLUDE_S_MODE & gc_tlb_flush;
     assign gc.sq_flush = CONFIG.INCLUDE_M_MODE & gc_sq_flush;
+    assign gc.fetch_ifence = CONFIG.INCLUDE_IFENCE & gc_fetch_ifence;
     ////////////////////////////////////////////////////
     //GC State Machine
     always @(posedge clk) begin

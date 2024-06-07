@@ -96,9 +96,10 @@ module load_store_unit
     localparam DCACHE_ID = int'(CONFIG.INCLUDE_DLOCAL_MEM) + int'(CONFIG.INCLUDE_PERIPHERAL_BUS);
 
     //Should be equal to pipeline depth of longest load/store subunit 
-    localparam ATTRIBUTES_DEPTH = 1;
+    localparam ATTRIBUTES_DEPTH = 2;
 
     //Subunit signals
+    amo_interface amo_if[NUM_SUB_UNITS]();
     addr_utils_interface #(CONFIG.DLOCAL_MEM_ADDR.L, CONFIG.DLOCAL_MEM_ADDR.H) dlocal_mem_addr_utils ();
     addr_utils_interface #(CONFIG.PERIPHERAL_BUS_ADDR.L, CONFIG.PERIPHERAL_BUS_ADDR.H) dpbus_addr_utils ();
     addr_utils_interface #(CONFIG.DCACHE_ADDR.L, CONFIG.DCACHE_ADDR.H) dcache_addr_utils ();
@@ -111,6 +112,8 @@ module load_store_unit
     data_access_shared_inputs_t shared_inputs;
     logic [31:0] unit_data_array [NUM_SUB_UNITS-1:0];
     logic [NUM_SUB_UNITS-1:0] unit_ready;
+    logic [NUM_SUB_UNITS-1:0] unit_write_outstanding;
+    logic write_outstanding;
     logic [NUM_SUB_UNITS-1:0] unit_data_valid;
     logic [NUM_SUB_UNITS-1:0] last_unit;
 
@@ -137,6 +140,7 @@ module load_store_unit
     logic unaligned_addr;
     logic load_exception_complete;
     logic exception_is_fp;
+    logic nontrivial_fence;
     logic fence_hold;
 
     typedef struct packed{
@@ -166,14 +170,19 @@ module load_store_unit
 
     assign unit_needed = instruction inside {LB, LH, LW, LBU, LHU, SB, SH, SW, FENCE} | 
         (CONFIG.INCLUDE_CBO & instruction inside {CBO_INVAL, CBO_CLEAN, CBO_FLUSH}) | 
-        (CONFIG.INCLUDE_UNIT.FPU & instruction inside {SP_FLW, SP_FSW, DP_FLD, DP_FSD});
+        (CONFIG.INCLUDE_UNIT.FPU & instruction inside {SP_FLW, SP_FSW, DP_FLD, DP_FSD}) | 
+        (CONFIG.INCLUDE_AMO & instruction inside {AMO_ADD, AMO_XOR, AMO_OR, AMO_AND, AMO_MIN, AMO_MAX, AMO_MINU, AMO_MAXU, AMO_SWAP, AMO_LR, AMO_SC});
     always_comb begin
         uses_rs = '0;
         uses_rs[RS1] = instruction inside {LB, LH, LW, LBU, LHU, SB, SH, SW} | 
             (CONFIG.INCLUDE_CBO & instruction inside {CBO_INVAL, CBO_CLEAN, CBO_FLUSH}) | 
-            (CONFIG.INCLUDE_UNIT.FPU & instruction inside {SP_FLW, SP_FSW, DP_FLD, DP_FSD});
-        uses_rs[RS2] = CONFIG.INCLUDE_FORWARDING_TO_STORES ? 0 : instruction inside {SB, SH, SW};
-        uses_rd = instruction inside {LB, LH, LW, LBU, LHU};
+            (CONFIG.INCLUDE_UNIT.FPU & instruction inside {SP_FLW, SP_FSW, DP_FLD, DP_FSD}) |
+            (CONFIG.INCLUDE_AMO & instruction inside {AMO_ADD, AMO_XOR, AMO_OR, AMO_AND, AMO_MIN, AMO_MAX, AMO_MINU, AMO_MAXU, AMO_SWAP, AMO_LR, AMO_SC});
+        if (CONFIG.INCLUDE_AMO)
+            uses_rs[RS2] = instruction inside {AMO_ADD, AMO_XOR, AMO_OR, AMO_AND, AMO_MIN, AMO_MAX, AMO_MINU, AMO_MAXU, AMO_SWAP, AMO_SC};
+        if (~CONFIG.INCLUDE_FORWARDING_TO_STORES)
+            uses_rs[RS2] |= instruction inside {SB, SH, SW};
+        uses_rd = instruction inside {LB, LH, LW, LBU, LHU} | (CONFIG.INCLUDE_AMO & instruction inside {AMO_ADD, AMO_XOR, AMO_OR, AMO_AND, AMO_MIN, AMO_MAX, AMO_MINU, AMO_MAXU, AMO_SWAP, AMO_LR, AMO_SC});
         fp_uses_rs = '0;
         fp_uses_rs[RS2] = ~CONFIG.INCLUDE_FORWARDING_TO_STORES & CONFIG.INCLUDE_UNIT.FPU & instruction inside {SP_FSW, DP_FSD};
         fp_uses_rd = CONFIG.INCLUDE_UNIT.FPU & instruction inside {SP_FLW, DP_FLD};
@@ -188,6 +197,9 @@ module load_store_unit
         logic is_cbo;
         logic is_fpu;
         logic is_double;
+        logic nontrivial_fence;
+        logic is_amo;
+        amo_t amo_type;
         logic [11:0] offset;
     } ls_attr_t;
     ls_attr_t decode_attr;
@@ -198,15 +210,51 @@ module load_store_unit
     assign load_offset = instruction[31:20];
     assign store_offset = {instruction[31:25], instruction[11:7]};
 
+    //Only a reduced subset of possible fences require stalling, because of the following guarantees:
+    //The load queue does not reorder loads
+    //The store queue does not reorder stores
+    //Earlier loads are always selected before later stores
+    //The data cache and local memory are sequentially consistent (no reordering)
+    //All peripheral busses are sequentially consistent across request types
+    always_comb begin
+        if (NUM_SUB_UNITS == 3)
+            nontrivial_fence = (
+                (instruction[27] & (instruction[22] | instruction[20])) | //Peripheral read before any write
+                (instruction[26] & (instruction[23] | |instruction[21:20])) | //Peripheral write before anything other than a peripheral write
+                (instruction[25] & instruction[22]) | //Regular read before peripheral write
+                (instruction[24]) //Regular write before anything
+            );
+        else if (NUM_SUB_UNITS == 2 & ~CONFIG.INCLUDE_PERIPHERAL_BUS)
+            nontrivial_fence = instruction[24] & |instruction[21:20]; //Regular write before any regular
+        else if (NUM_SUB_UNITS == 2)
+            nontrivial_fence = (
+                (instruction[27] & (instruction[22] | instruction[20])) | //Peripheral read before any write
+                (instruction[26] & (instruction[23] | |instruction[21:20])) | //Peripheral write before anything other than a peripheral write
+                (instruction[25] & instruction[22]) | //Memory read before peripheral write
+                (instruction[24] & |instruction[23:21]) //Memory write before anything other than a memory write
+            );
+        else if (NUM_SUB_UNITS == 1 & ~CONFIG.INCLUDE_PERIPHERAL_BUS)
+            nontrivial_fence = instruction[24] & instruction[21]; //Memory write before memory read
+        else if (NUM_SUB_UNITS == 1 & CONFIG.INCLUDE_PERIPHERAL_BUS)
+            nontrivial_fence = (
+                (instruction[27] & instruction[22]) | //Peripheral read before peripheral write
+                (instruction[26] & instruction[23]) //Peripheral write before peripheral read
+            );
+        else //0 subunits??
+            nontrivial_fence = 0;
+    end
 
     assign decode_attr = '{
         is_load : instruction inside {LB, LH, LW, LBU, LHU} | CONFIG.INCLUDE_UNIT.FPU & instruction inside {SP_FLW, DP_FLD},
         is_store : instruction inside {SB, SH, SW} | CONFIG.INCLUDE_UNIT.FPU & instruction inside {SP_FSW, DP_FSD},
         is_fence : instruction inside {FENCE},
+        nontrivial_fence : nontrivial_fence,
         is_cbo : CONFIG.INCLUDE_CBO & instruction inside {CBO_INVAL, CBO_CLEAN, CBO_FLUSH},
         is_fpu : CONFIG.INCLUDE_UNIT.FPU & instruction inside {SP_FLW, SP_FSW, DP_FLD, DP_FSD},
         is_double : CONFIG.INCLUDE_UNIT.FPU & instruction inside {DP_FLD, DP_FSD},
-        offset : instruction[5] ? store_offset : ((CONFIG.INCLUDE_CBO & instruction[2]) ? '0 : load_offset)
+        is_amo : CONFIG.INCLUDE_AMO & instruction inside {AMO_ADD, AMO_XOR, AMO_OR, AMO_AND, AMO_MIN, AMO_MAX, AMO_MINU, AMO_MAXU, AMO_SWAP, AMO_LR, AMO_SC},
+        amo_type : amo_t'(instruction[31:27]),
+        offset : (CONFIG.INCLUDE_CBO | CONFIG.INCLUDE_AMO) & instruction[3] ? '0 : (instruction[5] ? store_offset : load_offset)
     };
     assign decode_is_store = decode_attr.is_store | decode_attr.is_cbo;
 
@@ -254,7 +302,7 @@ module load_store_unit
                 unaligned_addr = 0;
         end
 
-        assign new_exception = unaligned_addr & issue.new_request & ~issue_attr.is_fence;
+        assign new_exception = unaligned_addr & issue.new_request & ~issue_attr.is_fence & ~issue_attr.is_cbo;
         always_ff @(posedge clk) begin
             if (rst)
                 exception.valid <= 0;
@@ -290,7 +338,7 @@ module load_store_unit
     assign load_store_status = '{
         sq_empty : lsq.sq_empty,
         no_released_stores_pending : lsq.no_released_stores_pending,
-        idle : lsq.empty & (~load_attributes.valid) & (&unit_ready)
+        idle : lsq.empty & (~load_attributes.valid) & (&unit_ready) & (~write_outstanding)
     };
 
     ////////////////////////////////////////////////////
@@ -298,7 +346,7 @@ module load_store_unit
     assign virtual_address = rf[RS1] + 32'(signed'(issue_attr.offset));
 
     assign tlb.virtual_address = virtual_address;
-    assign tlb.new_request = tlb_on & issue.new_request;
+    assign tlb.new_request = tlb_on & issue.new_request & ~issue_attr.is_fence;
     assign tlb.execute = 0;
     assign tlb.rnw = issue_attr.is_load & ~issue_attr.is_store;
 
@@ -318,6 +366,8 @@ module load_store_unit
             end
             default : be = '1;
         endcase
+        if (issue_attr.is_cbo) //Treat CBOM as writes that don't do anything
+            be = '0;
     end
 
     ////////////////////////////////////////////////////
@@ -327,9 +377,11 @@ module load_store_unit
         fn3 : issue_stage.fn3,
         be : be,
         data : rf[RS2],
-        load : issue_attr.is_load,
+        load : issue_attr.is_load | issue_attr.is_amo,
         store : issue_attr.is_store,
         cache_op : issue_attr.is_cbo,
+        amo : issue_attr.is_amo,
+        amo_type : issue_attr.amo_type,
         id : issue.id,
         id_needed : rd_attributes.id,
         fp : issue_attr.is_fpu,
@@ -338,7 +390,7 @@ module load_store_unit
     };
 
     assign lsq.potential_push = issue.possible_issue;
-    assign lsq.push = issue.new_request & ~unaligned_addr & (~tlb_on | tlb.done) & ~issue_attr.is_fence;
+    assign lsq.push = issue.new_request & (~unaligned_addr | issue_attr.is_cbo) & (~tlb_on | tlb.done) & ~issue_attr.is_fence;
 
     load_store_queue  # (.CONFIG(CONFIG)) lsq_block (
         .clk (clk),
@@ -382,11 +434,13 @@ module load_store_unit
     assign sub_unit_store_issue = (lsq.store_valid & ~sel_load) & sub_unit_ready & sub_unit_address_match[subunit_id];
     assign sub_unit_issue = sub_unit_load_issue | sub_unit_store_issue;
 
+    assign write_outstanding = |unit_write_outstanding;
+
     always_ff @ (posedge clk) begin
         if (rst)
             fence_hold <= 0;
         else
-            fence_hold <= (fence_hold & ~load_store_status.idle) | (issue.new_request & issue_attr.is_fence);
+            fence_hold <= (fence_hold & ~load_store_status.idle) | (issue.new_request & issue_attr.is_fence & issue_attr.nontrivial_fence);
     end
 
     ////////////////////////////////////////////////////
@@ -449,6 +503,10 @@ module load_store_unit
         local_mem_sub_unit d_local_mem (
             .clk (clk), 
             .rst (rst),
+            .write_outstanding (unit_write_outstanding[LOCAL_MEM_ID]),
+            .amo (shared_inputs.amo),
+            .amo_type (shared_inputs.amo_type),
+            .amo_unit (amo_if[LOCAL_MEM_ID]),
             .unit (sub_unit[LOCAL_MEM_ID]),
             .local_mem (data_bram)
         );
@@ -461,22 +519,33 @@ module load_store_unit
                 axi_master axi_bus (
                     .clk (clk),
                     .rst (rst),
+                    .write_outstanding (unit_write_outstanding[BUS_ID]),
                     .m_axi (m_axi),
-                    .size ({1'b0,shared_inputs.fn3[1:0]}),
+                    .amo (shared_inputs.amo),
+                    .amo_type (shared_inputs.amo_type),
+                    .amo_unit (amo_if[BUS_ID]),
                     .ls (sub_unit[BUS_ID])
                 ); //Lower two bits of fn3 match AXI specification for request size (byte/halfword/word)
             else if (CONFIG.PERIPHERAL_BUS_TYPE == WISHBONE_BUS)
-                wishbone_master wishbone_bus (
+                wishbone_master #(.LR_WAIT(CONFIG.AMO_UNIT.LR_WAIT), .INCLUDE_AMO(CONFIG.INCLUDE_AMO)) wishbone_bus (
                     .clk (clk),
                     .rst (rst),
+                    .write_outstanding (unit_write_outstanding[BUS_ID]),
                     .wishbone (dwishbone),
+                    .amo (shared_inputs.amo),
+                    .amo_type (shared_inputs.amo_type),
+                    .amo_unit (amo_if[BUS_ID]),
                     .ls (sub_unit[BUS_ID])
                 );
             else if (CONFIG.PERIPHERAL_BUS_TYPE == AVALON_BUS)  begin
-                avalon_master avalon_bus (
+                avalon_master #(.LR_WAIT(CONFIG.AMO_UNIT.LR_WAIT), .INCLUDE_AMO(CONFIG.INCLUDE_AMO)) avalon_bus (
                     .clk (clk),
                     .rst (rst),
-                    .m_avalon (m_avalon), 
+                    .write_outstanding (unit_write_outstanding[BUS_ID]),
+                    .m_avalon (m_avalon),
+                    .amo (shared_inputs.amo),
+                    .amo_type (shared_inputs.amo_type),
+                    .amo_unit (amo_if[BUS_ID]),
                     .ls (sub_unit[BUS_ID])
                 );
             end
@@ -499,30 +568,30 @@ module load_store_unit
             assign dcache_load_request = sub_unit_load_issue & sub_unit_address_match[DCACHE_ID];
             assign dcache_store_request = sub_unit_store_issue & sub_unit_address_match[DCACHE_ID];
 
-            dcache # (.CONFIG(CONFIG))
-            data_cache (
-                .clk (clk),
-                .rst (rst),
-                .dcache_on (dcache_on),
-                .l1_request (l1_request),
-                .l1_response (l1_response),
-                .sc_complete (sc_complete),
-                .sc_success (sc_success),
-                .clear_reservation (clear_reservation),
-                .amo (),
-                .uncacheable_load (uncacheable_load),
-                .uncacheable_store (uncacheable_store),
-                .is_load (sel_load),
-                .load_ready (load_ready),
-                .store_ready (store_ready),
-                .load_request (dcache_load_request),
-                .store_request (dcache_store_request),
-                .ls_load (lsq.load_data_out),
-                .ls_store (lsq.store_data_out),
-                .ls (sub_unit[DCACHE_ID])
-            );
+            dcache_litex #(.CONFIG(CONFIG)) data_cache (
+                .l1_request(l1_request),
+                .l1_response(l1_response),
+                .write_outstanding(unit_write_outstanding[DCACHE_ID]),
+                .amo(shared_inputs.amo),
+                .amo_type(shared_inputs.amo_type),
+                .amo_unit(amo_if[DCACHE_ID]),
+                .uncacheable(uncacheable_load | uncacheable_store),
+                .cbo(shared_inputs.cache_op),
+                .ls(sub_unit[DCACHE_ID]),
+                .load_peek(lsq.load_valid),
+                .load_addr_peek(lsq.load_data_out.addr),
+            .*);
         end
     endgenerate
+
+    generate if (CONFIG.INCLUDE_AMO) begin : gen_amo
+        amo_unit #(
+            .NUM_UNITS(NUM_SUB_UNITS),
+            .RESERVATION_WORDS(CONFIG.AMO_UNIT.RESERVATION_WORDS)
+        ) amo_inst (
+            .agents(amo_if),
+        .*);
+    end endgenerate
 
     ////////////////////////////////////////////////////
     //Output Muxing

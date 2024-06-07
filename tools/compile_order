@@ -48,7 +48,9 @@ core/memory_sub_units/wishbone_master.sv
 
 core/execution_units/load_store_unit/dcache_tag_banks.sv
 core/execution_units/load_store_unit/amo_alu.sv
+core/execution_units/load_store_unit/amo_unit.sv
 core/execution_units/load_store_unit/dcache.sv
+core/execution_units/load_store_unit/dcache_litex.sv
 core/execution_units/load_store_unit/addr_hash.sv
 core/execution_units/load_store_unit/store_queue.sv
 core/execution_units/load_store_unit/load_store_queue.sv

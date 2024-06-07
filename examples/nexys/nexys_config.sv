@@ -71,6 +71,10 @@ package nexys_config;
         //Memory Options
         SQ_DEPTH : 8,
         INCLUDE_FORWARDING_TO_STORES : 1,
+        AMO_UNIT : '{
+            LR_WAIT : 32,
+            RESERVATION_WORDS : 8 //Must be the same size as the DCACHE line width
+        },
         INCLUDE_ICACHE : 1,
         ICACHE_ADDR : '{
             L : 32'h80000000, 
