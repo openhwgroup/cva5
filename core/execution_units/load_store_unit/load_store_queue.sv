@@ -53,6 +53,9 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
         logic [2:0] fn3;
         logic fp;
         logic double;
+        logic amo;
+        amo_t amo_type;
+        logic [31:0] amo_wdata;
         id_t id;
         logic store_collision;
         logic [LOG2_SQ_DEPTH-1:0] sq_index;
@@ -109,8 +112,11 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
         fn3 : lsq.data_in.fn3,
         fp : lsq.data_in.fp,
         double : lsq.data_in.double,
+        amo : lsq.data_in.amo,
+        amo_type : lsq.data_in.amo_type,
+        amo_wdata : lsq.data_in.data,
         id : lsq.data_in.id, 
-        store_collision : potential_store_conflict,
+        store_collision : potential_store_conflict | (CONFIG.INCLUDE_AMO & lsq.data_in.amo), //Collision forces sequential consistence
         sq_index : sq_index
     };
     ////////////////////////////////////////////////////
@@ -237,9 +243,11 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
         load : 1,
         store : 0,
         cache_op : 0,
-        be : 'x,
+        amo : lq.data_out.amo,
+        amo_type : lq.data_out.amo_type,
+        be : '1,
         fn3 : load_fn3,
-        data_in : 'x,
+        data_in : CONFIG.INCLUDE_AMO ? lq.data_out.amo_wdata : 'x,
         id : lq.data_out.id,
         fp_op : load_type
     };
@@ -249,6 +257,8 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
         load : 0,
         store : 1,
         cache_op : sq.data_out.cache_op,
+        amo : 0,
+        amo_type : amo_t'('x),
         be : sq.data_out.be,
         fn3 : 'x,
         data_in : store_data,

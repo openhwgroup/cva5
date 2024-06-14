@@ -14,9 +14,11 @@ local_memory/local_mem.sv
 core/types_and_interfaces/internal_interfaces.sv
 core/types_and_interfaces/external_interfaces.sv
 
-core/common_components/lutram_1w_1r.sv
-core/common_components/lutram_1w_mr.sv
-core/common_components/dual_port_bram.sv
+core/common_components/ram/lutram_1w_1r.sv
+core/common_components/ram/lutram_1w_mr.sv
+core/common_components/ram/sdp_ram.sv
+core/common_components/ram/sdp_ram_padded.sv
+core/common_components/ram/dual_port_bram.sv
 core/common_components/set_clr_reg_with_rst.sv
 core/common_components/one_hot_to_integer.sv
 core/common_components/cycler.sv
@@ -46,7 +48,9 @@ core/memory_sub_units/wishbone_master.sv
 
 core/execution_units/load_store_unit/dcache_tag_banks.sv
 core/execution_units/load_store_unit/amo_alu.sv
+core/execution_units/load_store_unit/amo_unit.sv
 core/execution_units/load_store_unit/dcache.sv
+core/execution_units/load_store_unit/dcache_litex.sv
 core/execution_units/load_store_unit/addr_hash.sv
 core/execution_units/load_store_unit/store_queue.sv
 core/execution_units/load_store_unit/load_store_queue.sv

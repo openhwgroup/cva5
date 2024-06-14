@@ -104,38 +104,39 @@ module branch_predictor
     genvar i;
     generate if (CONFIG.INCLUDE_BRANCH_PREDICTOR)
     for (i=0; i<CONFIG.BP.WAYS; i++) begin : gen_branch_tag_banks
-        dual_port_bram #(.WIDTH($bits(branch_table_entry_t)), .LINES(CONFIG.BP.ENTRIES))
-        tag_bank (       
-            .clk (clk),
-            .en_a (tag_update_way[i]),
-            .wen_a (tag_update_way[i]),
-            .addr_a (addr_utils.getHashedLineAddr(br_results.pc, i)),
-            .data_in_a (ex_entry),
-            .data_out_a (),
-            .en_b (bp.new_mem_request),
-            .wen_b (0),
-            .addr_b (addr_utils.getHashedLineAddr(bp.next_pc, i)), 
-            .data_in_b ('0), 
-            .data_out_b (if_entry[i]));
+        sdp_ram #(
+            .ADDR_WIDTH(BRANCH_ADDR_W),
+            .NUM_COL(1),
+            .COL_WIDTH($bits(branch_table_entry_t)),
+            .PIPELINE_DEPTH(0)
+        ) tag_bank (
+            .a_en(tag_update_way[i]),
+            .a_wbe(tag_update_way[i]),
+            .a_wdata(ex_entry),
+            .a_addr(addr_utils.getHashedLineAddr(br_results.pc, i)),
+            .b_en(bp.new_mem_request),
+            .b_addr(addr_utils.getHashedLineAddr(bp.next_pc, i)),
+            .b_rdata(if_entry[i]),
+        .*);
     end
     endgenerate
 
     generate if (CONFIG.INCLUDE_BRANCH_PREDICTOR)
     for (i=0; i<CONFIG.BP.WAYS; i++) begin : gen_branch_table_banks
-        dual_port_bram #(.WIDTH(32), .LINES(CONFIG.BP.ENTRIES))
-        addr_table (       
-            .clk (clk),
-            .en_a (target_update_way[i]),
-            .wen_a (target_update_way[i]),
-            .addr_a (addr_utils.getHashedLineAddr(br_results.pc, i)),
-            .data_in_a (br_results.target_pc),
-            .data_out_a (),
-            .en_b (bp.new_mem_request),
-            .wen_b (0),
-            .addr_b (addr_utils.getHashedLineAddr(bp.next_pc, i)),
-            .data_in_b ('0),
-            .data_out_b (predicted_pc[i])
-        );
+        sdp_ram #(
+            .ADDR_WIDTH(BRANCH_ADDR_W),
+            .NUM_COL(1),
+            .COL_WIDTH(32),
+            .PIPELINE_DEPTH(0)
+        ) addr_table (
+            .a_en(target_update_way[i]),
+            .a_wbe(target_update_way[i]),
+            .a_wdata(br_results.target_pc),
+            .a_addr(addr_utils.getHashedLineAddr(br_results.pc, i)),
+            .b_en(bp.new_mem_request),
+            .b_addr(addr_utils.getHashedLineAddr(bp.next_pc, i)),
+            .b_rdata(predicted_pc[i]),
+        .*);
     end
     endgenerate
 

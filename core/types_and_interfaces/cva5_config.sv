@@ -57,6 +57,12 @@ package cva5_config;
         bit [31:0] H;
     } memory_config_t;
 
+    //Atomic configuration
+    typedef struct packed {
+        int unsigned LR_WAIT; //Must be >= the maximum number of cycles a constrained LR-SC can take
+        int unsigned RESERVATION_WORDS; //The amount of 32-bit words that are reserved by an LR instruction, must be == cache line size (if cache present)
+    } amo_config_t;
+
     ////////////////////////////////////////////////////
     //Cache Options
     //Size in bytes: (LINES * WAYS * LINE_W * 4)
@@ -177,6 +183,7 @@ package cva5_config;
         //Memory Options
         int unsigned SQ_DEPTH;//CAM-based reasonable max of 4
         bit INCLUDE_FORWARDING_TO_STORES;
+        amo_config_t AMO_UNIT;
         //Caches
         bit INCLUDE_ICACHE;
         cache_config_t ICACHE;
@@ -271,6 +278,10 @@ package cva5_config;
         //Memory Options
         SQ_DEPTH : 4,
         INCLUDE_FORWARDING_TO_STORES : 1,
+        AMO_UNIT : '{
+            LR_WAIT : 32,
+            RESERVATION_WORDS : 8
+        },
         INCLUDE_ICACHE : 0,
         ICACHE_ADDR : '{
             L: 32'h80000000,

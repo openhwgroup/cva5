@@ -136,6 +136,7 @@ module gc_unit
     logic gc_fetch_hold;
     logic gc_issue_hold;
     logic gc_fetch_flush;
+    logic gc_fetch_ifence;
     logic gc_writeback_supress;
     logic gc_retire_hold;
     logic gc_tlb_flush;
@@ -224,6 +225,7 @@ module gc_unit
         gc_init_clear <= next_state inside {INIT_CLEAR_STATE};
         gc_tlb_flush <= next_state inside {INIT_CLEAR_STATE, TLB_CLEAR_STATE};
         gc_sq_flush <= state inside {POST_ISSUE_DISCARD} & next_state inside {IDLE_STATE};
+        gc_fetch_ifence <= issue.new_request & gc_inputs.is_ifence;
     end
     //work-around for verilator BLKANDNBLK signal optimizations
     assign gc.fetch_hold = gc_fetch_hold;
@@ -233,6 +235,7 @@ module gc_unit
     assign gc.init_clear = gc_init_clear;
     assign gc.tlb_flush = CONFIG.INCLUDE_S_MODE & gc_tlb_flush;
     assign gc.sq_flush = CONFIG.INCLUDE_M_MODE & gc_sq_flush;
+    assign gc.fetch_ifence = CONFIG.INCLUDE_IFENCE & gc_fetch_ifence;
     ////////////////////////////////////////////////////
     //GC State Machine
     always @(posedge clk) begin
