@@ -249,8 +249,7 @@ module csr_unit
     always_ff @(posedge clk) begin
         if (issue.new_request) //TODO: flush only when certain fields are written
             will_flush <= CONFIG.INCLUDE_S_MODE & csr_inputs.writes & csr_inputs.addr inside {SATP, MSTATUS};
-        if (commit)
-            csr_frontend_flush <= will_flush;
+        csr_frontend_flush <= commit & will_flush;
     end
 
 
