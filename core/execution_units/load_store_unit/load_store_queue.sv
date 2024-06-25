@@ -124,6 +124,8 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
 
     assign lq_addr.push = lsq.addr_push & lsq.addr_data_in.rnw;
     assign lq_addr.potential_push = lq_addr.push;
+    assign lq_addr.data_in.addr = lsq.addr_data_in.addr;
+    assign lq_addr.data_in.discard = lsq.addr_data_in.discard;
     assign lq_addr.pop = load_pop | lq_addr_discard;
 
     assign lq_addr_discard = lq_addr.valid ? lq_addr.data_out.discard : lsq.addr_push & lsq.addr_data_in.rnw & lsq.addr_data_in.discard;
@@ -170,6 +172,8 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
 
     assign sq_addr.push = lsq.addr_push & ~lsq.addr_data_in.rnw;
     assign sq_addr.potential_push = sq_addr.push;
+    assign sq_addr.data_in.addr = lsq.addr_data_in.addr;
+    assign sq_addr.data_in.discard = lsq.addr_data_in.discard;
     assign sq_addr.pop = store_pop | sq_addr_discard;
 
     assign sq_addr_discard = sq_addr.valid ? sq_addr.data_out.discard : lsq.addr_push & ~lsq.addr_data_in.rnw & lsq.addr_data_in.discard;

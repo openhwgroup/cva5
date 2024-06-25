@@ -63,7 +63,7 @@ module csr_unit
         output logic csr_frontend_flush,
 
         //TLB and MMU
-        output logic tlb_on,
+        output logic translation_on,
         output logic [ASIDLEN-1:0] asid,
 
         //MMUs
@@ -621,7 +621,7 @@ endgenerate
     logic[31:0] sscratch;
 
     //TLB status --- used to mux physical/virtual address
-    assign tlb_on = CONFIG.INCLUDE_S_MODE & satp.mode;
+    assign translation_on = CONFIG.INCLUDE_S_MODE & satp.mode;
     assign asid = satp.asid;
     //******************
 

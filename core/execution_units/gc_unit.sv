@@ -167,9 +167,10 @@ module gc_unit
             is_sfence <= (instruction.upper_opcode == SYSTEM_T) & (instruction[31:20] == SFENCE_imm) & CONFIG.INCLUDE_S_MODE;
             trivial_sfence <= |instruction.rs1_addr;
             asid_sfence <= |instruction.rs2_addr;
-            is_mret <= (instruction.upper_opcode == SYSTEM_T) & (instruction[31:20] == MRET_imm) & CONFIG.INCLUDE_M_MODE;
-            is_sret <= (instruction.upper_opcode == SYSTEM_T) & (instruction[31:20] inside {SRET_imm}) & CONFIG.INCLUDE_S_MODE;
             is_wfi <= (instruction.upper_opcode == SYSTEM_T) & (instruction[31:20] == WFI_imm) & CONFIG.INCLUDE_M_MODE;
+            //Ret instructions need exact decoding
+            is_mret <= CONFIG.INCLUDE_M_MODE & instruction inside {MRET};
+            is_sret <= CONFIG.INCLUDE_S_MODE & instruction inside {SRET};
         end
     end
 
@@ -177,9 +178,7 @@ module gc_unit
     //Issue
     logic is_ifence_r;
     logic is_sfence_r;
-    logic is_mret_r;
     logic is_sret_r;
-    logic [31:0] pc_p4_r;
     logic trivial_sfence_r;
     logic asid_sfence_r;
     logic [31:0] sfence_addr_r;
@@ -190,20 +189,18 @@ module gc_unit
         if (rst) begin
             is_ifence_r <= 0;
             is_sfence_r <= 0;
-            is_mret_r <= 0;
-            is_sret_r <= 0;
+            mret <= 0;
+            sret <= 0;
         end
         else begin
-            is_ifence_r <= (is_ifence_r & ~(next_state == IDLE_STATE)) | (issue.new_request & is_ifence);
-            is_sfence_r <= (is_sfence_r & ~(next_state == IDLE_STATE)) | (issue.new_request & is_sfence);
-            is_mret_r <= (is_mret_r & ~(next_state == IDLE_STATE)) | (issue.new_request & is_mret);
-            is_sret_r <= (is_sret_r & ~(next_state == IDLE_STATE)) | (issue.new_request & is_sret);
+            is_ifence_r <= issue.new_request & is_ifence;
+            is_sfence_r <= issue.new_request & is_sfence;
+            mret <= issue.new_request & is_mret;
+            sret <= issue.new_request & is_sret;
         end  
     end
 
     always_ff @(posedge clk) begin
-        if (instruction_issued)
-            pc_p4_r <= constant_alu; //Next instruction for IFENCE, SFENCE, CSR flush
         if (issue.new_request) begin
             trivial_sfence_r <= trivial_sfence;
             asid_sfence_r <= asid_sfence;
@@ -346,9 +343,6 @@ module gc_unit
 
     assign interrupt_taken = interrupt_pending & (next_state == PRE_ISSUE_FLUSH) & ~(gc.exception.valid) & ~csr_frontend_flush;
 
-    assign mret = is_mret_r;
-    assign sret = is_sret_r;
-
     end endgenerate
 
     //PC determination (trap, flush or return)
@@ -358,10 +352,14 @@ module gc_unit
 
     always_ff @ (posedge clk) begin
         gc_pc_override <= next_state inside {PRE_ISSUE_FLUSH, INIT_CLEAR_STATE};
-        gc_pc <=
-                        (gc.exception.valid | interrupt_taken) ? exception_target_pc :
-                        (is_ifence_r | is_sfence_r | csr_frontend_flush) ? pc_p4_r :
-                        epc; //ret
+        if (gc.exception.valid | interrupt_taken)
+            gc_pc <= exception_target_pc;
+        else if (instruction_issued) begin
+            if (is_mret | is_sret)
+                gc_pc <= epc;
+            else //IFENCE, SFENCE, CSR flush
+                gc_pc <= constant_alu;
+        end
     end
     //work-around for verilator BLKANDNBLK signal optimizations
     assign gc.pc_override = gc_pc_override;

@@ -334,7 +334,7 @@ module load_store_unit
     ////////////////////////////////////////////////////
     //Load-Store status
     assign load_store_status = '{
-        outstanding_store : lsq.sq_empty | write_outstanding,
+        outstanding_store : ~lsq.sq_empty | write_outstanding,
         idle : lsq.empty & (~load_attributes.valid) & (&unit_ready) & (~write_outstanding)
     };
 

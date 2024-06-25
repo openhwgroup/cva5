@@ -133,11 +133,11 @@ module itlb
             request_in_progress <= 0;
         else if (mmu.write_entry | mmu.is_fault | abort_request)
             request_in_progress <= 0;
-        else if (tlb.new_request & ~hit)
+        else if (mmu.request)
             request_in_progress <= 1;
     end
 
-    assign mmu.request = request_in_progress;
+    assign mmu.request = translation_on & tlb.new_request & ~hit;
     assign mmu.execute = 1;
     assign mmu.rnw = tlb.rnw;
     assign mmu.virtual_address = tlb.virtual_address;
@@ -148,10 +148,10 @@ module itlb
         if (rst)
             mmu_request_complete <= 0;
         else
-            mmu_request_complete <= mmu.write_entry;
+            mmu_request_complete <= mmu.write_entry & ~abort_request;
     end
-    assign tlb.done = hit & (tlb.new_request | mmu_request_complete);
-    assign tlb.ready = ~request_in_progress;
+    assign tlb.done = translation_on ? (hit & (tlb.new_request | mmu_request_complete)) : tlb.new_request;
+    assign tlb.ready = ~request_in_progress & ~mmu_request_complete;
     assign tlb.is_fault = mmu.is_fault;
 
     always_comb begin
@@ -159,6 +159,8 @@ module itlb
         tlb.physical_address[31:12] = 0;
         for (int i = 0; i < WAYS; i++)
             if (tag_hit[i]) tlb.physical_address[31:12] |= rdata[i].phys_addr;
+        if (~translation_on)
+            tlb.physical_address[31:12] = tlb.virtual_address[31:12];
     end
 
     ////////////////////////////////////////////////////
@@ -168,7 +170,7 @@ module itlb
     ////////////////////////////////////////////////////
     //Assertions
     multiple_tag_hit_in_tlb:
-        assert property (@(posedge clk) disable iff (rst) (tlb.done) |-> $onehot(tag_hit))
+        assert property (@(posedge clk) disable iff (rst) (translation_on & tlb.done) |-> $onehot(tag_hit))
         else $error("Multiple tag hits in TLB!");
 
 endmodule

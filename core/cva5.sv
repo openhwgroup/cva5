@@ -90,7 +90,7 @@ module cva5
 
     tlb_interface itlb();
     tlb_interface dtlb();
-    logic tlb_on;
+    logic translation_on;
     logic [ASIDLEN-1:0] asid;
 
     //Instruction ID/Metadata
@@ -278,7 +278,7 @@ module cva5
     i_tlb (       
         .clk (clk),
         .rst (rst),
-        .translation_on (tlb_on),
+        .translation_on (translation_on),
         .sfence (gc.sfence),
         .abort_request (gc.fetch_flush | early_branch_flush),
         .asid (asid),
@@ -460,7 +460,7 @@ module cva5
     d_tlb (       
         .clk (clk),
         .rst (rst),
-        .translation_on (tlb_on),
+        .translation_on (translation_on),
         .sfence (gc.sfence),
         .asid (asid),
         .tlb (dtlb), 
@@ -500,7 +500,7 @@ module cva5
             .interrupt_taken(interrupt_taken),
             .interrupt_pending(interrupt_pending),
             .csr_frontend_flush(csr_frontend_flush),
-            .tlb_on(tlb_on),
+            .translation_on(translation_on),
             .asid(asid),
             .immu(immu),
             .dmmu(dmmu),
