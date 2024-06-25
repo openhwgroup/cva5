@@ -143,6 +143,7 @@ module cva5
     //Global Control
     exception_interface exception [NUM_EXCEPTION_SOURCES]();
     gc_outputs_t gc;
+    tlb_packet_t sfence;
     load_store_status_t load_store_status;
     logic [LOG2_MAX_IDS:0] post_issue_count;
 
@@ -279,7 +280,7 @@ module cva5
         .clk (clk),
         .rst (rst),
         .translation_on (translation_on),
-        .sfence (gc.sfence),
+        .sfence (sfence),
         .abort_request (gc.fetch_flush | early_branch_flush),
         .asid (asid),
         .tlb (itlb), 
@@ -461,7 +462,7 @@ module cva5
         .clk (clk),
         .rst (rst),
         .translation_on (translation_on),
-        .sfence (gc.sfence),
+        .sfence (sfence),
         .asid (asid),
         .tlb (dtlb), 
         .mmu (dmmu)
@@ -536,6 +537,7 @@ module cva5
         .exception_target_pc (exception_target_pc),
         .csr_frontend_flush (csr_frontend_flush),
         .gc (gc),
+        .sfence (sfence),
         .mret(mret),
         .sret(sret),
         .epc(epc),

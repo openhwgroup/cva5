@@ -188,7 +188,6 @@ package cva5_types;
         logic issue_hold;
         logic fetch_flush;
         logic fetch_ifence;
-        tlb_packet_t sfence;
         exception_packet_t exception;
         logic pc_override;
         logic [31:0] pc;

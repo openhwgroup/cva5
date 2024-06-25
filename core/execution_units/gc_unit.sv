@@ -70,6 +70,7 @@ module gc_unit
 
         //Output controls
         output gc_outputs_t gc,
+        output tlb_packet_t sfence,
 
         //Ordering support
         input load_store_status_t load_store_status,
@@ -164,7 +165,7 @@ module gc_unit
     always_ff @(posedge clk) begin
         if (issue_stage_ready) begin
             is_ifence <= (instruction.upper_opcode == FENCE_T) & CONFIG.INCLUDE_IFENCE;
-            is_sfence <= (instruction.upper_opcode == SYSTEM_T) & (instruction[31:20] == SFENCE_imm) & CONFIG.INCLUDE_S_MODE;
+            is_sfence <= (instruction.upper_opcode == SYSTEM_T) & (instruction[31:25] == SFENCE_imm[11:5]) & CONFIG.INCLUDE_S_MODE;
             trivial_sfence <= |instruction.rs1_addr;
             asid_sfence <= |instruction.rs2_addr;
             is_wfi <= (instruction.upper_opcode == SYSTEM_T) & (instruction[31:20] == WFI_imm) & CONFIG.INCLUDE_M_MODE;
@@ -225,7 +226,7 @@ module gc_unit
     assign gc.issue_hold = gc_issue_hold | possible_exception;
     assign gc.init_clear = gc_init_clear;
     assign gc.fetch_ifence = CONFIG.INCLUDE_IFENCE & gc_fetch_ifence;
-    assign gc.sfence = '{
+    assign sfence = '{
         valid : CONFIG.INCLUDE_S_MODE & gc_tlb_flush,
         asid_only : asid_sfence_r,
         asid : asid_r,
