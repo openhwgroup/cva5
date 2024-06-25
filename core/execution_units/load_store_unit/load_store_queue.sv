@@ -49,7 +49,7 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
     localparam DOUBLE_MIN_WIDTH = FLEN >= 32 ? 32 : FLEN;
 
     typedef struct packed {
-        logic [31:0] addr;
+        logic [11:0] offset;
         logic [2:0] fn3;
         logic fp;
         logic double;
@@ -61,10 +61,18 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
         logic [LOG2_SQ_DEPTH-1:0] sq_index;
     } lq_entry_t;
 
+    typedef struct packed {
+        logic discard;
+        logic [19:0] addr;
+    } addr_entry_t;
+
     logic [LOG2_SQ_DEPTH-1:0] sq_index;
     logic [LOG2_SQ_DEPTH-1:0] sq_oldest;
     addr_hash_t addr_hash;
     logic potential_store_conflict;
+
+    logic lq_addr_discard;
+    logic sq_addr_discard;
 
     logic load_pop;
     logic load_addr_bit_3;
@@ -75,7 +83,9 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
     logic [31:0] store_data;
 
     fifo_interface #(.DATA_TYPE(lq_entry_t)) lq();
+    fifo_interface #(.DATA_TYPE(addr_entry_t)) lq_addr();
     store_queue_interface sq();
+    fifo_interface #(.DATA_TYPE(addr_entry_t)) sq_addr();
     ////////////////////////////////////////////////////
     //Implementation
 
@@ -88,7 +98,7 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
     //Address hash for load-store collision checking
     addr_hash #(.USE_BIT_3(~CONFIG.INCLUDE_UNIT.FPU))
     lsq_addr_hash (
-        .addr (lsq.data_in.addr),
+        .addr (lsq.data_in.offset),
         .addr_hash (addr_hash)
     );
 
@@ -100,15 +110,27 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
         .rst(rst),
         .fifo(lq)
     );
+    cva5_fifo #(.DATA_TYPE(addr_entry_t), .FIFO_DEPTH(MAX_IDS))
+    load_queue_addr_fifo (
+        .clk(clk),
+        .rst(rst),
+        .fifo(lq_addr)
+    );
 
     //FIFO control signals
     assign lq.push = lsq.push & lsq.data_in.load;
     assign lq.potential_push = lsq.potential_push;
-    assign lq.pop = load_pop;
+    assign lq.pop = load_pop | lq_addr_discard;
+
+    assign lq_addr.push = lsq.addr_push & lsq.addr_data_in.rnw;
+    assign lq_addr.potential_push = lq_addr.push;
+    assign lq_addr.pop = load_pop | lq_addr_discard;
+
+    assign lq_addr_discard = lq_addr.valid ? lq_addr.data_out.discard : lsq.addr_push & lsq.addr_data_in.rnw & lsq.addr_data_in.discard;
 
     //FIFO data ports
     assign lq.data_in = '{
-        addr : lsq.data_in.addr,
+        offset : lsq.data_in.offset,
         fn3 : lsq.data_in.fn3,
         fp : lsq.data_in.fp,
         double : lsq.data_in.double,
@@ -122,12 +144,12 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
     ////////////////////////////////////////////////////
     //Store Queue
     assign sq.push = lsq.push & (lsq.data_in.store | lsq.data_in.cache_op);
-    assign sq.pop = store_pop;
+    assign sq.pop = store_pop | sq_addr_discard;
     assign sq.data_in = lsq.data_in;
 
     store_queue  # (.CONFIG(CONFIG)) sq_block (
         .clk (clk),
-        .rst (rst | gc.sq_flush),
+        .rst (rst),
         .sq (sq),
         .store_forward_wb_group (store_forward_wb_group),
         .fp_store_forward_wb_group (fp_store_forward_wb_group),
@@ -139,6 +161,19 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
         .fp_wb_packet (fp_wb_packet),
         .store_retire (store_retire)
     );
+    cva5_fifo #(.DATA_TYPE(addr_entry_t), .FIFO_DEPTH(CONFIG.SQ_DEPTH))
+    store_queue_addr_fifo (
+        .clk(clk),
+        .rst(rst),
+        .fifo(sq_addr)
+    );
+
+    assign sq_addr.push = lsq.addr_push & ~lsq.addr_data_in.rnw;
+    assign sq_addr.potential_push = sq_addr.push;
+    assign sq_addr.pop = store_pop | sq_addr_discard;
+
+    assign sq_addr_discard = sq_addr.valid ? sq_addr.data_out.discard : lsq.addr_push & ~lsq.addr_data_in.rnw & lsq.addr_data_in.discard;
+
 
     ////////////////////////////////////////////////////
     //Output
@@ -153,8 +188,8 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
             logic load_fp_hold;
 
             assign load_fp_hold = ~load_p2 & lq.data_out.double;
-            assign load_pop = lsq.load_pop & ~load_fp_hold;
-            assign load_addr_bit_3 = load_fp_hold | lq.data_out.addr[2];
+            assign load_pop = lsq.load_pop & ~load_fp_hold;//
+            assign load_addr_bit_3 = load_fp_hold | lq.data_out.offset[2];
             assign load_fn3 = lq.data_out.fp ? LS_W_fn3 : lq.data_out.fn3;
            
             always_comb begin
@@ -177,7 +212,7 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
         end else begin : gen_no_load_split
             //All loads are single cycle (load only the upper word)
             assign load_pop = lsq.load_pop;
-            assign load_addr_bit_3 = lq.data_out.addr[2] | lq.data_out.double;
+            assign load_addr_bit_3 = lq.data_out.offset[2] | lq.data_out.double;
             assign load_fn3 = lq.data_out.fp ? LS_W_fn3 : lq.data_out.fn3;
             always_comb begin
                 if (lq.data_out.double)
@@ -200,7 +235,7 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
 
         assign store_fp_hold = ~store_p2 & sq.data_out.double;
         assign store_pop = lsq.store_pop & ~store_fp_hold;
-        assign store_addr_bit_3 = sq.data_out.double ? store_p2 : sq.data_out.addr[2]; 
+        assign store_addr_bit_3 = sq.data_out.double ? store_p2 : sq.data_out.offset[2]; 
 
         always_ff @(posedge clk) begin
             if (rst)
@@ -223,11 +258,11 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
     end else begin : gen_no_fpu
         //Plain integer memory operations
         assign load_pop = lsq.load_pop;
-        assign load_addr_bit_3 = lq.data_out.addr[2];
+        assign load_addr_bit_3 = lq.data_out.offset[2];
         assign load_fn3 = lq.data_out.fn3;
         assign load_type = INT_DONE;
         assign store_pop = lsq.store_pop;
-        assign store_addr_bit_3 = sq.data_out.addr[2];
+        assign store_addr_bit_3 = sq.data_out.offset[2];
         assign store_data = sq.data_out.data;
     end
     endgenerate
@@ -235,11 +270,12 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
     logic load_blocked;
     assign load_blocked = (lq.data_out.store_collision & (lq.data_out.sq_index != sq_oldest));
 
-    assign lsq.load_valid = lq.valid & ~load_blocked;
-    assign lsq.store_valid = sq.valid;
+    //Requests are only valid if the TLB has returned the physical address and there was no exception
+    assign lsq.load_valid = lq.valid & ~load_blocked & (lq_addr.valid ? ~lq_addr.data_out.discard : lsq.addr_push & lsq.addr_data_in.rnw & ~lsq.addr_data_in.discard);
+    assign lsq.store_valid = sq.valid & (sq_addr.valid ? ~sq_addr.data_out.discard : lsq.addr_push & ~lsq.addr_data_in.rnw & ~lsq.addr_data_in.discard);
 
     assign lsq.load_data_out = '{
-        addr : {lq.data_out.addr[31:3], load_addr_bit_3, lq.data_out.addr[1:0]},
+        addr : {(lq_addr.valid ? lq_addr.data_out.addr : lsq.addr_data_in.addr), lq.data_out.offset[11:3], load_addr_bit_3, lq.data_out.offset[1:0]},
         load : 1,
         store : 0,
         cache_op : 0,
@@ -253,7 +289,7 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
     };
 
     assign lsq.store_data_out = '{
-        addr : {sq.data_out.addr[31:3], store_addr_bit_3, sq.data_out.addr[1:0]},
+        addr : {(sq_addr.valid ? sq_addr.data_out.addr : lsq.addr_data_in.addr), sq.data_out.offset[11:3], store_addr_bit_3, sq.data_out.offset[1:0]},
         load : 0,
         store : 1,
         cache_op : sq.data_out.cache_op,
@@ -267,7 +303,6 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
     };
 
     assign lsq.sq_empty = sq.empty;
-    assign lsq.no_released_stores_pending = sq.no_released_stores_pending;
     assign lsq.empty = ~lq.valid & sq.empty;
 
     ////////////////////////////////////////////////////

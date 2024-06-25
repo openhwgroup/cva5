@@ -62,7 +62,6 @@ module load_store_unit
         input logic dcache_on,
         input logic clear_reservation,
         tlb_interface.requester tlb,
-        input logic tlb_on,
 
         l1_arbiter_request_interface.master l1_request,
         l1_arbiter_return_interface.master l1_response,
@@ -129,6 +128,7 @@ module load_store_unit
     logic sub_unit_load_issue;
     logic sub_unit_store_issue;
 
+    logic load_response;
     logic load_complete;
 
     logic [31:0] virtual_address;
@@ -137,11 +137,15 @@ module load_store_unit
     logic [31:0] aligned_load_data;
     logic [31:0] final_load_data;
 
+    logic tlb_request_r;
+    logic tlb_lq;
+
     logic unaligned_addr;
-    logic load_exception_complete;
     logic exception_is_fp;
     logic nontrivial_fence;
     logic fence_hold;
+
+    id_t exception_id;
 
     typedef struct packed{
         logic is_signed;
@@ -159,6 +163,7 @@ module load_store_unit
     logic [3:0] be;
     //FIFOs
     fifo_interface #(.DATA_TYPE(load_attributes_t)) load_attributes();
+    fifo_interface #(.DATA_TYPE(logic[31:0])) backstop();
 
     load_store_queue_interface lsq();
     ////////////////////////////////////////////////////
@@ -302,53 +307,55 @@ module load_store_unit
                 unaligned_addr = 0;
         end
 
-        assign new_exception = unaligned_addr & issue.new_request & ~issue_attr.is_fence & ~issue_attr.is_cbo;
+        assign new_exception = (issue.new_request & unaligned_addr & ~issue_attr.is_fence & ~issue_attr.is_cbo) | tlb.is_fault;
         always_ff @(posedge clk) begin
             if (rst)
                 exception.valid <= 0;
             else
-                exception.valid <= (exception.valid & ~exception.ack) | new_exception;
+                exception.valid <= new_exception;
         end
 
+        logic was_load;
         always_ff @(posedge clk) begin
-            if (rst)
-                exception_is_fp <= 0;
-            else if (new_exception)
+            if (issue.new_request) begin
                 exception_is_fp <= CONFIG.INCLUDE_UNIT.FPU & issue_attr.is_fpu;
-        end
-
-        always_ff @(posedge clk) begin
-            if (new_exception & ~exception.valid) begin
+                was_load <= issue_attr.is_load & ~(issue_attr.is_amo & issue_attr.amo_type != AMO_LR_FN5);
                 exception.code <= issue_attr.is_store ? STORE_AMO_ADDR_MISSALIGNED : LOAD_ADDR_MISSALIGNED;
                 exception.tval <= virtual_address;
-                exception.id <= issue.id;
+                exception_id <= issue.id;
             end
+            if (tlb.is_fault)
+                exception.code <= was_load ? LOAD_PAGE_FAULT : STORE_OR_AMO_PAGE_FAULT;
         end
-
-        always_ff @(posedge clk) begin
-            if (rst)
-                load_exception_complete <= 0;
-            else
-                load_exception_complete <= exception.valid & exception.ack & (exception.code == LOAD_ADDR_MISSALIGNED);
-        end
+        assign exception.possible = (tlb_request_r & ~tlb.done) | exception.valid; //Must suppress issue for issue-time exceptions too
+        assign exception.pc = issue_stage.pc_r;
     end endgenerate
 
     ////////////////////////////////////////////////////
     //Load-Store status
     assign load_store_status = '{
-        sq_empty : lsq.sq_empty,
-        no_released_stores_pending : lsq.no_released_stores_pending,
+        outstanding_store : lsq.sq_empty | write_outstanding,
         idle : lsq.empty & (~load_attributes.valid) & (&unit_ready) & (~write_outstanding)
     };
 
     ////////////////////////////////////////////////////
-    //TLB interface
+    //Address calculation
     assign virtual_address = rf[RS1] + 32'(signed'(issue_attr.offset));
 
+    ////////////////////////////////////////////////////
+    //TLB interface
+    always_ff @(posedge clk) begin
+        if (rst)
+            tlb_request_r <= 0;
+        else if (tlb.new_request)
+            tlb_request_r <= 1;
+        else if (tlb.done | tlb.is_fault)
+            tlb_request_r <= 0;
+    end
+
+    assign tlb.rnw = issue_attr.is_load | (issue_attr.is_amo & issue_attr.amo_type == AMO_LR_FN5);
     assign tlb.virtual_address = virtual_address;
-    assign tlb.new_request = tlb_on & issue.new_request & ~issue_attr.is_fence;
-    assign tlb.execute = 0;
-    assign tlb.rnw = issue_attr.is_load & ~issue_attr.is_store;
+    assign tlb.new_request = issue.new_request & ~issue_attr.is_fence & (~unaligned_addr | issue_attr.is_cbo);
 
     ////////////////////////////////////////////////////
     //Byte enable generation
@@ -373,7 +380,7 @@ module load_store_unit
     ////////////////////////////////////////////////////
     //Load Store Queue
     assign lsq.data_in = '{
-        addr : tlb_on ? tlb.physical_address : virtual_address,
+        offset : virtual_address[11:0],
         fn3 : issue_stage.fn3,
         be : be,
         data : rf[RS2],
@@ -390,7 +397,7 @@ module load_store_unit
     };
 
     assign lsq.potential_push = issue.possible_issue;
-    assign lsq.push = issue.new_request & (~unaligned_addr | issue_attr.is_cbo) & (~tlb_on | tlb.done) & ~issue_attr.is_fence;
+    assign lsq.push = issue.new_request & ~issue_attr.is_fence & (~unaligned_addr | issue_attr.is_cbo);
 
     load_store_queue  # (.CONFIG(CONFIG)) lsq_block (
         .clk (clk),
@@ -406,6 +413,19 @@ module load_store_unit
     assign shared_inputs = sel_load ? lsq.load_data_out : lsq.store_data_out;
     assign lsq.load_pop = sub_unit_load_issue;
     assign lsq.store_pop = sub_unit_store_issue;
+
+    //Physical address paseed separately
+    assign lsq.addr_push = tlb.done | tlb.is_fault;
+    assign lsq.addr_data_in = '{
+        addr : tlb.physical_address[31:12],
+        rnw : tlb_lq,
+        discard : tlb.is_fault
+    };
+
+    always_ff @(posedge clk) begin
+        if (issue.new_request)
+            tlb_lq <= ~issue_attr.is_store;
+    end
 
     ////////////////////////////////////////////////////
     //Unit tracking
@@ -426,9 +446,11 @@ module load_store_unit
     assign sel_load = lsq.load_valid;
 
     assign sub_unit_ready = unit_ready[subunit_id] & (~unit_switch_hold);
-    assign load_complete = |unit_data_valid;
+    assign load_response = |unit_data_valid;
+    assign load_complete = load_response & ~exception.valid;
 
-    assign issue.ready = (~tlb_on | tlb.ready) & (~lsq.full) & (~fence_hold) & (~exception.valid);
+    //TLB status and exceptions can be ignored because they will prevent instructions from issuing
+    assign issue.ready = ~lsq.full & ~fence_hold;
 
     assign sub_unit_load_issue = sel_load & lsq.load_valid & sub_unit_ready & sub_unit_address_match[subunit_id];
     assign sub_unit_store_issue = (lsq.store_valid & ~sel_load) & sub_unit_ready & sub_unit_address_match[subunit_id];
@@ -598,7 +620,7 @@ module load_store_unit
     logic sign_bit_data [4];
     logic sign_bit;
     
-    assign unit_muxed_load_data = unit_data_array[wb_attr.subunit_id];
+    assign unit_muxed_load_data = backstop.valid ? backstop.data_out : unit_data_array[wb_attr.subunit_id];
 
     //Byte/halfword select: assumes aligned operations
     assign aligned_load_data[31:16] = unit_muxed_load_data[31:16];
@@ -648,15 +670,25 @@ module load_store_unit
     end endgenerate
 
     ////////////////////////////////////////////////////
+    //Backstop buffering
+    //Required if load response overlaps an exception
+    assign backstop.push = load_response & exception.valid;
+    assign backstop.potential_push = backstop.push;
+    assign backstop.data_in = unit_muxed_load_data;
+    assign backstop.pop = backstop.valid;
+    cva5_fifo #(.DATA_TYPE(logic[31:0]), .FIFO_DEPTH(1)) backstop_fifo (
+        .fifo(backstop),
+    .*);
+
+    ////////////////////////////////////////////////////
     //Output bank
     assign wb.rd = final_load_data;
-    assign wb.done = (load_complete & (~CONFIG.INCLUDE_UNIT.FPU | wb_attr.fp_op == INT_DONE)) | (load_exception_complete & ~exception_is_fp);
-    //TODO: exceptions seemingly clobber load data if it appears on the same cycle
-    assign wb.id = load_exception_complete ? exception.id : wb_attr.id;
+    assign wb.done = (load_complete & (~CONFIG.INCLUDE_UNIT.FPU | wb_attr.fp_op == INT_DONE)) | (exception.valid & ~exception_is_fp);
+    assign wb.id = exception.valid ? exception_id : wb_attr.id;
 
     assign fp_wb.rd = fp_result;
-    assign fp_wb.done = (load_complete & (wb_attr.fp_op == SINGLE_DONE | wb_attr.fp_op == DOUBLE_DONE)) | (load_exception_complete & exception_is_fp);
-    assign fp_wb.id = load_exception_complete ? exception.id : wb_attr.id;
+    assign fp_wb.done = (load_complete & (wb_attr.fp_op == SINGLE_DONE | wb_attr.fp_op == DOUBLE_DONE)) | (exception.valid & exception_is_fp);
+    assign fp_wb.id = exception.valid ? exception_id : wb_attr.id;
 
     ////////////////////////////////////////////////////
     //End of Implementation

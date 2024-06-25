@@ -65,7 +65,6 @@ module branch_unit
     logic [31:0] new_pc;
     logic [31:0] new_pc_ex;
 
-    logic [31:0] pc_ex;
     logic instruction_is_completing;
 
     logic branch_complete;
@@ -208,15 +207,13 @@ module branch_unit
             if (rst)
                 exception.valid <= 0;
             else
-                exception.valid <= (exception.valid & ~exception.ack) | new_exception;
+                exception.valid <= new_exception;
         end
 
-        always_ff @(posedge clk) begin
-            if (issue.new_request)
-                exception.id <= issue.id;
-        end
+        assign exception.possible = 0; //Not needed because branch_flush suppresses issue
         assign exception.code = INST_ADDR_MISSALIGNED;
         assign exception.tval = new_pc_ex;
+        assign exception.pc = issue_stage.pc_r;
     end
     endgenerate
 
@@ -228,13 +225,12 @@ module branch_unit
         if (issue.possible_issue) begin
             is_return_ex <= is_return;
             is_call_ex <= is_call;
-            pc_ex <= issue_stage.pc;
         end
     end
 
     assign br_results.id = id_ex;
     assign br_results.valid = instruction_is_completing;
-    assign br_results.pc = pc_ex;
+    assign br_results.pc = issue_stage.pc_r;
     assign br_results.target_pc = new_pc_ex;
     assign br_results.branch_taken = branch_taken_ex;
     assign br_results.is_branch = ~jal_or_jalr_ex;

@@ -60,7 +60,7 @@ module csr_unit
         //GC
         input logic interrupt_taken,
         output logic interrupt_pending,
-        output logic processing_csr,
+        output logic csr_frontend_flush,
 
         //TLB and MMU
         output logic tlb_on,
@@ -71,13 +71,16 @@ module csr_unit
         mmu_interface.csr dmmu,
 
         //CSR exception interface
-        input exception_packet_t exception,
+        input exception_packet_t exception_pkt,
         output logic [31:0] exception_target_pc,
 
         //exception return
         input logic mret,
         input logic sret,
         output logic [31:0] epc,
+        
+        //Exception generation
+        exception_interface.unit exception,
 
         //Retire
         input id_t retire_ids [RETIRE_PORTS],
@@ -211,8 +214,6 @@ module csr_unit
         reads : ~((issue_stage.fn3[1:0] == CSR_RW) && (issue_stage.rd_addr == 0)),
         writes : ~((issue_stage.fn3[1:0] == CSR_RC) && (issue_rs_addr[RS1] == 0))
     };
-
-    assign processing_csr = busy | issue.new_request;
     
     assign issue.ready = ~busy;
 
@@ -237,6 +238,21 @@ module csr_unit
 
     //Waits until CSR instruction is the oldest issued instruction
     assign commit = (retire_ids[0] == wb.id) & busy & (~commit_in_progress);
+
+    ////////////////////////////////////////////////////
+    //Exceptions
+    assign exception.possible = busy;
+
+    ////////////////////////////////////////////////////
+    //Frontend flush
+    logic will_flush;
+    always_ff @(posedge clk) begin
+        if (issue.new_request) //TODO: flush only when certain fields are written
+            will_flush <= CONFIG.INCLUDE_S_MODE & csr_inputs.writes & csr_inputs.addr inside {SATP, MSTATUS};
+        if (commit)
+            csr_frontend_flush <= will_flush;
+    end
+
 
     ////////////////////////////////////////////////////
     //Output
@@ -355,12 +371,12 @@ generate if (CONFIG.INCLUDE_M_MODE) begin : gen_csr_m_mode
     logic interrupt_delegated;
 
     assign can_delegate = CONFIG.INCLUDE_S_MODE & privilege_level inside {SUPERVISOR_PRIVILEGE, USER_PRIVILEGE};
-    assign exception_delegated = can_delegate & exception.valid & medeleg[exception.code];
+    assign exception_delegated = can_delegate & exception_pkt.valid & medeleg[exception_pkt.code];
     assign interrupt_delegated = can_delegate & interrupt_taken & mideleg[interrupt_cause_r];
 
     one_hot_to_integer #(6)
     mstatus_case_one_hot (
-        .one_hot ({sret, mret, exception.valid, interrupt_taken, (mwrite_en(MSTATUS) | swrite_en(SSTATUS)), 1'b0}), 
+        .one_hot ({sret, mret, exception_pkt.valid, interrupt_taken, (mwrite_en(MSTATUS) | swrite_en(SSTATUS)), 1'b0}), 
         .int_out (mstatus_case)
     );
 
@@ -498,8 +514,8 @@ generate if (CONFIG.INCLUDE_M_MODE) begin : gen_csr_m_mode
     //exception causing PC.  Lower two bits tied to zero.
     always_ff @(posedge clk) begin
         mepc[1:0] <= '0;
-        if (mwrite_en(MEPC) | exception.valid | interrupt_taken)
-            mepc[31:2] <= (exception.valid | interrupt_taken) ? exception.pc[31:2] : updated_csr[31:2];
+        if (mwrite_en(MEPC) | exception_pkt.valid | interrupt_taken)
+            mepc[31:2] <= (exception_pkt.valid | interrupt_taken) ? exception_pkt.pc[31:2] : updated_csr[31:2];
     end
     assign epc = mepc;
 
@@ -548,17 +564,17 @@ generate if (CONFIG.INCLUDE_M_MODE) begin : gen_csr_m_mode
             mcause.is_interrupt <= 0;
             mcause.code <= 0;
         end
-        else if (CONFIG.CSRS.NON_STANDARD_OPTIONS.INCLUDE_MCAUSE & ((mcause_write_valid & mwrite_en(MCAUSE)) | exception.valid | interrupt_taken)) begin
+        else if (CONFIG.CSRS.NON_STANDARD_OPTIONS.INCLUDE_MCAUSE & ((mcause_write_valid & mwrite_en(MCAUSE)) | exception_pkt.valid | interrupt_taken)) begin
             mcause.is_interrupt <= interrupt_taken | (mwrite_en(MCAUSE) & updated_csr[31]);
-            mcause.code <= interrupt_taken ? interrupt_cause_r : exception.valid ? exception.code : updated_csr[ECODE_W-1:0];
+            mcause.code <= interrupt_taken ? interrupt_cause_r : exception_pkt.valid ? exception_pkt.code : updated_csr[ECODE_W-1:0];
         end
     end
 
     ////////////////////////////////////////////////////
     //MTVAL
     always_ff @(posedge clk) begin
-        if (CONFIG.CSRS.NON_STANDARD_OPTIONS.INCLUDE_MTVAL & (mwrite_en(MTVAL) | exception.valid))
-            mtval <=  exception.valid ? exception.tval : updated_csr;
+        if (CONFIG.CSRS.NON_STANDARD_OPTIONS.INCLUDE_MTVAL & (mwrite_en(MTVAL) | exception_pkt.valid))
+            mtval <=  exception_pkt.valid ? exception_pkt.tval : updated_csr;
     end
 
     ////////////////////////////////////////////////////
@@ -837,6 +853,6 @@ end endgenerate
     ////////////////////////////////////////////////////
     //Assertions
     mstatus_update_assertion:
-        assert property (@(posedge clk) disable iff (rst) $onehot0({mret,sret,interrupt_taken, exception.valid,(mwrite_en(MSTATUS) | swrite_en(SSTATUS))})) else $error("multiple write to mstatus");
+        assert property (@(posedge clk) disable iff (rst) $onehot0({mret,sret,interrupt_taken, exception_pkt.valid,(mwrite_en(MSTATUS) | swrite_en(SSTATUS))})) else $error("multiple write to mstatus");
 
 endmodule

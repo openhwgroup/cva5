@@ -38,7 +38,6 @@ module dcache
         input logic sc_complete,
         input logic sc_success,
         input logic clear_reservation,
-        input amo_details_t amo,
         input logic uncacheable_load,
         input logic uncacheable_store,
         input logic is_load,

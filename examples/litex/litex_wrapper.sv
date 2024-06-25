@@ -100,6 +100,10 @@ module litex_wrapper
         },
         INCLUDE_IFENCE : 0,
         INCLUDE_AMO : 0,
+        AMO_UNIT : '{
+            LR_WAIT : 8,
+            RESERVATION_WORDS : 8
+        },
         //CSR constants
         CSRS : '{
             MACHINE_IMPLEMENTATION_ID : 0,
@@ -216,8 +220,12 @@ module litex_wrapper
             BR : 1,
             IEC : 1
         },
-        INCLUDE_IFENCE : 0,
-        INCLUDE_AMO : 0,
+        INCLUDE_IFENCE : 1,
+        INCLUDE_AMO : 1,
+        AMO_UNIT : '{
+            LR_WAIT : 8,
+            RESERVATION_WORDS : 8
+        },
         //CSR constants
         CSRS : '{
             MACHINE_IMPLEMENTATION_ID : 0,
@@ -244,7 +252,7 @@ module litex_wrapper
         },
         ICACHE : '{
             LINES : 512,
-            LINE_W : 4,
+            LINE_W : 8,
             WAYS : 2,
             USE_EXTERNAL_INVALIDATIONS : 0,
             USE_NON_CACHEABLE : 0,
@@ -264,7 +272,7 @@ module litex_wrapper
         },
         DCACHE : '{
             LINES : 512,
-            LINE_W : 4,
+            LINE_W : 8,
             WAYS : 2,
             USE_EXTERNAL_INVALIDATIONS : 0,
             USE_NON_CACHEABLE : 1,

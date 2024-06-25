@@ -112,7 +112,6 @@ module cva5
     logic decode_uses_rd;
     logic fp_decode_uses_rd;
     rs_addr_t decode_rd_addr;
-    exception_sources_t decode_exception_unit;
     logic decode_is_store;
     phys_addr_t decode_phys_rd_addr;
     phys_addr_t fp_decode_phys_rd_addr;
@@ -127,7 +126,6 @@ module cva5
     retire_packet_t fp_wb_retire;
     retire_packet_t store_retire;
     id_t retire_ids [RETIRE_PORTS];
-    id_t retire_ids_next [RETIRE_PORTS];
     logic retire_port_valid [RETIRE_PORTS];
     logic [LOG2_RETIRE_PORTS : 0] retire_count;
         //Writeback
@@ -138,15 +136,12 @@ module cva5
     phys_addr_t wb_phys_addr [CONFIG.NUM_WB_GROUPS];
     phys_addr_t fp_wb_phys_addr [2];
     logic [4:0] fflag_wmask;
-         //Exception
-    logic [31:0] oldest_pc;
 
     renamer_interface #(.NUM_WB_GROUPS(CONFIG.NUM_WB_GROUPS), .READ_PORTS(REGFILE_READ_PORTS)) decode_rename_interface ();
     renamer_interface #(.NUM_WB_GROUPS(2), .READ_PORTS(3)) fp_decode_rename_interface ();
 
     //Global Control
     exception_interface exception [NUM_EXCEPTION_SOURCES]();
-    logic [$clog2(NUM_EXCEPTION_SOURCES)-1:0] current_exception_unit;
     gc_outputs_t gc;
     load_store_status_t load_store_status;
     logic [LOG2_MAX_IDS:0] post_issue_count;
@@ -154,13 +149,12 @@ module cva5
     logic [1:0] current_privilege;
     logic mret;
     logic sret;
+    logic csr_frontend_flush;
     logic [31:0] epc;
     logic [31:0] exception_target_pc;
 
     logic interrupt_taken;
     logic interrupt_pending;
-
-    logic processing_csr;
 
     //Decode Unit and Fetch Unit
     logic issue_stage_ready;
@@ -217,7 +211,6 @@ module cva5
         .decode_rd_addr (decode_rd_addr),
         .decode_phys_rd_addr (decode_phys_rd_addr),
         .fp_decode_phys_rd_addr (fp_decode_phys_rd_addr),
-        .decode_exception_unit (decode_exception_unit),
         .decode_is_store (decode_is_store),
         .issue (issue),
         .instruction_issued (instruction_issued),
@@ -231,12 +224,9 @@ module cva5
         .fp_wb_retire (fp_wb_retire),
         .store_retire (store_retire),
         .retire_ids (retire_ids),
-        .retire_ids_next (retire_ids_next),
         .retire_port_valid(retire_port_valid),
         .retire_count (retire_count),
-        .post_issue_count(post_issue_count),
-        .oldest_pc (oldest_pc),
-        .current_exception_unit (current_exception_unit)
+        .post_issue_count(post_issue_count)
     );
 
     ////////////////////////////////////////////////////
@@ -263,8 +253,7 @@ module cva5
         .icache_on ('1),
         .tlb (itlb), 
         .l1_request (l1_request[L1_ICACHE_ID]), 
-        .l1_response (l1_response[L1_ICACHE_ID]), 
-        .exception (1'b0)
+        .l1_response (l1_response[L1_ICACHE_ID])
     );
 
     branch_predictor #(.CONFIG(CONFIG))
@@ -285,19 +274,19 @@ module cva5
         .ras (ras)
     );
 
-    generate if (CONFIG.INCLUDE_S_MODE) begin : gen_itlb_immu
+    itlb #(.WAYS(CONFIG.ITLB.WAYS), .DEPTH(CONFIG.ITLB.DEPTH))
+    i_tlb (       
+        .clk (clk),
+        .rst (rst),
+        .translation_on (tlb_on),
+        .sfence (gc.sfence),
+        .abort_request (gc.fetch_flush | early_branch_flush),
+        .asid (asid),
+        .tlb (itlb), 
+        .mmu (immu)
+    );
 
-        tlb_lut_ram #(.WAYS(CONFIG.ITLB.WAYS), .DEPTH(CONFIG.ITLB.DEPTH))
-        i_tlb (       
-            .clk (clk),
-            .rst (rst),
-            .gc (gc),
-            .abort_request (gc.fetch_flush | early_branch_flush),
-            .asid (asid),
-            .tlb (itlb), 
-            .mmu (immu)
-        );
-
+    generate if (CONFIG.INCLUDE_S_MODE) begin : gen_immu
         mmu i_mmu (
             .clk (clk),
             .rst (rst),
@@ -307,11 +296,6 @@ module cva5
             .l1_response (l1_response[L1_IMMU_ID])
         );
 
-        end
-        else begin
-            assign itlb.ready = 1;
-            assign itlb.done = itlb.new_request;
-            assign itlb.physical_address = itlb.virtual_address;
         end
     endgenerate
 
@@ -348,7 +332,6 @@ module cva5
         .decode_uses_rd (decode_uses_rd),
         .fp_decode_uses_rd (fp_decode_uses_rd),
         .decode_rd_addr (decode_rd_addr),
-        .decode_exception_unit (decode_exception_unit),
         .decode_phys_rd_addr (decode_phys_rd_addr),
         .fp_decode_phys_rd_addr (fp_decode_phys_rd_addr),
         .decode_phys_rs_addr (decode_phys_rs_addr),
@@ -455,8 +438,7 @@ module cva5
         .issue (unit_issue[LS_ID]),
         .dcache_on (1'b1), 
         .clear_reservation (1'b0), 
-        .tlb (dtlb),
-        .tlb_on (tlb_on),                            
+        .tlb (dtlb),                         
         .l1_request (l1_request[L1_DCACHE_ID]), 
         .l1_response (l1_response[L1_DCACHE_ID]),
         .sc_complete (sc_complete),
@@ -474,18 +456,18 @@ module cva5
         .fp_wb (fp_unit_wb[0])
     );
 
-    generate if (CONFIG.INCLUDE_S_MODE) begin : gen_dtlb_dmmu
-        tlb_lut_ram #(.WAYS(CONFIG.DTLB.WAYS), .DEPTH(CONFIG.DTLB.DEPTH))
-        d_tlb (       
-            .clk (clk),
-            .rst (rst),
-            .gc (gc),
-            .abort_request (1'b0),
-            .asid (asid),
-            .tlb (dtlb), 
-            .mmu (dmmu)
-        );
+    dtlb #(.WAYS(CONFIG.DTLB.WAYS), .DEPTH(CONFIG.DTLB.DEPTH))
+    d_tlb (       
+        .clk (clk),
+        .rst (rst),
+        .translation_on (tlb_on),
+        .sfence (gc.sfence),
+        .asid (asid),
+        .tlb (dtlb), 
+        .mmu (dmmu)
+    );
 
+    generate if (CONFIG.INCLUDE_S_MODE) begin : gen_dmmu
         mmu d_mmu (
             .clk (clk),
             .rst (rst),
@@ -494,11 +476,6 @@ module cva5
             .l1_request (l1_request[L1_DMMU_ID]), 
             .l1_response (l1_response[L1_DMMU_ID])
         );
-    end
-    else begin
-            assign dtlb.ready = 1;
-            assign dtlb.done = dtlb.new_request;
-            assign dtlb.physical_address = dtlb.virtual_address;
     end
     endgenerate
 
@@ -522,16 +499,17 @@ module cva5
             .dyn_rm (dyn_rm),
             .interrupt_taken(interrupt_taken),
             .interrupt_pending(interrupt_pending),
-            .processing_csr(processing_csr),
+            .csr_frontend_flush(csr_frontend_flush),
             .tlb_on(tlb_on),
             .asid(asid),
             .immu(immu),
             .dmmu(dmmu),
-            .exception(gc.exception),
+            .exception_pkt(gc.exception),
             .exception_target_pc (exception_target_pc),
             .mret(mret),
             .sret(sret),
             .epc(epc),
+            .exception(exception[CSR_EXCEPTION]),
             .retire_ids(retire_ids),
             .retire_count (retire_count),
             .s_interrupt(s_interrupt),
@@ -549,22 +527,20 @@ module cva5
         .unit_needed (unit_needed[IEC_ID]),
         .uses_rs (unit_uses_rs[IEC_ID]),
         .uses_rd (unit_uses_rd[IEC_ID]),
+        .instruction_issued (instruction_issued),
         .constant_alu (constant_alu),
         .rf (rf_issue.data),
         .issue (unit_issue[IEC_ID]),
         .branch_flush (branch_flush),
         .exception (exception),
         .exception_target_pc (exception_target_pc),
-        .current_exception_unit (current_exception_unit),
+        .csr_frontend_flush (csr_frontend_flush),
         .gc (gc),
-        .oldest_pc (oldest_pc),
         .mret(mret),
         .sret(sret),
         .epc(epc),
-        .retire_ids_next (retire_ids_next),
         .interrupt_taken(interrupt_taken),
         .interrupt_pending(interrupt_pending),
-        .processing_csr(processing_csr),
         .load_store_status(load_store_status),
         .post_issue_count (post_issue_count)
     );

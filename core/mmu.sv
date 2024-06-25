@@ -178,6 +178,7 @@ module mmu
     //TLB return path
     always_ff @ (posedge clk) begin
         if (l1_response.data_valid) begin
+            mmu.is_global <= pte.g | (state[WAIT_REQUEST_2] & mmu.is_global); 
             mmu.upper_physical_address[19:10] <= pte.ppn1[9:0];
             mmu.upper_physical_address[9:0] <= state[WAIT_REQUEST_2] ? pte.ppn0 : mmu.virtual_address[21:12];
         end
@@ -201,7 +202,7 @@ module mmu
     //the transaction is aborted.  As such, if TLB request is low and we are not in the
     //IDLE state, then our current processor state has been corrupted
     mmu_tlb_state_mismatch:
-        assert property (@(posedge clk) disable iff (rst) (~mmu.request) |-> (state[IDLE]))
+        assert property (@(posedge clk) disable iff (rst) (mmu.request) |-> (state[IDLE]))
         else $error("MMU and TLB state mismatch");
 
 endmodule

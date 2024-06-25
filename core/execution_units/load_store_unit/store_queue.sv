@@ -131,7 +131,7 @@ module store_queue
         .raddr(sq_oldest_next),
         .ram_write(sq.push),
         .new_ram_data('{
-            addr : sq.data_in.addr,
+            offset : sq.data_in.offset,
             be : sq.data_in.be,
             cache_op : sq.data_in.cache_op,
             data : '0,
@@ -151,7 +151,7 @@ module store_queue
         .waddr(sq.data_in.id),
         .raddr(store_retire.id),
         .ram_write(sq.push),
-        .new_ram_data(sq.data_in.addr[1:0]),
+        .new_ram_data(sq.data_in.offset[1:0]),
         .ram_data_out(retire_alignment)
     );
     //Compare store addr-hashes against new load addr-hash
@@ -177,8 +177,6 @@ module store_queue
         else
             released_count <= released_count + (LOG2_SQ_DEPTH + 1)'(store_retire.valid) - (LOG2_SQ_DEPTH + 1)'(sq.pop);
     end
-
-    assign sq.no_released_stores_pending = ~|released_count;
 
     ////////////////////////////////////////////////////
     //Forwarding and Store Data
@@ -308,7 +306,7 @@ module store_queue
 
     assign sq.valid = |released_count;
     assign sq.data_out = '{
-        addr : output_entry_r.addr,
+        offset : output_entry_r.offset,
         be : output_entry_r.be,
         cache_op : output_entry_r.cache_op,
         data : sq_data_out[31:0],

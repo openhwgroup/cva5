@@ -36,7 +36,6 @@ module fetch
 
         input logic branch_flush,
         input gc_outputs_t gc,
-        input logic exception,
 
         //ID Support
         input id_t pc_id,
@@ -171,15 +170,14 @@ module fetch
     ////////////////////////////////////////////////////
     //TLB
     assign tlb.virtual_address = pc;
-    assign tlb.execute = 1;
     assign tlb.rnw = 0;
-    assign tlb.new_request = tlb.ready;
+    assign tlb.new_request = tlb.ready & pc_id_available & ~fetch_attr_fifo.full & (~exception_pending) & (~gc.fetch_hold);
 
     //////////////////////////////////////////////
     //Issue Control Signals
     assign flush_or_rst = (rst | gc.fetch_flush | early_branch_flush);
 
-    assign new_mem_request = tlb.done & pc_id_available & ~fetch_attr_fifo.full & units_ready & (~gc.fetch_hold) & (~exception_pending);
+    assign new_mem_request = tlb.done & units_ready & (~gc.fetch_hold);
     assign pc_id_assigned = new_mem_request | tlb.is_fault;
 
     //////////////////////////////////////////////
@@ -214,7 +212,7 @@ module fetch
         if (rst)
             inflight_count <= 0;
         else
-            inflight_count <=  inflight_count_next;
+            inflight_count <= inflight_count_next;
     end
 
     always_ff @(posedge clk) begin
@@ -232,7 +230,7 @@ module fetch
     //for any sub unit.  That request can either be completed or aborted.
     //In either case, data_valid must NOT be asserted.
     generate for (i=0; i < NUM_SUB_UNITS; i++) begin : gen_fetch_sources
-        assign sub_unit[i].new_request = fetch_attr_fifo.push & sub_unit_address_match[i];
+        assign sub_unit[i].new_request = fetch_attr_fifo.push & sub_unit_address_match[i] & ~tlb.is_fault;
         assign sub_unit[i].addr = tlb.physical_address;
         assign sub_unit[i].re = 1;
         assign sub_unit[i].we = 0;
@@ -319,11 +317,11 @@ module fetch
 
     assign if_pc = pc;
     assign fetch_metadata.ok = valid_fetch_result;
-    assign fetch_metadata.error_code = INST_ACCESS_FAULT;
+    assign fetch_metadata.error_code = fetch_attr.mmu_fault ? INST_PAGE_FAULT : INST_ACCESS_FAULT;
 
     assign fetch_instruction = unit_data_array[fetch_attr.subunit_id];
 
-    assign internal_fetch_complete = fetch_attr_fifo.valid & (fetch_attr.address_valid ? |unit_data_valid : ~valid_fetch_result);//allow instruction to propagate to decode if address is invalid
+    assign internal_fetch_complete = fetch_attr_fifo.valid & (~valid_fetch_result | |unit_data_valid);//allow instruction to propagate to decode if address is invalid
     assign fetch_complete = internal_fetch_complete & ~|flush_count;
 
     ////////////////////////////////////////////////////

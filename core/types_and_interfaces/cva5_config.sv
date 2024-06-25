@@ -388,12 +388,13 @@ package cva5_config;
 
     ////////////////////////////////////////////////////
     //Exceptions
-    localparam NUM_EXCEPTION_SOURCES = 3; //LS, Branch, Illegal
+    localparam NUM_EXCEPTION_SOURCES = 4; //LS, Branch, Illegal, CSR
     //Stored in a ID table on issue, checked at retire
     typedef enum bit [1:0] {
         LS_EXCEPTION = 0,
         BR_EXCEPTION = 1,
-        PRE_ISSUE_EXCEPTION = 2
+        PRE_ISSUE_EXCEPTION = 2,
+        CSR_EXCEPTION = 3
     } exception_sources_t;
 
     ////////////////////////////////////////////////////

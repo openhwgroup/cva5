@@ -64,6 +64,7 @@ package cva5_types;
 
     typedef struct packed{
         logic [31:0] pc;
+        logic [31:0] pc_r;
         logic [31:0] instruction;
         logic [2:0] fn3;
         logic [6:0] opcode;
@@ -76,7 +77,6 @@ package cva5_types;
         logic fp_uses_rd;
         logic is_multicycle;
         id_t id;
-        exception_sources_t exception_unit;
         logic stage_valid;
         fetch_metadata_t fetch_metadata;
     } issue_packet_t;
@@ -98,15 +98,8 @@ package cva5_types;
         logic [4:0] op;
     }amo_alu_inputs_t;
 
-    typedef struct packed{
-        logic is_lr;
-        logic is_sc;
-        logic is_amo;
-        logic [4:0] op;
-    } amo_details_t;
-
     typedef struct packed {
-        logic [31:0] addr;
+        logic [11:0] offset;
         logic load;
         logic store;
         logic cache_op;
@@ -123,7 +116,13 @@ package cva5_types;
     } lsq_entry_t;
 
     typedef struct packed {
-        logic [31:0] addr;
+        logic [19:0] addr;
+        logic rnw;
+        logic discard;
+    } lsq_addr_entry_t;
+
+    typedef struct packed {
+        logic [11:0] offset;
         logic [3:0] be;
         logic cache_op;
         logic [31:0] data;
@@ -133,8 +132,7 @@ package cva5_types;
     } sq_entry_t;
 
     typedef struct packed {
-        logic sq_empty;
-        logic no_released_stores_pending;
+        logic outstanding_store;
         logic idle;
     } load_store_status_t;
 
@@ -176,11 +174,13 @@ package cva5_types;
         fp_ls_op_t fp_op;
     } data_access_shared_inputs_t;
 
-    typedef enum  {
-        LUTRAM_FIFO,
-        NON_MUXED_INPUT_FIFO,
-        NON_MUXED_OUTPUT_FIFO
-    } fifo_type_t;
+    typedef struct packed {
+        logic valid;
+        logic asid_only;
+        logic[ASIDLEN-1:0] asid;
+        logic addr_only;
+        logic[31:0] addr;
+    } tlb_packet_t;
 
     typedef struct packed{
         logic init_clear;
@@ -188,11 +188,7 @@ package cva5_types;
         logic issue_hold;
         logic fetch_flush;
         logic fetch_ifence;
-        logic writeback_supress;
-        logic retire_hold;
-        logic sq_flush;
-        logic tlb_flush;
-        logic exception_pending;
+        tlb_packet_t sfence;
         exception_packet_t exception;
         logic pc_override;
         logic [31:0] pc;

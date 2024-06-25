@@ -414,7 +414,7 @@ module cva5_sim
         assign retire_ports_valid[i] = cpu.retire_port_valid[i];
     end endgenerate
 
-    assign store_queue_empty = cpu.load_store_status.sq_empty;
+    assign store_queue_empty = ~cpu.load_store_status.outstanding_store;
 
     ////////////////////////////////////////////////////
     //Assertion Binding

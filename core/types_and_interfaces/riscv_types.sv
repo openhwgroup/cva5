@@ -113,7 +113,8 @@ package riscv_types;
         URET_imm = 12'b000000000010,
         SRET_imm = 12'b000100000010,
         MRET_imm = 12'b001100000010,
-        SFENCE_imm = 12'b0001001?????
+        SFENCE_imm = 12'b0001001?????,
+        WFI_imm = 12'b000100000101
     } imm_sys_t;
 
     typedef enum logic [11:0] {
