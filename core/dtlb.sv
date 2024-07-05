@@ -98,7 +98,7 @@ module dtlb
     always_comb begin
         tlb_addr = '0;
         for (int i = 0; i < WAYS; i++)
-            if (both_hit[i]) tlb_addr |= rdata[i].phys_addr;
+            if (both_hit[i]) tlb_addr |= rdata_r[i].phys_addr;
     end
 
     //Random replacement
