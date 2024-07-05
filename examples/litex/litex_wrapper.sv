@@ -210,6 +210,7 @@ module litex_wrapper
         },
         INCLUDE_IFENCE : 1,
         INCLUDE_AMO : 1,
+        INCLUDE_CBO : 0,
 
         //CSR constants
         CSRS : '{
