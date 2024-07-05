@@ -347,8 +347,8 @@ module load_store_unit
         logic illegal_cbo;
         logic menv_illegal;
         logic senv_illegal;
-        assign menv_illegal = CONFIG.INCLUDE_CBO & issue_attr.is_cbo & issue_attr.cbo_type == INVAL ? menvcfg.cbie == 2'b00 : ~menvcfg.cbcfe;
-        assign senv_illegal = CONFIG.INCLUDE_CBO & issue_attr.is_cbo & issue_attr.cbo_type == INVAL ? senvcfg.cbie == 2'b00 : ~senvcfg.cbcfe;
+        assign menv_illegal = CONFIG.INCLUDE_CBO & (issue_attr.is_cbo & issue_attr.cbo_type == INVAL ? menvcfg.cbie == 2'b00 : ~menvcfg.cbcfe);
+        assign senv_illegal = CONFIG.INCLUDE_CBO & (issue_attr.is_cbo & issue_attr.cbo_type == INVAL ? senvcfg.cbie == 2'b00 : ~senvcfg.cbcfe);
         assign illegal_cbo = CONFIG.MODES == MU ? current_privilege == USER_PRIVILEGE & menv_illegal : (current_privilege != MACHINE_PRIVILEGE & menv_illegal) | (current_privilege == USER_PRIVILEGE & senv_illegal);
 
         assign new_exception = (issue.new_request & ((unaligned_addr & ~issue_attr.is_fence & ~issue_attr.is_cbo) | illegal_cbo)) | tlb.is_fault;
