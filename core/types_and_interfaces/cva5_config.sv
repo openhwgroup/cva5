@@ -32,22 +32,20 @@ package cva5_config;
 
     ////////////////////////////////////////////////////
     //CSR Options
-    typedef struct packed {
-        int unsigned COUNTER_W; //CSR counter width (33-64 bits): 48-bits --> 32 days @ 100MHz
-        bit MCYCLE_WRITEABLE;
-        bit MINSTR_WRITEABLE;
-        bit MTVEC_WRITEABLE;
-        bit INCLUDE_MSCRATCH;
-        bit INCLUDE_MCAUSE;
-        bit INCLUDE_MTVAL;
-    } csr_non_standard_config_t;
+    typedef enum {
+        BARE,
+        M,
+        MU,
+        MSU
+    } modes_t;
 
     typedef struct packed {
         bit [31:0] MACHINE_IMPLEMENTATION_ID;
         bit [31:0] CPU_ID;
         bit [31:0] RESET_VEC; //PC value on reset
-        bit [31:0] RESET_MTVEC;
-        csr_non_standard_config_t NON_STANDARD_OPTIONS;
+        bit [31:0] RESET_TVEC;
+        bit [31:0] MCONFIGPTR;
+        bit INCLUDE_SSTC;
     } csr_config_t;
 
     //Memory range [L, H]
@@ -167,9 +165,7 @@ package cva5_config;
 
     typedef struct packed {
         //ISA options
-        bit INCLUDE_M_MODE;
-        bit INCLUDE_S_MODE;
-        bit INCLUDE_U_MODE;
+        modes_t MODES;
 
         bit INCLUDE_IFENCE; //local mem operations only
         bit INCLUDE_AMO;
@@ -239,9 +235,7 @@ package cva5_config;
 
     localparam cpu_config_t EXAMPLE_CONFIG = '{
         //ISA options
-        INCLUDE_M_MODE : 1,
-        INCLUDE_S_MODE : 0,
-        INCLUDE_U_MODE : 0,
+        MODES : MSU,
 
         INCLUDE_UNIT : '{
             ALU : 1,
@@ -264,16 +258,9 @@ package cva5_config;
             MACHINE_IMPLEMENTATION_ID : 0,
             CPU_ID : 0,
             RESET_VEC : 32'h80000000,
-            RESET_MTVEC : 32'h80000100,
-            NON_STANDARD_OPTIONS : '{
-                COUNTER_W : 33,
-                MCYCLE_WRITEABLE : 0,
-                MINSTR_WRITEABLE : 0,
-                MTVEC_WRITEABLE : 1,
-                INCLUDE_MSCRATCH : 0,
-                INCLUDE_MCAUSE : 1,
-                INCLUDE_MTVAL : 1
-            }
+            RESET_TVEC : 32'h00000000,
+            MCONFIGPTR : '0,
+            INCLUDE_SSTC : 1
         },
         //Memory Options
         SQ_DEPTH : 4,
@@ -388,13 +375,14 @@ package cva5_config;
 
     ////////////////////////////////////////////////////
     //Exceptions
-    localparam NUM_EXCEPTION_SOURCES = 4; //LS, Branch, Illegal, CSR
+    localparam NUM_EXCEPTION_SOURCES = 5; //LS, Branch, Illegal, CSR, GC
     //Stored in a ID table on issue, checked at retire
-    typedef enum bit [1:0] {
+    typedef enum bit [2:0] {
         LS_EXCEPTION = 0,
         BR_EXCEPTION = 1,
         PRE_ISSUE_EXCEPTION = 2,
-        CSR_EXCEPTION = 3
+        CSR_EXCEPTION = 3,
+        GC_EXCEPTION = 4
     } exception_sources_t;
 
     ////////////////////////////////////////////////////

@@ -170,7 +170,7 @@ module fetch
     ////////////////////////////////////////////////////
     //TLB
     assign tlb.virtual_address = pc;
-    assign tlb.rnw = 0;
+    assign tlb.rnw = 1;
     assign tlb.new_request = tlb.ready & pc_id_available & ~fetch_attr_fifo.full & (~exception_pending) & (~gc.fetch_hold);
 
     //////////////////////////////////////////////
@@ -313,7 +313,7 @@ module fetch
     ////////////////////////////////////////////////////
     //Instruction metada updates
     logic valid_fetch_result;
-    assign valid_fetch_result = CONFIG.INCLUDE_M_MODE ? (fetch_attr_fifo.valid & fetch_attr.address_valid & (~fetch_attr.mmu_fault)) : 1;
+    assign valid_fetch_result = CONFIG.MODES != BARE ? (fetch_attr_fifo.valid & fetch_attr.address_valid & (~fetch_attr.mmu_fault)) : 1;
 
     assign if_pc = pc;
     assign fetch_metadata.ok = valid_fetch_result;
@@ -327,7 +327,7 @@ module fetch
     ////////////////////////////////////////////////////
     //Branch Predictor corruption check
     //Needed if instruction memory is changed after any branches have been executed
-    generate if (CONFIG.INCLUDE_IFENCE | CONFIG.INCLUDE_S_MODE) begin : gen_branch_corruption_check
+    generate if (CONFIG.INCLUDE_IFENCE | CONFIG.MODES == MSU) begin : gen_branch_corruption_check
         logic is_branch_or_jump;
         assign is_branch_or_jump = fetch_instruction[6:2] inside {JAL_T, JALR_T, BRANCH_T};
         assign early_branch_flush = (valid_fetch_result & (|unit_data_valid)) & fetch_attr.is_predicted_branch_or_jump & (~is_branch_or_jump);

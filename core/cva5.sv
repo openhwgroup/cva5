@@ -29,6 +29,7 @@ module cva5
     import riscv_types::*;
     import cva5_types::*;
     import fpu_types::*;
+    import csr_types::*;
 
     #(
         parameter cpu_config_t CONFIG = EXAMPLE_CONFIG
@@ -48,6 +49,7 @@ module cva5
 
         l2_requester_interface.master l2,
 
+        input logic [63:0] mtime,
         input interrupt_t s_interrupt,
         input interrupt_t m_interrupt
     );
@@ -90,7 +92,8 @@ module cva5
 
     tlb_interface itlb();
     tlb_interface dtlb();
-    logic translation_on;
+    logic instruction_translation_on;
+    logic data_translation_on;
     logic [ASIDLEN-1:0] asid;
 
     //Instruction ID/Metadata
@@ -147,15 +150,22 @@ module cva5
     load_store_status_t load_store_status;
     logic [LOG2_MAX_IDS:0] post_issue_count;
 
-    logic [1:0] current_privilege;
     logic mret;
     logic sret;
     logic csr_frontend_flush;
-    logic [31:0] epc;
-    logic [31:0] exception_target_pc;
-
     logic interrupt_taken;
     logic interrupt_pending;
+
+    //CSR broadcast info
+    logic [1:0] current_privilege;
+    logic tvm;
+    logic tsr;
+    envcfg_t menvcfg;
+    envcfg_t senvcfg;
+    logic [31:0] mepc;
+    logic [31:0] sepc;
+    logic [31:0] exception_target_pc;
+
 
     //Decode Unit and Fetch Unit
     logic issue_stage_ready;
@@ -171,11 +181,12 @@ module cva5
 
     ////////////////////////////////////////////////////
     //Implementation
+    
 
 
     ////////////////////////////////////////////////////
     // Memory Interface
-    generate if (CONFIG.INCLUDE_S_MODE || CONFIG.INCLUDE_ICACHE || CONFIG.INCLUDE_DCACHE) begin : gen_l1_arbiter
+    generate if (CONFIG.MODES == MSU || CONFIG.INCLUDE_ICACHE || CONFIG.INCLUDE_DCACHE) begin : gen_l1_arbiter
         l1_arbiter #(.CONFIG(CONFIG))
         arb(
             .clk (clk),
@@ -279,7 +290,7 @@ module cva5
     i_tlb (       
         .clk (clk),
         .rst (rst),
-        .translation_on (translation_on),
+        .translation_on (instruction_translation_on),
         .sfence (sfence),
         .abort_request (gc.fetch_flush | early_branch_flush),
         .asid (asid),
@@ -287,7 +298,7 @@ module cva5
         .mmu (immu)
     );
 
-    generate if (CONFIG.INCLUDE_S_MODE) begin : gen_immu
+    generate if (CONFIG.MODES == MSU) begin : gen_immu
         mmu i_mmu (
             .clk (clk),
             .rst (rst),
@@ -448,6 +459,9 @@ module cva5
         .m_avalon (m_avalon),
         .dwishbone (dwishbone),                                       
         .data_bram (data_bram),
+        .current_privilege (current_privilege),
+        .menvcfg (menvcfg),
+        .senvcfg (senvcfg),
         .wb_packet (wb_packet),
         .fp_wb_packet (fp_wb_packet),
         .store_retire (store_retire),
@@ -461,14 +475,14 @@ module cva5
     d_tlb (       
         .clk (clk),
         .rst (rst),
-        .translation_on (translation_on),
+        .translation_on (data_translation_on),
         .sfence (sfence),
         .asid (asid),
         .tlb (dtlb), 
         .mmu (dmmu)
     );
 
-    generate if (CONFIG.INCLUDE_S_MODE) begin : gen_dmmu
+    generate if (CONFIG.MODES == MSU) begin : gen_dmmu
         mmu d_mmu (
             .clk (clk),
             .rst (rst),
@@ -496,12 +510,15 @@ module cva5
             .issue (unit_issue[CSR_ID]), 
             .wb (unit_wb[CSR_ID]),
             .current_privilege(current_privilege),
+            .menvcfg(menvcfg),
+            .senvcfg(senvcfg),
             .fflag_wmask (fflag_wmask),
             .dyn_rm (dyn_rm),
             .interrupt_taken(interrupt_taken),
             .interrupt_pending(interrupt_pending),
             .csr_frontend_flush(csr_frontend_flush),
-            .translation_on(translation_on),
+            .instruction_translation_on(instruction_translation_on),
+            .data_translation_on(data_translation_on),
             .asid(asid),
             .immu(immu),
             .dmmu(dmmu),
@@ -509,10 +526,12 @@ module cva5
             .exception_target_pc (exception_target_pc),
             .mret(mret),
             .sret(sret),
-            .epc(epc),
+            .mepc(mepc),
+            .sepc(sepc),
             .exception(exception[CSR_EXCEPTION]),
             .retire_ids(retire_ids),
             .retire_count (retire_count),
+            .mtime(mtime),
             .s_interrupt(s_interrupt),
             .m_interrupt(m_interrupt)
         );
@@ -533,14 +552,19 @@ module cva5
         .rf (rf_issue.data),
         .issue (unit_issue[IEC_ID]),
         .branch_flush (branch_flush),
+        .local_gc_exception (exception[GC_EXCEPTION]),
         .exception (exception),
         .exception_target_pc (exception_target_pc),
         .csr_frontend_flush (csr_frontend_flush),
+        .current_privilege (current_privilege),
+        .tvm (tvm),
+        .tsr (tsr),
         .gc (gc),
         .sfence (sfence),
         .mret(mret),
         .sret(sret),
-        .epc(epc),
+        .mepc(mepc),
+        .sepc(sepc),
         .interrupt_taken(interrupt_taken),
         .interrupt_pending(interrupt_pending),
         .load_store_status(load_store_status),

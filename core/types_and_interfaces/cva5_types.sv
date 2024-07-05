@@ -66,6 +66,7 @@ package cva5_types;
         logic [31:0] pc;
         logic [31:0] pc_r;
         logic [31:0] instruction;
+        logic [31:0] instruction_r;
         logic [2:0] fn3;
         logic [6:0] opcode;
 

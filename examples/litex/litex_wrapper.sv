@@ -83,46 +83,37 @@ module litex_wrapper
 
     localparam cpu_config_t MINIMAL_CONFIG = '{
         //ISA options
-        INCLUDE_M_MODE : 1,
-        INCLUDE_S_MODE : 0,
-        INCLUDE_U_MODE : 0,
-	INCLUDE_CBO    : 0,
+        MODES : M,
         INCLUDE_UNIT : '{
-	    FPU : 0,
             ALU : 1,
             LS : 1,
             MUL : 0,
             DIV : 0,
             CSR : 1,
+            FPU : 0,
             CUSTOM : 0,
             BR : 1,
             IEC : 1
         },
         INCLUDE_IFENCE : 0,
         INCLUDE_AMO : 0,
-        AMO_UNIT : '{
-            LR_WAIT : 8,
-            RESERVATION_WORDS : 8
-        },
+        INCLUDE_CBO : 0,
         //CSR constants
         CSRS : '{
             MACHINE_IMPLEMENTATION_ID : 0,
             CPU_ID : 0,
             RESET_VEC : RESET_VEC,
-            RESET_MTVEC : 32'h00000000,
-            NON_STANDARD_OPTIONS : '{
-                COUNTER_W : 33,
-                MCYCLE_WRITEABLE : 0,
-                MINSTR_WRITEABLE : 0,
-                MTVEC_WRITEABLE : 1,
-                INCLUDE_MSCRATCH : 0,
-                INCLUDE_MCAUSE : 1,
-                INCLUDE_MTVAL : 1
-            }
+            RESET_TVEC : 32'h00000000,
+            MCONFIGPTR : '0,
+            INCLUDE_SSTC : 0
         },
         //Memory Options
         SQ_DEPTH : 2,
         INCLUDE_FORWARDING_TO_STORES : 0,
+        AMO_UNIT : '{
+            LR_WAIT : 8,
+            RESERVATION_WORDS : 8
+        },
         INCLUDE_ICACHE : 0,
         ICACHE_ADDR : '{
             L: 32'h40000000,
@@ -205,46 +196,37 @@ module litex_wrapper
 
     localparam cpu_config_t STANDARD_CONFIG = '{
         //ISA options
-        INCLUDE_M_MODE : 1,
-        INCLUDE_S_MODE : 0,
-        INCLUDE_U_MODE : 0,
-	INCLUDE_CBO    : 0,
+        MODES : MSU,
         INCLUDE_UNIT : '{
-	    FPU : 0,
             ALU : 1,
             LS : 1,
             MUL : 1,
             DIV : 1,
             CSR : 1,
+            FPU : 0,
             CUSTOM : 0,
             BR : 1,
             IEC : 1
         },
         INCLUDE_IFENCE : 1,
         INCLUDE_AMO : 1,
-        AMO_UNIT : '{
-            LR_WAIT : 8,
-            RESERVATION_WORDS : 8
-        },
+
         //CSR constants
         CSRS : '{
             MACHINE_IMPLEMENTATION_ID : 0,
             CPU_ID : 0,
             RESET_VEC : RESET_VEC,
-            RESET_MTVEC : 32'h00000000,
-            NON_STANDARD_OPTIONS : '{
-                COUNTER_W : 33,
-                MCYCLE_WRITEABLE : 0,
-                MINSTR_WRITEABLE : 0,
-                MTVEC_WRITEABLE : 1,
-                INCLUDE_MSCRATCH : 0,
-                INCLUDE_MCAUSE : 1,
-                INCLUDE_MTVAL : 1
-            }
+            RESET_TVEC : 32'h00000000,
+            MCONFIGPTR : '0,
+            INCLUDE_SSTC : 1
         },
         //Memory Options
         SQ_DEPTH : 4,
         INCLUDE_FORWARDING_TO_STORES : 1,
+        AMO_UNIT : '{
+            LR_WAIT : 8,
+            RESERVATION_WORDS : 8
+        },
         INCLUDE_ICACHE : 1,
         ICACHE_ADDR : '{
             L : 32'h00000000, 
@@ -349,6 +331,7 @@ module litex_wrapper
     assign m_interrupt.software = 0;
     assign m_interrupt.timer = litex_interrupt[1];
     assign m_interrupt.external = litex_interrupt[0];
+    logic [63:0] mtime;
 
     cva5 #(.CONFIG(LITEX_CONFIG)) cpu(.*);
 

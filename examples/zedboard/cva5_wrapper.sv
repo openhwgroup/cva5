@@ -236,7 +236,7 @@ module cva5_wrapper (
     //design_2 infra(.*);
 
     generate
-        if (EXAMPLE_CONFIG.INCLUDE_S_MODE || EXAMPLE_CONFIG.INCLUDE_ICACHE || EXAMPLE_CONFIG.INCLUDE_DCACHE) begin
+        if (EXAMPLE_CONFIG.MODES == MSU || EXAMPLE_CONFIG.INCLUDE_ICACHE || EXAMPLE_CONFIG.INCLUDE_DCACHE) begin
             l2_arbiter l2_arb (.*, .request(l2));
             axi_to_arb l2_to_mem (.*, .l2(mem));
         end

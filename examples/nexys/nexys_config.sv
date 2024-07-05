@@ -34,9 +34,7 @@ package nexys_config;
 
     localparam cpu_config_t NEXYS_CONFIG = '{
         //ISA options
-        INCLUDE_M_MODE : 1,
-        INCLUDE_S_MODE : 0,
-        INCLUDE_U_MODE : 0,
+        MODES : MSU,
         INCLUDE_UNIT : '{
             ALU : 1,
             LS : 1,
@@ -57,16 +55,9 @@ package nexys_config;
             MACHINE_IMPLEMENTATION_ID : 0,
             CPU_ID : 0,
             RESET_VEC : 32'h80000000,
-            RESET_MTVEC : 32'h80000000,
-            NON_STANDARD_OPTIONS : '{
-                COUNTER_W : 33,
-                MCYCLE_WRITEABLE : 0,
-                MINSTR_WRITEABLE : 0,
-                MTVEC_WRITEABLE : 1,
-                INCLUDE_MSCRATCH : 0,
-                INCLUDE_MCAUSE : 1,
-                INCLUDE_MTVAL : 1
-            }
+            RESET_TVEC : 32'h00000000,
+            MCONFIGPTR : '0,
+            INCLUDE_SSTC : 1
         },
         //Memory Options
         SQ_DEPTH : 8,

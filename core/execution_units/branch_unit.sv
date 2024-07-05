@@ -199,7 +199,7 @@ module branch_unit
 
     ////////////////////////////////////////////////////
     //Exception support
-    generate if (CONFIG.INCLUDE_M_MODE) begin : gen_branch_exception
+    generate if (CONFIG.MODES != BARE) begin : gen_branch_exception
         logic new_exception;
 
         assign new_exception = new_pc[1] & branch_taken & issue.new_request;

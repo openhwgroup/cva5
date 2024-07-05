@@ -45,7 +45,7 @@ module branch_predictor
     localparam longint BUS_RANGE = 64'(CONFIG.IBUS_ADDR.H) - 64'(CONFIG.IBUS_ADDR.L) + 1;
 
     function int get_memory_width();
-        if(CONFIG.INCLUDE_S_MODE)
+        if(CONFIG.MODES == MSU)
             return 32;
         else if (CONFIG.INCLUDE_ICACHE && (
             (CONFIG.INCLUDE_ILOCAL_MEM && CACHE_RANGE > SCRATCH_RANGE) ||

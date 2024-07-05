@@ -54,19 +54,24 @@ module gc_unit
         input logic branch_flush,
 
         //Exception
+        exception_interface.unit local_gc_exception,
         exception_interface.econtrol exception [NUM_EXCEPTION_SOURCES],
         input logic [31:0] exception_target_pc,
 
         output logic mret,
         output logic sret,
-        input logic [31:0] epc,
+        input logic [31:0] mepc,
+        input logic [31:0] sepc,
 
         //CSR Interrupts
         input logic interrupt_pending,
         output logic interrupt_taken,
 
-        //CSR front end flush
+        //CSR signals
         input logic csr_frontend_flush,
+        input logic [1:0] current_privilege,
+        input logic tvm,
+        input logic tsr,
 
         //Output controls
         output gc_outputs_t gc,
@@ -80,7 +85,7 @@ module gc_unit
     //Largest depth for TLBs
     localparam int TLB_CLEAR_DEPTH = (CONFIG.DTLB.DEPTH > CONFIG.ITLB.DEPTH) ? CONFIG.DTLB.DEPTH : CONFIG.ITLB.DEPTH;
     //For general reset clear, greater of TLB depth or id-flight memory blocks (MAX_IDS)
-    localparam int INIT_CLEAR_DEPTH = CONFIG.INCLUDE_S_MODE ? (TLB_CLEAR_DEPTH > 64 ? TLB_CLEAR_DEPTH : 64) : 64;
+    localparam int INIT_CLEAR_DEPTH = CONFIG.MODES == MSU ? (TLB_CLEAR_DEPTH > 64 ? TLB_CLEAR_DEPTH : 64) : 64;
 
     ////////////////////////////////////////////////////
     //Overview
@@ -151,13 +156,13 @@ module gc_unit
     assign instruction = decode_stage.instruction;
 
     assign unit_needed =
-        (CONFIG.INCLUDE_M_MODE & instruction inside {MRET, WFI}) |
-        (CONFIG.INCLUDE_S_MODE & instruction inside {SRET, SFENCE_VMA}) |
+        (CONFIG.MODES != BARE & instruction inside {MRET, WFI}) |
+        (CONFIG.MODES == MSU & instruction inside {SRET, SFENCE_VMA}) |
         (CONFIG.INCLUDE_IFENCE & instruction inside {FENCE_I});
     always_comb begin
         uses_rs = '0;
-        uses_rs[RS1] = CONFIG.INCLUDE_S_MODE & instruction inside {SFENCE_VMA};
-        uses_rs[RS2] = CONFIG.INCLUDE_S_MODE & instruction inside {SFENCE_VMA};
+        uses_rs[RS1] = CONFIG.MODES == MSU & instruction inside {SFENCE_VMA};
+        uses_rs[RS2] = CONFIG.MODES == MSU & instruction inside {SFENCE_VMA};
         uses_rd = 0;
     end
 
@@ -165,13 +170,13 @@ module gc_unit
     always_ff @(posedge clk) begin
         if (issue_stage_ready) begin
             is_ifence <= (instruction.upper_opcode == FENCE_T) & CONFIG.INCLUDE_IFENCE;
-            is_sfence <= (instruction.upper_opcode == SYSTEM_T) & (instruction[31:25] == SFENCE_imm[11:5]) & CONFIG.INCLUDE_S_MODE;
+            is_sfence <= (instruction.upper_opcode == SYSTEM_T) & (instruction[31:25] == SFENCE_imm[11:5]) & CONFIG.MODES == MSU;
             trivial_sfence <= |instruction.rs1_addr;
             asid_sfence <= |instruction.rs2_addr;
-            is_wfi <= (instruction.upper_opcode == SYSTEM_T) & (instruction[31:20] == WFI_imm) & CONFIG.INCLUDE_M_MODE;
+            is_wfi <= (instruction.upper_opcode == SYSTEM_T) & (instruction[31:20] == WFI_imm) & CONFIG.MODES != BARE;
             //Ret instructions need exact decoding
-            is_mret <= CONFIG.INCLUDE_M_MODE & instruction inside {MRET};
-            is_sret <= CONFIG.INCLUDE_S_MODE & instruction inside {SRET};
+            is_mret <= CONFIG.MODES != BARE & instruction inside {MRET};
+            is_sret <= CONFIG.MODES == MSU & instruction inside {SRET};
         end
     end
 
@@ -184,6 +189,7 @@ module gc_unit
     logic asid_sfence_r;
     logic [31:0] sfence_addr_r;
     logic [ASIDLEN-1:0] asid_r;
+    logic new_exception;
 
     //Input registering
     always_ff @(posedge clk) begin
@@ -194,10 +200,10 @@ module gc_unit
             sret <= 0;
         end
         else begin
-            is_ifence_r <= issue.new_request & is_ifence;
-            is_sfence_r <= issue.new_request & is_sfence;
-            mret <= issue.new_request & is_mret;
-            sret <= issue.new_request & is_sret;
+            is_ifence_r <= issue.new_request & is_ifence & ~new_exception;
+            is_sfence_r <= issue.new_request & is_sfence & ~new_exception;
+            mret <= issue.new_request & is_mret & ~new_exception;
+            sret <= issue.new_request & is_sret & ~new_exception;
         end  
     end
 
@@ -209,6 +215,32 @@ module gc_unit
             asid_r <= rf[RS2][ASIDLEN-1:0];
         end
     end
+
+    //Exceptions treated like every other unit
+    generate if (CONFIG.MODES != BARE) begin : gen_gc_exception
+        always_comb begin
+            new_exception = 0;
+            if (issue.new_request) begin
+                if (current_privilege == USER_PRIVILEGE)
+                    new_exception = is_sfence | is_sret | is_mret;
+                else if (current_privilege == SUPERVISOR_PRIVILEGE)
+                    new_exception = (is_sfence & tvm) | (is_sret & tsr);
+            end
+        end
+
+        always_ff @(posedge clk) begin
+            if (rst)
+                local_gc_exception.valid <= 0;
+            else
+                local_gc_exception.valid <= new_exception;
+        end
+
+        assign local_gc_exception.possible = 0; //Not needed because appears on first cycle
+        assign local_gc_exception.code = ILLEGAL_INST;
+        assign local_gc_exception.tval = issue_stage.instruction_r;
+        assign local_gc_exception.pc = issue_stage.pc_r;
+    end
+    endgenerate
 
     ////////////////////////////////////////////////////
     //GC Operation
@@ -227,7 +259,7 @@ module gc_unit
     assign gc.init_clear = gc_init_clear;
     assign gc.fetch_ifence = CONFIG.INCLUDE_IFENCE & gc_fetch_ifence;
     assign sfence = '{
-        valid : CONFIG.INCLUDE_S_MODE & gc_tlb_flush,
+        valid : CONFIG.MODES == MSU & gc_tlb_flush,
         asid_only : asid_sfence_r,
         asid : asid_r,
         addr_only : trivial_sfence_r,
@@ -250,7 +282,7 @@ module gc_unit
             PRE_CLEAR_STATE : next_state = INIT_CLEAR_STATE;
             INIT_CLEAR_STATE : if (init_clear_done) next_state = IDLE_STATE;
             IDLE_STATE : begin
-                if ((issue.new_request & ~is_wfi) | gc.exception.valid | csr_frontend_flush)
+                if ((issue.new_request & ~is_wfi & ~new_exception) | gc.exception.valid | csr_frontend_flush)
                     next_state = PRE_ISSUE_FLUSH;
                 else if (interrupt_pending)
                     next_state = WAIT_INTERRUPT;
@@ -258,7 +290,7 @@ module gc_unit
             WAIT_INTERRUPT : begin
                 if (gc.exception.valid | csr_frontend_flush) //Exception overrides interrupt
                     next_state = PRE_ISSUE_FLUSH;
-                else if (~interrupt_pending) //An issued CSR instruction cancelled the interrupt
+                else if (~interrupt_pending) //Something cancelled the interrupt
                     next_state = IDLE_STATE;
                 else if (~possible_exception & issue_stage.stage_valid & ~branch_flush) //No more possible exceptions and issue stage has correct PC
                     next_state = PRE_ISSUE_FLUSH;
@@ -314,7 +346,7 @@ module gc_unit
     end endgenerate
     assign possible_exception = |exception_possible;
 
-    generate if (CONFIG.INCLUDE_M_MODE) begin :gen_gc_m_mode
+generate if (CONFIG.MODES != BARE) begin :gen_gc_m_mode
 
     //Re-assigning interface inputs to array types so that they can be dynamically indexed
     exception_code_t [NUM_EXCEPTION_SOURCES-1:0] exception_code;
@@ -324,7 +356,6 @@ module gc_unit
     
     for (genvar i = 0; i < NUM_EXCEPTION_SOURCES; i++) begin
         assign exception_valid[i] = exception[i].valid;
-        
         assign exception_code[i] = exception[i].code;
         assign exception_tval[i] = exception[i].tval;
         assign exception_pc[i] = exception[i].pc;
@@ -344,20 +375,22 @@ module gc_unit
 
     assign interrupt_taken = interrupt_pending & (next_state == PRE_ISSUE_FLUSH) & ~(gc.exception.valid) & ~csr_frontend_flush;
 
-    end endgenerate
+end endgenerate
 
     //PC determination (trap, flush or return)
     //Two cycles: on first cycle the processor front end is flushed,
     //on the second cycle the new PC is fetched
-    generate if (CONFIG.INCLUDE_M_MODE || CONFIG.INCLUDE_IFENCE) begin :gen_gc_pc_override
+generate if (CONFIG.MODES != BARE || CONFIG.INCLUDE_IFENCE) begin :gen_gc_pc_override
 
     always_ff @ (posedge clk) begin
         gc_pc_override <= next_state inside {PRE_ISSUE_FLUSH, INIT_CLEAR_STATE};
         if (gc.exception.valid | interrupt_taken)
             gc_pc <= exception_target_pc;
         else if (instruction_issued) begin
-            if (is_mret | is_sret)
-                gc_pc <= epc;
+            if (is_mret)
+                gc_pc <= mepc;
+            else if (is_sret)
+                gc_pc <= sepc;
             else //IFENCE, SFENCE, CSR flush
                 gc_pc <= constant_alu;
         end
@@ -366,7 +399,7 @@ module gc_unit
     assign gc.pc_override = gc_pc_override;
     assign gc.pc = gc_pc;
 
-    end endgenerate
+end endgenerate
     ////////////////////////////////////////////////////
     //Decode / Write-back Handshaking
     //CSR reads are passed through the Load-Store unit

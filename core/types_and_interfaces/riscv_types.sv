@@ -117,12 +117,19 @@ package riscv_types;
         WFI_imm = 12'b000100000101
     } imm_sys_t;
 
+    //Other registers exist but are not supported
     typedef enum logic [11:0] {
+        //Floating Point
+        FFLAGS = 12'h001,
+        FRM = 12'h002,
+        FCSR = 12'h003,
+
         //Machine info
         MVENDORID = 12'hF11,
         MARCHID = 12'hF12,
         MIMPID = 12'hF13,
         MHARTID = 12'hF14,
+        MCONFIGPTR = 12'hF15,
         //Machine trap setup
         MSTATUS = 12'h300,
         MISA = 12'h301,
@@ -131,55 +138,66 @@ package riscv_types;
         MIE = 12'h304,
         MTVEC = 12'h305,
         MCOUNTEREN = 12'h306,
+        MSTATUSH = 12'h310,
+        MEDELEGH = 12'h312,
         //Machine trap handling
         MSCRATCH = 12'h340,
         MEPC = 12'h341,
         MCAUSE = 12'h342,
         MTVAL = 12'h343,
         MIP = 12'h344,
+        //Machine configuration
+        MENVCFG = 12'h30A,
+        MENVCFGH = 12'h31A,
+        //No optional mseccfg/mseccfgh
 
+        //No PMP
 
         //Machine Counters
         MCYCLE = 12'hB00,
         MINSTRET = 12'hB02,
+        MHPMCOUNTER3 = 12'hB03,
+        MHPMCOUNTER31 = 12'hB1F,
         MCYCLEH = 12'hB80,
         MINSTRETH = 12'hB82,
+        MHPMCOUNTER3H = 12'hB83,
+        MHPMCOUNTER31H = 12'hB9F,
+
+        //Machine counter setup
+        MCOUNTINHIBIT = 12'h320,
+        MHPMEVENT3 = 12'h323,
+        MHPMEVENT31 = 12'h33F,
 
         //Supervisor regs
         //Supervisor Trap Setup
         SSTATUS = 12'h100,
-        SEDELEG = 12'h102,
-        SIDELEG = 12'h103,
         SIE = 12'h104,
         STVEC = 12'h105,
         SCOUNTEREN = 12'h106,
+        //Supervisor configuration
+        SENVCFG = 12'h10A,
         //Supervisor trap handling
         SSCRATCH = 12'h140,
         SEPC = 12'h141,
         SCAUSE = 12'h142,
         STVAL = 12'h143,
         SIP = 12'h144,
-
+        STIMECMP = 12'h14D,
+        STIMECMPH = 12'h15D,
         //Supervisor address translation and protection
         SATP = 12'h180,
 
-        //User regs
-        //USER Floating Point
-        FFLAGS = 12'h001,
-        FRM = 12'h002,
-        FCSR = 12'h003,
-        //User Counter Timers
+        //Shadow registers
         CYCLE = 12'hC00,
         TIME = 12'hC01,
         INSTRET = 12'hC02,
+        HPMCOUNTER3 = 12'hC03,
+        HPMCOUNTER31 = 12'hC1F,
         CYCLEH = 12'hC80,
         TIMEH = 12'hC81,
         INSTRETH = 12'hC82,
-
-        //Debug regs
-        DCSR = 12'h7B0,
-        DPC = 12'h7B1,
-        DSCRATCH = 12'h7B2
+        HPMCOUNTER3H = 12'hC83,
+        HPMCOUNTER31H = 12'hC9F
     } csr_reg_addr_t;
 
     typedef enum logic [2:0] {
@@ -222,7 +240,9 @@ package riscv_types;
         INST_PAGE_FAULT = 5'd12,
         LOAD_PAGE_FAULT = 5'd13,
         //reserved
-        STORE_OR_AMO_PAGE_FAULT = 5'd15
+        STORE_OR_AMO_PAGE_FAULT = 5'd15,
+        SOFTWARE_CHECK = 5'd18,
+        HARDWARE_ERROR = 5'd19
         //reserved
     } exception_code_t;
 
@@ -239,7 +259,9 @@ package riscv_types;
         //RESERVED
         S_EXTERNAL_INTERRUPT = 5'd9,
         //RESERVED
-        M_EXTERNAL_INTERRUPT = 5'd11
+        M_EXTERNAL_INTERRUPT = 5'd11,
+        //RESERVED
+        LOCAL_COUNT_OVERFLOW_INTERRUPT = 5'd13
     } interrupt_code_t;
 
     typedef enum bit [4:0] {
@@ -255,6 +277,12 @@ package riscv_types;
         AMO_MINU_FN5 = 5'b11000,
         AMO_MAXU_FN5 = 5'b11100
     } amo_t;
+
+    typedef enum bit [1:0] {
+        INVAL = 2'b00,
+        CLEAN = 2'b01,
+        FLUSH = 2'b10
+    } cbo_t;
 
     //Assembly register definitions for simulation purposes
     typedef struct packed{

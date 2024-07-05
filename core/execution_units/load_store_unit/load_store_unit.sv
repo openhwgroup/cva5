@@ -26,6 +26,7 @@ module load_store_unit
     import riscv_types::*;
     import cva5_types::*;
     import fpu_types::*;
+    import csr_types::*;
     import opcodes::*;
 
     # (
@@ -73,6 +74,11 @@ module load_store_unit
         wishbone_interface.master dwishbone,
 
         local_memory_interface.master data_bram,
+
+        //CSR
+        input logic [1:0] current_privilege,
+        input envcfg_t menvcfg,
+        input envcfg_t senvcfg,
 
         //Writeback-Store Interface
         input wb_packet_t wb_packet [CONFIG.NUM_WB_GROUPS],
@@ -142,6 +148,7 @@ module load_store_unit
 
     logic unaligned_addr;
     logic exception_is_fp;
+    logic exception_is_store;
     logic nontrivial_fence;
     logic fence_hold;
 
@@ -200,6 +207,7 @@ module load_store_unit
         logic is_store;
         logic is_fence;
         logic is_cbo;
+        cbo_t cbo_type;
         logic is_fpu;
         logic is_double;
         logic nontrivial_fence;
@@ -255,6 +263,7 @@ module load_store_unit
         is_fence : instruction inside {FENCE},
         nontrivial_fence : nontrivial_fence,
         is_cbo : CONFIG.INCLUDE_CBO & instruction inside {CBO_INVAL, CBO_CLEAN, CBO_FLUSH},
+        cbo_type : cbo_t'(instruction[21:20]),
         is_fpu : CONFIG.INCLUDE_UNIT.FPU & instruction inside {SP_FLW, SP_FSW, DP_FLD, DP_FSD},
         is_double : CONFIG.INCLUDE_UNIT.FPU & instruction inside {DP_FLD, DP_FSD},
         is_amo : CONFIG.INCLUDE_AMO & instruction inside {AMO_ADD, AMO_XOR, AMO_OR, AMO_AND, AMO_MIN, AMO_MAX, AMO_MINU, AMO_MAXU, AMO_SWAP, AMO_LR, AMO_SC},
@@ -291,8 +300,36 @@ module load_store_unit
     );
     
     ////////////////////////////////////////////////////
-    //Alignment Exception
-    generate if (CONFIG.INCLUDE_M_MODE) begin : gen_ls_exceptions
+    //CSR Permissions
+    //Can impact fences, atomic instructions, and CBO
+    logic fiom; 
+    logic fiom_amo_hold;
+    generate if (CONFIG.MODES inside {MU, MSU}) begin : gen_csr_env
+        //Fence on IO implies memory; force all fences to be nontrivial for simplicity
+        always_comb begin
+            if (CONFIG.MODES == MU)
+                fiom = current_privilege == USER_PRIVILEGE & menvcfg.fiom;
+            else
+                fiom = (current_privilege != MACHINE_PRIVILEGE & menvcfg.fiom) | (current_privilege == USER_PRIVILEGE & senvcfg.fiom);
+        end
+
+        //AMO instructions AQ-RL consider all memory regions; force write drain for simplicity
+        logic fiom_amo_hold_r;
+        logic set_fiom_amo_hold;
+        assign set_fiom_amo_hold = lsq.load_valid & shared_inputs.amo & fiom & write_outstanding;
+        assign fiom_amo_hold = set_fiom_amo_hold | fiom_amo_hold_r;
+
+        always_ff @(posedge clk) begin
+            if (rst | ~write_outstanding)
+                fiom_amo_hold_r <= 0;
+            else
+                fiom_amo_hold_r <= fiom_amo_hold_r | set_fiom_amo_hold;
+        end
+    end endgenerate
+
+    ////////////////////////////////////////////////////
+    //Exceptions
+    generate if (CONFIG.MODES != BARE) begin : gen_ls_exceptions
         logic new_exception;
         always_comb begin
             if (issue_stage.fn3 == LS_H_fn3 | issue_stage.fn3 == L_HU_fn3)
@@ -307,7 +344,14 @@ module load_store_unit
                 unaligned_addr = 0;
         end
 
-        assign new_exception = (issue.new_request & unaligned_addr & ~issue_attr.is_fence & ~issue_attr.is_cbo) | tlb.is_fault;
+        logic illegal_cbo;
+        logic menv_illegal;
+        logic senv_illegal;
+        assign menv_illegal = CONFIG.INCLUDE_CBO & issue_attr.is_cbo & issue_attr.cbo_type == INVAL ? menvcfg.cbie == 2'b00 : ~menvcfg.cbcfe;
+        assign senv_illegal = CONFIG.INCLUDE_CBO & issue_attr.is_cbo & issue_attr.cbo_type == INVAL ? senvcfg.cbie == 2'b00 : ~senvcfg.cbcfe;
+        assign illegal_cbo = CONFIG.MODES == MU ? current_privilege == USER_PRIVILEGE & menv_illegal : (current_privilege != MACHINE_PRIVILEGE & menv_illegal) | (current_privilege == USER_PRIVILEGE & senv_illegal);
+
+        assign new_exception = (issue.new_request & ((unaligned_addr & ~issue_attr.is_fence & ~issue_attr.is_cbo) | illegal_cbo)) | tlb.is_fault;
         always_ff @(posedge clk) begin
             if (rst)
                 exception.valid <= 0;
@@ -315,20 +359,33 @@ module load_store_unit
                 exception.valid <= new_exception;
         end
 
-        logic was_load;
+        logic is_load;
+        logic is_load_r;
+        assign is_load = issue_attr.is_load & ~(issue_attr.is_amo & issue_attr.amo_type != AMO_LR_FN5);
+
         always_ff @(posedge clk) begin
             if (issue.new_request) begin
                 exception_is_fp <= CONFIG.INCLUDE_UNIT.FPU & issue_attr.is_fpu;
-                was_load <= issue_attr.is_load & ~(issue_attr.is_amo & issue_attr.amo_type != AMO_LR_FN5);
-                exception.code <= issue_attr.is_store ? STORE_AMO_ADDR_MISSALIGNED : LOAD_ADDR_MISSALIGNED;
-                exception.tval <= virtual_address;
+                is_load_r <= is_load;
+                if (illegal_cbo) begin
+                    exception.code <= ILLEGAL_INST;
+                    exception.tval <= issue_stage.instruction;
+                end else begin
+                    exception.code <= is_load ? LOAD_ADDR_MISSALIGNED : STORE_AMO_ADDR_MISSALIGNED;
+                    exception.tval <= virtual_address;
+                end
                 exception_id <= issue.id;
             end
             if (tlb.is_fault)
-                exception.code <= was_load ? LOAD_PAGE_FAULT : STORE_OR_AMO_PAGE_FAULT;
+                exception.code <= is_load_r ? LOAD_PAGE_FAULT : STORE_OR_AMO_PAGE_FAULT;
         end
         assign exception.possible = (tlb_request_r & ~tlb.done) | exception.valid; //Must suppress issue for issue-time exceptions too
         assign exception.pc = issue_stage.pc_r;
+
+        always_ff @(posedge clk) begin
+            if (issue_stage_ready)
+                exception_is_store <= decode_is_store;
+        end
     end endgenerate
 
     ////////////////////////////////////////////////////
@@ -439,7 +496,7 @@ module load_store_unit
     always_ff @ (posedge clk) begin
         unit_switch_in_progress <= (unit_switch_in_progress | unit_switch) & ~load_attributes.valid;
     end
-    assign unit_switch_hold = unit_switch | unit_switch_in_progress;
+    assign unit_switch_hold = unit_switch | unit_switch_in_progress | fiom_amo_hold;
 
     ////////////////////////////////////////////////////
     //Primary Control Signals
@@ -447,7 +504,7 @@ module load_store_unit
 
     assign sub_unit_ready = unit_ready[subunit_id] & (~unit_switch_hold);
     assign load_response = |unit_data_valid;
-    assign load_complete = load_response & ~exception.valid;
+    assign load_complete = load_response & (~exception.valid | exception_is_store);
 
     //TLB status and exceptions can be ignored because they will prevent instructions from issuing
     assign issue.ready = ~lsq.full & ~fence_hold;
@@ -462,7 +519,7 @@ module load_store_unit
         if (rst)
             fence_hold <= 0;
         else
-            fence_hold <= (fence_hold & ~load_store_status.idle) | (issue.new_request & issue_attr.is_fence & issue_attr.nontrivial_fence);
+            fence_hold <= (fence_hold & ~load_store_status.idle) | (issue.new_request & issue_attr.is_fence & (issue_attr.nontrivial_fence | fiom));
     end
 
     ////////////////////////////////////////////////////
@@ -672,7 +729,7 @@ module load_store_unit
     ////////////////////////////////////////////////////
     //Backstop buffering
     //Required if load response overlaps an exception
-    assign backstop.push = load_response & exception.valid;
+    assign backstop.push = load_response & exception.valid & ~exception_is_store;
     assign backstop.potential_push = backstop.push;
     assign backstop.data_in = unit_muxed_load_data;
     assign backstop.pop = backstop.valid;
@@ -683,12 +740,12 @@ module load_store_unit
     ////////////////////////////////////////////////////
     //Output bank
     assign wb.rd = final_load_data;
-    assign wb.done = (load_complete & (~CONFIG.INCLUDE_UNIT.FPU | wb_attr.fp_op == INT_DONE)) | (exception.valid & ~exception_is_fp);
-    assign wb.id = exception.valid ? exception_id : wb_attr.id;
+    assign wb.done = (load_complete & (~CONFIG.INCLUDE_UNIT.FPU | wb_attr.fp_op == INT_DONE)) | (exception.valid & ~exception_is_fp & ~exception_is_store);
+    assign wb.id = exception.valid & ~exception_is_store ? exception_id : wb_attr.id;
 
     assign fp_wb.rd = fp_result;
-    assign fp_wb.done = (load_complete & (wb_attr.fp_op == SINGLE_DONE | wb_attr.fp_op == DOUBLE_DONE)) | (exception.valid & exception_is_fp);
-    assign fp_wb.id = exception.valid ? exception_id : wb_attr.id;
+    assign fp_wb.done = (load_complete & (wb_attr.fp_op == SINGLE_DONE | wb_attr.fp_op == DOUBLE_DONE)) | (exception.valid & exception_is_fp & ~exception_is_store);
+    assign fp_wb.id = exception.valid & ~exception_is_store ? exception_id : wb_attr.id;
 
     ////////////////////////////////////////////////////
     //End of Implementation

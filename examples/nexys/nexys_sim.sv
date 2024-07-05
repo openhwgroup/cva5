@@ -109,6 +109,7 @@ module cva5_sim
 
     interrupt_t s_interrupt;
     interrupt_t m_interrupt;
+    logic[63:0] mtime;
 
     assign s_interrupt = '{default: 0};
     assign m_interrupt = '{default: 0};

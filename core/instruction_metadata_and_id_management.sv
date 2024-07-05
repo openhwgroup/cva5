@@ -407,7 +407,7 @@ module instruction_metadata_and_id_management
         valid : fetched_count_neg[LOG2_MAX_IDS],
         pc : decode_pc,
         instruction : decode_instruction,
-        fetch_metadata : CONFIG.INCLUDE_M_MODE ? decode_fetch_metadata : ADDR_OK
+        fetch_metadata : CONFIG.MODES != BARE ? decode_fetch_metadata : ADDR_OK
     };
 
     ////////////////////////////////////////////////////

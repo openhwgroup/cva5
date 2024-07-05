@@ -189,8 +189,10 @@ module decode_and_issue
     ////////////////////////////////////////////////////
     //Issue
     always_ff @(posedge clk) begin
-        if (instruction_issued)
+        if (instruction_issued) begin
             issue.pc_r <= issue.pc;
+            issue.instruction_r <= issue.instruction;
+        end
         if (issue_stage_ready) begin
             issue.pc <= decode.pc;
             issue.instruction <= decode.instruction;
@@ -276,10 +278,11 @@ module decode_and_issue
 
     ////////////////////////////////////////////////////
     //Illegal Instruction check
-    generate if (CONFIG.INCLUDE_M_MODE) begin : gen_decode_exceptions
+    generate if (CONFIG.MODES != BARE) begin : gen_decode_exceptions
     logic new_exception;
     exception_code_t ecode;
     exception_code_t ecall_code;
+    logic [31:0] tval;
 
     //ECALL and EBREAK captured here, but seperated out when ecode is set
     assign illegal_instruction_pattern = ~|unit_needed;
@@ -303,6 +306,12 @@ module decode_and_issue
                     decode.instruction inside {EBREAK} ? BREAK :
                     illegal_instruction_pattern ? ILLEGAL_INST :
                     decode.fetch_metadata.error_code; //(~decode.fetch_metadata.ok)
+            if (illegal_instruction_pattern)
+                tval <= decode.instruction;
+            else if (~decode.fetch_metadata.ok)
+                tval <= decode.pc;
+            else
+                tval <= '0;
         end
     end
 
@@ -326,7 +335,7 @@ module decode_and_issue
 
     assign exception.possible = 0; //Not needed because occurs before issue
     assign exception.code = ecode;
-    assign exception.tval = issue.instruction;
+    assign exception.tval = tval;
     assign exception.pc = issue.pc;
 
     end endgenerate
