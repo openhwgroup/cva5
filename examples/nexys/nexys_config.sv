@@ -58,6 +58,7 @@ package nexys_config;
             RESET_TVEC : 32'h00000000,
             MCONFIGPTR : '0,
             INCLUDE_ZICNTR : 1,
+            INCLUDE_ZIHPM : 1,
             INCLUDE_SSTC : 1,
             INCLUDE_SMSTATEEN : 1
         },

@@ -164,6 +164,8 @@ package riscv_types;
         MCOUNTINHIBIT = 12'h320,
         MHPMEVENT3 = 12'h323,
         MHPMEVENT31 = 12'h33F,
+        MHPMEVENT3H = 12'h723,
+        MHPMEVENT31H = 12'h73F,
         //Machine state enable
         MSTATEEN0 = 12'h30C,
         MSTATEEN1 = 12'h30D,

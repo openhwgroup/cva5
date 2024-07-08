@@ -925,7 +925,7 @@ generate if (CONFIG.MODES != BARE) begin : gen_csr_exceptions
         case (csr_inputs.addr) inside
             FFLAGS, FRM, FCSR : legal_access = CONFIG.INCLUDE_UNIT.FPU; //FPU always accessible if present
             MVENDORID, MARCHID, MIMPID, MHARTID, MCONFIGPTR : legal_access = privilege_level == MACHINE_PRIVILEGE & ~csr_inputs.writes; //Read only
-            MSTATUS, MISA, MIE, MTVEC, MSTATUSH, MSCRATCH, MEPC, MCAUSE, MTVAL, MIP, MCYCLE, MINSTRET, [MHPMCOUNTER3H:MHPMCOUNTER31], MCYCLEH, MINSTRETH, [MHPMCOUNTER3H:MHPMCOUNTER31H], MCOUNTINHIBIT, [MHPMEVENT3:MHPMEVENT31] : legal_access = privilege_level == MACHINE_PRIVILEGE; //Read write
+            MSTATUS, MISA, MIE, MTVEC, MSTATUSH, MSCRATCH, MEPC, MCAUSE, MTVAL, MIP, MCYCLE, MINSTRET, [MHPMCOUNTER3H:MHPMCOUNTER31], MCYCLEH, MINSTRETH, [MHPMCOUNTER3H:MHPMCOUNTER31H], MCOUNTINHIBIT, [MHPMEVENT3:MHPMEVENT31], [MHPMEVENT3H:MHPMEVENT31H] : legal_access = privilege_level == MACHINE_PRIVILEGE; //Read write
             MEDELEG, MIDELEG, MEDELEGH : legal_access = CONFIG.MODES == MSU & privilege_level == MACHINE_PRIVILEGE; //Read write, needs supervisor
             [MSTATEEN0:MSTATEEN3], [MSTATEEN0H:MSTATEEN3H] : legal_access = CONFIG.CSRS.INCLUDE_SMSTATEEN & privilege_level == MACHINE_PRIVILEGE; //Read write, needs extension
             MCOUNTEREN, MENVCFG, MENVCFGH : legal_access = CONFIG.MODES inside {MU, MSU} & privilege_level == MACHINE_PRIVILEGE; //Read write, needs user
@@ -934,12 +934,19 @@ generate if (CONFIG.MODES != BARE) begin : gen_csr_exceptions
             SENVCFG : legal_access = CONFIG.MODES == MSU & ((privilege_level == MACHINE_PRIVILEGE) | (privilege_level == SUPERVISOR_PRIVILEGE & (~CONFIG.CSRS.INCLUDE_SMSTATEEN | mstateen0h.envcfg))); //Read write, depends on mstateen0h
             SSTATEEN0 : legal_access = CONFIG.MODES == MSU & CONFIG.CSRS.INCLUDE_SMSTATEEN & ((privilege_level == MACHINE_PRIVILEGE) | (privilege_level == SUPERVISOR_PRIVILEGE & mstateen0h.se0)); //Read write, needs extension and mstateen0h
             [SSTATEEN1:SSTATEEN3] : legal_access = CONFIG.MODES == MSU & CONFIG.CSRS.INCLUDE_SMSTATEEN & privilege_level inside {MACHINE_PRIVILEGE, SUPERVISOR_PRIVILEGE}; //Read write, needs extension
-            [CYCLE:HPMCOUNTER31], [CYCLEH:HPMCOUNTER31H] : begin //Read only, depends on m/scounteren
+            CYCLE, TIME, INSTRET, CYCLEH, TIMEH, INSTRETH : begin //Read only, depends on m/scounteren and extension
                 legal_access = CONFIG.CSRS.INCLUDE_ZICNTR & ~csr_inputs.writes;
-                if ((CONFIG.MODES == MSU & privilege_level == SUPERVISOR_PRIVILEGE) | (CONFIG.MODES == MU & privilege_level == USER_PRIVILEGE))
+                if (privilege_level != MACHINE_PRIVILEGE)
                     legal_access &= mcounteren[csr_inputs.addr[4:0]];
-                else if (CONFIG.MODES == MSU & privilege_level == USER_PRIVILEGE)
-                    legal_access &= mcounteren[csr_inputs.addr[4:0]] & scounteren[csr_inputs.addr[4:0]];
+                if (CONFIG.MODES == MSU & privilege_level == USER_PRIVILEGE)
+                    legal_access &= scounteren[csr_inputs.addr[4:0]];
+            end
+            [HPMCOUNTER3:HPMCOUNTER31], [HPMCOUNTER3H:HPMCOUNTER31H] : begin //Read only, depends on m/scounteren and extension
+                legal_access = CONFIG.CSRS.INCLUDE_ZIHPM & ~csr_inputs.writes;
+                if (privilege_level != MACHINE_PRIVILEGE)
+                    legal_access &= mcounteren[csr_inputs.addr[4:0]];
+                if (CONFIG.MODES == MSU & privilege_level == USER_PRIVILEGE)
+                    legal_access &= scounteren[csr_inputs.addr[4:0]];
             end
             STIMECMP, STIMECMPH : legal_access = CONFIG.MODES == MSU & CONFIG.CSRS.INCLUDE_SSTC & ((privilege_level == MACHINE_PRIVILEGE) | (privilege_level == SUPERVISOR_PRIVILEGE & mcounteren.tm & menvcfgh.stce)); //Read write, depends on TM + STCE
             default: legal_access = 0;
@@ -1025,6 +1032,7 @@ endgenerate
             //Machine Counter Setup
             MCOUNTINHIBIT : selected_csr = CONFIG.MODES != BARE ? mcountinhibit : '0;
             [MHPMEVENT3 : MHPMEVENT31] : selected_csr = '0;
+            [MHPMEVENT3H : MHPMEVENT31H] : selected_csr = '0;
             //Machine state enable
             MSTATEEN0 : selected_csr = CONFIG.MODES != BARE & CONFIG.CSRS.INCLUDE_SMSTATEEN ? mstateen0 : '0;
             MSTATEEN1 : selected_csr = CONFIG.MODES != BARE & CONFIG.CSRS.INCLUDE_SMSTATEEN ? mstateen1 : '0;
