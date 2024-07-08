@@ -284,9 +284,16 @@ module csr_unit
     localparam logic [31:0] mconfigptr = CONFIG.CSRS.MCONFIGPTR;
 
     ////////////////////////////////////////////////////
-    //Concstants
+    //Constants
     localparam logic [31:0] mstatush = 0; //Always little endian
     localparam logic [31:0] medelegh = 0; //Not used
+    localparam logic [31:0] mstateen0 = 0; //Behaviour defined but not relevant
+    localparam logic [31:0] mstateen1 = 0; //Behaviour not yet defined
+    localparam logic [31:0] mstateen2 = 0; //Behaviour not yet defined
+    localparam logic [31:0] mstateen3 = 0; //Behaviour not yet defined
+    localparam logic [31:0] mstateen1h = 0; //Behaviour not yet defined
+    localparam logic [31:0] mstateen2h = 0; //Behaviour not yet defined
+    localparam logic [31:0] mstateen3h = 0; //Behaviour not yet defined
 
     ////////////////////////////////////////////////////
     //Non-Constant Registers
@@ -302,6 +309,7 @@ module csr_unit
     mcounter_t mcounteren;
     mcounter_t mcountinhibit;
     envcfgh_t menvcfgh;
+    mstateen0h_t mstateen0h;
 
     //Virtualization support: TSR, TW, TVM unused
     //Extension context status: SD, FS, XS unused
@@ -556,7 +564,6 @@ end
             mepc[31:2] <= (exception_pkt.valid | interrupt_taken) ? exception_pkt.pc[31:2] : updated_csr[31:2];
     end
 
-
     ////////////////////////////////////////////////////
     //MCAUSE
     //Can be software written, written on exception or
@@ -653,6 +660,16 @@ end
             menvcfgh <= updated_csr & menvcfg_mask;
     end
 
+    ////////////////////////////////////////////////////
+    //MSTATEEN0H
+    localparam mstateen0h_t mstateen0h_mask = '{default:0, se0:CONFIG.MODES == MSU, envcfg:CONFIG.MODES != M};
+    always_ff @(posedge clk) begin
+        if (rst)
+            mstateen0h <= '0;
+        else if (mwrite_en(MSTATEEN0H) & CONFIG.MODES != M)
+            mstateen0h <= updated_csr & mstateen0h_mask;
+    end
+
 end
 endgenerate
 
@@ -675,6 +692,10 @@ endgenerate
     logic[31:0] stimecmph;
     mip_t sip;
     logic[31:0] sie;
+    localparam logic[31:0] sstateen0 = 0; //The defined behaviour is not used
+    localparam logic[31:0] sstateen1 = 0;
+    localparam logic[31:0] sstateen2 = 0;
+    localparam logic[31:0] sstateen3 = 0;
 
     //TLB status --- used to mux physical/virtual address
     assign instruction_translation_on = CONFIG.MODES == MSU & satp.mode & privilege_level != MACHINE_PRIVILEGE;
@@ -748,6 +769,15 @@ generate if (CONFIG.MODES == MSU) begin : gen_csr_s_mode
     end
 
     ////////////////////////////////////////////////////
+    //SCOUNTEREN
+    always_ff @(posedge clk) begin
+        if (rst)
+            scounteren <= 0;
+        else if (swrite_en(SCOUNTEREN))
+            scounteren <= updated_csr;
+    end
+
+    ////////////////////////////////////////////////////
     //SSCRATCH
     always_ff @(posedge clk) begin
         if (rst)
@@ -806,7 +836,7 @@ endgenerate
     ////////////////////////////////////////////////////
     //Timers and Counters
     //Register increment for instructions completed
-    //Increments suppressed on writes to these registers
+    //Can be inhbited by mcountinhibit
     localparam COUNTER_W = 64;
 
     logic[COUNTER_W-1:0] mcycle;
@@ -819,7 +849,7 @@ endgenerate
 
     assign mcycle_input_next[31:0] = mwrite_en(MCYCLE) ? updated_csr : mcycle[31:0];
     assign mcycle_input_next[COUNTER_W-1:32] = mwrite_en(MCYCLEH) ? updated_csr[COUNTER_W-33:0] : mcycle[COUNTER_W-1:32];
-    assign mcycle_inc = ~((mwrite_en(MCYCLE) | mwrite_en(MCYCLEH))) & ~mcountinhibit.cy;
+    assign mcycle_inc = (CONFIG.MODES != BARE | CONFIG.CSRS.INCLUDE_ZICNTR) & ~((mwrite_en(MCYCLE) | mwrite_en(MCYCLEH))) & ~mcountinhibit.cy;
 
     always_ff @(posedge clk) begin
         if (rst) 
@@ -830,7 +860,7 @@ endgenerate
 
     assign minst_ret_input_next[31:0] = mwrite_en(MINSTRET) ? updated_csr : minst_ret[31:0];
     assign minst_ret_input_next[COUNTER_W-1:32] = mwrite_en(MINSTRETH) ? updated_csr[COUNTER_W-33:0] : minst_ret[COUNTER_W-1:32];
-    assign minst_ret_inc = (mwrite_en(MINSTRET) | mwrite_en(MINSTRETH) | mcountinhibit.ir) ? '0 : retire_count;
+    assign minst_ret_inc = (CONFIG.MODES == BARE & ~CONFIG.CSRS.INCLUDE_ZICNTR) & (mwrite_en(MINSTRET) | mwrite_en(MINSTRETH) | mcountinhibit.ir) ? '0 : retire_count;
     
     always_ff @(posedge clk) begin
         if (rst)
@@ -897,11 +927,15 @@ generate if (CONFIG.MODES != BARE) begin : gen_csr_exceptions
             MVENDORID, MARCHID, MIMPID, MHARTID, MCONFIGPTR : legal_access = privilege_level == MACHINE_PRIVILEGE & ~csr_inputs.writes; //Read only
             MSTATUS, MISA, MIE, MTVEC, MSTATUSH, MSCRATCH, MEPC, MCAUSE, MTVAL, MIP, MCYCLE, MINSTRET, [MHPMCOUNTER3H:MHPMCOUNTER31], MCYCLEH, MINSTRETH, [MHPMCOUNTER3H:MHPMCOUNTER31H], MCOUNTINHIBIT, [MHPMEVENT3:MHPMEVENT31] : legal_access = privilege_level == MACHINE_PRIVILEGE; //Read write
             MEDELEG, MIDELEG, MEDELEGH : legal_access = CONFIG.MODES == MSU & privilege_level == MACHINE_PRIVILEGE; //Read write, needs supervisor
+            [MSTATEEN0:MSTATEEN3], [MSTATEEN0H:MSTATEEN3H] : legal_access = CONFIG.CSRS.INCLUDE_SMSTATEEN & privilege_level == MACHINE_PRIVILEGE; //Read write, needs extension
             MCOUNTEREN, MENVCFG, MENVCFGH : legal_access = CONFIG.MODES inside {MU, MSU} & privilege_level == MACHINE_PRIVILEGE; //Read write, needs user
             SSTATUS, SIE, STVEC, SCOUNTEREN, SSCRATCH, SEPC, SCAUSE, STVAL, SIP, SENVCFG : legal_access = CONFIG.MODES == MSU & privilege_level inside {MACHINE_PRIVILEGE, SUPERVISOR_PRIVILEGE}; //Read write
             SATP : legal_access = CONFIG.MODES == MSU & ((privilege_level == MACHINE_PRIVILEGE) | (privilege_level == SUPERVISOR_PRIVILEGE & ~mstatus.tvm)); //Read write, not TVM
+            SENVCFG : legal_access = CONFIG.MODES == MSU & ((privilege_level == MACHINE_PRIVILEGE) | (privilege_level == SUPERVISOR_PRIVILEGE & mstateen0h.envcfg)); //Read write, depends on mstateen0h
+            SSTATEEN0 : legal_access = CONFIG.MODES == MSU & CONFIG.CSRS.INCLUDE_SMSTATEEN & ((privilege_level == MACHINE_PRIVILEGE) | (privilege_level == SUPERVISOR_PRIVILEGE & mstateen0h.se0)); //Read write, needs extension and mstateen0h
+            [SSTATEEN1:SSTATEEN3] : legal_access = CONFIG.MODES == MSU & CONFIG.CSRS.INCLUDE_SMSTATEEN & privilege_level inside {MACHINE_PRIVILEGE, SUPERVISOR_PRIVILEGE}; //Read write, needs extension
             [CYCLE:HPMCOUNTER31], [CYCLEH:HPMCOUNTER31H] : begin //Read only, depends on m/scounteren
-                legal_access = ~csr_inputs.writes;
+                legal_access = CONFIG.CSRS.INCLUDE_ZICNTR & ~csr_inputs.writes;
                 if ((CONFIG.MODES == MSU & privilege_level == SUPERVISOR_PRIVILEGE) | (CONFIG.MODES == MU & privilege_level == USER_PRIVILEGE))
                     legal_access &= mcounteren[csr_inputs.addr[4:0]];
                 else if (CONFIG.MODES == MSU & privilege_level == USER_PRIVILEGE)
@@ -960,7 +994,6 @@ endgenerate
             MIMPID : selected_csr = CONFIG.MODES != BARE ? mimpid : '0;
             MHARTID : selected_csr = CONFIG.MODES != BARE ? mhartid : '0; 
             MCONFIGPTR : selected_csr = CONFIG.MODES != BARE ? mconfigptr : '0;
-            
             //Machine trap setup
             MSTATUS : selected_csr = CONFIG.MODES != BARE ? mstatus : '0;
             MISA :  selected_csr = CONFIG.MODES != BARE ? misa : '0;
@@ -980,9 +1013,7 @@ endgenerate
             //Machine configuration
             MENVCFG : selected_csr = CONFIG.MODES inside {MU, MSU} ? menvcfg : '0;
             MENVCFGH : selected_csr = CONFIG.MODES inside {MU, MSU} ? menvcfgh : '0;
-
             //No PMP
-
             //MHPM COUNTER
             //Machine Timers and Counters
             MCYCLE : selected_csr = CONFIG.MODES != BARE ? mcycle[31:0] : '0;
@@ -991,10 +1022,18 @@ endgenerate
             MCYCLEH : selected_csr = CONFIG.MODES != BARE ? 32'(mcycle[COUNTER_W-1:32]) : '0;
             MINSTRETH : selected_csr = CONFIG.MODES != BARE ? 32'(minst_ret[COUNTER_W-1:32]) : '0;
             [MHPMCOUNTER3H : MHPMCOUNTER31H] : selected_csr = '0;
-
             //Machine Counter Setup
             MCOUNTINHIBIT : selected_csr = CONFIG.MODES != BARE ? mcountinhibit : '0;
             [MHPMEVENT3 : MHPMEVENT31] : selected_csr = '0;
+            //Machine state enable
+            MSTATEEN0 : selected_csr = CONFIG.MODES != BARE & CONFIG.CSRS.INCLUDE_SMSTATEEN ? mstateen0 : '0;
+            MSTATEEN1 : selected_csr = CONFIG.MODES != BARE & CONFIG.CSRS.INCLUDE_SMSTATEEN ? mstateen1 : '0;
+            MSTATEEN2 : selected_csr = CONFIG.MODES != BARE & CONFIG.CSRS.INCLUDE_SMSTATEEN ? mstateen2 : '0;
+            MSTATEEN3 : selected_csr = CONFIG.MODES != BARE & CONFIG.CSRS.INCLUDE_SMSTATEEN ? mstateen3 : '0;
+            MSTATEEN0H : selected_csr = CONFIG.MODES != BARE & CONFIG.CSRS.INCLUDE_SMSTATEEN ? mstateen0h : '0;
+            MSTATEEN1H : selected_csr = CONFIG.MODES != BARE & CONFIG.CSRS.INCLUDE_SMSTATEEN ? mstateen1h : '0;
+            MSTATEEN2H : selected_csr = CONFIG.MODES != BARE & CONFIG.CSRS.INCLUDE_SMSTATEEN ? mstateen2h : '0;
+            MSTATEEN3H : selected_csr = CONFIG.MODES != BARE & CONFIG.CSRS.INCLUDE_SMSTATEEN ? mstateen3h : '0;
 
             //Supervisor regs
             //Supervisor Trap Setup
@@ -1014,15 +1053,20 @@ endgenerate
             STIMECMPH : selected_csr = CONFIG.MODES == MSU & CONFIG.CSRS.INCLUDE_SSTC ? stimecmph : '0;
             //Supervisor address translation and protection
             SATP : selected_csr = CONFIG.MODES == MSU ? satp : '0;
+            //Supervisor state enable
+            SSTATEEN0 : selected_csr = CONFIG.MODES == MSU & CONFIG.CSRS.INCLUDE_SMSTATEEN ? sstateen0 : '0;
+            SSTATEEN1 : selected_csr = CONFIG.MODES == MSU & CONFIG.CSRS.INCLUDE_SMSTATEEN ? sstateen1 : '0;
+            SSTATEEN2 : selected_csr = CONFIG.MODES == MSU & CONFIG.CSRS.INCLUDE_SMSTATEEN ? sstateen2 : '0;
+            SSTATEEN3 : selected_csr = CONFIG.MODES == MSU & CONFIG.CSRS.INCLUDE_SMSTATEEN ? sstateen3 : '0;
 
-            //Shadow registers
-            CYCLE : selected_csr = mcycle[31:0];
-            TIME : selected_csr = CONFIG.MODES != BARE ? mtime[31:0] : '0;
-            INSTRET : selected_csr = minst_ret[31:0];
+            //Timers and counters
+            CYCLE : selected_csr = CONFIG.CSRS.INCLUDE_ZICNTR ? mcycle[31:0] : '0;
+            TIME : selected_csr = CONFIG.CSRS.INCLUDE_ZICNTR ? mtime[31:0] : '0;
+            INSTRET : selected_csr = CONFIG.CSRS.INCLUDE_ZICNTR ? minst_ret[31:0] : '0;
             [HPMCOUNTER3 : HPMCOUNTER31] : selected_csr = '0;
-            CYCLEH : selected_csr = 32'(mcycle[COUNTER_W-1:32]);
-            TIMEH : selected_csr = CONFIG.MODES != BARE ? mtime[63:32] : '0;
-            INSTRETH : selected_csr = 32'(minst_ret[COUNTER_W-1:32]);
+            CYCLEH : selected_csr = CONFIG.CSRS.INCLUDE_ZICNTR ? 32'(mcycle[COUNTER_W-1:32]) : '0;
+            TIMEH : selected_csr = CONFIG.CSRS.INCLUDE_ZICNTR ? mtime[63:32] : '0;
+            INSTRETH : selected_csr = CONFIG.CSRS.INCLUDE_ZICNTR ? 32'(minst_ret[COUNTER_W-1:32]) : '0;
             [HPMCOUNTER3H : HPMCOUNTER31H] : selected_csr = '0;
 
             default : selected_csr = '0;

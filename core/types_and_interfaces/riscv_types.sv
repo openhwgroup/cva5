@@ -150,9 +150,7 @@ package riscv_types;
         MENVCFG = 12'h30A,
         MENVCFGH = 12'h31A,
         //No optional mseccfg/mseccfgh
-
         //No PMP
-
         //Machine Counters
         MCYCLE = 12'hB00,
         MINSTRET = 12'hB02,
@@ -162,11 +160,19 @@ package riscv_types;
         MINSTRETH = 12'hB82,
         MHPMCOUNTER3H = 12'hB83,
         MHPMCOUNTER31H = 12'hB9F,
-
         //Machine counter setup
         MCOUNTINHIBIT = 12'h320,
         MHPMEVENT3 = 12'h323,
         MHPMEVENT31 = 12'h33F,
+        //Machine state enable
+        MSTATEEN0 = 12'h30C,
+        MSTATEEN1 = 12'h30D,
+        MSTATEEN2 = 12'h30E,
+        MSTATEEN3 = 12'h30F,
+        MSTATEEN0H = 12'h31C,
+        MSTATEEN1H = 12'h31D,
+        MSTATEEN2H = 12'h31E,
+        MSTATEEN3H = 12'h31F,   
 
         //Supervisor regs
         //Supervisor Trap Setup
@@ -186,8 +192,13 @@ package riscv_types;
         STIMECMPH = 12'h15D,
         //Supervisor address translation and protection
         SATP = 12'h180,
+        //Supervisor state enable
+        SSTATEEN0 = 12'h10C,
+        SSTATEEN1 = 12'h10D,
+        SSTATEEN2 = 12'h10E,
+        SSTATEEN3 = 12'h10F,
 
-        //Shadow registers
+        //Timers and counters
         CYCLE = 12'hC00,
         TIME = 12'hC01,
         INSTRET = 12'hC02,

@@ -57,7 +57,9 @@ package nexys_config;
             RESET_VEC : 32'h80000000,
             RESET_TVEC : 32'h00000000,
             MCONFIGPTR : '0,
-            INCLUDE_SSTC : 1
+            INCLUDE_ZICNTR : 1,
+            INCLUDE_SSTC : 1,
+            INCLUDE_SMSTATEEN : 1
         },
         //Memory Options
         SQ_DEPTH : 8,

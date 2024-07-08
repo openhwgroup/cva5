@@ -45,7 +45,9 @@ package cva5_config;
         bit [31:0] RESET_VEC; //PC value on reset
         bit [31:0] RESET_TVEC;
         bit [31:0] MCONFIGPTR;
+        bit INCLUDE_ZICNTR;
         bit INCLUDE_SSTC;
+        bit INCLUDE_SMSTATEEN;
     } csr_config_t;
 
     //Memory range [L, H]
@@ -260,7 +262,9 @@ package cva5_config;
             RESET_VEC : 32'h80000000,
             RESET_TVEC : 32'h00000000,
             MCONFIGPTR : '0,
-            INCLUDE_SSTC : 1
+            INCLUDE_ZICNTR : 1,
+            INCLUDE_SSTC : 1,
+            INCLUDE_SMSTATEEN : 1
         },
         //Memory Options
         SQ_DEPTH : 4,

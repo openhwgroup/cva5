@@ -201,6 +201,24 @@ package csr_types;
     } envcfgh_t;
 
     typedef struct packed {
+        logic [28:0] zeros;
+        logic jvt;
+        logic fcsr;
+        logic c;
+    } stateen0_t;
+
+    typedef struct packed {
+        logic se0;
+        logic envcfg;
+        logic zero;
+        logic csrind;
+        logic aia;
+        logic imsic;
+        logic contex;
+        logic [24:0] zeros;
+    } mstateen0h_t;
+
+    typedef struct packed {
         logic mode;
         logic [ASIDLEN-1:0] asid;
         logic [21:0] ppn;
