@@ -931,7 +931,7 @@ generate if (CONFIG.MODES != BARE) begin : gen_csr_exceptions
             MCOUNTEREN, MENVCFG, MENVCFGH : legal_access = CONFIG.MODES inside {MU, MSU} & privilege_level == MACHINE_PRIVILEGE; //Read write, needs user
             SSTATUS, SIE, STVEC, SCOUNTEREN, SSCRATCH, SEPC, SCAUSE, STVAL, SIP, SENVCFG : legal_access = CONFIG.MODES == MSU & privilege_level inside {MACHINE_PRIVILEGE, SUPERVISOR_PRIVILEGE}; //Read write
             SATP : legal_access = CONFIG.MODES == MSU & ((privilege_level == MACHINE_PRIVILEGE) | (privilege_level == SUPERVISOR_PRIVILEGE & ~mstatus.tvm)); //Read write, not TVM
-            SENVCFG : legal_access = CONFIG.MODES == MSU & ((privilege_level == MACHINE_PRIVILEGE) | (privilege_level == SUPERVISOR_PRIVILEGE & mstateen0h.envcfg)); //Read write, depends on mstateen0h
+            SENVCFG : legal_access = CONFIG.MODES == MSU & ((privilege_level == MACHINE_PRIVILEGE) | (privilege_level == SUPERVISOR_PRIVILEGE & (~CONFIG.CSRS.INCLUDE_SMSTATEEN | mstateen0h.envcfg))); //Read write, depends on mstateen0h
             SSTATEEN0 : legal_access = CONFIG.MODES == MSU & CONFIG.CSRS.INCLUDE_SMSTATEEN & ((privilege_level == MACHINE_PRIVILEGE) | (privilege_level == SUPERVISOR_PRIVILEGE & mstateen0h.se0)); //Read write, needs extension and mstateen0h
             [SSTATEEN1:SSTATEEN3] : legal_access = CONFIG.MODES == MSU & CONFIG.CSRS.INCLUDE_SMSTATEEN & privilege_level inside {MACHINE_PRIVILEGE, SUPERVISOR_PRIVILEGE}; //Read write, needs extension
             [CYCLE:HPMCOUNTER31], [CYCLEH:HPMCOUNTER31H] : begin //Read only, depends on m/scounteren
