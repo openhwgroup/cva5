@@ -324,7 +324,7 @@ module decode_and_issue
             pre_issue_exception_pending <= illegal_instruction_pattern | (~decode.fetch_metadata.ok);
     end
 
-    assign new_exception = issue.stage_valid & pre_issue_exception_pending & ~(gc.issue_hold | gc.fetch_flush);
+    assign new_exception = issue.stage_valid & pre_issue_exception_pending & ~(gc.issue_hold | gc.fetch_flush) & ~exception.valid;
 
     always_ff @(posedge clk) begin
         if (rst)
