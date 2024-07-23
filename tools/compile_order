@@ -21,6 +21,7 @@ core/common_components/ram/sdp_ram_padded.sv
 core/common_components/ram/dual_port_bram.sv
 core/common_components/set_clr_reg_with_rst.sv
 core/common_components/one_hot_to_integer.sv
+core/common_components/one_hot_mux.sv
 core/common_components/cycler.sv
 core/common_components/lfsr.sv
 core/common_components/cva5_fifo.sv

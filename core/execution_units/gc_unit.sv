@@ -352,7 +352,7 @@ generate if (CONFIG.MODES != BARE) begin :gen_gc_m_mode
     exception_code_t [NUM_EXCEPTION_SOURCES-1:0] exception_code;
     logic [NUM_EXCEPTION_SOURCES-1:0][31:0] exception_tval;
     logic [NUM_EXCEPTION_SOURCES-1:0][31:0] exception_pc;
-    exception_sources_t current_exception_unit;
+    logic [31:0] muxed_exception_pc;
     
     for (genvar i = 0; i < NUM_EXCEPTION_SOURCES; i++) begin
         assign exception_valid[i] = exception[i].valid;
@@ -360,18 +360,27 @@ generate if (CONFIG.MODES != BARE) begin :gen_gc_m_mode
         assign exception_tval[i] = exception[i].tval;
         assign exception_pc[i] = exception[i].pc;
     end
-    
-    one_hot_to_integer #(.C_WIDTH(NUM_EXCEPTION_SOURCES)) ex_enc (
-        .one_hot (exception_valid),
-        .int_out (current_exception_unit)
-    );
 
-    always_comb begin
-        gc.exception.valid = |exception_valid;
-        gc.exception.pc = gc.exception.valid ? exception_pc[current_exception_unit] : issue_stage.pc;
-        gc.exception.code = exception_code[current_exception_unit];
-        gc.exception.tval = exception_tval[current_exception_unit];
-    end
+    assign gc.exception.valid = |exception_valid;
+
+    one_hot_mux #(.OPTIONS(NUM_EXCEPTION_SOURCES), .DATA_TYPE(exception_code_t)) code_mux (
+        .one_hot(exception_valid),
+        .choices(exception_code),
+        .sel(gc.exception.code),
+    .*);
+
+    one_hot_mux #(.OPTIONS(NUM_EXCEPTION_SOURCES), .DATA_TYPE(logic[31:0])) tval_mux (
+        .one_hot(exception_valid),
+        .choices(exception_tval),
+        .sel(gc.exception.tval),
+    .*);
+
+    one_hot_mux #(.OPTIONS(NUM_EXCEPTION_SOURCES), .DATA_TYPE(logic[31:0])) pc_mux (
+        .one_hot(exception_valid),
+        .choices(exception_pc),
+        .sel(muxed_exception_pc),
+    .*);
+    assign gc.exception.pc = |exception_valid ? muxed_exception_pc : issue_stage.pc;    
 
     assign interrupt_taken = interrupt_pending & (next_state == PRE_ISSUE_FLUSH) & ~(gc.exception.valid) & ~csr_frontend_flush;
 

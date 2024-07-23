@@ -76,6 +76,7 @@ module branch_predictor
     } branch_table_entry_t;
 
     branch_table_entry_t [CONFIG.BP.WAYS-1:0] if_entry;
+    branch_table_entry_t muxed_entry;
     branch_table_entry_t ex_entry;
 
     typedef struct packed{
@@ -88,12 +89,12 @@ module branch_predictor
     logic branch_predictor_direction_changed;
     logic [31:0] new_jump_addr;
     logic [CONFIG.BP.WAYS-1:0][31:0] predicted_pc;
+    logic [31:0] muxed_predicted_pc;
 
     logic [CONFIG.BP.WAYS-1:0] tag_matches;
     logic [CONFIG.BP.WAYS-1:0] replacement_way;
     logic [CONFIG.BP.WAYS-1:0] tag_update_way;
     logic [CONFIG.BP.WAYS-1:0] target_update_way;
-    logic [$clog2(CONFIG.BP.WAYS > 1 ? CONFIG.BP.WAYS : 2)-1:0] hit_way;
     logic tag_match;
     logic use_predicted_pc;
 
@@ -102,71 +103,67 @@ module branch_predictor
     /////////////////////////////////////////
 
     genvar i;
-    generate if (CONFIG.INCLUDE_BRANCH_PREDICTOR)
-    for (i=0; i<CONFIG.BP.WAYS; i++) begin : gen_branch_tag_banks
-        sdp_ram #(
-            .ADDR_WIDTH(BRANCH_ADDR_W),
-            .NUM_COL(1),
-            .COL_WIDTH($bits(branch_table_entry_t)),
-            .PIPELINE_DEPTH(0)
-        ) tag_bank (
-            .a_en(tag_update_way[i]),
-            .a_wbe(tag_update_way[i]),
-            .a_wdata(ex_entry),
-            .a_addr(addr_utils.getHashedLineAddr(br_results.pc, i)),
-            .b_en(bp.new_mem_request),
-            .b_addr(addr_utils.getHashedLineAddr(bp.next_pc, i)),
-            .b_rdata(if_entry[i]),
-        .*);
-    end
-    endgenerate
+    generate if (CONFIG.INCLUDE_BRANCH_PREDICTOR) begin : gen_bp
+        for (i=0; i<CONFIG.BP.WAYS; i++) begin : gen_bp_rams
+            sdp_ram #(
+                .ADDR_WIDTH(BRANCH_ADDR_W),
+                .NUM_COL(1),
+                .COL_WIDTH($bits(branch_table_entry_t)),
+                .PIPELINE_DEPTH(0)
+            ) tag_bank (
+                .a_en(tag_update_way[i]),
+                .a_wbe(tag_update_way[i]),
+                .a_wdata(ex_entry),
+                .a_addr(addr_utils.getHashedLineAddr(br_results.pc, i)),
+                .b_en(bp.new_mem_request),
+                .b_addr(addr_utils.getHashedLineAddr(bp.next_pc, i)),
+                .b_rdata(if_entry[i]),
+            .*);
 
-    generate if (CONFIG.INCLUDE_BRANCH_PREDICTOR)
-    for (i=0; i<CONFIG.BP.WAYS; i++) begin : gen_branch_table_banks
-        sdp_ram #(
-            .ADDR_WIDTH(BRANCH_ADDR_W),
-            .NUM_COL(1),
-            .COL_WIDTH(32),
-            .PIPELINE_DEPTH(0)
-        ) addr_table (
-            .a_en(target_update_way[i]),
-            .a_wbe(target_update_way[i]),
-            .a_wdata(br_results.target_pc),
-            .a_addr(addr_utils.getHashedLineAddr(br_results.pc, i)),
-            .b_en(bp.new_mem_request),
-            .b_addr(addr_utils.getHashedLineAddr(bp.next_pc, i)),
-            .b_rdata(predicted_pc[i]),
-        .*);
-    end
-    endgenerate
+            sdp_ram #(
+                .ADDR_WIDTH(BRANCH_ADDR_W),
+                .NUM_COL(1),
+                .COL_WIDTH(32),
+                .PIPELINE_DEPTH(0)
+            ) addr_table (
+                .a_en(target_update_way[i]),
+                .a_wbe(target_update_way[i]),
+                .a_wdata(br_results.target_pc),
+                .a_addr(addr_utils.getHashedLineAddr(br_results.pc, i)),
+                .b_en(bp.new_mem_request),
+                .b_addr(addr_utils.getHashedLineAddr(bp.next_pc, i)),
+                .b_rdata(predicted_pc[i]),
+            .*);
 
-    generate if (CONFIG.INCLUDE_BRANCH_PREDICTOR)
-    for (i=0; i<CONFIG.BP.WAYS; i++) begin : gen_branch_hit_detection
             assign tag_matches[i] = ({if_entry[i].valid, if_entry[i].tag} == {1'b1, addr_utils.getTag(bp.if_pc)});
+        end
+
+        one_hot_mux #(.OPTIONS(CONFIG.BP.WAYS), .DATA_TYPE(branch_table_entry_t)) hit_mux (
+            .one_hot(tag_matches),
+            .choices(if_entry),
+            .sel(muxed_entry),
+        .*);
+
+        one_hot_mux #(.OPTIONS(CONFIG.BP.WAYS), .DATA_TYPE(logic[31:0])) pc_mux (
+            .one_hot(tag_matches),
+            .choices(predicted_pc),
+            .sel(muxed_predicted_pc),
+        .*);
     end
     endgenerate
 
     ////////////////////////////////////////////////////
     //Instruction Fetch Response
-    generate if (CONFIG.BP.WAYS > 1)
-        one_hot_to_integer #(CONFIG.BP.WAYS)
-        hit_way_conv (       
-            .one_hot(tag_matches), 
-            .int_out(hit_way)
-        );
-    else
-        assign hit_way = 0;
-    endgenerate
     assign tag_match = |tag_matches;
 
     assign use_predicted_pc = CONFIG.INCLUDE_BRANCH_PREDICTOR & tag_match;
 
     //Predicted PC and whether the prediction is valid
-    assign bp.predicted_pc = predicted_pc[hit_way];
+    assign bp.predicted_pc = muxed_predicted_pc;
     assign bp.use_prediction = use_predicted_pc;
-    assign bp.is_branch = if_entry[hit_way].is_branch;
-    assign bp.is_return = if_entry[hit_way].is_return;
-    assign bp.is_call = if_entry[hit_way].is_call;
+    assign bp.is_branch = muxed_entry.is_branch;
+    assign bp.is_return = muxed_entry.is_return;
+    assign bp.is_call = muxed_entry.is_call;
 
     ////////////////////////////////////////////////////
     //Instruction Fetch metadata
@@ -185,7 +182,7 @@ module branch_predictor
         .raddr(br_results.id),
         .ram_write(bp.pc_id_assigned),
         .new_ram_data('{
-            branch_predictor_metadata : if_entry[hit_way].metadata,
+            branch_predictor_metadata : muxed_entry.metadata,
             branch_prediction_used : use_predicted_pc,
             branch_predictor_update_way : tag_match ? tag_matches : replacement_way
         }),
