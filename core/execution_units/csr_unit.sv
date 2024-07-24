@@ -711,7 +711,7 @@ generate if (CONFIG.MODES == MSU) begin : gen_csr_s_mode
     assign immu.sum = mstatus.sum;
     assign dmmu.sum = mstatus.sum;
     assign immu.privilege = privilege_level;
-    assign dmmu.privilege = mstatus.mprv ? mstatus.mpp : privilege_level;
+    assign dmmu.privilege = mstatus.mprv ? privilege_t'(mstatus.mpp) : privilege_level;
     assign immu.satp_ppn = satp.ppn;
     assign dmmu.satp_ppn = satp.ppn;
     ////////////////////////////////////////////////////

@@ -72,8 +72,6 @@ package csr_types;
         logic A; //Atomic
     } misa_t;
 
-
-
     typedef struct packed {
         logic sd;
         logic [7:0] zeros;
@@ -224,5 +222,15 @@ package csr_types;
         logic [21:0] ppn;
     } satp_t;
 
+    typedef struct packed {
+        logic d;
+        logic a;
+        logic g;
+        logic u;
+        logic x;
+        logic w;
+        logic r;
+        logic v;
+    } pte_perms_t;
 
 endpackage

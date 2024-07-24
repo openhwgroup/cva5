@@ -95,9 +95,10 @@ core/fetch_stage/fetch.sv
 
 core/instruction_metadata_and_id_management.sv
 
-core/itlb.sv
-core/dtlb.sv
-core/mmu.sv
+core/mmu/perms_check.sv
+core/mmu/itlb.sv
+core/mmu/dtlb.sv
+core/mmu/mmu.sv
 
 core/decode_and_issue.sv
 

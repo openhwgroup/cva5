@@ -122,6 +122,8 @@ interface fifo_interface #(parameter type DATA_TYPE = logic);
 endinterface
 
 interface mmu_interface;
+    import csr_types::*;
+    
     //From TLB
     logic request;
     logic execute;
@@ -138,7 +140,7 @@ interface mmu_interface;
     logic [21:0] satp_ppn;
     logic mxr; //Make eXecutable Readable
     logic sum; //permit Supervisor User Memory access
-    logic [1:0] privilege;
+    privilege_t privilege;
 
     modport mmu (input virtual_address, request, execute, rnw, satp_ppn, mxr, sum, privilege, output write_entry, is_global, upper_physical_address, is_fault);
     modport tlb (input write_entry, is_global, upper_physical_address, is_fault, output request, virtual_address, execute, rnw);

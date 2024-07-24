@@ -40,14 +40,7 @@ module mmu
         logic [11:0] ppn1;
         logic [9:0] ppn0;
         logic [1:0] reserved;
-        logic d;
-        logic a;
-        logic g;
-        logic u;
-        logic x;
-        logic w;
-        logic r;
-        logic v;
+        pte_perms_t perms;
     } pte_t;
 
     typedef enum  {
@@ -63,8 +56,7 @@ module mmu
     logic [6:0] next_state;
 
     pte_t pte;
-    logic access_valid;
-    logic privilege_valid;
+    logic perms_valid;
 
     localparam MAX_ABORTED_REQUESTS = 4;
     logic abort_queue_full;
@@ -113,18 +105,16 @@ module mmu
 
     assign discard_data = abort_tracking[COUNT_W];
     assign abort_queue_full = abort_tracking[COUNT_W] & ~|abort_tracking[COUNT_W-1:0];
-    ////////////////////////////////////////////////////
-    //Access and permission checks
-    //A and D bits are software managed
-    assign access_valid =
-        (mmu.execute & pte.x & pte.a) | //fetch
-        (mmu.rnw & (pte.r | (pte.x & mmu.mxr)) & pte.a) | //load
-        ((~mmu.rnw & ~mmu.execute) & pte.w & pte.a & pte.d); //store
 
-    assign privilege_valid = 
-        (mmu.privilege == MACHINE_PRIVILEGE) |
-        ((mmu.privilege == SUPERVISOR_PRIVILEGE) & (~pte.u | (pte.u & mmu.sum))) |
-        ((mmu.privilege == USER_PRIVILEGE) & pte.u);
+    perms_check perm (
+        .pte_perms(pte.perms),
+        .rnw(mmu.rnw),
+        .execute(mmu.execute),
+        .mxr(mmu.mxr),
+        .sum(mmu.sum),
+        .privilege(mmu.privilege),
+        .valid(perms_valid)
+    );
 
     ////////////////////////////////////////////////////
     //State Machine
@@ -139,14 +129,14 @@ module mmu
                     next_state = 2**WAIT_REQUEST_1;
             state[WAIT_REQUEST_1] :
                 if (l1_response.data_valid & ~discard_data) begin
-                    if (~pte.v | (~pte.r & pte.w)) //page not valid OR invalid xwr pattern
+                    if (~pte.perms.v | (~pte.perms.r & pte.perms.w)) //page not valid OR invalid xwr pattern
                         next_state = 2**COMPLETE_FAULT;
-                    else if (pte.v & (pte.r | pte.x)) begin//superpage (all remaining xwr patterns other than all zeros)
-                        if (access_valid & privilege_valid)
+                    else if (pte.perms.v & (pte.perms.r | pte.perms.x)) begin//superpage (all remaining xwr patterns other than all zeros)
+                        if (perms_valid)
                             next_state = 2**COMPLETE_SUCCESS;
                         else
                             next_state = 2**COMPLETE_FAULT;
-                    end else //(pte.v & ~pte.x & ~pte.w & ~pte.r) pointer to next level in page table
+                    end else //(pte.perms.v & ~pte.perms.x & ~pte.perms.w & ~pte.perms.r) pointer to next level in page table
                         next_state = 2**SEND_REQUEST_2;
                 end
             state[SEND_REQUEST_2] : 
@@ -154,7 +144,7 @@ module mmu
                     next_state = 2**WAIT_REQUEST_2;
             state[WAIT_REQUEST_2] : 
                 if (l1_response.data_valid & ~discard_data) begin
-                    if (access_valid & privilege_valid)
+                    if (perms_valid)
                         next_state = 2**COMPLETE_SUCCESS;
                     else
                         next_state = 2**COMPLETE_FAULT;
@@ -178,7 +168,7 @@ module mmu
     //TLB return path
     always_ff @ (posedge clk) begin
         if (l1_response.data_valid) begin
-            mmu.is_global <= pte.g | (state[WAIT_REQUEST_2] & mmu.is_global); 
+            mmu.is_global <= pte.perms.g | (state[WAIT_REQUEST_2] & mmu.is_global); 
             mmu.upper_physical_address[19:10] <= pte.ppn1[9:0];
             mmu.upper_physical_address[9:0] <= state[WAIT_REQUEST_2] ? pte.ppn0 : mmu.virtual_address[21:12];
         end
