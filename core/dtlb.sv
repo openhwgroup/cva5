@@ -43,13 +43,14 @@ module dtlb
 
     typedef logic[TLB_TAG_W-1:0] tag_t;
     typedef logic[$clog2(DEPTH)-1:0] line_t;
+    typedef logic[19:0] phys_addr_t;
 
     typedef struct packed {
         logic valid;
         logic is_global;
         logic [ASIDLEN-1:0] asid;
         tag_t tag;
-        logic [19:0] phys_addr;
+        phys_addr_t phys_addr;
     } tlb_entry_t;
 
     ////////////////////////////////////////////////////
@@ -59,7 +60,7 @@ module dtlb
     line_t raddr;
     line_t waddr;
     tlb_entry_t rdata[WAYS];
-    tlb_entry_t rdata_r[WAYS];
+    phys_addr_t[WAYS-1:0] phys_addrs;
     logic [WAYS-1:0] write;
     tlb_entry_t wdata;
 
@@ -71,7 +72,7 @@ module dtlb
             .new_ram_data(wdata),
             .ram_data_out(rdata[i]),
         .*);
-        always_ff @(posedge clk) rdata_r[i] <= rdata[i];
+        always_ff @(posedge clk) phys_addrs[i] <= rdata[i].phys_addr;
     end endgenerate
 
     //Hit detection
@@ -83,23 +84,23 @@ module dtlb
     logic hit;
     logic [19:0] tlb_addr;
 
-    assign cmp_tag = sfence_valid_r ? sfence.addr[31:32-TLB_TAG_W] : mmu.virtual_address[31:32-TLB_TAG_W];
-    assign cmp_asid = sfence_valid_r ? sfence.asid : asid;
+    assign cmp_tag = sfence.valid ? sfence.addr[31:32-TLB_TAG_W] : tlb.virtual_address[31:32-TLB_TAG_W];
+    assign cmp_asid = sfence.valid ? sfence.asid : asid;
 
-    always_comb begin
+    always_ff @(posedge clk) begin
         for (int i = 0; i < WAYS; i++) begin
-            tag_hit[i] = rdata_r[i].tag == cmp_tag;
-            asid_hit[i] = {rdata_r[i].valid, rdata_r[i].asid} == {1'b1, cmp_asid}; //Put valid comparison in ASID because it is narrower than the tag
+            tag_hit[i] <= rdata[i].tag == cmp_tag;
+            asid_hit[i] <= {rdata[i].valid, rdata[i].asid} == {1'b1, cmp_asid}; //Put valid comparison in ASID because it is narrower than the tag
         end
     end
     assign both_hit = tag_hit & asid_hit;
     assign hit = |both_hit;
 
-    always_comb begin
-        tlb_addr = '0;
-        for (int i = 0; i < WAYS; i++)
-            if (both_hit[i]) tlb_addr |= rdata_r[i].phys_addr;
-    end
+    one_hot_mux #(.OPTIONS(WAYS), .DATA_TYPE(phys_addr_t)) hit_mux (
+        .one_hot(both_hit),
+        .choices(phys_addrs),
+        .sel(tlb_addr),
+    .*);
 
     //Random replacement
     logic[WAYS-1:0] replacement_way;
@@ -111,7 +112,7 @@ module dtlb
     //SFENCE
     logic sfence_valid_r;
     line_t flush_addr;
-    line_t flush_addr_r;
+    line_t raddr_r;
 
     lfsr #(.WIDTH($clog2(DEPTH)), .NEEDS_RESET(0)) lfsr_counter (
         .en(1'b1),
@@ -119,12 +120,18 @@ module dtlb
     .*);
 
     always_ff @(posedge clk) begin
-        flush_addr_r <= flush_addr;
+        raddr_r <= raddr;
         sfence_valid_r <= sfence.valid; //Other SFENCE signals remain registered and do not need to be saved
     end
 
-    assign waddr = sfence_valid_r ? flush_addr_r : mmu.virtual_address[12 +: $clog2(DEPTH)];
-    assign raddr = sfence.valid ? flush_addr : tlb.virtual_address[12 +: $clog2(DEPTH)];
+    assign waddr = sfence_valid_r ? raddr_r : mmu.virtual_address[12 +: $clog2(DEPTH)];
+
+    always_comb begin
+        if (sfence.valid)
+            raddr = sfence.addr_only ? sfence.addr[12 +: $clog2(DEPTH)] : flush_addr;
+        else
+            raddr = tlb.virtual_address[12 +: $clog2(DEPTH)];
+    end
 
     assign wdata = '{
         valid : ~sfence_valid_r,
