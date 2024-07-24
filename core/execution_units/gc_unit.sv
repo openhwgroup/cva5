@@ -78,8 +78,7 @@ module gc_unit
         output tlb_packet_t sfence,
 
         //Ordering support
-        input load_store_status_t load_store_status,
-        input logic [LOG2_MAX_IDS:0] post_issue_count
+        input load_store_status_t load_store_status
     );
 
     //Largest depth for TLBs

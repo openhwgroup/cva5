@@ -331,8 +331,6 @@ module instruction_metadata_and_id_management
     //Supports retiring up to RETIRE_PORTS instructions.  The retired block of instructions must be
     //contiguous and must start with the first retire port.  Additionally, only one register file writing 
     //instruction is supported per cycle.
-    //If an exception is pending, only retire a single intrustuction per cycle.  As such, the pending
-    //exception will have to become the oldest instruction retire_ids[0] before it can retire.
     logic retire_with_rd_found;
     logic retire_with_fp_rd_found;
     logic retire_with_store_found;

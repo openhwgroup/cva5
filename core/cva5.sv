@@ -567,8 +567,7 @@ module cva5
         .sepc(sepc),
         .interrupt_taken(interrupt_taken),
         .interrupt_pending(interrupt_pending),
-        .load_store_status(load_store_status),
-        .post_issue_count (post_issue_count)
+        .load_store_status(load_store_status)
     );
 
     generate if (CONFIG.INCLUDE_UNIT.MUL) begin : gen_mul

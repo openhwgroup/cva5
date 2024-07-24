@@ -230,11 +230,6 @@ package riscv_types;
         CSR_RC = 2'b11
     } csr_op_t;
 
-    typedef enum logic [4:0] {
-        BARE = 5'd0,
-        SV32 = 5'd8
-    } vm_t;
-
     localparam ASIDLEN = 9;//pid
 
     typedef enum logic [ECODE_W-1:0] {
