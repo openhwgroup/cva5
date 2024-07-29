@@ -132,7 +132,7 @@ module mmu
                     if (~pte.perms.v | (~pte.perms.r & pte.perms.w)) //page not valid OR invalid xwr pattern
                         next_state = 2**COMPLETE_FAULT;
                     else if (pte.perms.v & (pte.perms.r | pte.perms.x)) begin//superpage (all remaining xwr patterns other than all zeros)
-                        if (perms_valid)
+                        if (perms_valid & ~|pte.ppn0) //check for misaligned superpage
                             next_state = 2**COMPLETE_SUCCESS;
                         else
                             next_state = 2**COMPLETE_FAULT;
@@ -168,7 +168,15 @@ module mmu
     //TLB return path
     always_ff @ (posedge clk) begin
         if (l1_response.data_valid) begin
-            mmu.is_global <= pte.perms.g | (state[WAIT_REQUEST_2] & mmu.is_global); 
+            mmu.superpage <= state[WAIT_REQUEST_1];
+            mmu.perms.d <= pte.perms.d;
+            mmu.perms.a <= pte.perms.a;
+            mmu.perms.g <= pte.perms.g | (state[WAIT_REQUEST_2] & mmu.perms.g);
+            mmu.perms.u <= pte.perms.u;
+            mmu.perms.x <= pte.perms.x;
+            mmu.perms.w <= pte.perms.w;
+            mmu.perms.r <= pte.perms.r;
+            mmu.perms.v <= pte.perms.v;
             mmu.upper_physical_address[19:10] <= pte.ppn1[9:0];
             mmu.upper_physical_address[9:0] <= state[WAIT_REQUEST_2] ? pte.ppn0 : mmu.virtual_address[21:12];
         end

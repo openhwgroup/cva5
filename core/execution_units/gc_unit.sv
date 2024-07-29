@@ -213,6 +213,10 @@ module gc_unit
             sfence_addr_r <= rf[RS1];
             asid_r <= rf[RS2][ASIDLEN-1:0];
         end
+        if (rst) begin
+            trivial_sfence_r <= 0;
+            asid_sfence_r <= 0;
+        end
     end
 
     //Exceptions treated like every other unit

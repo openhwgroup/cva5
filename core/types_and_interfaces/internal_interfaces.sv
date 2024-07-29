@@ -132,7 +132,8 @@ interface mmu_interface;
 
     //TLB response
     logic write_entry;
-    logic is_global;
+    logic superpage;
+    pte_perms_t perms;
     logic [19:0] upper_physical_address;
     logic is_fault;
 
@@ -142,8 +143,8 @@ interface mmu_interface;
     logic sum; //permit Supervisor User Memory access
     privilege_t privilege;
 
-    modport mmu (input virtual_address, request, execute, rnw, satp_ppn, mxr, sum, privilege, output write_entry, is_global, upper_physical_address, is_fault);
-    modport tlb (input write_entry, is_global, upper_physical_address, is_fault, output request, virtual_address, execute, rnw);
+    modport mmu (input virtual_address, request, execute, rnw, satp_ppn, mxr, sum, privilege, output write_entry, superpage, perms, upper_physical_address, is_fault);
+    modport tlb (input write_entry, superpage, perms, upper_physical_address, is_fault, mxr, sum, privilege, output request, virtual_address, execute, rnw);
     modport csr (output satp_ppn, mxr, sum, privilege);
 
 endinterface

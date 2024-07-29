@@ -135,7 +135,7 @@ module dtlb
 
     assign wdata = '{
         valid : ~sfence_valid_r,
-        is_global : mmu.is_global,
+        is_global : mmu.perms.g,
         asid : asid,
         tag : mmu.virtual_address[31:32-TLB_TAG_W],
         phys_addr : mmu.upper_physical_address

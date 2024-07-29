@@ -42,7 +42,7 @@ module perms_check
     logic privilege_valid;
 
     //Access and permission checks
-    //A and D bits are software managed
+    //A and D bits are software managed; this implementation corresponds to the Svade extension
     assign access_valid =
         (execute & pte_perms.x & pte_perms.a) | //fetch
         (rnw & (pte_perms.r | (pte_perms.x & mxr)) & pte_perms.a) | //load
