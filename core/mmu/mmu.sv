@@ -95,7 +95,7 @@ module mmu
     logic delayed_abort_complete;
 
     assign delayed_abort = abort_request & (state[WAIT_REQUEST_1] | state[WAIT_REQUEST_2]);
-    assign delayed_abort_complete = discard_data & l1_response.data_valid;
+    assign delayed_abort_complete = (discard_data | abort_request) & l1_response.data_valid;
     always_ff @ (posedge clk) begin
         if (rst)
             abort_tracking <= 0;
