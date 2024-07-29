@@ -43,7 +43,7 @@ module itlb
     );
     //////////////////////////////////////////
     localparam SUPERPAGE_W = 10-$clog2(DEPTH);
-    localparam NONSUPERPAGE_W = 32-12-SUPERPAGE_W-$clog2(DEPTH);
+    localparam NONSUPERPAGE_W = 10;
     localparam WAY_W = WAYS == 1 ? 1 : $clog2(WAYS);
 
     typedef struct packed {
@@ -116,7 +116,7 @@ module itlb
             rdata_superpage[i] = rdata[i].superpage;
             upper_tag_hit[i] = rdata[i].upper_tag == cmp_tag_upper;
             asid_hit[i] = rdata[i].asid == cmp_asid;
-            hit_ohot[i] = lower_tag_hit[i] & (upper_tag_hit[i] | rdata_superpage[i]) & (asid_hit[i] | rdata[i].globe);
+            hit_ohot[i] = upper_tag_hit[i] & (lower_tag_hit[i] | rdata_superpage[i]) & (asid_hit[i] | rdata[i].globe);
         end
     end
     assign hit = |hit_ohot;
@@ -174,8 +174,8 @@ module itlb
             case ({sfence.valid, sfence.addr_only, sfence.asid_only})
                 3'b100: write[i] = 1'b1; //Clear everything
                 3'b101: write[i] = ~rdata[i].globe & asid_hit[i]; //Clear non global for specified address space
-                3'b110: write[i] = lower_tag_hit[i] & (upper_tag_hit[i] | rdata_superpage[i]); //Clear matching addresses
-                3'b111: write[i] = (~rdata[i].globe & asid_hit[i]) & lower_tag_hit[i] & (upper_tag_hit[i] | rdata_superpage[i]); //Clear if both
+                3'b110: write[i] = upper_tag_hit[i] & (lower_tag_hit[i] | rdata_superpage[i]); //Clear matching addresses
+                3'b111: write[i] = (~rdata[i].globe & asid_hit[i]) & upper_tag_hit[i] & (lower_tag_hit[i] | rdata_superpage[i]); //Clear if both
                 default: write[i] = mmu.write_entry & replacement_way[i];
             endcase
         end
