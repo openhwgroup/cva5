@@ -352,6 +352,7 @@ module dcache_litex
     assign amo_unit.reservation = stage1.addr;
     assign amo_unit.rs2 = stage1.data;
     assign amo_unit.rmw_valid = (current_state != IDLE) & stage1.amo;
+    assign amo_unit.op = stage1.amo_type;
     assign amo_unit.set_reservation = stage1_is_lr & stage1_done;
     assign amo_unit.clear_reservation = stage1_done;
 
