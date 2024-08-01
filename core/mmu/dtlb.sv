@@ -178,7 +178,7 @@ module dtlb
             tlb_raddr = tlb.virtual_address[12 +: $clog2(DEPTH)];
     end
 
-    assign wdata_valid = ~sfence.valid;
+    assign wdata_valid = ~sfence_valid_r;
     assign wdata = '{
         superpage : mmu.superpage,
         asid : asid,
