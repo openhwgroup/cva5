@@ -54,8 +54,8 @@ package cva5_config;
     //Memory range [L, H]
     //Address range is inclusive and must be aligned to its size
     typedef struct packed {
-        bit [31:0] L;
-        bit [31:0] H;
+        logic [31:0] L;
+        logic [31:0] H;
     } memory_config_t;
 
     //Atomic configuration

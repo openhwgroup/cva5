@@ -263,23 +263,14 @@ interface cache_functions_interface #(parameter int TAG_W = 8, parameter int LIN
 
 endinterface
 
-interface addr_utils_interface #(parameter bit [31:0] BASE_ADDR = 32'h00000000, parameter bit [31:0] UPPER_BOUND = 32'hFFFFFFFF);
-        //Based on the lower and upper address ranges,
-        //find the number of bits needed to uniquely identify this memory range.
-        //Assumption: address range is aligned to its size
-        function int unsigned bit_range ();
-            for(int i=0; i < 32; i++) begin
-                if (BASE_ADDR[i] == UPPER_BOUND[i])
-                    return (32 - i);
-            end
-            return 0;
-        endfunction
-
-        localparam int unsigned BIT_RANGE = bit_range();
-
-        /* verilator lint_off SELRANGE */
+interface addr_utils_interface #(parameter logic [31:0] BASE_ADDR = 32'h00000000, parameter logic [31:0] UPPER_BOUND = 32'hFFFFFFFF);
+        //The range should be aligned for performance
         function address_range_check (input logic[31:0] addr);
-            return (BIT_RANGE == 0) ? 1 : (addr[31:32-BIT_RANGE] == BASE_ADDR[31:32-BIT_RANGE]);
+            /* verilator lint_off UNSIGNED */
+            /* verilator lint_off CMPCONST */
+            return addr >= BASE_ADDR & addr <= UPPER_BOUND;
+            /* verilator lint_on UNSIGNED */
+            /* verilator lint_on CMPCONST */
         endfunction
 endinterface
 
