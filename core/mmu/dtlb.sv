@@ -40,15 +40,14 @@ module dtlb
         tlb_interface.tlb tlb
     );
     //////////////////////////////////////////
-    localparam SUPERPAGE_W = 10-$clog2(DEPTH);
-    localparam NONSUPERPAGE_W = 10;
+    localparam TAG_W = 20 - $clog2(DEPTH);
+    localparam TAG_W_S = 10 - $clog2(DEPTH);
     localparam WAY_W = WAYS == 1 ? 1 : $clog2(WAYS);
 
     typedef struct packed {
-        logic superpage;
+        logic valid;
         logic [ASIDLEN-1:0] asid;
-        logic [SUPERPAGE_W-1:0] lower_tag;
-        logic [NONSUPERPAGE_W-1:0] upper_tag;
+        logic [TAG_W-1:0] tag;
         //Signals from the PTE
         logic [9:0] ppn1;
         logic [9:0] ppn0;
@@ -60,29 +59,45 @@ module dtlb
         logic read;
     } tlb_entry_t;
 
-    logic[WAYS-1:0] replacement_way;
+    typedef struct packed {
+        logic valid;
+        logic [ASIDLEN-1:0] asid;
+        logic [TAG_W_S-1:0] tag;
+        //Signals from the PTE
+        logic [9:0] ppn1;
+        logic dirty;
+        logic globe;
+        logic user;
+        logic execute;
+        logic write;
+        logic read;
+    } tlb_entry_s_t;
 
     ////////////////////////////////////////////////////
     //Implementation
-    //LUTRAM-based
-    //SFENCE and reset are performed sequentially, coordinated by the gc unit
+    //Regular and super pages stored separately
+    //Regular pages are set associative and super pages are direct mapped
+
+    //Random replacement
+    logic[WAYS-1:0] replacement_way;
+    cycler #(.C_WIDTH(WAYS)) replacement_policy (       
+        .en(1'b1), 
+        .one_hot(replacement_way),
+    .*);
+
+    //LUTRAM storage
     logic [$clog2(DEPTH)-1:0] tlb_raddr;
+    logic [$clog2(DEPTH)-1:0] tlb_raddr_s;
     logic [$clog2(DEPTH)-1:0] tlb_waddr;
-    tlb_entry_t rdata[WAYS];
-    logic [WAYS-1:0] rdata_valid;
+    logic [$clog2(DEPTH)-1:0] tlb_waddr_s;
+    tlb_entry_t [WAYS-1:0] rdata;
+    tlb_entry_s_t rdata_s;
     logic [WAYS-1:0] write;
+    logic write_s;
     tlb_entry_t wdata;
-    logic wdata_valid;
+    tlb_entry_s_t wdata_s;
 
     generate for (genvar i = 0; i < WAYS; i++) begin : gen_lut_rams
-        lutram_1w_1r #(.DATA_TYPE(logic), .DEPTH(DEPTH)) valid_table (
-            .waddr(tlb_waddr),
-            .raddr(tlb_raddr),
-            .ram_write(write[i]),
-            .new_ram_data(wdata_valid),
-            .ram_data_out(rdata_valid[i]),
-        .*);
-
         lutram_1w_1r #(.DATA_TYPE(tlb_entry_t), .DEPTH(DEPTH)) data_table (
             .waddr(tlb_waddr),
             .raddr(tlb_raddr),
@@ -91,45 +106,59 @@ module dtlb
             .ram_data_out(rdata[i]),
         .*);
     end endgenerate
+    lutram_1w_1r #(.DATA_TYPE(tlb_entry_s_t), .DEPTH(DEPTH)) data_table_s (
+        .waddr(tlb_waddr_s),
+        .raddr(tlb_raddr_s),
+        .ram_write(write_s),
+        .new_ram_data(wdata_s),
+        .ram_data_out(rdata_s),
+    .*);
 
     //Hit detection
-    logic [SUPERPAGE_W-1:0] cmp_tag_lower;
-    logic [NONSUPERPAGE_W-1:0] cmp_tag_upper;
+    logic [TAG_W-1:0] cmp_tag;
+    logic [TAG_W_S-1:0] cmp_tag_s;
     logic [ASIDLEN-1:0] cmp_asid;
-    logic [WAYS-1:0] lower_tag_hit;
-    logic [WAYS-1:0] upper_tag_hit;
+    logic [WAYS-1:0] tag_hit;
+    logic tag_hit_s;
     logic [WAYS-1:0] asid_hit;
-    logic [WAYS-1:0] rdata_superpage;
+    logic asid_hit_s;
     logic [WAYS-1:0] rdata_global;
+    logic rdata_global_s;
     logic [WAYS-1:0][9:0] ppn0;
     logic [WAYS-1:0][9:0] ppn1;
+    logic [9:0] ppn1_s;
     logic [WAYS-1:0] perms_valid_comb;
+    logic perms_valid_comb_s;
     logic [WAYS-1:0] perms_valid;
+    logic perms_valid_s;
     logic [WAYS-1:0] hit_ohot;
-    logic hit;
+    logic hit_ohot_s;
     logic [WAY_W-1:0] hit_way;
+    logic hit;
 
-    assign cmp_tag_upper = sfence.valid ? sfence.addr[31-:NONSUPERPAGE_W] : tlb.virtual_address[31-:NONSUPERPAGE_W];
-    assign cmp_tag_lower = sfence.valid ? sfence.addr[31-NONSUPERPAGE_W-:SUPERPAGE_W] : tlb.virtual_address[31-NONSUPERPAGE_W-:SUPERPAGE_W];
+    assign cmp_tag = sfence.valid ? sfence.addr[31-:TAG_W] : tlb.virtual_address[31-:TAG_W];
+    assign cmp_tag_s = sfence.valid ? sfence.addr[31-:TAG_W_S] : tlb.virtual_address[31-:TAG_W_S];
     assign cmp_asid = sfence.valid ? sfence.asid : asid;
 
     always_ff @(posedge clk) begin
         for (int i = 0; i < WAYS; i++) begin
-            lower_tag_hit[i] <= {rdata_valid[i], rdata[i].lower_tag} == {1'b1, cmp_tag_lower}; //Put valid in cmp with narrowest field for speed
-            rdata_superpage[i] <= rdata[i].superpage;
+            tag_hit[i] <= rdata[i].tag == cmp_tag;
             rdata_global[i] <= rdata[i].globe;
             ppn0[i] <= rdata[i].ppn0;
             ppn1[i] <= rdata[i].ppn1;
-            upper_tag_hit[i] <= rdata[i].upper_tag == cmp_tag_upper;
             asid_hit[i] <= rdata[i].asid == cmp_asid;
             perms_valid[i] <= perms_valid_comb[i];
-            //TODO: check if this should be combinational or sequential
-            //hit_ohot[i] <= lower_tag_hit[i] & (upper_tag_hit[i] | rdata_superpage[i]) & (asid_hit[i] | rdata[i].globe);
+            hit_ohot[i] <= rdata[i].valid & (rdata[i].tag == cmp_tag) & (rdata[i].asid == cmp_asid | rdata[i].globe);
         end
+        tag_hit_s <= rdata_s.tag == cmp_tag_s;
+        rdata_global_s <= rdata_s.globe;
+        ppn1_s <= rdata_s.ppn1;
+        asid_hit_s <= rdata_s.asid == cmp_asid;
+        perms_valid_s <= perms_valid_comb_s;
+        hit_ohot_s <= rdata_s.valid & (rdata_s.tag == cmp_tag_s) & (rdata_s.asid == cmp_asid | rdata_s.globe);
     end
 
-    assign hit_ohot = upper_tag_hit & (lower_tag_hit | rdata_superpage) & (asid_hit | rdata_global);
-    assign hit = |hit_ohot;
+    assign hit = |hit_ohot | hit_ohot_s;
 
     priority_encoder #(.WIDTH(WAYS)) hit_cast (
         .priority_vector(hit_ohot),
@@ -155,37 +184,70 @@ module dtlb
             .valid(perms_valid_comb[i])
         );
     end endgenerate
+    perms_check checks (
+        .pte_perms('{
+            d : rdata_s.dirty,
+            a : 1'b1,
+            u : rdata_s.user,
+            x : rdata_s.execute,
+            w : rdata_s.write,
+            r : rdata_s.read,
+            default: 'x
+        }),
+        .rnw(tlb.rnw),
+        .execute(1'b0),
+        .mxr(mmu.mxr),
+        .sum(mmu.sum),
+        .privilege(mmu.privilege),
+        .valid(perms_valid_comb_s)
+    );
+
 
     //SFENCE
     logic sfence_valid_r;
     logic [$clog2(DEPTH)-1:0] flush_addr;
-    logic [$clog2(DEPTH)-1:0] raddr_r;
     lfsr #(.WIDTH($clog2(DEPTH)), .NEEDS_RESET(0)) lfsr_counter (
         .en(1'b1),
         .value(flush_addr),
     .*);
 
     always_ff @(posedge clk) begin
-        raddr_r <= tlb_raddr;
+        if (tlb.new_request | sfence.valid) begin
+            tlb_waddr <= tlb_raddr;
+            tlb_waddr_s <= tlb_raddr_s;
+        end
         sfence_valid_r <= sfence.valid; //Other SFENCE signals remain registered and do not need to be saved
     end
 
-    assign tlb_waddr = sfence_valid_r ? raddr_r : mmu.virtual_address[12 +: $clog2(DEPTH)];
     always_comb begin
-        if (sfence.valid)
+        if (sfence.valid) begin
             tlb_raddr = sfence.addr_only ? sfence.addr[12 +: $clog2(DEPTH)] : flush_addr;
-        else
+            tlb_raddr_s = sfence.addr_only ? sfence.addr[22 +: $clog2(DEPTH)] : flush_addr;
+        end
+        else begin
             tlb_raddr = tlb.virtual_address[12 +: $clog2(DEPTH)];
+            tlb_raddr_s = tlb.virtual_address[22 +: $clog2(DEPTH)];
+        end
     end
 
-    assign wdata_valid = ~sfence_valid_r;
     assign wdata = '{
-        superpage : mmu.superpage,
+        valid : ~sfence_valid_r,
         asid : asid,
-        lower_tag : mmu.virtual_address[31-NONSUPERPAGE_W-:SUPERPAGE_W],
-        upper_tag : mmu.virtual_address[31-:NONSUPERPAGE_W],
+        tag : mmu.virtual_address[31-:TAG_W],
         ppn1 : mmu.upper_physical_address[19:10],
         ppn0 : mmu.upper_physical_address[9:0],
+        dirty : mmu.perms.d,
+        globe : mmu.perms.g,
+        user : mmu.perms.u,
+        execute : mmu.perms.x,
+        write : mmu.perms.w,
+        read : mmu.perms.r
+    };
+    assign wdata_s = '{
+        valid : ~sfence_valid_r,
+        asid : asid,
+        tag : mmu.virtual_address[31-:TAG_W_S],
+        ppn1 : mmu.upper_physical_address[19:10],
         dirty : mmu.perms.d,
         globe : mmu.perms.g,
         user : mmu.perms.u,
@@ -197,24 +259,33 @@ module dtlb
     always_comb begin
         for (int i = 0; i < WAYS; i++) begin
             case ({sfence_valid_r, sfence.addr_only, sfence.asid_only})
-                3'b100: write[i] = 1'b1; //Clear everything
-                3'b101: write[i] = ~rdata_global[i] & asid_hit[i]; //Clear non global for specified address space
-                3'b110: write[i] = upper_tag_hit[i] & (lower_tag_hit[i] | rdata_superpage[i]); //Clear matching addresses
-                3'b111: write[i] = (~rdata[i].globe & asid_hit[i]) & upper_tag_hit[i] & (lower_tag_hit[i] | rdata_superpage[i]); //Clear if both
-                default: write[i] = mmu.write_entry & replacement_way[i];
+                3'b100: begin //Clear everything
+                    write[i] = 1'b1;
+                    write_s = 1'b1;
+                end
+                3'b101: begin //Clear non global for specified address space
+                    write[i] = ~rdata_global[i] & asid_hit[i];
+                    write_s = ~rdata_global_s & asid_hit_s;
+                end
+                3'b110: begin //Clear matching addresses
+                    write[i] = tag_hit[i];
+                    write_s = tag_hit_s;
+                end
+                3'b111: begin //Clear if both
+                    write[i] = (~rdata[i].globe & asid_hit[i]) & tag_hit[i]; 
+                    write_s = (~rdata_s.globe & asid_hit_s) & tag_hit_s; 
+                end
+                default: begin
+                    write[i] = mmu.write_entry & ~mmu.superpage & replacement_way[i];
+                    write_s = mmu.write_entry & mmu.superpage;
+                end
             endcase
         end
     end
 
     //Permission fail
     logic perm_fail;
-    assign perm_fail = |(hit_ohot & ~perms_valid) & translation_on;
-
-    //Random replacement
-    cycler #(.C_WIDTH(WAYS)) replacement_policy (       
-        .en(1'b1), 
-        .one_hot(replacement_way),
-    .*);
+    assign perm_fail = |(hit_ohot & ~perms_valid) | (hit_ohot_s & ~perms_valid_s);
 
 
     //MMU interface
@@ -233,7 +304,7 @@ module dtlb
     //TLB interface
     assign tlb.done = (new_request_r & ((hit & ~perm_fail) | ~translation_on)) | mmu.write_entry;
     assign tlb.ready = 1; //Not always ready, but requests will not be sent if it isn't done
-    assign tlb.is_fault = mmu.is_fault | (new_request_r & perm_fail);
+    assign tlb.is_fault = mmu.is_fault | (new_request_r & translation_on & perm_fail);
 
 
     always_comb begin
@@ -241,8 +312,8 @@ module dtlb
         if (~translation_on)
             tlb.physical_address[31:12] = mmu.virtual_address[31:12];
         else if (new_request_r) begin
-            tlb.physical_address[31:22] = ppn1[hit_way];
-            tlb.physical_address[21:12] = rdata_superpage[hit_way] ? mmu.virtual_address[21:12] : ppn0[hit_way];
+            tlb.physical_address[31:22] = hit_ohot_s ? ppn1_s : ppn1[hit_way];
+            tlb.physical_address[21:12] = hit_ohot_s ? mmu.virtual_address[21:12] : ppn0[hit_way];
         end else begin
             tlb.physical_address[31:22] = mmu.upper_physical_address[19:10];
             tlb.physical_address[21:12] = mmu.superpage ? mmu.virtual_address[21:12] : mmu.upper_physical_address[9:0];
@@ -256,7 +327,7 @@ module dtlb
     ////////////////////////////////////////////////////
     //Assertions
     request_on_miss:
-        assert property (@(posedge clk) disable iff (rst) (new_request_r & translation_on & ~hit) |-> ~tlb.new_request)
+        assert property (@(posedge clk) disable iff (rst) (mmu.request) |-> ~tlb.new_request)
         else $error("Request during miss in TLB!");
 
 endmodule
