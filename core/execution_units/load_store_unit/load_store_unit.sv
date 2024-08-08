@@ -471,7 +471,7 @@ module load_store_unit
     assign lsq.load_pop = sub_unit_load_issue;
     assign lsq.store_pop = sub_unit_store_issue;
 
-    //Physical address paseed separately
+    //Physical address passed separately
     assign lsq.addr_push = tlb.done | tlb.is_fault;
     assign lsq.addr_data_in = '{
         addr : tlb.physical_address[31:12],

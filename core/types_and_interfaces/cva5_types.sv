@@ -29,7 +29,6 @@ package cva5_types;
     localparam LOG2_MAX_IDS = $clog2(MAX_IDS);
 
     typedef logic[LOG2_MAX_IDS-1:0] id_t;
-    typedef logic[1:0] branch_predictor_metadata_t;
 
     typedef logic [3:0] addr_hash_t;
     typedef logic [5:0] phys_addr_t;

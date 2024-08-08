@@ -66,6 +66,7 @@ module branch_predictor
     localparam BTAG_W = get_memory_width() - BRANCH_ADDR_W - 2;
     cache_functions_interface #(.TAG_W(BTAG_W), .LINE_W(BRANCH_ADDR_W), .SUB_LINE_W(0)) addr_utils();
 
+    typedef logic[1:0] branch_predictor_metadata_t;
     typedef struct packed {
         logic valid;
         logic [BTAG_W-1:0] tag;

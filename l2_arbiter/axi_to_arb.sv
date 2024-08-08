@@ -238,4 +238,3 @@ module axi_to_arb
     assign l2.rd_data_valid = axi_rvalid;
 
 endmodule
-
