@@ -382,10 +382,7 @@ module load_store_unit
         assign exception.possible = (tlb_request_r & ~tlb.done) | exception.valid; //Must suppress issue for issue-time exceptions too
         assign exception.pc = issue_stage.pc_r;
 
-        always_ff @(posedge clk) begin
-            if (issue_stage_ready)
-                exception_is_store <= decode_is_store;
-        end
+        assign exception_is_store = ~tlb_lq;
     end endgenerate
 
     ////////////////////////////////////////////////////
