@@ -76,7 +76,7 @@ module mmu
 
     //Page Table addresses
     always_ff @ (posedge clk) begin
-        if (state[IDLE] | l1_response.data_valid) begin
+        if (state[IDLE] | (l1_response.data_valid & ~discard_data)) begin
             if (state[IDLE])
                 l1_request.addr <= {mmu.satp_ppn[19:0], mmu.virtual_address[31:22], 2'b00};
             else
