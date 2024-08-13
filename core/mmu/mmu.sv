@@ -144,10 +144,10 @@ module mmu
                     next_state = 2**WAIT_REQUEST_2;
             state[WAIT_REQUEST_2] : 
                 if (l1_response.data_valid & ~discard_data) begin
-                    if (perms_valid)
-                        next_state = 2**COMPLETE_SUCCESS;
-                    else
+                    if (~perms_valid | ~pte.perms.v | (~pte.perms.r & pte.perms.w)) //perm fail or invalid
                         next_state = 2**COMPLETE_FAULT;
+                    else
+                        next_state = 2**COMPLETE_SUCCESS;
                 end
             state[COMPLETE_SUCCESS], state[COMPLETE_FAULT]  :
                 next_state = 2**IDLE;
