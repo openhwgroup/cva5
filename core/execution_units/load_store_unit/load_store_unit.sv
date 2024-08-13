@@ -151,6 +151,8 @@ module load_store_unit
     logic exception_is_store;
     logic nontrivial_fence;
     logic fence_hold;
+    logic illegal_cbo;
+    logic exception_lsq_push;
 
     id_t exception_id;
 
@@ -344,7 +346,6 @@ module load_store_unit
                 unaligned_addr = 0;
         end
 
-        logic illegal_cbo;
         logic menv_illegal;
         logic senv_illegal;
         assign menv_illegal = CONFIG.INCLUDE_CBO & (issue_attr.is_cbo & issue_attr.cbo_type == INVAL ? menvcfg.cbie == 2'b00 : ~menvcfg.cbcfe);
@@ -364,6 +365,7 @@ module load_store_unit
         assign is_load = issue_attr.is_load & ~(issue_attr.is_amo & issue_attr.amo_type != AMO_LR_FN5);
 
         always_ff @(posedge clk) begin
+            exception_lsq_push <= issue.new_request & ((unaligned_addr & ~issue_attr.is_fence & ~issue_attr.is_cbo) | illegal_cbo);
             if (issue.new_request) begin
                 exception_is_fp <= CONFIG.INCLUDE_UNIT.FPU & issue_attr.is_fpu;
                 is_load_r <= is_load;
@@ -407,9 +409,9 @@ module load_store_unit
             tlb_request_r <= 0;
     end
 
-    assign tlb.rnw = issue_attr.is_load | (issue_attr.is_amo & issue_attr.amo_type == AMO_LR_FN5);
+    assign tlb.rnw = issue_attr.is_load | (issue_attr.is_amo & issue_attr.amo_type == AMO_LR_FN5) | issue_attr.is_cbo;
     assign tlb.virtual_address = virtual_address;
-    assign tlb.new_request = issue.new_request & ~issue_attr.is_fence & (~unaligned_addr | issue_attr.is_cbo);
+    assign tlb.new_request = issue.new_request & ~issue_attr.is_fence & (~unaligned_addr | issue_attr.is_cbo) & ~illegal_cbo;
 
     ////////////////////////////////////////////////////
     //Byte enable generation
@@ -451,7 +453,7 @@ module load_store_unit
     };
 
     assign lsq.potential_push = issue.possible_issue;
-    assign lsq.push = issue.new_request & ~issue_attr.is_fence & (~unaligned_addr | issue_attr.is_cbo);
+    assign lsq.push = issue.new_request & ~issue_attr.is_fence;
 
     load_store_queue  # (.CONFIG(CONFIG)) lsq_block (
         .clk (clk),
@@ -469,16 +471,16 @@ module load_store_unit
     assign lsq.store_pop = sub_unit_store_issue;
 
     //Physical address passed separately
-    assign lsq.addr_push = tlb.done | tlb.is_fault;
+    assign lsq.addr_push = tlb.done | tlb.is_fault | exception_lsq_push;
     assign lsq.addr_data_in = '{
         addr : tlb.physical_address[31:12],
         rnw : tlb_lq,
-        discard : tlb.is_fault
+        discard : tlb.is_fault | exception_lsq_push
     };
 
     always_ff @(posedge clk) begin
         if (issue.new_request)
-            tlb_lq <= ~issue_attr.is_store;
+            tlb_lq <= ~issue_attr.is_store & ~issue_attr.is_cbo;
     end
 
     ////////////////////////////////////////////////////
