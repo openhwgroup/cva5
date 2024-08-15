@@ -215,6 +215,7 @@ module load_store_unit
         logic nontrivial_fence;
         logic is_amo;
         amo_t amo_type;
+        logic rd_zero;
         logic [11:0] offset;
     } ls_attr_t;
     ls_attr_t decode_attr;
@@ -270,6 +271,7 @@ module load_store_unit
         is_double : CONFIG.INCLUDE_UNIT.FPU & instruction inside {DP_FLD, DP_FSD},
         is_amo : CONFIG.INCLUDE_AMO & instruction inside {AMO_ADD, AMO_XOR, AMO_OR, AMO_AND, AMO_MIN, AMO_MAX, AMO_MINU, AMO_MAXU, AMO_SWAP, AMO_LR, AMO_SC},
         amo_type : amo_t'(instruction[31:27]),
+        rd_zero : ~|instruction.rd_addr,
         offset : (CONFIG.INCLUDE_CBO | CONFIG.INCLUDE_AMO) & instruction[3] ? '0 : (instruction[5] ? store_offset : load_offset)
     };
     assign decode_is_store = decode_attr.is_store | decode_attr.is_cbo;
@@ -353,11 +355,12 @@ module load_store_unit
         assign illegal_cbo = CONFIG.MODES == MU ? current_privilege == USER_PRIVILEGE & menv_illegal : (current_privilege != MACHINE_PRIVILEGE & menv_illegal) | (current_privilege == USER_PRIVILEGE & senv_illegal);
 
         //Hold writeback exceptions until they are ready to retire
+        logic rd_zero_r;
         logic delay_exception;
         logic delayed_exception;
         assign delay_exception = (
-            (issue.new_request & unaligned_addr & (issue_attr.is_load | issue_attr.is_amo) & issue.id != retire_id) |
-            (tlb.is_fault & tlb_lq & exception_id != retire_id)
+            (issue.new_request & unaligned_addr & (issue_attr.is_load | issue_attr.is_amo) & issue.id != retire_id & ~issue_attr.rd_zero) |
+            (tlb.is_fault & tlb_lq & exception_id != retire_id & ~rd_zero_r)
         );
         always_ff @(posedge clk) begin
             if (rst)
@@ -370,9 +373,9 @@ module load_store_unit
 
         assign new_exception = (
             (issue.new_request & ((unaligned_addr & issue_attr.is_store) | illegal_cbo)) |
-            (issue.new_request & unaligned_addr & (issue_attr.is_load | issue_attr.is_amo) & issue.id == retire_id) |
+            (issue.new_request & unaligned_addr & (issue_attr.is_load | issue_attr.is_amo) & (issue.id == retire_id | issue_attr.rd_zero)) |
             (tlb.is_fault & ~tlb_lq) |
-            (tlb.is_fault & tlb_lq & exception_id == retire_id) |
+            (tlb.is_fault & tlb_lq & (exception_id == retire_id | rd_zero_r)) |
             (delayed_exception & exception_id == retire_id)
         );
 
@@ -390,6 +393,7 @@ module load_store_unit
         always_ff @(posedge clk) begin
             exception_lsq_push <= issue.new_request & ((unaligned_addr & ~issue_attr.is_fence & ~issue_attr.is_cbo) | illegal_cbo);
             if (issue.new_request) begin
+                rd_zero_r <= issue_attr.rd_zero;
                 exception_is_fp <= CONFIG.INCLUDE_UNIT.FPU & issue_attr.is_fpu;
                 is_load_r <= is_load;
                 if (illegal_cbo) begin
@@ -406,7 +410,7 @@ module load_store_unit
         end
         assign exception.possible = (tlb_request_r & ~tlb.done) | exception.valid | delayed_exception; //Must suppress issue for issue-time exceptions too
         assign exception.pc = issue_stage.pc_r;
-        assign exception.discard = tlb_lq;
+        assign exception.discard = tlb_lq & ~rd_zero_r;
 
         assign exception_is_store = ~tlb_lq;
     end endgenerate
