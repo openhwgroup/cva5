@@ -337,6 +337,7 @@ module decode_and_issue
     assign exception.code = ecode;
     assign exception.tval = tval;
     assign exception.pc = issue.pc;
+    assign exception.discard = 0;
 
     end endgenerate
     ////////////////////////////////////////////////////

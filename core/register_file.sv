@@ -118,7 +118,7 @@ module register_file
             .clk,
             .waddr(wb_phys_addr[i]),
             .raddr(decode_phys_rs_addr),
-            .ram_write(commit[i].valid),
+            .ram_write(commit[i].valid & ~gc.writeback_suppress),
             .new_ram_data(commit[i].data),
             .ram_data_out(regfile_rs_data[i])
     );

@@ -103,9 +103,10 @@ interface exception_interface;
     exception_code_t code;
     logic [31:0] tval;
     logic [31:0] pc;
+    logic discard;
     
-    modport unit (output valid, possible, code, tval, pc);
-    modport econtrol (input valid, possible, code, tval, pc);
+    modport unit (output valid, possible, code, tval, pc, discard);
+    modport econtrol (input valid, possible, code, tval, pc, discard);
 endinterface
 
 interface fifo_interface #(parameter type DATA_TYPE = logic);

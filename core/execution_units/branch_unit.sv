@@ -214,6 +214,7 @@ module branch_unit
         assign exception.code = INST_ADDR_MISSALIGNED;
         assign exception.tval = new_pc_ex;
         assign exception.pc = issue_stage.pc_r;
+        assign exception.discard = 0;
     end
     endgenerate
 

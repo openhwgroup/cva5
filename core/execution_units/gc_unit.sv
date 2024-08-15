@@ -130,6 +130,7 @@ module gc_unit
     logic gc_init_clear;
     logic gc_fetch_hold;
     logic gc_issue_hold;
+    logic gc_rename_revert;
     logic gc_fetch_flush;
     logic gc_fetch_ifence;
     logic gc_tlb_flush;
@@ -242,6 +243,7 @@ module gc_unit
         assign local_gc_exception.code = ILLEGAL_INST;
         assign local_gc_exception.tval = issue_stage.instruction_r;
         assign local_gc_exception.pc = issue_stage.pc_r;
+        assign local_gc_exception.discard = 0;
     end
     endgenerate
 
@@ -355,12 +357,14 @@ generate if (CONFIG.MODES != BARE) begin :gen_gc_m_mode
     exception_code_t [NUM_EXCEPTION_SOURCES-1:0] exception_code;
     logic [NUM_EXCEPTION_SOURCES-1:0][31:0] exception_tval;
     logic [NUM_EXCEPTION_SOURCES-1:0][31:0] exception_pc;
+    logic [NUM_EXCEPTION_SOURCES-1:0] exception_discard;
     logic [31:0] muxed_exception_pc;
     
     for (genvar i = 0; i < NUM_EXCEPTION_SOURCES; i++) begin
         assign exception_valid[i] = exception[i].valid;
         assign exception_code[i] = exception[i].code;
         assign exception_tval[i] = exception[i].tval;
+        assign exception_discard[i] = exception[i].discard;
         assign exception_pc[i] = exception[i].pc;
     end
 
@@ -383,10 +387,25 @@ generate if (CONFIG.MODES != BARE) begin :gen_gc_m_mode
         .choices(exception_pc),
         .sel(muxed_exception_pc),
     .*);
-    assign gc.exception.pc = |exception_valid ? muxed_exception_pc : issue_stage.pc;    
+    assign gc.exception.pc = |exception_valid ? muxed_exception_pc : issue_stage.pc;
 
     assign interrupt_taken = interrupt_pending & (next_state == PRE_ISSUE_FLUSH) & ~(gc.exception.valid) & ~csr_frontend_flush;
 
+    //Writeback and rename handling
+    logic gc_writeback_suppress_r;
+    logic gc_rename_revert;
+    always_ff @(posedge clk) begin
+        if (rst) begin
+            gc_writeback_suppress_r <= 0;
+            gc_rename_revert <= 0;
+        end
+        else begin
+            gc_writeback_suppress_r <= gc.writeback_suppress;
+            gc_rename_revert <= gc_writeback_suppress_r;
+        end
+    end
+    assign gc.writeback_suppress = |(exception_valid & exception_discard);
+    assign gc.rename_revert = gc_rename_revert;
 end endgenerate
 
     //PC determination (trap, flush or return)

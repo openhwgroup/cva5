@@ -84,7 +84,8 @@ module load_store_unit
         input wb_packet_t wb_packet [CONFIG.NUM_WB_GROUPS],
         input fp_wb_packet_t fp_wb_packet [2],
 
-        //Retire release
+        //Retire
+        input id_t retire_id,
         input retire_packet_t store_retire,
 
         exception_interface.unit exception,
@@ -172,7 +173,6 @@ module load_store_unit
     logic [3:0] be;
     //FIFOs
     fifo_interface #(.DATA_TYPE(load_attributes_t)) load_attributes();
-    fifo_interface #(.DATA_TYPE(logic[31:0])) backstop();
 
     load_store_queue_interface lsq();
     ////////////////////////////////////////////////////
@@ -352,7 +352,30 @@ module load_store_unit
         assign senv_illegal = CONFIG.INCLUDE_CBO & (issue_attr.is_cbo & issue_attr.cbo_type == INVAL ? senvcfg.cbie == 2'b00 : ~senvcfg.cbcfe);
         assign illegal_cbo = CONFIG.MODES == MU ? current_privilege == USER_PRIVILEGE & menv_illegal : (current_privilege != MACHINE_PRIVILEGE & menv_illegal) | (current_privilege == USER_PRIVILEGE & senv_illegal);
 
-        assign new_exception = (issue.new_request & ((unaligned_addr & ~issue_attr.is_fence & ~issue_attr.is_cbo) | illegal_cbo)) | tlb.is_fault;
+        //Hold writeback exceptions until they are ready to retire
+        logic delay_exception;
+        logic delayed_exception;
+        assign delay_exception = (
+            (issue.new_request & unaligned_addr & (issue_attr.is_load | issue_attr.is_amo) & issue.id != retire_id) |
+            (tlb.is_fault & tlb_lq & exception_id != retire_id)
+        );
+        always_ff @(posedge clk) begin
+            if (rst)
+                delayed_exception <= 0;
+            else if (delay_exception)
+                delayed_exception <= 1;
+            else if (new_exception)
+                delayed_exception <= 0;
+        end
+
+        assign new_exception = (
+            (issue.new_request & ((unaligned_addr & issue_attr.is_store) | illegal_cbo)) |
+            (issue.new_request & unaligned_addr & (issue_attr.is_load | issue_attr.is_amo) & issue.id == retire_id) |
+            (tlb.is_fault & ~tlb_lq) |
+            (tlb.is_fault & tlb_lq & exception_id == retire_id) |
+            (delayed_exception & exception_id == retire_id)
+        );
+
         always_ff @(posedge clk) begin
             if (rst)
                 exception.valid <= 0;
@@ -381,8 +404,9 @@ module load_store_unit
             if (tlb.is_fault)
                 exception.code <= is_load_r ? LOAD_PAGE_FAULT : STORE_OR_AMO_PAGE_FAULT;
         end
-        assign exception.possible = (tlb_request_r & ~tlb.done) | exception.valid; //Must suppress issue for issue-time exceptions too
+        assign exception.possible = (tlb_request_r & ~tlb.done) | exception.valid | delayed_exception; //Must suppress issue for issue-time exceptions too
         assign exception.pc = issue_stage.pc_r;
+        assign exception.discard = tlb_lq;
 
         assign exception_is_store = ~tlb_lq;
     end endgenerate
@@ -676,7 +700,7 @@ module load_store_unit
     logic sign_bit_data [4];
     logic sign_bit;
     
-    assign unit_muxed_load_data = backstop.valid ? backstop.data_out : unit_data_array[wb_attr.subunit_id];
+    assign unit_muxed_load_data = unit_data_array[wb_attr.subunit_id];
 
     //Byte/halfword select: assumes aligned operations
     assign aligned_load_data[31:16] = unit_muxed_load_data[31:16];
@@ -724,17 +748,6 @@ module load_store_unit
     else begin : gen_no_fpu
         assign fp_result = 'x;
     end endgenerate
-
-    ////////////////////////////////////////////////////
-    //Backstop buffering
-    //Required if load response overlaps an exception
-    assign backstop.push = load_response & exception.valid & ~exception_is_store;
-    assign backstop.potential_push = backstop.push;
-    assign backstop.data_in = unit_muxed_load_data;
-    assign backstop.pop = backstop.valid;
-    cva5_fifo #(.DATA_TYPE(logic[31:0]), .FIFO_DEPTH(1)) backstop_fifo (
-        .fifo(backstop),
-    .*);
 
     ////////////////////////////////////////////////////
     //Output bank

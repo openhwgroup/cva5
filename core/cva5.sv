@@ -464,6 +464,7 @@ module cva5
         .senvcfg (senvcfg),
         .wb_packet (wb_packet),
         .fp_wb_packet (fp_wb_packet),
+        .retire_id (retire_ids[0]),
         .store_retire (store_retire),
         .exception (exception[LS_EXCEPTION]),
         .load_store_status(load_store_status),

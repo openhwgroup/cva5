@@ -971,6 +971,7 @@ generate if (CONFIG.MODES != BARE) begin : gen_csr_exceptions
     assign exception.code = ILLEGAL_INST;
     assign exception.pc = issue_stage.pc_r;
     assign exception.tval = issue_stage.instruction_r;
+    assign exception.discard = 1;
 
 end
 endgenerate
