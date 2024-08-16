@@ -290,6 +290,11 @@ module decode_and_issue
     ////////////////////////////////////////////////////
     //ECALL/EBREAK
     //The type of call instruction is depedent on the current privilege level
+    logic is_ecall;
+    logic is_ebreak;
+    assign is_ecall = decode.instruction inside {ECALL};
+    assign is_ebreak = decode.instruction inside {EBREAK};
+    
     always_comb begin
         case (current_privilege)
             USER_PRIVILEGE : ecall_code = ECALL_U;
@@ -302,16 +307,16 @@ module decode_and_issue
     always_ff @(posedge clk) begin
         if (issue_stage_ready) begin
             ecode <=
-                    decode.instruction inside {ECALL} ? ecall_code :
-                    decode.instruction inside {EBREAK} ? BREAK :
+                    is_ecall ? ecall_code :
+                    is_ebreak ? BREAK :
                     illegal_instruction_pattern ? ILLEGAL_INST :
                     decode.fetch_metadata.error_code; //(~decode.fetch_metadata.ok)
-            if (illegal_instruction_pattern)
-                tval <= decode.instruction;
-            else if (~decode.fetch_metadata.ok)
+            if (~decode.fetch_metadata.ok | is_ebreak)
                 tval <= decode.pc;
-            else
+            else if (is_ecall)
                 tval <= '0;
+            else
+                tval <= decode.instruction;
         end
     end
 
