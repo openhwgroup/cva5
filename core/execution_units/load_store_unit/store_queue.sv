@@ -39,7 +39,6 @@ module store_queue
 
         //Address hash (shared by loads and stores)
         input addr_hash_t addr_hash,
-        input id_t potential_id,
 
         //hash check on adding a load to the queue
         output logic [$clog2(CONFIG.SQ_DEPTH)-1:0] sq_index,
@@ -75,6 +74,7 @@ module store_queue
     logic [CONFIG.SQ_DEPTH-1:0] valid;
     logic [CONFIG.SQ_DEPTH-1:0] valid_next;
     addr_hash_t [CONFIG.SQ_DEPTH-1:0] hashes;
+    logic [CONFIG.SQ_DEPTH-1:0] ids_valid;
     id_t [CONFIG.SQ_DEPTH-1:0] ids;
 
     //LUTRAM-based memory blocks
@@ -163,7 +163,7 @@ module store_queue
         potential_store_conflict = 0;
         for (int i = 0; i < CONFIG.SQ_DEPTH; i++) begin
             potential_store_conflict |= {(valid[i] & ~issued_one_hot[i]), addr_hash} == {1'b1, hashes[i]};
-            potential_store_conflict |= {(valid[i] & ~issued_one_hot[i]), potential_id} == {1'b1, ids[i]};
+            potential_store_conflict |= {(valid[i] & ~issued_one_hot[i] & ids_valid[i]), sq.data_in.id} == {1'b1, ids[i]};
         end
     end
     ////////////////////////////////////////////////////
@@ -173,7 +173,8 @@ module store_queue
         for (int i = 0; i < CONFIG.SQ_DEPTH; i++) begin
             if (new_request_one_hot[i]) begin
                 hashes[i] <= addr_hash;
-                ids[i] <= potential_id;
+                ids[i] <= sq.data_in.id_needed;
+                ids_valid[i] <= CONFIG.INCLUDE_UNIT.FPU & sq.data_in.fp ? |fp_store_forward_wb_group : |store_forward_wb_group;
             end
         end
     end
