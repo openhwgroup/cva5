@@ -156,6 +156,7 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
         .store_forward_wb_group (store_forward_wb_group),
         .fp_store_forward_wb_group (fp_store_forward_wb_group),
         .addr_hash (addr_hash),
+        .potential_id (lsq.data_in.id),
         .potential_store_conflict (potential_store_conflict),
         .sq_index (sq_index),
         .sq_oldest (sq_oldest),

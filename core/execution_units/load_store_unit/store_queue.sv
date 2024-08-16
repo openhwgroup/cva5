@@ -39,6 +39,8 @@ module store_queue
 
         //Address hash (shared by loads and stores)
         input addr_hash_t addr_hash,
+        input id_t potential_id,
+
         //hash check on adding a load to the queue
         output logic [$clog2(CONFIG.SQ_DEPTH)-1:0] sq_index,
         output logic [$clog2(CONFIG.SQ_DEPTH)-1:0] sq_oldest,
@@ -73,6 +75,7 @@ module store_queue
     logic [CONFIG.SQ_DEPTH-1:0] valid;
     logic [CONFIG.SQ_DEPTH-1:0] valid_next;
     addr_hash_t [CONFIG.SQ_DEPTH-1:0] hashes;
+    id_t [CONFIG.SQ_DEPTH-1:0] ids;
 
     //LUTRAM-based memory blocks
     sq_entry_t output_entry;    
@@ -155,18 +158,23 @@ module store_queue
         .ram_data_out(retire_alignment)
     );
     //Compare store addr-hashes against new load addr-hash
+    //ID collisions also handled to prevent overwriting store data
     always_comb begin
         potential_store_conflict = 0;
-        for (int i = 0; i < CONFIG.SQ_DEPTH; i++)
+        for (int i = 0; i < CONFIG.SQ_DEPTH; i++) begin
             potential_store_conflict |= {(valid[i] & ~issued_one_hot[i]), addr_hash} == {1'b1, hashes[i]};
+            potential_store_conflict |= {(valid[i] & ~issued_one_hot[i]), potential_id} == {1'b1, ids[i]};
+        end
     end
     ////////////////////////////////////////////////////
     //Register-based storage
     //Address hashes
     always_ff @ (posedge clk) begin
         for (int i = 0; i < CONFIG.SQ_DEPTH; i++) begin
-            if (new_request_one_hot[i])
+            if (new_request_one_hot[i]) begin
                 hashes[i] <= addr_hash;
+                ids[i] <= potential_id;
+            end
         end
     end
     ////////////////////////////////////////////////////
