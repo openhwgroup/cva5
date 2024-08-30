@@ -24,6 +24,7 @@ module litex_wrapper
     import cva5_config::*;
     import cva5_types::*;
     import l2_config_and_types::*;
+    import riscv_types::*;
 
     #(
         parameter bit [31:0] RESET_VEC = 0,
@@ -34,7 +35,11 @@ module litex_wrapper
     (
         input logic clk,
         input logic rst,
-        input logic [15:0] litex_interrupt,
+        input logic cpu_m_interrupt,
+        input logic cpu_s_interrupt,
+        input logic cpu_software_in,
+        input logic cpu_timer_in,
+        input logic [63:0] mtime,
 
         output logic [29:0] idbus_adr,
         output logic [31:0] idbus_dat_w,
@@ -96,7 +101,7 @@ module litex_wrapper
         INCLUDE_ICACHE : 1,
         ICACHE_ADDR : '{
             L : 32'h00000000, 
-            H : 32'hFFFFFFFF
+            H : 32'h7FFFFFFF
         },
         ICACHE : '{
             LINES : 512,
@@ -172,6 +177,9 @@ module litex_wrapper
     local_memory_interface instruction_bram();
     local_memory_interface data_bram();
     interrupt_t s_interrupt;
+    assign s_interrupt.software = 0;
+    assign s_interrupt.timer = cpu_timer_in;
+    assign s_interrupt.external = cpu_s_interrupt;
 
     //L2 to Wishbone
     l2_requester_interface l2();
@@ -183,10 +191,10 @@ module litex_wrapper
 
     //Timer and External interrupts
     interrupt_t m_interrupt;
-    assign m_interrupt.software = 0;
-    assign m_interrupt.timer = litex_interrupt[1];
-    assign m_interrupt.external = litex_interrupt[0];
-    logic [63:0] mtime;
+    assign m_interrupt.software = cpu_software_in;
+    assign m_interrupt.timer = 0;
+    //assign m_interrupt.timer = cpu_timer_in;
+    assign m_interrupt.external = cpu_m_interrupt;
 
     cva5 #(.CONFIG(STANDARD_CONFIG)) cpu(.*);
 
