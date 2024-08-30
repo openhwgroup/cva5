@@ -89,6 +89,7 @@ module fetch
     typedef struct packed{
         logic is_predicted_branch_or_jump;
         logic is_branch;
+        logic [31:0] early_flush_pc;
         logic address_valid;
         logic mmu_fault;
         logic [NUM_SUB_UNITS_W-1:0] subunit_id;
@@ -102,8 +103,9 @@ module fetch
 
 
     logic [31:0] pc_plus_4;
-    logic [31:0] pc_mux [4];
-    logic [1:0] pc_sel;
+    logic [31:0] early_flush_pc;
+    logic [31:0] pc_mux [5];
+    logic [2:0] pc_sel;
     logic [31:0] next_pc;
     logic [31:0] pc;
 
@@ -130,15 +132,16 @@ module fetch
 
     assign pc_plus_4 = pc + 4;
 
-    priority_encoder #(.WIDTH(4))
+    priority_encoder #(.WIDTH(5))
     pc_sel_encoder (
-        .priority_vector ({1'b1, (bp.use_prediction & ~early_branch_flush), branch_flush, gc.pc_override}),
+        .priority_vector ({1'b1, bp.use_prediction, early_branch_flush, branch_flush, gc.pc_override}),
         .encoded_result (pc_sel)
     );
     assign pc_mux[0] = gc.pc;
     assign pc_mux[1] = bp.branch_flush_pc;
-    assign pc_mux[2] = bp.is_return ? ras.addr : bp.predicted_pc;
-    assign pc_mux[3] = pc_plus_4;
+    assign pc_mux[2] = early_flush_pc;
+    assign pc_mux[3] = bp.is_return ? ras.addr : bp.predicted_pc;
+    assign pc_mux[4] = pc_plus_4;
     assign next_pc = pc_mux[pc_sel];
 
     //If an exception occurs here in the fetch logic,
@@ -191,6 +194,7 @@ module fetch
     assign fetch_attr_fifo.data_in = '{
         is_predicted_branch_or_jump : bp.use_prediction,
         is_branch : (bp.use_prediction & bp.is_branch),
+        early_flush_pc : pc_plus_4,
         address_valid : address_valid,
         mmu_fault : tlb.is_fault,
         subunit_id : subunit_id
@@ -206,6 +210,7 @@ module fetch
         .fifo (fetch_attr_fifo)
     );
     assign fetch_attr = fetch_attr_fifo.data_out;
+    assign early_flush_pc = fetch_attr.early_flush_pc;
 
     assign inflight_count_next = inflight_count + MAX_OUTSTANDING_REQUESTS_W'(fetch_attr_fifo.push) - MAX_OUTSTANDING_REQUESTS_W'(fetch_attr_fifo.pop);
     always_ff @(posedge clk) begin
@@ -218,7 +223,7 @@ module fetch
     always_ff @(posedge clk) begin
         if (rst)
             flush_count <= 0;
-        else if (gc.fetch_flush)
+        else if (gc.fetch_flush | early_branch_flush)
             flush_count <= inflight_count_next;
         else if (|flush_count & fetch_attr_fifo.pop)
             flush_count <= flush_count - 1;
@@ -330,8 +335,8 @@ module fetch
     generate if (CONFIG.INCLUDE_IFENCE | CONFIG.MODES == MSU) begin : gen_branch_corruption_check
         logic is_branch_or_jump;
         assign is_branch_or_jump = fetch_instruction[6:2] inside {JAL_T, JALR_T, BRANCH_T};
-        assign early_branch_flush = (valid_fetch_result & (|unit_data_valid)) & fetch_attr.is_predicted_branch_or_jump & (~is_branch_or_jump);
-        assign early_branch_flush_ras_adjust = (valid_fetch_result & (|unit_data_valid)) & fetch_attr.is_branch & (~is_branch_or_jump);
+        assign early_branch_flush = (valid_fetch_result & (|unit_data_valid)) & fetch_attr.is_predicted_branch_or_jump & (~is_branch_or_jump) & (~|flush_count);
+        assign early_branch_flush_ras_adjust = (valid_fetch_result & (|unit_data_valid)) & fetch_attr.is_branch & (~is_branch_or_jump) & (~|flush_count);
     end endgenerate
     ////////////////////////////////////////////////////
     //End of Implementation
