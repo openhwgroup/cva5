@@ -508,6 +508,7 @@ module cva5
             .uses_rs (unit_uses_rs[CSR_ID]),
             .uses_rd (unit_uses_rd[CSR_ID]),
             .rf (rf_issue.data),
+            .fp_instruction_issued_with_rd (fp_instruction_issued_with_rd),
             .issue (unit_issue[CSR_ID]), 
             .wb (unit_wb[CSR_ID]),
             .current_privilege(current_privilege),

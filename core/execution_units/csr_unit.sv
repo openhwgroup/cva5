@@ -45,6 +45,7 @@ module csr_unit
         input logic issue_stage_ready,
         input rs_addr_t issue_rs_addr [REGFILE_READ_PORTS],
         input logic [31:0] rf [REGFILE_READ_PORTS],
+        input logic fp_instruction_issued_with_rd,
 
         //Unit Interfaces
         unit_issue_interface.unit issue,
@@ -312,7 +313,7 @@ module csr_unit
     mstateen0h_t mstateen0h;
 
     //Virtualization support: TSR, TW, TVM unused
-    //Extension context status: SD, FS, XS unused
+    //Extension context status: XS unused
     localparam mstatus_t mstatus_mask = '{
         default:0,
         mprv:(CONFIG.MODES inside {MU, MSU}),
@@ -323,10 +324,12 @@ module csr_unit
         mpie:1,
         spie:(CONFIG.MODES == MSU),
         mie:1,
-        sie:(CONFIG.MODES == MSU)
+        sie:(CONFIG.MODES == MSU),
+        sd:(CONFIG.INCLUDE_UNIT.FPU),
+        fs:{2{CONFIG.INCLUDE_UNIT.FPU}}
     };
 
-    localparam mstatus_t sstatus_mask = '{default:0, mxr:1, sum:1, spp:1, spie:1, sie:1};
+    localparam mstatus_t sstatus_mask = '{default:0, mxr:1, sum:1, spp:1, spie:1, sie:1, sd:(CONFIG.INCLUDE_UNIT.FPU), fs:{2{CONFIG.INCLUDE_UNIT.FPU}}};
     logic stip_stimecmp;
 
     localparam mie_t sie_mask = '{default:0, seie:CONFIG.MODES == MSU, stie:CONFIG.MODES == MSU, ssie:CONFIG.MODES == MSU};
@@ -412,11 +415,27 @@ generate if (CONFIG.MODES != BARE) begin : gen_csr_m_mode
             end
             default : mstatus_new = mstatus;
         endcase
+
+        //Overwrites writes to fs and sd from above
+        if (CONFIG.INCLUDE_UNIT.FPU) begin
+            if (fp_instruction_issued_with_rd | |fflag_wmask | (commit & csr_inputs_r.addr inside {FFLAGS, FRM, FCSR})) begin
+                mstatus_new.fs = 2'b11;
+                mstatus_new.sd = 1'b1;
+            end
+            else if (mwrite_en(MSTATUS) | swrite_en(SSTATUS)) begin
+                mstatus_new.fs = |updated_csr[14:13] ? updated_csr[14:13] : mstatus.fs; //Cannot disable by writing 00
+                mstatus_new.sd = &updated_csr[14:13];
+            end
+            else begin
+                mstatus_new.fs = mstatus.fs;
+                mstatus_new.sd = mstatus.sd;
+            end
+        end
     end
 
     always_ff @(posedge clk) begin
         if (rst)
-            mstatus <= '{default:0, mpp:MACHINE_PRIVILEGE};
+            mstatus <= '{default:0, mpp:MACHINE_PRIVILEGE, fs:{1'b0, CONFIG.INCLUDE_UNIT.FPU}};
         else
             mstatus <= mstatus_new;
     end
