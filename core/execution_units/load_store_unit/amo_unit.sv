@@ -72,21 +72,30 @@ module amo_unit
     amo_t selected_op;
     logic[31:0] selected_rs1;
     logic[31:0] selected_rs2;
-    always_comb begin
-        set_val = 'x;
-        selected_op = amo_t'('x);
-        selected_rs1 = 'x;
-        selected_rs2 = 'x;
-        for (int i = 0; i < NUM_UNITS; i++) begin
-            if (set_reservation[i]) //TODO: assert ohot
-                set_val = reservation[i];
-            if (rmw_valid[i]) begin
-                selected_op = op[i];
-                selected_rs1 = rs1[i];
-                selected_rs2 = rs2[i];
-            end
-        end
-    end
+
+    one_hot_mux #(.OPTIONS(NUM_UNITS), .DATA_TYPE(amo_t)) op_mux (
+        .one_hot(rmw_valid),
+        .choices(op),
+        .sel(selected_op),
+    .*);
+
+    one_hot_mux #(.OPTIONS(NUM_UNITS), .DATA_TYPE(logic[31:0])) rs1_mux (
+        .one_hot(rmw_valid),
+        .choices(rs1),
+        .sel(selected_rs1),
+    .*);
+
+    one_hot_mux #(.OPTIONS(NUM_UNITS), .DATA_TYPE(logic[31:0])) rs2_mux (
+        .one_hot(rmw_valid),
+        .choices(rs2),
+        .sel(selected_rs2),
+    .*);
+
+    one_hot_mux #(.OPTIONS(NUM_UNITS), .DATA_TYPE(reservation_t)) reservation_mux (
+        .one_hot(set_reservation),
+        .choices(reservation),
+        .sel(set_val),
+    .*);
 
     ////////////////////////////////////////////////////
     //RISC-V LR-SC

@@ -47,7 +47,7 @@ module sdp_ram_padded
     //Pad columns to the nearest multiple of 8 or 9 to allow the use of the byte enable
     //This results in a more compact BRAM encoding
     localparam PAD_WIDTH8 = (8 - (COL_WIDTH % 8)) % 8;
-    localparam PAD_WIDTH9 = (9 - (COL_WIDTH % 9)) % 9; //TODO: Only Xilinx supports 9b columns
+    localparam PAD_WIDTH9 = (9 - (COL_WIDTH % 9)) % 9;
     localparam PAD_WIDTH = PAD_WIDTH8 <= PAD_WIDTH9 ? PAD_WIDTH8 : PAD_WIDTH9;
     localparam PADDED_WIDTH = COL_WIDTH + PAD_WIDTH;
     localparam TOTAL_WIDTH = NUM_COL * PADDED_WIDTH;
