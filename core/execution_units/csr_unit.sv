@@ -339,6 +339,14 @@ module csr_unit
 generate if (CONFIG.MODES != BARE) begin : gen_csr_m_mode
     mstatus_t mstatus_new;
     mstatus_t mstatus_write_mask;
+    logic[4:0] fflag_wmask_r; //Used for updating mstatus, registered for frequency reasons
+
+    always_ff @(posedge clk) begin
+        if (rst)
+            fflag_wmask_r <= '0;
+        else if (CONFIG.INCLUDE_UNIT.FPU)
+            fflag_wmask_r <= fflag_wmask;
+    end
 
     //Interrupt and Exception Delegation
     //Can delegate to supervisor if currently in supervisor or user modes
@@ -418,7 +426,7 @@ generate if (CONFIG.MODES != BARE) begin : gen_csr_m_mode
 
         //Overwrites writes to fs and sd from above
         if (CONFIG.INCLUDE_UNIT.FPU) begin
-            if (fp_instruction_issued_with_rd | |fflag_wmask | (commit & csr_inputs_r.addr inside {FFLAGS, FRM, FCSR})) begin
+            if (fp_instruction_issued_with_rd | |fflag_wmask_r | (commit & csr_inputs_r.addr inside {FFLAGS, FRM, FCSR})) begin
                 mstatus_new.fs = 2'b11;
                 mstatus_new.sd = 1'b1;
             end
