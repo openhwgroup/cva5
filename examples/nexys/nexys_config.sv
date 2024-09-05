@@ -41,7 +41,7 @@ package nexys_config;
             MUL : 1,
             DIV : 1,
             CSR : 1,
-            FPU : 0,
+            FPU : 1,
             CUSTOM : 0,
             BR : 1,
             IEC : 1
@@ -124,10 +124,10 @@ package nexys_config;
             L : 32'h00000000, 
             H : 32'hFFFFFFFF
         },
-        INCLUDE_PERIPHERAL_BUS : 0,
+        INCLUDE_PERIPHERAL_BUS : 1,
         PERIPHERAL_BUS_ADDR : '{
-            L : 32'h00000000,
-            H : 32'hFFFFFFFF
+            L : 32'h60000000,
+            H : 32'h6FFFFFFF
         },
         PERIPHERAL_BUS_TYPE : AXI_BUS,
         //Branch Predictor Options
