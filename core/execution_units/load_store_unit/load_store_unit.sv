@@ -261,20 +261,20 @@ module load_store_unit
     end
 
     assign decode_attr = '{
-        is_load : instruction inside {LB, LH, LW, LBU, LHU} | CONFIG.INCLUDE_UNIT.FPU & instruction inside {SP_FLW, DP_FLD},
+        is_load : ~instruction.upper_opcode[5] & ~instruction.upper_opcode[3],
         is_store : instruction inside {SB, SH, SW} | CONFIG.INCLUDE_UNIT.FPU & instruction inside {SP_FSW, DP_FSD},
-        is_fence : instruction inside {FENCE},
+        is_fence : ~instruction.fn3[1] & instruction.upper_opcode[3],
         nontrivial_fence : nontrivial_fence,
         is_cbo : CONFIG.INCLUDE_CBO & instruction inside {CBO_INVAL, CBO_CLEAN, CBO_FLUSH},
         cbo_type : cbo_t'(instruction[21:20]),
-        is_fpu : CONFIG.INCLUDE_UNIT.FPU & instruction inside {SP_FLW, SP_FSW, DP_FLD, DP_FSD},
-        is_double : CONFIG.INCLUDE_UNIT.FPU & instruction inside {DP_FLD, DP_FSD},
-        is_amo : CONFIG.INCLUDE_AMO & instruction inside {AMO_ADD, AMO_XOR, AMO_OR, AMO_AND, AMO_MIN, AMO_MAX, AMO_MINU, AMO_MAXU, AMO_SWAP, AMO_LR, AMO_SC},
+        is_fpu : CONFIG.INCLUDE_UNIT.FPU & instruction.upper_opcode[3:2] == 2'b01,
+        is_double : CONFIG.INCLUDE_UNIT.FPU & instruction.fn3[1:0] == 2'b11,
+        is_amo : CONFIG.INCLUDE_AMO & instruction.upper_opcode[3] & instruction.upper_opcode[5],
         amo_type : amo_t'(instruction[31:27]),
         rd_zero : ~|instruction.rd_addr,
         offset : (CONFIG.INCLUDE_CBO | CONFIG.INCLUDE_AMO) & instruction[3] ? '0 : (instruction[5] ? store_offset : load_offset)
     };
-    assign decode_is_store = decode_attr.is_store | decode_attr.is_cbo;
+    assign decode_is_store = decode_attr.is_store | decode_attr.is_cbo; //Must be exact
 
     always_ff @(posedge clk) begin
         if (issue_stage_ready)

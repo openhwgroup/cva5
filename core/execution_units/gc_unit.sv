@@ -166,14 +166,13 @@ module gc_unit
         uses_rd = 0;
     end
 
-    //TODO: use mutually exclusive bits to make decoding cheaper
     always_ff @(posedge clk) begin
         if (issue_stage_ready) begin
-            is_ifence <= (instruction.upper_opcode == FENCE_T) & CONFIG.INCLUDE_IFENCE;
-            is_sfence <= (instruction.upper_opcode == SYSTEM_T) & (instruction[31:25] == SFENCE_imm[11:5]) & CONFIG.MODES == MSU;
+            is_ifence <= CONFIG.INCLUDE_IFENCE & instruction.upper_opcode[2];
+            is_sfence <= CONFIG.MODES == MSU & ~instruction.upper_opcode[2] & instruction.fn7[0];
             trivial_sfence <= |instruction.rs1_addr;
             asid_sfence <= |instruction.rs2_addr;
-            is_wfi <= (instruction.upper_opcode == SYSTEM_T) & (instruction[31:20] == WFI_imm) & CONFIG.MODES != BARE;
+            is_wfi <= CONFIG.MODES != BARE & ~instruction.upper_opcode[2] & ~instruction.fn7[0] & ~instruction.rs2_addr[1];
             //Ret instructions need exact decoding
             is_mret <= CONFIG.MODES != BARE & instruction inside {MRET};
             is_sret <= CONFIG.MODES == MSU & instruction inside {SRET};
