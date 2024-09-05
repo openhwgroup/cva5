@@ -42,6 +42,8 @@ package cva5_types;
 
     typedef struct packed{
         logic valid;
+        logic possible;
+        logic [NUM_EXCEPTION_SOURCES-1:0] source;
         exception_code_t code;
         logic [31:0] tval;
         logic [31:0] pc;

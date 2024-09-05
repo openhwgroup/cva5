@@ -45,6 +45,7 @@ module csr_unit
         input logic issue_stage_ready,
         input rs_addr_t issue_rs_addr [REGFILE_READ_PORTS],
         input logic [31:0] rf [REGFILE_READ_PORTS],
+        input logic instruction_issued,
         input logic fp_instruction_issued_with_rd,
 
         //Unit Interfaces
@@ -89,7 +90,6 @@ module csr_unit
 
         //Retire
         input id_t retire_ids [RETIRE_PORTS],
-        input logic [LOG2_RETIRE_PORTS : 0] retire_count,
 
         //External
         input logic [63:0] mtime,
@@ -859,12 +859,12 @@ endgenerate
     localparam COUNTER_W = 64;
 
     logic[COUNTER_W-1:0] mcycle;
-    logic[COUNTER_W-1:0] minst_ret;
+    logic[COUNTER_W-1:0] minstret;
 
     logic[COUNTER_W-1:0] mcycle_input_next;
-    logic[COUNTER_W-1:0] minst_ret_input_next;
-    logic[LOG2_RETIRE_PORTS:0] minst_ret_inc;
     logic mcycle_inc;
+    logic pending_inst;
+    logic increment_minstret;
 
     assign mcycle_input_next[31:0] = mwrite_en(MCYCLE) ? updated_csr : mcycle[31:0];
     assign mcycle_input_next[COUNTER_W-1:32] = mwrite_en(MCYCLEH) ? updated_csr[COUNTER_W-33:0] : mcycle[COUNTER_W-1:32];
@@ -877,15 +877,25 @@ endgenerate
             mcycle <= mcycle_input_next + COUNTER_W'(mcycle_inc);
     end
 
-    assign minst_ret_input_next[31:0] = mwrite_en(MINSTRET) ? updated_csr : minst_ret[31:0];
-    assign minst_ret_input_next[COUNTER_W-1:32] = mwrite_en(MINSTRETH) ? updated_csr[COUNTER_W-33:0] : minst_ret[COUNTER_W-1:32];
-    assign minst_ret_inc = (CONFIG.MODES == BARE & ~CONFIG.CSRS.INCLUDE_ZICNTR) & (mwrite_en(MINSTRET) | mwrite_en(MINSTRETH) | mcountinhibit.ir) ? '0 : retire_count;
-    
+
+    //Branch and pre issue exceptions retire the pending
+    assign increment_minstret = pending_inst & (exception_pkt.valid ? exception_pkt.source[BR_EXCEPTION] | exception_pkt.source[PRE_ISSUE_EXCEPTION] : ~exception_pkt.possible);
     always_ff @(posedge clk) begin
         if (rst)
-            minst_ret <= 0;
-        else
-            minst_ret <= minst_ret_input_next + COUNTER_W'(minst_ret_inc);
+            pending_inst <= 0;
+        else begin
+            if (instruction_issued & ~mcountinhibit.ir)
+                pending_inst <= 1;
+            else if (mwrite_en(MINSTRET) | mwrite_en(MINSTRETH) | (~exception_pkt.possible | ~exception_pkt.valid))
+                pending_inst <= 0;
+        end
+    end
+
+    always_ff @(posedge clk) begin
+        if (rst)
+            minstret <= 0;
+        else if ((CONFIG.MODES != BARE | CONFIG.CSRS.INCLUDE_ZICNTR) & increment_minstret)
+            minstret <= minstret + 1;
     end
 
     ////////////////////////////////////////////////////
@@ -1044,10 +1054,10 @@ endgenerate
             //MHPM COUNTER
             //Machine Timers and Counters
             MCYCLE : selected_csr = CONFIG.MODES != BARE ? mcycle[31:0] : '0;
-            MINSTRET : selected_csr = CONFIG.MODES != BARE ? minst_ret[31:0] : '0;
+            MINSTRET : selected_csr = CONFIG.MODES != BARE ? minstret[31:0] : '0;
             [MHPMCOUNTER3 : MHPMCOUNTER31] : selected_csr = '0;
             MCYCLEH : selected_csr = CONFIG.MODES != BARE ? 32'(mcycle[COUNTER_W-1:32]) : '0;
-            MINSTRETH : selected_csr = CONFIG.MODES != BARE ? 32'(minst_ret[COUNTER_W-1:32]) : '0;
+            MINSTRETH : selected_csr = CONFIG.MODES != BARE ? 32'(minstret[COUNTER_W-1:32]) : '0;
             [MHPMCOUNTER3H : MHPMCOUNTER31H] : selected_csr = '0;
             //Machine Counter Setup
             MCOUNTINHIBIT : selected_csr = CONFIG.MODES != BARE ? mcountinhibit : '0;
@@ -1090,11 +1100,11 @@ endgenerate
             //Timers and counters
             CYCLE : selected_csr = CONFIG.CSRS.INCLUDE_ZICNTR ? mcycle[31:0] : '0;
             TIME : selected_csr = CONFIG.CSRS.INCLUDE_ZICNTR ? mtime[31:0] : '0;
-            INSTRET : selected_csr = CONFIG.CSRS.INCLUDE_ZICNTR ? minst_ret[31:0] : '0;
+            INSTRET : selected_csr = CONFIG.CSRS.INCLUDE_ZICNTR ? minstret[31:0] : '0;
             [HPMCOUNTER3 : HPMCOUNTER31] : selected_csr = '0;
             CYCLEH : selected_csr = CONFIG.CSRS.INCLUDE_ZICNTR ? 32'(mcycle[COUNTER_W-1:32]) : '0;
             TIMEH : selected_csr = CONFIG.CSRS.INCLUDE_ZICNTR ? mtime[63:32] : '0;
-            INSTRETH : selected_csr = CONFIG.CSRS.INCLUDE_ZICNTR ? 32'(minst_ret[COUNTER_W-1:32]) : '0;
+            INSTRETH : selected_csr = CONFIG.CSRS.INCLUDE_ZICNTR ? 32'(minstret[COUNTER_W-1:32]) : '0;
             [HPMCOUNTER3H : HPMCOUNTER31H] : selected_csr = '0;
 
             default : selected_csr = '0;

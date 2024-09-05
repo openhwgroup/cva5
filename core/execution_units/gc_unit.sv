@@ -350,6 +350,7 @@ module gc_unit
         assign exception_possible[i] = exception[i].possible;
     end endgenerate
     assign possible_exception = |exception_possible;
+    assign gc.exception.possible = possible_exception;
 
 generate if (CONFIG.MODES != BARE) begin :gen_gc_m_mode
 
@@ -369,6 +370,7 @@ generate if (CONFIG.MODES != BARE) begin :gen_gc_m_mode
     end
 
     assign gc.exception.valid = |exception_valid;
+    assign gc.exception.source = exception_valid;
 
     one_hot_mux #(.OPTIONS(NUM_EXCEPTION_SOURCES), .DATA_TYPE(exception_code_t)) code_mux (
         .one_hot(exception_valid),

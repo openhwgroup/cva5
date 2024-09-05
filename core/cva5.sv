@@ -508,6 +508,7 @@ module cva5
             .uses_rs (unit_uses_rs[CSR_ID]),
             .uses_rd (unit_uses_rd[CSR_ID]),
             .rf (rf_issue.data),
+            .instruction_issued (instruction_issued),
             .fp_instruction_issued_with_rd (fp_instruction_issued_with_rd),
             .issue (unit_issue[CSR_ID]), 
             .wb (unit_wb[CSR_ID]),
@@ -532,7 +533,6 @@ module cva5
             .sepc(sepc),
             .exception(exception[CSR_EXCEPTION]),
             .retire_ids(retire_ids),
-            .retire_count (retire_count),
             .mtime(mtime),
             .s_interrupt(s_interrupt),
             .m_interrupt(m_interrupt)
