@@ -116,7 +116,7 @@ package cva5_config;
     //Additionally, writeback units must be grouped before non-writeback units
     localparam MAX_NUM_UNITS = 9;
     typedef struct packed {
-        bit IEC;
+        bit GC;
         bit BR;
         //End of Write-Back Units
         bit CUSTOM;
@@ -129,7 +129,7 @@ package cva5_config;
     } units_t;
 
     typedef enum bit [$clog2(MAX_NUM_UNITS)-1:0] {
-        IEC_ID = 8,
+        GC_ID = 8,
         BR_ID = 7,
         //End of Write-Back Units (insert new writeback units here)
         CUSTOM_ID = 6,
@@ -249,7 +249,7 @@ package cva5_config;
             FPU : 1,
             CUSTOM : 0,
             BR : 1,
-            IEC : 1
+            GC : 1
         },
 
         INCLUDE_IFENCE : 1,

@@ -73,7 +73,7 @@ module litex_wrapper
             FPU : 0,
             CUSTOM : 0,
             BR : 1,
-            IEC : 1
+            GC : 1
         },
         INCLUDE_IFENCE : 1,
         INCLUDE_AMO : 1,

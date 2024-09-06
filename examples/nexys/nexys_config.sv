@@ -44,7 +44,7 @@ package nexys_config;
             FPU : 1,
             CUSTOM : 0,
             BR : 1,
-            IEC : 1
+            GC : 1
         },
         INCLUDE_IFENCE : 0,
         INCLUDE_AMO : 0,
