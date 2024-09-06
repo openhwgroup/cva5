@@ -659,22 +659,15 @@ module load_store_unit
     endgenerate
 
     generate if (CONFIG.INCLUDE_DCACHE) begin : gen_ls_dcache
-            logic load_ready;
-            logic store_ready;
             logic uncacheable_load;
             logic uncacheable_store;
-            logic dcache_load_request;
-            logic dcache_store_request;
 
             assign sub_unit_address_match[DCACHE_ID] = dcache_addr_utils.address_range_check(shared_inputs.addr);
 
             assign uncacheable_load = CONFIG.DCACHE.USE_NON_CACHEABLE & uncacheable_utils.address_range_check(shared_inputs.addr);
             assign uncacheable_store = CONFIG.DCACHE.USE_NON_CACHEABLE & uncacheable_utils.address_range_check(shared_inputs.addr);
 
-            assign dcache_load_request = sub_unit_load_issue & sub_unit_address_match[DCACHE_ID];
-            assign dcache_store_request = sub_unit_store_issue & sub_unit_address_match[DCACHE_ID];
-
-            dcache_litex #(.CONFIG(CONFIG)) data_cache (
+            dcache #(.CONFIG(CONFIG)) data_cache (
                 .l1_request(l1_request),
                 .l1_response(l1_response),
                 .write_outstanding(unit_write_outstanding[DCACHE_ID]),
