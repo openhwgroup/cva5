@@ -121,10 +121,11 @@ module load_store_unit
     logic [NUM_SUB_UNITS-1:0] unit_write_outstanding;
     logic write_outstanding;
     logic [NUM_SUB_UNITS-1:0] unit_data_valid;
-    logic [NUM_SUB_UNITS-1:0] last_unit;
+    logic [NUM_SUB_UNITS_W-1:0] last_unit;
 
     logic sub_unit_ready;
     logic [NUM_SUB_UNITS_W-1:0] subunit_id;
+    ls_subunit_t padded_subunit_id;
 
     logic unit_switch;
     logic unit_switch_in_progress;
@@ -154,6 +155,8 @@ module load_store_unit
     logic fence_hold;
     logic illegal_cbo;
     logic exception_lsq_push;
+    logic nomatch_fault;
+    logic late_exception;
 
     id_t exception_id;
 
@@ -354,13 +357,16 @@ module load_store_unit
         assign senv_illegal = CONFIG.INCLUDE_CBO & (issue_attr.is_cbo & issue_attr.cbo_type == INVAL ? senvcfg.cbie == 2'b00 : ~senvcfg.cbcfe);
         assign illegal_cbo = CONFIG.MODES == MU ? current_privilege == USER_PRIVILEGE & menv_illegal : (current_privilege != MACHINE_PRIVILEGE & menv_illegal) | (current_privilege == USER_PRIVILEGE & senv_illegal);
 
+        assign nomatch_fault = tlb.done & ~|sub_unit_address_match;
+        assign late_exception = tlb.is_fault | nomatch_fault;
+
         //Hold writeback exceptions until they are ready to retire
         logic rd_zero_r;
         logic delay_exception;
         logic delayed_exception;
         assign delay_exception = (
             (issue.new_request & unaligned_addr & (issue_attr.is_load | issue_attr.is_amo) & issue.id != retire_id & ~issue_attr.rd_zero) |
-            (tlb.is_fault & tlb_lq & exception_id != retire_id & ~rd_zero_r)
+            (late_exception & tlb_lq & exception_id != retire_id & ~rd_zero_r)
         );
         always_ff @(posedge clk) begin
             if (rst)
@@ -374,8 +380,8 @@ module load_store_unit
         assign new_exception = (
             (issue.new_request & ((unaligned_addr & issue_attr.is_store) | illegal_cbo)) |
             (issue.new_request & unaligned_addr & (issue_attr.is_load | issue_attr.is_amo) & (issue.id == retire_id | issue_attr.rd_zero)) |
-            (tlb.is_fault & ~tlb_lq) |
-            (tlb.is_fault & tlb_lq & (exception_id == retire_id | rd_zero_r)) |
+            (late_exception & ~tlb_lq) |
+            (late_exception & tlb_lq & (exception_id == retire_id | rd_zero_r)) |
             (delayed_exception & exception_id == retire_id)
         );
 
@@ -405,10 +411,12 @@ module load_store_unit
                 end
                 exception_id <= issue.id;
             end
-            if (tlb.is_fault)
+            else if (tlb.is_fault)
                 exception.code <= is_load_r ? LOAD_PAGE_FAULT : STORE_OR_AMO_PAGE_FAULT;
+            else if (nomatch_fault)
+                exception.code <= is_load_r ? LOAD_FAULT : STORE_AMO_FAULT;
         end
-        assign exception.possible = (tlb_request_r & ~tlb.done) | exception.valid | delayed_exception; //Must suppress issue for issue-time exceptions too
+        assign exception.possible = (tlb_request_r & (~tlb.done | ~|sub_unit_address_match)) | exception.valid | delayed_exception; //Must suppress issue for issue-time exceptions too
         assign exception.pc = issue_stage.pc_r;
         assign exception.discard = tlb_lq & ~rd_zero_r;
 
@@ -503,7 +511,8 @@ module load_store_unit
     assign lsq.addr_data_in = '{
         addr : tlb.physical_address[31:12],
         rnw : tlb_lq,
-        discard : tlb.is_fault | exception_lsq_push
+        discard : late_exception | exception_lsq_push,
+        subunit : padded_subunit_id
     };
 
     always_ff @(posedge clk) begin
@@ -515,11 +524,11 @@ module load_store_unit
     //Unit tracking
     always_ff @ (posedge clk) begin
         if (load_attributes.push)
-            last_unit <= sub_unit_address_match;
+            last_unit <= subunit_id;
     end
 
     //When switching units, ensure no outstanding loads so that there can be no timing collisions with results
-    assign unit_switch = lsq.load_valid & (sub_unit_address_match != last_unit) & load_attributes.valid;
+    assign unit_switch = lsq.load_valid & (subunit_id != last_unit) & load_attributes.valid;
     always_ff @ (posedge clk) begin
         unit_switch_in_progress <= (unit_switch_in_progress | unit_switch) & ~load_attributes.valid;
     end
@@ -536,8 +545,8 @@ module load_store_unit
     //TLB status and exceptions can be ignored because they will prevent instructions from issuing
     assign issue.ready = ~lsq.full & ~fence_hold;
 
-    assign sub_unit_load_issue = sel_load & lsq.load_valid & sub_unit_ready & sub_unit_address_match[subunit_id];
-    assign sub_unit_store_issue = (lsq.store_valid & ~sel_load) & sub_unit_ready & sub_unit_address_match[subunit_id];
+    assign sub_unit_load_issue = sel_load & lsq.load_valid & sub_unit_ready;
+    assign sub_unit_store_issue = (lsq.store_valid & ~sel_load) & sub_unit_ready;
     assign sub_unit_issue = sub_unit_load_issue | sub_unit_store_issue;
 
     assign write_outstanding = |unit_write_outstanding;
@@ -553,10 +562,11 @@ module load_store_unit
     //Load attributes FIFO
     logic [1:0] final_mux_sel;
 
+    assign subunit_id = shared_inputs.subunit[NUM_SUB_UNITS_W-1:0];
     one_hot_to_integer #(NUM_SUB_UNITS)
     sub_unit_select (
         .one_hot (sub_unit_address_match), 
-        .int_out (subunit_id)
+        .int_out (padded_subunit_id[NUM_SUB_UNITS_W-1:0])
     );
 
     always_comb begin
@@ -591,7 +601,7 @@ module load_store_unit
     ////////////////////////////////////////////////////
     //Unit Instantiation
     generate for (genvar i=0; i < NUM_SUB_UNITS; i++) begin : gen_load_store_sources
-        assign sub_unit[i].new_request = sub_unit_issue & sub_unit_address_match[i];
+        assign sub_unit[i].new_request = sub_unit_issue & subunit_id == i;
         assign sub_unit[i].addr = shared_inputs.addr;
         assign sub_unit[i].re = shared_inputs.load;
         assign sub_unit[i].we = shared_inputs.store;
@@ -605,7 +615,7 @@ module load_store_unit
     endgenerate
 
     generate if (CONFIG.INCLUDE_DLOCAL_MEM) begin : gen_ls_local_mem
-        assign sub_unit_address_match[LOCAL_MEM_ID] = dlocal_mem_addr_utils.address_range_check(shared_inputs.addr);
+        assign sub_unit_address_match[LOCAL_MEM_ID] = dlocal_mem_addr_utils.address_range_check(tlb.physical_address);
         local_mem_sub_unit d_local_mem (
             .clk (clk), 
             .rst (rst),
@@ -620,7 +630,7 @@ module load_store_unit
     endgenerate
 
     generate if (CONFIG.INCLUDE_PERIPHERAL_BUS) begin : gen_ls_pbus
-            assign sub_unit_address_match[BUS_ID] = dpbus_addr_utils.address_range_check(shared_inputs.addr);
+            assign sub_unit_address_match[BUS_ID] = dpbus_addr_utils.address_range_check(tlb.physical_address);
             if(CONFIG.PERIPHERAL_BUS_TYPE == AXI_BUS)
                 axi_master axi_bus (
                     .clk (clk),
@@ -662,7 +672,7 @@ module load_store_unit
             logic uncacheable_load;
             logic uncacheable_store;
 
-            assign sub_unit_address_match[DCACHE_ID] = dcache_addr_utils.address_range_check(shared_inputs.addr);
+            assign sub_unit_address_match[DCACHE_ID] = dcache_addr_utils.address_range_check(tlb.physical_address);
 
             assign uncacheable_load = CONFIG.DCACHE.USE_NON_CACHEABLE & uncacheable_utils.address_range_check(shared_inputs.addr);
             assign uncacheable_store = CONFIG.DCACHE.USE_NON_CACHEABLE & uncacheable_utils.address_range_check(shared_inputs.addr);

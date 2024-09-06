@@ -64,6 +64,7 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
     typedef struct packed {
         logic discard;
         logic [19:0] addr;
+        ls_subunit_t subunit;
     } addr_entry_t;
 
     logic [LOG2_SQ_DEPTH-1:0] sq_index;
@@ -125,6 +126,7 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
     assign lq_addr.push = lsq.addr_push & lsq.addr_data_in.rnw;
     assign lq_addr.potential_push = lq_addr.push;
     assign lq_addr.data_in.addr = lsq.addr_data_in.addr;
+    assign lq_addr.data_in.subunit = lsq.addr_data_in.subunit;
     assign lq_addr.data_in.discard = lsq.addr_data_in.discard;
     assign lq_addr.pop = load_pop | lq_addr_discard;
 
@@ -173,6 +175,7 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
     assign sq_addr.push = lsq.addr_push & ~lsq.addr_data_in.rnw;
     assign sq_addr.potential_push = sq_addr.push;
     assign sq_addr.data_in.addr = lsq.addr_data_in.addr;
+    assign sq_addr.data_in.subunit = lsq.addr_data_in.subunit;
     assign sq_addr.data_in.discard = lsq.addr_data_in.discard;
     assign sq_addr.pop = store_pop | sq_addr_discard;
 
@@ -287,6 +290,7 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
         amo_type : lq.data_out.amo_type,
         be : '1,
         fn3 : load_fn3,
+        subunit : lq_addr.valid ? lq_addr.data_out.subunit : lsq.addr_data_in.subunit,
         data_in : CONFIG.INCLUDE_AMO ? lq.data_out.amo_wdata : 'x,
         id : lq.data_out.id,
         fp_op : load_type
@@ -301,6 +305,7 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
         amo_type : amo_t'('x),
         be : sq.data_out.be,
         fn3 : 'x,
+        subunit : sq_addr.valid ? sq_addr.data_out.subunit : lsq.addr_data_in.subunit,
         data_in : store_data,
         id : 'x,
         fp_op : fp_ls_op_t'('x)

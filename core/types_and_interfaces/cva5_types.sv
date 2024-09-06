@@ -27,8 +27,10 @@ package cva5_types;
 
     localparam LOG2_RETIRE_PORTS = $clog2(RETIRE_PORTS);
     localparam LOG2_MAX_IDS = $clog2(MAX_IDS);
+    localparam MAX_LS_SUBUNITS = 3;
 
     typedef logic[LOG2_MAX_IDS-1:0] id_t;
+    typedef logic[$clog2(MAX_LS_SUBUNITS)-1:0] ls_subunit_t;
 
     typedef logic [3:0] addr_hash_t;
     typedef logic [5:0] phys_addr_t;
@@ -121,6 +123,7 @@ package cva5_types;
         logic [19:0] addr;
         logic rnw;
         logic discard;
+        ls_subunit_t subunit;
     } lsq_addr_entry_t;
 
     typedef struct packed {
@@ -171,6 +174,7 @@ package cva5_types;
         amo_t amo_type;
         logic [3:0] be;
         logic [2:0] fn3;
+        ls_subunit_t subunit;
         logic [31:0] data_in;
         id_t id;
         fp_ls_op_t fp_op;
