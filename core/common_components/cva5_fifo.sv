@@ -27,10 +27,6 @@
  */
 module cva5_fifo
 
-    import cva5_config::*;
-    import riscv_types::*;
-    import cva5_types::*;
-    
     #(
         parameter type DATA_TYPE = logic,
         parameter FIFO_DEPTH = 4

@@ -22,9 +22,6 @@
 
 module toggle_memory_set
 
-    import cva5_config::*;
-    import cva5_types::*;
-    
     # (
         parameter DEPTH = 64,
         parameter NUM_WRITE_PORTS = 3,
@@ -32,7 +29,6 @@ module toggle_memory_set
     )
     (
         input logic clk,
-        input logic rst,
         input logic init_clear,
 
         input logic toggle [NUM_WRITE_PORTS],
@@ -53,7 +49,7 @@ module toggle_memory_set
     //counter for indexing through memories for post-reset clearing/initialization
     lfsr #(.WIDTH($clog2(DEPTH)), .NEEDS_RESET(0))
     lfsr_counter (
-        .clk (clk), .rst (rst),
+        .clk (clk), .rst (1'b0),
         .en(init_clear),
         .value(clear_index)
     );
@@ -76,7 +72,7 @@ module toggle_memory_set
         for (j = 0; j < NUM_WRITE_PORTS+1; j++) begin : write_port_gen
             toggle_memory #(.DEPTH(DEPTH), .NUM_READ_PORTS(NUM_READ_PORTS+1))
             mem (
-                .clk (clk), .rst (rst),
+                .clk (clk),
                 .toggle(_toggle[j]),
                 .toggle_id(_toggle_addr[j]),
                 .read_id(_read_addr),

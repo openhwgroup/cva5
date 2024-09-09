@@ -100,7 +100,6 @@ module register_file
     ) id_inuse_toggle_mem_set
     (
         .clk (clk),
-        .rst (rst),
         .init_clear (gc.init_clear),
         .toggle (toggle),
         .toggle_addr (toggle_addr),

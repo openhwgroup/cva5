@@ -22,9 +22,6 @@
 
 module mmu
 
-    import cva5_config::*;
-    import riscv_types::*;
-    import cva5_types::*;
     import csr_types::*;
 
     (

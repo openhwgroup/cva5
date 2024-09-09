@@ -311,7 +311,6 @@ module instruction_metadata_and_id_management
     ) id_waiting_for_writeback_toggle_mem_set
     (
         .clk (clk),
-        .rst (rst),
         .init_clear (gc.init_clear),
         .toggle (id_waiting_toggle),
         .toggle_addr (id_waiting_toggle_addr),
