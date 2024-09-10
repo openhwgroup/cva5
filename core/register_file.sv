@@ -100,7 +100,6 @@ module register_file
     ) id_inuse_toggle_mem_set
     (
         .clk (clk),
-        .rst (rst),
         .init_clear (gc.init_clear),
         .toggle (toggle),
         .toggle_addr (toggle_addr),
@@ -118,7 +117,7 @@ module register_file
             .clk,
             .waddr(wb_phys_addr[i]),
             .raddr(decode_phys_rs_addr),
-            .ram_write(commit[i].valid & ~gc.writeback_supress),
+            .ram_write(commit[i].valid & ~gc.writeback_suppress),
             .new_ram_data(commit[i].data),
             .ram_data_out(regfile_rs_data[i])
     );

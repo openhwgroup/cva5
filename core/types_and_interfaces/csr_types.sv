@@ -29,7 +29,7 @@ package csr_types;
     typedef enum logic [1:0] {
         USER_PRIVILEGE = 2'b00,
         SUPERVISOR_PRIVILEGE = 2'b01,
-        //reserved
+        RESERVED_PRIVILEGE = 2'b10,
         MACHINE_PRIVILEGE = 2'b11
     } privilege_t;
 
@@ -72,8 +72,6 @@ package csr_types;
         logic A; //Atomic
     } misa_t;
 
-
-
     typedef struct packed {
         logic sd;
         logic [7:0] zeros;
@@ -86,7 +84,7 @@ package csr_types;
         logic [1:0] xs;
         logic [1:0] fs;
         logic [1:0] mpp;
-        logic [1:0] zeros1;
+        logic [1:0] vs;
         logic spp;
         logic mpie;
         logic ube;
@@ -121,7 +119,9 @@ package csr_types;
 
     typedef struct packed {
         logic [31:16] custom;
-        logic [15:12] zeros;
+        logic [15:14] zeros;
+        logic lcofip;
+        logic zero0;
         logic meip;
         logic zero1;
         logic seip;
@@ -138,7 +138,9 @@ package csr_types;
 
     typedef struct packed {
         logic [31:16] custom;
-        logic [15:12] zeros;
+        logic [15:14] zeros;
+        logic lcofie;
+        logic zero0;
         logic meie;
         logic zero1;
         logic seie;
@@ -154,11 +156,65 @@ package csr_types;
     } mie_t;
 
     typedef struct packed {
-        logic is_interrupt;
-        logic [XLEN-1-1-ECODE_W:0] zeroes;
-        logic [ECODE_W-1:0] code;
-    } mcause_t;
+        logic [31:16] custom;
+        logic [15:14] zeros;
+        logic lcofipd;
+        logic [12:10] zero1;
+        logic seid;
+        logic [8:6] zero2;
+        logic stid;
+        logic [4:2] zero3;
+        logic ssid;
+        logic zero4;
+    } mideleg_t;
 
+    typedef struct packed {
+        logic is_interrupt;
+        logic [XLEN-1-1-ECODE_W:0] zeros;
+        logic [ECODE_W-1:0] code;
+    } cause_t;
+
+    typedef struct packed {
+        logic [28:0] hpm;
+        logic ir;
+        logic tm;
+        logic cy;
+    } mcounter_t;
+
+    typedef struct packed {
+        logic [24:0] zeros_high;
+        logic cbze;
+        logic cbcfe;
+        logic [1:0] cbie;
+        logic [1:0] zeros_low;
+        logic fiom;
+    } envcfg_t;
+
+    typedef struct packed {
+        logic stce;
+        logic pbmte;
+        logic adue;
+        logic cde;
+        logic [27:0] zeros;
+    } envcfgh_t;
+
+    typedef struct packed {
+        logic [28:0] zeros;
+        logic jvt;
+        logic fcsr;
+        logic c;
+    } stateen0_t;
+
+    typedef struct packed {
+        logic se0;
+        logic envcfg;
+        logic zero;
+        logic csrind;
+        logic aia;
+        logic imsic;
+        logic contex;
+        logic [24:0] zeros;
+    } mstateen0h_t;
 
     typedef struct packed {
         logic mode;
@@ -166,5 +222,15 @@ package csr_types;
         logic [21:0] ppn;
     } satp_t;
 
+    typedef struct packed {
+        logic d;
+        logic a;
+        logic g;
+        logic u;
+        logic x;
+        logic w;
+        logic r;
+        logic v;
+    } pte_perms_t;
 
 endpackage

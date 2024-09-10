@@ -152,13 +152,15 @@ void CVA5Tracer::start_tracer(const char *trace_file) {
 }
 
 
-
+uint64_t CVA5Tracer::cycle_count = 0;
 uint64_t CVA5Tracer::get_cycle_count() {
     return cycle_count;
 }
 
 
 CVA5Tracer::CVA5Tracer(std::ifstream& programFile) {
+    cycle_count = 0;
+
 	#ifdef TRACE_ON
 		Verilated::traceEverOn(true);
 	#endif

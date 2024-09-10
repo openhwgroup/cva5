@@ -129,7 +129,7 @@ module div_unit
     set_clr_reg_with_rst #(.SET_OVER_CLR(1), .WIDTH(1), .RST_VALUE(0)) prev_div_result_valid_m (
         .clk, .rst,
         .set(issue.new_request & ~((issue_stage.rd_addr == issue_rs_addr[RS1]) | (issue_stage.rd_addr == issue_rs_addr[RS2]))),
-        .clr((instruction_issued_with_rd & div_rs_overwrite) | gc.writeback_supress), //No instructions will be issued while gc.writeback_supress is asserted
+        .clr((instruction_issued_with_rd & div_rs_overwrite) | gc.init_clear), //No instructions will be issued while gc.init_clear is asserted
         .result(prev_div_result_valid)
     );
 

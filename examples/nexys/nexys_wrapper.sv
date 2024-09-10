@@ -139,4 +139,3 @@ module nexys_wrapper
     cva5 #(.CONFIG(NEXYS_CONFIG)) cpu(.rst(rst_r2), .*);
 
 endmodule
-

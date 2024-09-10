@@ -34,19 +34,17 @@ package nexys_config;
 
     localparam cpu_config_t NEXYS_CONFIG = '{
         //ISA options
-        INCLUDE_M_MODE : 1,
-        INCLUDE_S_MODE : 0,
-        INCLUDE_U_MODE : 0,
+        MODES : MSU,
         INCLUDE_UNIT : '{
             ALU : 1,
             LS : 1,
             MUL : 1,
             DIV : 1,
             CSR : 1,
-            FPU : 0,
+            FPU : 1,
             CUSTOM : 0,
             BR : 1,
-            IEC : 1
+            GC : 1
         },
         INCLUDE_IFENCE : 0,
         INCLUDE_AMO : 0,
@@ -57,20 +55,20 @@ package nexys_config;
             MACHINE_IMPLEMENTATION_ID : 0,
             CPU_ID : 0,
             RESET_VEC : 32'h80000000,
-            RESET_MTVEC : 32'h80000000,
-            NON_STANDARD_OPTIONS : '{
-                COUNTER_W : 33,
-                MCYCLE_WRITEABLE : 0,
-                MINSTR_WRITEABLE : 0,
-                MTVEC_WRITEABLE : 1,
-                INCLUDE_MSCRATCH : 0,
-                INCLUDE_MCAUSE : 1,
-                INCLUDE_MTVAL : 1
-            }
+            RESET_TVEC : 32'h00000000,
+            MCONFIGPTR : '0,
+            INCLUDE_ZICNTR : 1,
+            INCLUDE_ZIHPM : 1,
+            INCLUDE_SSTC : 1,
+            INCLUDE_SMSTATEEN : 1
         },
         //Memory Options
         SQ_DEPTH : 8,
         INCLUDE_FORWARDING_TO_STORES : 1,
+        AMO_UNIT : '{
+            LR_WAIT : 32,
+            RESERVATION_WORDS : 8 //Must be the same size as the DCACHE line width
+        },
         INCLUDE_ICACHE : 1,
         ICACHE_ADDR : '{
             L : 32'h80000000, 
@@ -126,10 +124,10 @@ package nexys_config;
             L : 32'h00000000, 
             H : 32'hFFFFFFFF
         },
-        INCLUDE_PERIPHERAL_BUS : 0,
+        INCLUDE_PERIPHERAL_BUS : 1,
         PERIPHERAL_BUS_ADDR : '{
-            L : 32'h00000000,
-            H : 32'hFFFFFFFF
+            L : 32'h60000000,
+            H : 32'h6FFFFFFF
         },
         PERIPHERAL_BUS_TYPE : AXI_BUS,
         //Branch Predictor Options

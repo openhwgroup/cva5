@@ -22,9 +22,6 @@
 
 module mmu
 
-    import cva5_config::*;
-    import riscv_types::*;
-    import cva5_types::*;
     import csr_types::*;
 
     (
@@ -40,14 +37,7 @@ module mmu
         logic [11:0] ppn1;
         logic [9:0] ppn0;
         logic [1:0] reserved;
-        logic d;
-        logic a;
-        logic g;
-        logic u;
-        logic x;
-        logic w;
-        logic r;
-        logic v;
+        pte_perms_t perms;
     } pte_t;
 
     typedef enum  {
@@ -63,8 +53,7 @@ module mmu
     logic [6:0] next_state;
 
     pte_t pte;
-    logic access_valid;
-    logic privilege_valid;
+    logic perms_valid;
 
     localparam MAX_ABORTED_REQUESTS = 4;
     logic abort_queue_full;
@@ -84,7 +73,7 @@ module mmu
 
     //Page Table addresses
     always_ff @ (posedge clk) begin
-        if (state[IDLE] | l1_response.data_valid) begin
+        if (state[IDLE] | (l1_response.data_valid & ~discard_data)) begin
             if (state[IDLE])
                 l1_request.addr <= {mmu.satp_ppn[19:0], mmu.virtual_address[31:22], 2'b00};
             else
@@ -103,7 +92,7 @@ module mmu
     logic delayed_abort_complete;
 
     assign delayed_abort = abort_request & (state[WAIT_REQUEST_1] | state[WAIT_REQUEST_2]);
-    assign delayed_abort_complete = discard_data & l1_response.data_valid;
+    assign delayed_abort_complete = (discard_data | abort_request) & l1_response.data_valid;
     always_ff @ (posedge clk) begin
         if (rst)
             abort_tracking <= 0;
@@ -113,18 +102,16 @@ module mmu
 
     assign discard_data = abort_tracking[COUNT_W];
     assign abort_queue_full = abort_tracking[COUNT_W] & ~|abort_tracking[COUNT_W-1:0];
-    ////////////////////////////////////////////////////
-    //Access and permission checks
-    //A and D bits are software managed
-    assign access_valid =
-        (mmu.execute & pte.x & pte.a) | //fetch
-        (mmu.rnw & (pte.r | (pte.x & mmu.mxr)) & pte.a) | //load
-        ((~mmu.rnw & ~mmu.execute) & pte.w & pte.a & pte.d); //store
 
-    assign privilege_valid = 
-        (mmu.privilege == MACHINE_PRIVILEGE) |
-        ((mmu.privilege == SUPERVISOR_PRIVILEGE) & (~pte.u | (pte.u & mmu.sum))) |
-        ((mmu.privilege == USER_PRIVILEGE) & pte.u);
+    perms_check perm (
+        .pte_perms(pte.perms),
+        .rnw(mmu.rnw),
+        .execute(mmu.execute),
+        .mxr(mmu.mxr),
+        .sum(mmu.sum),
+        .privilege(mmu.privilege),
+        .valid(perms_valid)
+    );
 
     ////////////////////////////////////////////////////
     //State Machine
@@ -139,14 +126,14 @@ module mmu
                     next_state = 2**WAIT_REQUEST_1;
             state[WAIT_REQUEST_1] :
                 if (l1_response.data_valid & ~discard_data) begin
-                    if (~pte.v | (~pte.r & pte.w)) //page not valid OR invalid xwr pattern
+                    if (~pte.perms.v | (~pte.perms.r & pte.perms.w)) //page not valid OR invalid xwr pattern
                         next_state = 2**COMPLETE_FAULT;
-                    else if (pte.v & (pte.r | pte.x)) begin//superpage (all remaining xwr patterns other than all zeros)
-                        if (access_valid & privilege_valid)
+                    else if (pte.perms.v & (pte.perms.r | pte.perms.x)) begin//superpage (all remaining xwr patterns other than all zeros)
+                        if (perms_valid & ~|pte.ppn0) //check for misaligned superpage
                             next_state = 2**COMPLETE_SUCCESS;
                         else
                             next_state = 2**COMPLETE_FAULT;
-                    end else //(pte.v & ~pte.x & ~pte.w & ~pte.r) pointer to next level in page table
+                    end else //(pte.perms.v & ~pte.perms.x & ~pte.perms.w & ~pte.perms.r) pointer to next level in page table
                         next_state = 2**SEND_REQUEST_2;
                 end
             state[SEND_REQUEST_2] : 
@@ -154,10 +141,10 @@ module mmu
                     next_state = 2**WAIT_REQUEST_2;
             state[WAIT_REQUEST_2] : 
                 if (l1_response.data_valid & ~discard_data) begin
-                    if (access_valid & privilege_valid)
-                        next_state = 2**COMPLETE_SUCCESS;
-                    else
+                    if (~perms_valid | ~pte.perms.v | (~pte.perms.r & pte.perms.w)) //perm fail or invalid
                         next_state = 2**COMPLETE_FAULT;
+                    else
+                        next_state = 2**COMPLETE_SUCCESS;
                 end
             state[COMPLETE_SUCCESS], state[COMPLETE_FAULT]  :
                 next_state = 2**IDLE;
@@ -178,6 +165,15 @@ module mmu
     //TLB return path
     always_ff @ (posedge clk) begin
         if (l1_response.data_valid) begin
+            mmu.superpage <= state[WAIT_REQUEST_1];
+            mmu.perms.d <= pte.perms.d;
+            mmu.perms.a <= pte.perms.a;
+            mmu.perms.g <= pte.perms.g | (state[WAIT_REQUEST_2] & mmu.perms.g);
+            mmu.perms.u <= pte.perms.u;
+            mmu.perms.x <= pte.perms.x;
+            mmu.perms.w <= pte.perms.w;
+            mmu.perms.r <= pte.perms.r;
+            mmu.perms.v <= pte.perms.v;
             mmu.upper_physical_address[19:10] <= pte.ppn1[9:0];
             mmu.upper_physical_address[9:0] <= state[WAIT_REQUEST_2] ? pte.ppn0 : mmu.virtual_address[21:12];
         end
@@ -201,7 +197,7 @@ module mmu
     //the transaction is aborted.  As such, if TLB request is low and we are not in the
     //IDLE state, then our current processor state has been corrupted
     mmu_tlb_state_mismatch:
-        assert property (@(posedge clk) disable iff (rst) (~mmu.request) |-> (state[IDLE]))
+        assert property (@(posedge clk) disable iff (rst) (mmu.request) |-> (state[IDLE]))
         else $error("MMU and TLB state mismatch");
 
 endmodule

@@ -31,6 +31,7 @@ interface axi_interface;
     logic [1:0] arburst;
     logic [3:0] arcache;
     logic [5:0] arid;
+    logic arlock;
 
     //read data
     logic rready;
@@ -50,6 +51,7 @@ interface axi_interface;
     logic [1:0] awburst;
     logic [3:0] awcache;
     logic [5:0] awid;
+    logic awlock;
 
     //write data
     logic wready;
@@ -65,12 +67,12 @@ interface axi_interface;
     logic [5:0] bid;
 
     modport master (input arready, rvalid, rdata, rresp, rlast, rid, awready, wready, bvalid, bresp, bid,
-            output arvalid, araddr, arlen, arsize, arburst, arcache, arid, rready, awvalid, awaddr, awlen, awsize, awburst, awcache, awid,
+            output arvalid, araddr, arlen, arsize, arburst, arcache, arlock, arid, rready, awvalid, awaddr, awlen, awsize, awburst, awcache, awid, awlock,
             wvalid, wdata, wstrb, wlast, bready);
 
-    modport slave (input arvalid, araddr, arlen, arsize, arburst, arcache,
+    modport slave (input arvalid, araddr, arlen, arsize, arburst, arcache, arlock,
             rready,
-            awvalid, awaddr, awlen, awsize, awburst, awcache, arid,
+            awvalid, awaddr, awlen, awsize, awburst, awcache, awlock, arid,
             wvalid, wdata, wstrb, wlast, awid,
             bready,
             output arready, rvalid, rdata, rresp, rlast, rid,
@@ -79,9 +81,9 @@ interface axi_interface;
             bvalid, bresp, bid);
 
 `ifdef __CVA5_FORMAL__
-    modport formal (input arready, arvalid, araddr, arlen, arsize, arburst, arcache,
+    modport formal (input arready, arvalid, araddr, arlen, arsize, arburst, arcache, arlock,
                           rready, rvalid, rdata, rresp, rlast, rid,
-                          awready, awvalid, awaddr, awlen, awsize, awburst, awcache, arid,
+                          awready, awvalid, awaddr, awlen, awsize, awburst, awcache, awlock, arid,
                           wready, wvalid, wdata, wstrb, wlast, awid,
                           bready, bvalid, bresp, bid);
 `endif
@@ -92,6 +94,7 @@ interface avalon_interface;
     logic [31:0] addr;
     logic read;
     logic write;
+    logic lock;
     logic [3:0] byteenable;
     logic [31:0] readdata;
     logic [31:0] writedata;
@@ -100,13 +103,13 @@ interface avalon_interface;
     logic writeresponsevalid;
 
     modport master (input readdata, waitrequest, readdatavalid, writeresponsevalid,
-            output addr, read, write, byteenable, writedata);
+            output addr, read, write, lock, byteenable, writedata);
     modport slave (output readdata, waitrequest, readdatavalid, writeresponsevalid,
-            input addr, read, write, byteenable, writedata);
+            input addr, read, write, lock, byteenable, writedata);
 
 `ifdef __CVA5_FORMAL__
     modport formal (input readdata, waitrequest, readdatavalid, writeresponsevalid,
-                          addr, read, write, byteenable, writedata);
+                          addr, read, write, lock, byteenable, writedata);
 `endif
 
 endinterface

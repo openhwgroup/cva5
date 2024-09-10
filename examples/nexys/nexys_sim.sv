@@ -102,13 +102,9 @@ module cva5_sim
         output logic store_queue_empty
     );
 
-    parameter SCRATCH_MEM_KB = 128;
-    parameter MEM_LINES = (SCRATCH_MEM_KB*1024)/4;
-    parameter UART_ADDR = 32'h88001000;
-    parameter UART_ADDR_LINE_STATUS = 32'h88001014;
-
     interrupt_t s_interrupt;
     interrupt_t m_interrupt;
+    logic[63:0] mtime;
 
     assign s_interrupt = '{default: 0};
     assign m_interrupt = '{default: 0};
@@ -139,14 +135,50 @@ module cva5_sim
     l1_to_axi  arb(.*, .cpu(l2), .axi(axi));
     cva5 #(.CONFIG(NEXYS_CONFIG)) cpu(.*);
 
-    initial begin
-        write_uart = 0;
-        uart_byte = 0;
-    end
     //Capture writes to UART
     always_ff @(posedge clk) begin
-        write_uart <= (axi.wvalid && axi.wready && axi.awaddr == UART_ADDR);
-        uart_byte <= axi.wdata[7:0];
+        if (rst) begin
+            m_axi.awready <= 1;
+            m_axi.wready <= 0;
+            m_axi.bvalid <= 0;
+            write_uart <= 0;
+        end
+        else begin
+            write_uart <= 0;
+            if (m_axi.awvalid & m_axi.awready) begin
+                m_axi.awready <= 0;
+                m_axi.wready <= 1;
+            end
+            else if (m_axi.wvalid & m_axi.wready) begin
+                m_axi.wready <= 0;
+                m_axi.bvalid <= 1;
+                write_uart <= 1;
+            end
+            else if (m_axi.bvalid & m_axi.bready) begin
+                m_axi.bvalid <= 0;
+                m_axi.awready <= 1;
+            end
+        end
+        uart_byte <= m_axi.wdata[7:0];
+    end
+
+    //Simulate UART read response
+    assign m_axi.rdata = 32'hFFFFFF21;
+    always_ff @(posedge clk) begin
+        if (rst) begin
+            m_axi.arready <= 1;
+            m_axi.rvalid <= 0;
+        end
+        else begin
+            if (m_axi.arvalid & m_axi.arready) begin
+                m_axi.arready <= 0;
+                m_axi.rvalid <= 1;
+            end
+            else if (m_axi.rvalid & m_axi.rready) begin
+                m_axi.rvalid <= 0;
+                m_axi.arready <= 1;
+            end
+        end
     end
 
     ////////////////////////////////////////////////////
@@ -261,9 +293,9 @@ module cva5_sim
     end endgenerate
 
     generate if (NEXYS_CONFIG.INCLUDE_DCACHE) begin
-        assign dcache_hit = `DCACHE_P.load_hit;
-        assign dcache_miss = `DCACHE_P.line_complete;
-        assign darb_stall = cpu.l1_request[L1_DCACHE_ID].request & ~cpu.l1_request[L1_DCACHE_ID].ack;
+        // assign dcache_hit = `DCACHE_P.load_hit;
+        // assign dcache_miss = `DCACHE_P.line_complete;
+        // assign darb_stall = cpu.l1_request[L1_DCACHE_ID].request & ~cpu.l1_request[L1_DCACHE_ID].ack;
     end endgenerate
 
     logic [MAX_NUM_UNITS-1:0] unit_ready;
@@ -414,7 +446,7 @@ module cva5_sim
         assign retire_ports_valid[i] = cpu.retire_port_valid[i];
     end endgenerate
 
-    assign store_queue_empty = cpu.load_store_status.sq_empty;
+    assign store_queue_empty = ~cpu.load_store_status.outstanding_store;
 
     ////////////////////////////////////////////////////
     //Assertion Binding

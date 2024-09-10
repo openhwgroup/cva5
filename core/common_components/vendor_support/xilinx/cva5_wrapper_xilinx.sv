@@ -131,4 +131,3 @@ module cva5_wrapper_xilinx
     cva5 cpu(.*);
 
 endmodule
-

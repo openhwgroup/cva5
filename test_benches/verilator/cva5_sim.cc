@@ -12,7 +12,7 @@ CVA5Tracer *cva5Tracer;
 char* csv_log_name;
 //For time index on assertions
  double sc_time_stamp () {
-            return cva5Tracer->get_cycle_count();
+            return CVA5Tracer::get_cycle_count();
 }
 
 const char* cva5_csv_log_file_name () {

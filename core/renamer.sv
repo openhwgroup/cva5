@@ -96,7 +96,7 @@ module renamer
     assign free_list.potential_push = (gc.init_clear & ~clear_index[5]) | (wb_retire.valid);
     assign free_list.push = free_list.potential_push;
 
-    assign free_list.data_in = gc.init_clear ? {1'b1, clear_index[4:0]} : (gc.writeback_supress ? inuse_table_output.spec_phys_addr : inuse_table_output.previous_phys_addr);
+    assign free_list.data_in = gc.init_clear ? {1'b1, clear_index[4:0]} : (gc.rename_revert ? inuse_table_output.spec_phys_addr : inuse_table_output.previous_phys_addr);
     assign free_list.pop = rename_valid;
 
     ////////////////////////////////////////////////////
@@ -137,12 +137,12 @@ module renamer
     rs_addr_t spec_table_write_index;
     rs_addr_t spec_table_write_index_mux [4];
 
-    assign spec_table_update = rename_valid | rollback | gc.init_clear | (wb_retire.valid & gc.writeback_supress);
+    assign spec_table_update = rename_valid | rollback | gc.init_clear | gc.rename_revert;
 
     logic [1:0] spec_table_sel;
     
     one_hot_to_integer #(.C_WIDTH(4)) spec_table_sel_one_hot_to_int (
-        .one_hot ({gc.init_clear, rollback, (wb_retire.valid & gc.writeback_supress), 1'b0}),
+        .one_hot ({gc.init_clear, rollback, gc.rename_revert, 1'b0}),
         .int_out (spec_table_sel)
     );
 
@@ -150,7 +150,7 @@ module renamer
     assign spec_table_write_index_mux[0] = decode.rd_addr;
     assign spec_table_next_mux[0].phys_addr = free_list.data_out;
     assign spec_table_next_mux[0].wb_group = decode.rd_wb_group;
-    //gc.writeback_supress
+    //gc.rename_revert
     assign spec_table_write_index_mux[1] = inuse_table_output.rd_addr;
     assign spec_table_next_mux[1].phys_addr = inuse_table_output.previous_phys_addr;
     assign spec_table_next_mux[1].wb_group = inuse_table_output.previous_wb_group;
