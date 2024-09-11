@@ -42,7 +42,7 @@ module local_mem_sub_unit
     logic rmw;
     logic[31:2] rmw_addr;
     logic[31:0] rmw_rs2;
-    logic[31:0] rmw_op;
+    amo_t rmw_op;
     logic sc_valid;
     logic sc_valid_r;
     
