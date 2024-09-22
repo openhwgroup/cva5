@@ -150,7 +150,7 @@ module fetch
     always_ff @(posedge clk) begin
         if (flush_or_rst)
             exception_pending <= 0;
-        else if (tlb.is_fault | (new_mem_request & ~address_valid))
+        else if ((tlb.is_fault & ~fetch_attr_fifo.full) | (new_mem_request & ~address_valid))
             exception_pending <= 1;
     end
 
@@ -180,8 +180,8 @@ module fetch
     //Issue Control Signals
     assign flush_or_rst = (rst | gc.fetch_flush | early_branch_flush);
 
-    assign new_mem_request = tlb.done & units_ready & (~gc.fetch_hold);
-    assign pc_id_assigned = new_mem_request | tlb.is_fault;
+    assign new_mem_request = tlb.done & units_ready & ~gc.fetch_hold & ~fetch_attr_fifo.full;
+    assign pc_id_assigned = new_mem_request | (tlb.is_fault & ~fetch_attr_fifo.full);
 
     //////////////////////////////////////////////
     //Subunit Tracking
