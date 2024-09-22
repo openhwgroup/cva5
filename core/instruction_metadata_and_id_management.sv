@@ -225,7 +225,7 @@ module instruction_metadata_and_id_management
             decode_id <= oldest_pre_issue_id;
         end
         else begin
-            pc_id <= (early_branch_flush ? fetch_id : pc_id) + LOG2_MAX_IDS'(pc_id_assigned);
+            pc_id <= early_branch_flush ? fetch_id + LOG2_MAX_IDS'(fetch_complete) : pc_id + LOG2_MAX_IDS'(pc_id_assigned);
             fetch_id <= fetch_id + LOG2_MAX_IDS'(fetch_complete);
             decode_id <= decode_id + LOG2_MAX_IDS'(decode_advance);
         end
