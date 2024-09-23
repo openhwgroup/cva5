@@ -62,8 +62,25 @@ module one_hot_mux
 
     ////////////////////////////////////////////////////
     //Assertions
+    //Support inputs that aren't one hot as long as they are identical
+    logic supported_inputs;
+    logic saw_first;
+    casted_t queried_input;
+    always_comb begin
+        supported_inputs = 1;
+        saw_first = 0;
+        queried_input = 'x;
+        for (int i = 0; i < OPTIONS; i++) begin
+            if (one_hot[i]) begin
+                supported_inputs |= ~saw_first | (queried_input == choices_casted[i]);
+                saw_first = 1;
+                queried_input = choices_casted[i];
+            end
+        end
+    end
+
     ohot_assertion:
-        assert property (@(posedge clk) disable iff (rst) $onehot0(one_hot))
+        assert property (@(posedge clk) disable iff (rst) supported_inputs)
         else $error("Selection mux not one hot");
 
 endmodule
