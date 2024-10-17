@@ -32,7 +32,7 @@ module amo_unit
         input logic clk,
         input logic rst,
 
-        amo_interface.amo_unit agents[NUM_UNITS]
+        amo_interface.amo_unit agents[NUM_UNITS-1:0]
     );
 
     localparam RESERVATION_WIDTH = 30 - $clog2(RESERVATION_WORDS);

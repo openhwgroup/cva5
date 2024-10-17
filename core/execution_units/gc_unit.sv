@@ -55,7 +55,7 @@ module gc_unit
 
         //Exception
         exception_interface.unit local_gc_exception,
-        exception_interface.econtrol exception [NUM_EXCEPTION_SOURCES],
+        exception_interface.econtrol exception [NUM_EXCEPTION_SOURCES-1:0],
         input logic [31:0] exception_target_pc,
 
         output logic mret,
