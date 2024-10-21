@@ -39,8 +39,6 @@ module amo_alu
     logic rs1_smaller_than_rs2;
     logic signed [WIDTH:0] rs1_ext;
     logic signed [WIDTH:0] rs2_ext;
-    logic[WIDTH-1:0] logic_result;
-    logic[WIDTH-1:0] arith_result;
     
     assign signed_op = amo_type == AMO_MIN_FN5 | amo_type == AMO_MAX_FN5;
     assign rs1_ext = {(signed_op & rs1[WIDTH-1]), rs1};
