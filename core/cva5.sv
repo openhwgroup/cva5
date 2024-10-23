@@ -47,7 +47,7 @@ module cva5
         wishbone_interface.master dwishbone,
         wishbone_interface.master iwishbone,
 
-        l2_requester_interface.master l2,
+        mem_interface.mem_master mem,
 
         input logic [63:0] mtime,
         input interrupt_t s_interrupt,
@@ -56,10 +56,10 @@ module cva5
 
     ////////////////////////////////////////////////////
     //Connecting Signals
-    l1_arbiter_request_interface l1_request[L1_CONNECTIONS-1:0]();
-    l1_arbiter_return_interface l1_response[L1_CONNECTIONS-1:0]();
-    logic sc_complete;
-    logic sc_success;
+    mem_interface dcache_mem();
+    mem_interface icache_mem();
+    mem_interface dmmu_mem();
+    mem_interface immu_mem();
 
     branch_predictor_interface bp();
     branch_results_t br_results;
@@ -111,7 +111,7 @@ module cva5
     fetch_metadata_t fetch_metadata;
         //Decode stage
     logic decode_advance;
-    decode_packet_t decode;   
+    decode_packet_t decode;
     logic decode_uses_rd;
     logic fp_decode_uses_rd;
     rs_addr_t decode_rd_addr;
@@ -181,21 +181,21 @@ module cva5
 
     ////////////////////////////////////////////////////
     //Implementation
-    
+
 
 
     ////////////////////////////////////////////////////
     // Memory Interface
-    generate if (CONFIG.MODES == MSU || CONFIG.INCLUDE_ICACHE || CONFIG.INCLUDE_DCACHE) begin : gen_l1_arbiter
-        l1_arbiter #(.CONFIG(CONFIG))
+    generate if (CONFIG.MODES == MSU || CONFIG.INCLUDE_ICACHE || CONFIG.INCLUDE_DCACHE) begin : gen_core_arb
+        core_arbiter #(.INCLUDE_DCACHE(CONFIG.INCLUDE_DCACHE), .INCLUDE_ICACHE(CONFIG.INCLUDE_ICACHE), .INCLUDE_MMUS(CONFIG.MODES == MSU))
         arb(
             .clk (clk),
             .rst (rst),
-            .l2 (l2),
-            .sc_complete (sc_complete),
-            .sc_success (sc_success),
-            .l1_request (l1_request),
-            .l1_response (l1_response)
+            .dcache (dcache_mem),
+            .icache (icache_mem),
+            .dmmu (dmmu_mem),
+            .immu (immu_mem),
+            .mem (mem)
         );
     end
     endgenerate
@@ -259,17 +259,16 @@ module cva5
         .early_branch_flush (early_branch_flush),
         .early_branch_flush_ras_adjust (early_branch_flush_ras_adjust),
         .if_pc (if_pc),
-        .fetch_instruction (fetch_instruction),                                
-        .instruction_bram (instruction_bram), 
+        .fetch_instruction (fetch_instruction),
+        .instruction_bram (instruction_bram),
         .iwishbone (iwishbone),
         .icache_on ('1),
-        .tlb (itlb), 
-        .l1_request (l1_request[L1_ICACHE_ID]), 
-        .l1_response (l1_response[L1_ICACHE_ID])
+        .tlb (itlb),
+        .mem (icache_mem)
     );
 
     branch_predictor #(.CONFIG(CONFIG))
-    bp_block (       
+    bp_block (
         .clk (clk),
         .rst (rst),
         .bp (bp),
@@ -287,14 +286,14 @@ module cva5
     );
 
     itlb #(.WAYS(CONFIG.ITLB.WAYS), .DEPTH(CONFIG.ITLB.DEPTH))
-    i_tlb (       
+    i_tlb (
         .clk (clk),
         .rst (rst),
         .translation_on (instruction_translation_on),
         .sfence (sfence),
         .abort_request (gc.fetch_flush | early_branch_flush),
         .asid (asid),
-        .tlb (itlb), 
+        .tlb (itlb),
         .mmu (immu)
     );
 
@@ -302,10 +301,9 @@ module cva5
         mmu i_mmu (
             .clk (clk),
             .rst (rst),
-            .mmu (immu) , 
+            .mmu (immu),
             .abort_request (gc.fetch_flush),
-            .l1_request (l1_request[L1_IMMU_ID]), 
-            .l1_response (l1_response[L1_IMMU_ID])
+            .mem (immu_mem)
         );
 
         end
@@ -313,7 +311,7 @@ module cva5
 
     ////////////////////////////////////////////////////
     //Renamer
-    renamer #(.NUM_WB_GROUPS(CONFIG.NUM_WB_GROUPS), .READ_PORTS(REGFILE_READ_PORTS), .RENAME_ZERO(0)) 
+    renamer #(.NUM_WB_GROUPS(CONFIG.NUM_WB_GROUPS), .READ_PORTS(REGFILE_READ_PORTS), .RENAME_ZERO(0))
     renamer_block (
         .clk (clk),
         .rst (rst),
@@ -390,7 +388,7 @@ module cva5
     ////////////////////////////////////////////////////
     //Execution Units
     branch_unit #(.CONFIG(CONFIG))
-    branch_unit_block ( 
+    branch_unit_block (
         .clk (clk),
         .rst (rst),
         .decode_stage (decode),
@@ -420,7 +418,7 @@ module cva5
         .rf (rf_issue.data),
         .constant_alu (constant_alu),
         .issue_rs_addr (issue_rs_addr),
-        .issue (unit_issue[ALU_ID]), 
+        .issue (unit_issue[ALU_ID]),
         .wb (unit_wb[ALU_ID])
     );
 
@@ -448,16 +446,13 @@ module cva5
         .rf (rf_issue.data),
         .fp_rf (fp_rf_issue.data),
         .issue (unit_issue[LS_ID]),
-        .dcache_on (1'b1), 
-        .clear_reservation (1'b0), 
-        .tlb (dtlb),                         
-        .l1_request (l1_request[L1_DCACHE_ID]), 
-        .l1_response (l1_response[L1_DCACHE_ID]),
-        .sc_complete (sc_complete),
-        .sc_success (sc_success),                                       
+        .dcache_on (1'b1),
+        .clear_reservation (1'b0),
+        .tlb (dtlb),
+        .mem (dcache_mem),
         .m_axi (m_axi),
         .m_avalon (m_avalon),
-        .dwishbone (dwishbone),                                       
+        .dwishbone (dwishbone),
         .data_bram (data_bram),
         .current_privilege (current_privilege),
         .menvcfg (menvcfg),
@@ -473,13 +468,13 @@ module cva5
     );
 
     dtlb #(.WAYS(CONFIG.DTLB.WAYS), .DEPTH(CONFIG.DTLB.DEPTH))
-    d_tlb (       
+    d_tlb (
         .clk (clk),
         .rst (rst),
         .translation_on (data_translation_on),
         .sfence (sfence),
         .asid (asid),
-        .tlb (dtlb), 
+        .tlb (dtlb),
         .mmu (dmmu)
     );
 
@@ -487,10 +482,9 @@ module cva5
         mmu d_mmu (
             .clk (clk),
             .rst (rst),
-            .mmu (dmmu) , 
+            .mmu (dmmu),
             .abort_request (1'b0),
-            .l1_request (l1_request[L1_DMMU_ID]), 
-            .l1_response (l1_response[L1_DMMU_ID])
+            .mem (dmmu_mem)
         );
     end
     endgenerate
@@ -510,7 +504,7 @@ module cva5
             .rf (rf_issue.data),
             .instruction_issued (instruction_issued),
             .fp_instruction_issued_with_rd (fp_instruction_issued_with_rd),
-            .issue (unit_issue[CSR_ID]), 
+            .issue (unit_issue[CSR_ID]),
             .wb (unit_wb[CSR_ID]),
             .current_privilege(current_privilege),
             .menvcfg(menvcfg),
@@ -602,7 +596,7 @@ module cva5
             .uses_rs (unit_uses_rs[DIV_ID]),
             .uses_rd (unit_uses_rd[DIV_ID]),
             .rf (rf_issue.data),
-            .issue (unit_issue[DIV_ID]), 
+            .issue (unit_issue[DIV_ID]),
             .wb (unit_wb[DIV_ID])
         );
     end endgenerate
@@ -619,7 +613,7 @@ module cva5
             .issue_stage (issue),
             .issue_stage_ready (issue_stage_ready),
             .rf (rf_issue.data),
-            .issue (unit_issue[CUSTOM_ID]), 
+            .issue (unit_issue[CUSTOM_ID]),
             .wb (unit_wb[CUSTOM_ID])
         );
     end endgenerate
@@ -682,7 +676,7 @@ module cva5
             .wb_phys_addr (fp_wb_phys_addr)
         );
 
-        renamer #(.NUM_WB_GROUPS(2), .READ_PORTS(3), .RENAME_ZERO(1)) 
+        renamer #(.NUM_WB_GROUPS(2), .READ_PORTS(3), .RENAME_ZERO(1))
         fp_renamer_block (
             .clk (clk),
             .rst (rst),

@@ -118,7 +118,7 @@ module cva5_sim
 
 	//L2 and AXI
     axi_interface axi ();
-    l2_requester_interface l2 ();
+    mem_interface mem[0:0]();
 
     assign instruction_bram_addr = instruction_bram.addr;
     assign instruction_bram_en = instruction_bram.en;
@@ -132,8 +132,8 @@ module cva5_sim
     assign data_bram_data_in = data_bram.data_in;
     assign data_bram.data_out = data_bram_data_out;
 
-    l1_to_axi  arb(.*, .cpu(l2), .axi(axi));
-    cva5 #(.CONFIG(NEXYS_CONFIG)) cpu(.*);
+    axi_adapter #(.NUM_CORES(1)) arb(.mems(mem), .axi(axi), .*);
+    cva5 #(.CONFIG(NEXYS_CONFIG)) cpu(.mem(mem[0]), .*);
 
     //Capture writes to UART
     always_ff @(posedge clk) begin
@@ -289,13 +289,13 @@ module cva5_sim
     generate if (NEXYS_CONFIG.INCLUDE_ICACHE) begin
         assign icache_hit = `ICACHE_P.tag_hit;
         assign icache_miss = `ICACHE_P.second_cycle & ~`ICACHE_P.tag_hit;
-        assign iarb_stall = `ICACHE_P.request_r & ~cpu.l1_request[L1_ICACHE_ID].ack;
+        assign iarb_stall = `ICACHE_P.request_r & ~cpu.icache_mem.ack;
     end endgenerate
 
     generate if (NEXYS_CONFIG.INCLUDE_DCACHE) begin
         // assign dcache_hit = `DCACHE_P.load_hit;
         // assign dcache_miss = `DCACHE_P.line_complete;
-        // assign darb_stall = cpu.l1_request[L1_DCACHE_ID].request & ~cpu.l1_request[L1_DCACHE_ID].ack;
+        // assign darb_stall = cpu.dcache_mem.request & ~cpu.dcache_mem.ack;
     end endgenerate
 
     logic [MAX_NUM_UNITS-1:0] unit_ready;

@@ -26,6 +26,7 @@ core/common_components/cycler.sv
 core/common_components/lfsr.sv
 core/common_components/cva5_fifo.sv
 core/common_components/priority_encoder.sv
+core/common_components/round_robin.sv
 core/common_components/toggle_memory.sv
 core/common_components/toggle_memory_set.sv
 
@@ -107,12 +108,11 @@ core/register_file.sv
 core/fp_writeback.sv
 core/writeback.sv
 
-core/l1_arbiter.sv
+core/core_arbiter.sv
 
-l2_arbiter/l2_fifo.sv
-l2_arbiter/l2_reservation_logic.sv
-l2_arbiter/l2_round_robin.sv
-l2_arbiter/l2_arbiter.sv
-l2_arbiter/axi_to_arb.sv
+apu/busses/multicore_arbiter.sv
+apu/busses/axi_adapter.sv
+apu/busses/wishbone_adapter.sv
+
 
 core/cva5.sv

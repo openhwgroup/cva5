@@ -493,13 +493,13 @@ module cva5_sim
     generate if (EXAMPLE_CONFIG.INCLUDE_ICACHE) begin
         assign icache_hit = `ICACHE_P.tag_hit;
         assign icache_miss = `ICACHE_P.second_cycle & ~`ICACHE_P.tag_hit;
-        assign iarb_stall = `ICACHE_P.request_r & ~cpu.l1_request[L1_ICACHE_ID].ack;
+        assign iarb_stall = `ICACHE_P.request_r & ~cpu.icache_mem.ack;
     end endgenerate
 
     generate if (EXAMPLE_CONFIG.INCLUDE_DCACHE) begin
         assign dcache_hit = `DCACHE_P.load_hit;
         assign dcache_miss = `DCACHE_P.line_complete;
-        assign darb_stall = cpu.l1_request[L1_DCACHE_ID].request & ~cpu.l1_request[L1_DCACHE_ID].ack;
+        assign darb_stall = cpu.dcache_mem.request & ~cpu.dcache_mem.ack;
     end endgenerate
 
     logic [MAX_NUM_UNITS-1:0] unit_ready;

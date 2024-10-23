@@ -138,42 +138,30 @@ interface wishbone_interface;
 
 endinterface
 
-interface l1_arbiter_request_interface;
-    import l2_config_and_types::*;
-
-    logic [31:0] addr;
-    logic [31:0] data ;
-    logic rnw ;
-    logic [3:0] be;
-    logic [4:0] size;
-    logic is_amo;
-    logic [4:0] amo;
-
+interface mem_interface;
     logic request;
+    logic[31:2] addr;
+    logic[4:0] rlen; //Nobody truly needs requests > 32 words
     logic ack;
 
-    modport master (output addr, data, rnw, be, size, is_amo, amo, request, input ack);
-    modport slave (input addr, data, rnw, be, size, is_amo, amo, request, output ack);
+    logic rvalid;
+    logic[31:0] rdata;
+    logic[1:0] rid;
+    
+    logic rnw;
+    logic[3:0] wbe;
+    logic[31:0] wdata;
 
-`ifdef __CVA5_FORMAL__
-    modport formal (input addr, data, rnw, be, size, is_amo, amo, request, ack);
-`endif
+    logic inv;
+    logic[31:2] inv_addr;
 
-endinterface
+    logic[1:0] id;
 
-interface l1_arbiter_return_interface;
-    logic [31:2] inv_addr;
-    logic inv_valid;
-    logic inv_ack;
-    logic [31:0] data;
-    logic data_valid;
-
-    modport master (input inv_addr, inv_valid, data, data_valid, output inv_ack);
-    modport slave (output inv_addr, inv_valid, data, data_valid, input inv_ack);
-
-`ifdef __CVA5_FORMAL__
-    modport formal (input inv_addr, inv_valid, data, data_valid, inv_ack);
-`endif
+    modport ro_master (output request, addr, rlen, input ack, rvalid, rdata);
+    modport ro_slave (input request, addr, rlen, output ack, rvalid, rdata);
+    modport rw_master (output request, addr, rlen, rnw, wbe, wdata, input ack, rvalid, rdata, inv, inv_addr);
+    modport rw_slave (input request, addr, rlen, rnw, wbe, wdata, output ack, rvalid, rdata, inv, inv_addr);
+    modport mem_master (output request, addr, rlen, rnw, wbe, wdata, id, input ack, rvalid, rdata, rid, inv, inv_addr);
+    modport mem_slave (input request, addr, rlen, rnw, wbe, wdata, id, output ack, rvalid, rdata, rid, inv, inv_addr);
 
 endinterface
-

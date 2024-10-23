@@ -392,16 +392,6 @@ package cva5_config;
     } exception_sources_t;
 
     ////////////////////////////////////////////////////
-    //L1 Arbiter IDs
-    localparam L1_CONNECTIONS = 4;
-    typedef enum bit [1:0] {
-        L1_DCACHE_ID = 0,
-        L1_ICACHE_ID = 1,
-        L1_DMMU_ID = 2,
-        L1_IMMU_ID = 3
-    } l1_id_t;
-
-    ////////////////////////////////////////////////////
     //Debug Parameters
 
     //To enable assertions specific to formal debug, uncomment or set in tool flow

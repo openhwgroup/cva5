@@ -32,8 +32,7 @@ module dcache
     (
         input logic clk,
         input logic rst,
-        l1_arbiter_request_interface.master l1_request,
-        l1_arbiter_return_interface.master l1_response,
+        mem_interface.rw_master mem,
         output logic write_outstanding,
         input logic amo,
         input amo_t amo_type,
@@ -194,10 +193,10 @@ module dcache
     logic correct_word;
     logic return_done;
     logic[SCONFIG.SUB_LINE_ADDR_W-1:0] word_counter;
-    assign return_done = l1_response.data_valid & word_counter == SCONFIG.SUB_LINE_ADDR_W'(CONFIG.DCACHE.LINE_W-1);
-    assign correct_word = l1_response.data_valid & word_counter == stage1.addr[2+:SCONFIG.SUB_LINE_ADDR_W];
+    assign return_done = mem.rvalid & word_counter == SCONFIG.SUB_LINE_ADDR_W'(CONFIG.DCACHE.LINE_W-1);
+    assign correct_word = mem.rvalid & word_counter == stage1.addr[2+:SCONFIG.SUB_LINE_ADDR_W];
     always_ff @(posedge clk) begin
-        if (l1_response.data_valid)
+        if (mem.rvalid)
             word_counter <= word_counter+1;
         if (ls.new_request)
             word_counter <= 0;
@@ -225,22 +224,20 @@ module dcache
     always_comb begin
         unique case (current_state)
             IDLE : stage1_done = 0;
-            FIRST_CYCLE : stage1_done = ((~stage1.rnw | (stage1_is_sc & amo_unit.reservation_valid)) & l1_request.ack) | (stage1_is_sc & ~amo_unit.reservation_valid) | (stage1.rnw & hit & (~stage1.amo | stage1_is_lr) & ~stage1.uncacheable) | stage1.cbo;
+            FIRST_CYCLE : stage1_done = ((~stage1.rnw | (stage1_is_sc & amo_unit.reservation_valid)) & mem.ack) | (stage1_is_sc & ~amo_unit.reservation_valid) | (stage1.rnw & hit & (~stage1.amo | stage1_is_lr) & ~stage1.uncacheable) | stage1.cbo;
             REQUESTING_READ : stage1_done = 0;
             FILLING : stage1_done = return_done & (stage1_is_lr | ~stage1.amo);
-            UNCACHEABLE_WAITING_READ : stage1_done = l1_response.data_valid & (stage1_is_lr | ~stage1.amo);
-            AMO_WRITE : stage1_done = l1_request.ack;
+            UNCACHEABLE_WAITING_READ : stage1_done = mem.rvalid & (stage1_is_lr | ~stage1.amo);
+            AMO_WRITE : stage1_done = mem.ack;
         endcase
     end
 
     always_comb begin
         unique case (current_state)
             IDLE : begin
-                l1_request.request = 0;
-                l1_request.addr = 'x;
-                l1_request.data = 'x;
-                l1_request.rnw = 'x;
-                l1_request.size = 'x;
+                mem.request = 0;
+                mem.wdata = 'x;
+                mem.rnw = 'x;
                 db_wen = 0;
                 db_wdata = 'x;
                 db_way = 'x;
@@ -249,11 +246,9 @@ module dcache
                 next_state = ls.new_request ? FIRST_CYCLE : IDLE;
             end
             FIRST_CYCLE : begin //Handles writes, read hits, uncacheable reads, and SC
-                l1_request.request = ~stage1.cbo & (~stage1.rnw | (stage1.uncacheable & ~stage1_is_sc) | (stage1_is_sc & amo_unit.reservation_valid));
-                l1_request.addr = stage1.addr;
-                l1_request.data = stage1.data;
-                l1_request.rnw = stage1.rnw & ~stage1_is_sc;
-                l1_request.size = '0;
+                mem.request = ~stage1.cbo & (~stage1.rnw | (stage1.uncacheable & ~stage1_is_sc) | (stage1_is_sc & amo_unit.reservation_valid));
+                mem.wdata = stage1.data;
+                mem.rnw = stage1.rnw & ~stage1_is_sc;
                 db_wen = ~stage1.cbo & hit & ~stage1.uncacheable & (~stage1.rnw | (stage1_is_sc & amo_unit.reservation_valid));
                 db_wdata = stage1.data;
                 db_way = hit_ohot;
@@ -261,7 +256,7 @@ module dcache
                 ls.data_out = stage1_is_sc ? {31'b0, ~amo_unit.reservation_valid} : db_hit_entry;
                 if (stage1_done)
                     next_state = ls.new_request ? FIRST_CYCLE : IDLE;
-                else if (stage1.uncacheable & l1_request.ack)
+                else if (stage1.uncacheable & mem.ack)
                     next_state = UNCACHEABLE_WAITING_READ;
                 else if (stage1.rnw & ~stage1.uncacheable & ~hit & ~stage1_is_sc)
                     next_state = REQUESTING_READ;
@@ -271,29 +266,25 @@ module dcache
                     next_state = FIRST_CYCLE;
             end
             REQUESTING_READ : begin
-                l1_request.request = 1;
-                l1_request.addr = stage1.addr;
-                l1_request.data = 'x;
-                l1_request.rnw = 1;
-                l1_request.size = 5'(CONFIG.DCACHE.LINE_W-1);
+                mem.request = 1;
+                mem.wdata = 'x;
+                mem.rnw = 1;
                 db_wen = 0;
                 db_wdata = 'x;
                 db_way = 'x;
                 ls.data_valid = 0;
                 ls.data_out = 'x;
-                next_state = l1_request.ack ? FILLING : REQUESTING_READ;
+                next_state = mem.ack ? FILLING : REQUESTING_READ;
             end
             FILLING : begin
-                l1_request.request = 0;
-                l1_request.addr = 'x;
-                l1_request.data = 'x;
-                l1_request.rnw = 'x;
-                l1_request.size = 'x;
-                db_wen = l1_response.data_valid;
-                db_wdata = l1_response.data;
+                mem.request = 0;
+                mem.wdata = 'x;
+                mem.rnw = 'x;
+                db_wen = mem.rvalid;
+                db_wdata = mem.rdata;
                 db_way = replacement_way;
                 ls.data_valid = correct_word;
-                ls.data_out = l1_response.data;
+                ls.data_out = mem.rdata;
                 if (return_done) begin
                     if (stage1.amo & ~stage1_is_lr)
                         next_state = AMO_WRITE;
@@ -304,17 +295,15 @@ module dcache
                     next_state = FILLING;
             end
             UNCACHEABLE_WAITING_READ : begin
-                l1_request.request = 0;
-                l1_request.addr = 'x;
-                l1_request.data = 'x;
-                l1_request.rnw = 'x;
-                l1_request.size = 'x;
+                mem.request = 0;
+                mem.wdata = 'x;
+                mem.rnw = 'x;
                 db_wen = 0;
                 db_wdata = 'x;
                 db_way = 'x;
-                ls.data_valid = l1_response.data_valid;
-                ls.data_out = l1_response.data;
-                if (l1_response.data_valid) begin
+                ls.data_valid = mem.rvalid;
+                ls.data_out = mem.rdata;
+                if (mem.rvalid) begin
                     if (stage1.amo & ~stage1_is_lr)
                         next_state = AMO_WRITE;
                     else
@@ -324,17 +313,15 @@ module dcache
                     next_state = UNCACHEABLE_WAITING_READ;  
             end
             AMO_WRITE : begin
-                l1_request.request = 1;
-                l1_request.addr = stage1.addr;
-                l1_request.data = amo_unit.rd;
-                l1_request.rnw = 0;
-                l1_request.size = '0;
+                mem.request = 1;
+                mem.wdata = amo_unit.rd;
+                mem.rnw = 0;
                 db_wen = ~stage1.uncacheable;
                 db_wdata = amo_unit.rd;
                 db_way = hit_r ? hit_ohot_r : replacement_way;
                 ls.data_valid = 0;
                 ls.data_out = 'x;
-                if (l1_request.ack)
+                if (mem.ack)
                     next_state = ls.new_request ? FIRST_CYCLE : IDLE;
                 else
                     next_state = AMO_WRITE;  
@@ -359,13 +346,13 @@ module dcache
     always_ff @(posedge clk) begin
         if (stage0_advance_r)
             amo_unit.rs1 <= db_hit_entry;
-        else if (correct_word | (l1_response.data_valid & stage1.uncacheable))
-            amo_unit.rs1 <= l1_response.data;
+        else if (correct_word | (mem.rvalid & stage1.uncacheable))
+            amo_unit.rs1 <= mem.rdata;
     end
 
-    assign l1_request.be = stage1.be;
-    assign l1_request.is_amo = 0;
-    assign l1_request.amo = '0;
+    assign mem.addr = stage1.addr[31:2];
+    assign mem.rlen = 5'(CONFIG.DCACHE.LINE_W-1);
+    assign mem.wbe = stage1.be;
 
     ////////////////////////////////////////////////////
     //Assertions
@@ -374,7 +361,7 @@ module dcache
         else $error("dcache received request when not ready");
 
     dache_suprious_l1_ack_assertion:
-        assert property (@(posedge clk) disable iff (rst) l1_request.ack |-> l1_request.request)
+        assert property (@(posedge clk) disable iff (rst) mem.ack |-> mem.request)
         else $error("dcache received ack without a request");
 
 endmodule

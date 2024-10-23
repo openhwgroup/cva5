@@ -29,8 +29,7 @@ module mmu
         input logic rst,
         mmu_interface.mmu mmu,
         input logic abort_request,
-        l1_arbiter_request_interface.master l1_request,
-        l1_arbiter_return_interface.master l1_response
+        mem_interface.ro_master mem
     );
 
     typedef struct packed{
@@ -63,25 +62,21 @@ module mmu
 
     ////////////////////////////////////////////////////
     //L1 arbiter Interfrace
-    assign l1_request.rnw = 1;
-    assign l1_request.be = '1;
-    assign l1_request.size = '0;
-    assign l1_request.is_amo = 0;
-    assign l1_request.amo = 0;
+    assign mem.rlen = '0;
 
-    assign l1_request.request = (state[SEND_REQUEST_1] | state[SEND_REQUEST_2]) & ~abort_request;
+    assign mem.request = (state[SEND_REQUEST_1] | state[SEND_REQUEST_2]) & ~abort_request;
 
     //Page Table addresses
     always_ff @ (posedge clk) begin
-        if (state[IDLE] | (l1_response.data_valid & ~discard_data)) begin
+        if (state[IDLE] | (mem.rvalid & ~discard_data)) begin
             if (state[IDLE])
-                l1_request.addr <= {mmu.satp_ppn[19:0], mmu.virtual_address[31:22], 2'b00};
+                mem.addr <= {mmu.satp_ppn[19:0], mmu.virtual_address[31:22]};
             else
-                l1_request.addr <= {{pte.ppn1[9:0], pte.ppn0}, mmu.virtual_address[21:12], 2'b00};
+                mem.addr <= {pte.ppn1[9:0], pte.ppn0, mmu.virtual_address[21:12]};
         end
     end
 
-    assign pte = l1_response.data;
+    assign pte = mem.rdata;
 
     ////////////////////////////////////////////////////
     //Supports unlimited tracking of aborted requests
@@ -92,7 +87,7 @@ module mmu
     logic delayed_abort_complete;
 
     assign delayed_abort = abort_request & (state[WAIT_REQUEST_1] | state[WAIT_REQUEST_2]);
-    assign delayed_abort_complete = (discard_data | abort_request) & l1_response.data_valid;
+    assign delayed_abort_complete = (discard_data | abort_request) & mem.rvalid;
     always_ff @ (posedge clk) begin
         if (rst)
             abort_tracking <= 0;
@@ -122,10 +117,10 @@ module mmu
                 if (mmu.request & ~abort_queue_full)
                     next_state = 2**SEND_REQUEST_1;
             state[SEND_REQUEST_1] : 
-                if (l1_request.ack)
+                if (mem.ack)
                     next_state = 2**WAIT_REQUEST_1;
             state[WAIT_REQUEST_1] :
-                if (l1_response.data_valid & ~discard_data) begin
+                if (mem.rvalid & ~discard_data) begin
                     if (~pte.perms.v | (~pte.perms.r & pte.perms.w)) //page not valid OR invalid xwr pattern
                         next_state = 2**COMPLETE_FAULT;
                     else if (pte.perms.v & (pte.perms.r | pte.perms.x)) begin//superpage (all remaining xwr patterns other than all zeros)
@@ -137,10 +132,10 @@ module mmu
                         next_state = 2**SEND_REQUEST_2;
                 end
             state[SEND_REQUEST_2] : 
-                if (l1_request.ack)
+                if (mem.ack)
                     next_state = 2**WAIT_REQUEST_2;
             state[WAIT_REQUEST_2] : 
-                if (l1_response.data_valid & ~discard_data) begin
+                if (mem.rvalid & ~discard_data) begin
                     if (~perms_valid | ~pte.perms.v | (~pte.perms.r & pte.perms.w)) //perm fail or invalid
                         next_state = 2**COMPLETE_FAULT;
                     else
@@ -164,7 +159,7 @@ module mmu
     ////////////////////////////////////////////////////
     //TLB return path
     always_ff @ (posedge clk) begin
-        if (l1_response.data_valid) begin
+        if (mem.rvalid) begin
             mmu.superpage <= state[WAIT_REQUEST_1];
             mmu.perms.d <= pte.perms.d;
             mmu.perms.a <= pte.perms.a;
@@ -189,7 +184,7 @@ module mmu
     //Assertions
     `ifdef ENABLE_SIMULATION_ASSERTIONS
         mmu_spurious_l1_response:
-            assert property (@(posedge clk) disable iff (rst) (l1_response.data_valid) |-> (state[WAIT_REQUEST_1] | state[WAIT_REQUEST_2]))
+            assert property (@(posedge clk) disable iff (rst) (mem.rvalid) |-> (state[WAIT_REQUEST_1] | state[WAIT_REQUEST_2]))
             else $error("mmu recieved response without a request");
     `endif
 

@@ -35,8 +35,7 @@ module icache
         input logic rst,
         input logic ifence,
         input logic icache_on,
-        l1_arbiter_request_interface.master l1_request,
-        l1_arbiter_return_interface.master l1_response,
+        mem_interface.ro_master mem,
 
         memory_sub_unit_interface.responder fetch_sub
     );
@@ -150,7 +149,7 @@ module icache
         if (rst)
             tag_update <= 0;
         else
-            tag_update <= l1_request.ack;
+            tag_update <= mem.ack;
     end
 
     //Replacement policy is psuedo random
@@ -170,22 +169,17 @@ module icache
     logic initiate_l1_request;
     logic request_r;
 
-    assign l1_request.addr = second_cycle_addr;
-    assign l1_request.data = 0;
-    assign l1_request.rnw = 1;
-    assign l1_request.be = 0;
-    assign l1_request.size = 5'(CONFIG.ICACHE.LINE_W-1);
-    assign l1_request.is_amo = 0;
-    assign l1_request.amo = 0;
+    assign mem.addr = second_cycle_addr[31:2];
+    assign mem.rlen = 5'(CONFIG.ICACHE.LINE_W-1);
 
     assign initiate_l1_request = second_cycle & (~tag_hit | ~icache_on);
     always_ff @ (posedge clk) begin
         if (rst)
             request_r <= 0;
         else
-            request_r <= (initiate_l1_request | request_r) & ~l1_request.ack;
+            request_r <= (initiate_l1_request | request_r) & ~mem.ack;
     end
-    assign l1_request.request = request_r;
+    assign mem.request = request_r;
 
     ////////////////////////////////////////////////////
     //Miss state tracking
@@ -193,7 +187,7 @@ module icache
         if (rst)
             linefill_in_progress <= 0;
         else
-            linefill_in_progress <= (linefill_in_progress & ~line_complete) | l1_request.ack;
+            linefill_in_progress <= (linefill_in_progress & ~line_complete) | mem.ack;
     end
 
     ////////////////////////////////////////////////////
@@ -222,9 +216,9 @@ module icache
         .COL_WIDTH(32),
         .PIPELINE_DEPTH(0)
     ) idata_bank (
-        .a_en(l1_response.data_valid),
+        .a_en(mem.rvalid),
         .a_wbe(tag_update_way),
-        .a_wdata({CONFIG.ICACHE.WAYS{l1_response.data}}),
+        .a_wdata({CONFIG.ICACHE.WAYS{mem.rdata}}),
         .a_addr(addr_utils.getDataLineAddr({second_cycle_addr[31:SCONFIG.SUB_LINE_ADDR_W+2], word_count, 2'b0})),
         .b_en(new_request),
         .b_addr(addr_utils.getDataLineAddr(new_request_addr)),
@@ -240,11 +234,11 @@ module icache
         if (rst)
             word_count <= 0;
         else
-            word_count <= word_count + SCONFIG.SUB_LINE_ADDR_W'(l1_response.data_valid);
+            word_count <= word_count + SCONFIG.SUB_LINE_ADDR_W'(mem.rvalid);
     end
 
-    assign miss_data_valid = request_in_progress & l1_response.data_valid & is_target_word;
-    assign line_complete = l1_response.data_valid & (word_count == END_OF_LINE_COUNT);
+    assign miss_data_valid = request_in_progress & mem.rvalid & is_target_word;
+    assign line_complete = mem.rvalid & (word_count == END_OF_LINE_COUNT);
 
     ////////////////////////////////////////////////////
     //Output muxing
@@ -254,7 +248,7 @@ module icache
     logic [31:0] output_array [OMUX_W];
     always_comb begin
         priority_vector[0] = miss_data_valid;
-        output_array[0] = l1_response.data;
+        output_array[0] = mem.rdata;
         for (int i = 0; i < CONFIG.ICACHE.WAYS; i++) begin
             priority_vector[i+1] = tag_hit_way[i];
             output_array[i+1] = data_out[i];
@@ -276,11 +270,11 @@ module icache
     ////////////////////////////////////////////////////
     //Assertions
     icache_l1_arb_ack_assertion:
-        assert property (@(posedge clk) disable iff (rst) l1_request.ack |-> l1_request.request)
+        assert property (@(posedge clk) disable iff (rst) mem.ack |-> mem.request)
         else $error("Spurious icache ack received from arbiter!");
 
     icache_l1_arb_data_valid_assertion:
-        assert property (@(posedge clk) disable iff (rst) l1_response.data_valid |-> linefill_in_progress)
+        assert property (@(posedge clk) disable iff (rst) mem.rvalid |-> linefill_in_progress)
         else $error("Spurious icache data received from arbiter!");
 
 endmodule

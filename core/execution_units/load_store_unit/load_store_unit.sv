@@ -64,10 +64,7 @@ module load_store_unit
         input logic clear_reservation,
         tlb_interface.requester tlb,
 
-        l1_arbiter_request_interface.master l1_request,
-        l1_arbiter_return_interface.master l1_response,
-        input sc_complete,
-        input sc_success,
+        mem_interface.rw_master mem,
 
         axi_interface.master m_axi,
         avalon_interface.master m_avalon,
@@ -678,8 +675,7 @@ module load_store_unit
             assign uncacheable_store = CONFIG.DCACHE.USE_NON_CACHEABLE & uncacheable_utils.address_range_check(shared_inputs.addr);
 
             dcache #(.CONFIG(CONFIG)) data_cache (
-                .l1_request(l1_request),
-                .l1_response(l1_response),
+                .mem(mem),
                 .write_outstanding(unit_write_outstanding[DCACHE_ID]),
                 .amo(shared_inputs.amo),
                 .amo_type(shared_inputs.amo_type),
