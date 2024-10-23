@@ -32,7 +32,7 @@ module writeback
 
     (
         //Unit writeback
-        unit_writeback_interface.wb unit_wb[MAX_NUM_UNITS-1:0],
+        unit_writeback_interface.wb unit_wb[MAX_NUM_UNITS],
         //WB output
         output wb_packet_t wb_packet
     );
