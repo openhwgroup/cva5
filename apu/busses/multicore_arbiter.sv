@@ -44,12 +44,14 @@ module multicore_arbiter
 
         input logic request_rvalid,
         input logic[31:0] request_rdata,
-        input logic[1+$clog2(NUM_CORES):0] request_rid
+        input logic[1+$clog2(NUM_CORES):0] request_rid,
+        input logic[NUM_CORES-1:0] write_outstanding
     );
 
     //Multiplexes memory requests and submits invalidations
     //Write coalescing would be a nice future improvement
     localparam FIFO_DEPTH = 32;
+    typedef logic[$clog2(FIFO_DEPTH):0] count_t;
     typedef logic[2+$clog2(NUM_CORES)-1:0] full_id_t;
 
     typedef struct packed {
@@ -65,6 +67,7 @@ module multicore_arbiter
     fifo_interface #(.DATA_TYPE(request_t)) request_fifo();
 
     logic[NUM_CORES-1:0] requests;
+    logic[NUM_CORES-1:0] acks;
     logic[NUM_CORES-1:0][31:2] addr;
     logic[NUM_CORES-1:0][4:0] rlen;
     logic[NUM_CORES-1:0] rnw;
@@ -77,6 +80,8 @@ module multicore_arbiter
     logic rvalid;
     logic[31:0] rdata;
     full_id_t rid;
+    logic[NUM_CORES-1:0] out_core;
+    count_t[NUM_CORES-1:0] wcounts;
     
     logic request_push;
     logic request_finished;
@@ -94,12 +99,14 @@ module multicore_arbiter
         assign wbe[i] = mems[i].wbe;
         assign wdata[i] = mems[i].wdata;
         assign id[i] = mems[i].id;
-        assign mems[i].ack = request_push & i == int'(chosen_port);
+        assign acks[i] = request_push & i == int'(chosen_port);
+        assign mems[i].ack = acks[i];
         assign mems[i].inv_addr = in_req.addr;
         assign mems[i].inv = request_push & ~in_req.rnw & i != int'(chosen_port);
         assign mems[i].rvalid = rvalids[i];
         assign mems[i].rdata = request_rdata;
         assign mems[i].rid = request_rid[1:0];
+        assign mems[i].write_outstanding = wcounts[i][$clog2(FIFO_DEPTH)] | write_outstanding[i];
     end endgenerate
 
     //Request FIFO
@@ -139,9 +146,31 @@ module multicore_arbiter
     generate if (NUM_CORES == 1) begin : gen_no_id
         assign padded_id = id[chosen_port];
         assign rvalids[0] = request_rvalid;
+        assign out_core[0] = 1;
     end else begin : gen_id
         assign padded_id = {chosen_port, id[chosen_port]};
         assign rvalids = request_rvalid << request_rid[2+:$clog2(NUM_CORES)];
+        assign out_core = 1 << request_id[2+:$clog2(NUM_CORES)];
     end endgenerate
+
+    //Write tracking; tracked for each core
+    logic[NUM_CORES-1:0] wcount_incr;
+    logic[NUM_CORES-1:0] wcount_decr;
+
+    always_comb begin
+        for (int j = 0; j < NUM_CORES; j++) begin
+            wcount_incr = acks[j] & ~rnw[j];
+            wcount_decr = out_core[j] & ~request_rnw & request_pop;
+        end
+    end
+
+    always_ff @(posedge clk) begin
+        if (rst)
+            wcounts <= '0;
+        else begin
+            for (int j = 0; j < NUM_CORES; j++) //Flipped increment / decrement allows the MSB to be used as a nonzero signal
+                wcounts[j] <= wcounts - count_t'(wcount_incr) + count_t'(wcount_decr);
+        end
+    end
 
 endmodule

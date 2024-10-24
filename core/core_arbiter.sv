@@ -59,6 +59,7 @@ module core_arbiter
     assign mem.wdata = dcache.wdata;
     assign dcache.inv = mem.inv;
     assign dcache.inv_addr = mem.inv_addr;
+    assign dcache.write_outstanding = mem.write_outstanding;
     assign dcache.ack = mem.ack & port == 2'b00;
     assign dcache.rvalid = mem.rvalid & mem.rid == 2'b00;
     assign dcache.rdata = mem.rdata;

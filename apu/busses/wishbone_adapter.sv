@@ -61,6 +61,7 @@ module wishbone_adapter
         .request_rvalid(request_rvalid),
         .request_rdata(request_rdata),
         .request_rid(request_rid),
+        .write_outstanding('0),
     .*);
 
     ////////////////////////////////////////////////////

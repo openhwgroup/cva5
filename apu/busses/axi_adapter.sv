@@ -32,6 +32,15 @@ module axi_adapter
         axi_interface.master axi
     );
 
+    //When NUM_CORES > 1, this caps the number of reads + writes to MAX_OUTS,
+    //when 1 writes only are capped to 2**$clog2(MAX_OUTSTANDING)
+    localparam MAX_OUTSTANDING = 2;
+    localparam MAX_W = $clog2(MAX_OUTSTANDING);
+
+    typedef logic[7:0] hash_t;
+    typedef logic[MAX_W:0] count_t;
+    typedef logic[MAX_W-1:0] index_t;
+
     ////////////////////////////////////////////////////
     //Multicore interface
     //Arbitrates requests
@@ -46,6 +55,7 @@ module axi_adapter
     logic request_rvalid;
     logic[31:0] request_rdata;
     logic[1+$clog2(NUM_CORES):0] request_rid;
+    logic[NUM_CORES-1:0] write_outstanding;
 
     multicore_arbiter #(.NUM_CORES(NUM_CORES)) arb (
         .mems(mems),
@@ -60,39 +70,38 @@ module axi_adapter
         .request_rvalid(request_rvalid),
         .request_rdata(request_rdata),
         .request_rid(request_rid),
+        .write_outstanding(write_outstanding),
     .*);
 
     ////////////////////////////////////////////////////
     //AXI interface
     //Read bursts and single writes
+    //If there is more than one core, ordering between reads and writes must be enforced
+    //This is not required for a single core because writes will use the same ID and ordering depends on fences
+    logic addr_blocked;
 
     //AR
-    assign axi.arvalid = request_valid & request_rnw;
+    assign axi.arvalid = request_valid & request_rnw & ~addr_blocked;
     assign axi.araddr = {request_addr[31:7], request_addr[6:2] & ~request_rlen, 2'b00};
     assign axi.arlen = {3'b0, request_rlen};
     assign axi.arsize = 3'b010; //4 bytes
     assign axi.arburst = 2'b01; //Incrementing
     assign axi.arcache = 4'b0011; //Bufferable and cacheable memory
     assign axi.arlock = 0; //Not locked
-    always_comb begin
-        axi.arid = '0;
-        axi.arid[1+$clog2(NUM_CORES):0] = request_id;
-    end
 
     //R
     assign axi.rready = 1;
     assign request_rdata = axi.rdata;
     assign request_rvalid = axi.rvalid;
-    assign request_rid = axi.rid[1+$clog2(NUM_CORES):0];
     //Don't care about rresp or rlast
-
-    //Although it is possible to keep track of the address of outstanding writes,
-    //this isn't necessary because reordering is relatively rare on FPGAs
 
     logic sent_aw;
     logic sent_w;
+    logic write_sent;
+    assign write_sent = (axi.awvalid & axi.awready | sent_aw) & (axi.wvalid & axi.wready | sent_w);
+
     always_ff @(posedge clk) begin
-        if (rst | axi.bvalid) begin
+        if (rst | write_sent) begin
             sent_aw <= 0;
             sent_w <= 0;
         end
@@ -103,17 +112,13 @@ module axi_adapter
     end
 
     //AW
-    assign axi.awvalid = request_valid & ~request_rnw & ~sent_aw;
+    assign axi.awvalid = request_valid & ~request_rnw & ~sent_aw & ~addr_blocked;
     assign axi.awaddr = {request_addr, 2'b00};
     assign axi.awlen = '0;
     assign axi.awsize = 3'b010; //4 bytes
     assign axi.awburst = 2'b01; //Incrementing
     assign axi.awcache = 4'b0011; //Bufferable and cacheable memory
     assign axi.awlock = 0; //Not locked
-    always_comb begin
-        axi.awid = '0;
-        axi.awid[1+$clog2(NUM_CORES):0] = request_id;
-    end
 
     //W
     assign axi.wvalid = request_valid & ~request_rnw & ~sent_w;
@@ -123,8 +128,147 @@ module axi_adapter
 
     //B
     assign axi.bready = 1;
-    //Don't care about bresp or bid
+    //Don't care about bresp
 
-    assign request_pop = (axi.arvalid & axi.arready) | axi.bvalid;
+    assign request_pop = (axi.arvalid & axi.arready) | write_sent;
+
+    //The AXI ID signals and outstanding write tracking depend on the number of cores
+    generate if (NUM_CORES > 1) begin : gen_outstanding_tracking
+        
+        ////////////////////////////////////////////////////
+        //Outstanding tracking
+        //Outstanding requests are tracked using a fully-associative array
+        
+        //Free slots
+        logic[MAX_OUTSTANDING-1:0] frees;
+        logic open_slot;
+        index_t free_index;
+        assign open_slot = |frees;
+
+        priority_encoder #(.WIDTH(MAX_OUTSTANDING)) free_enc (
+            .priority_vector(frees),
+            .encoded_result(free_index)
+        );
+
+        always_ff @(posedge clk) begin
+            if (rst)
+                frees <= '1;
+            else begin
+                if (axi.rvalid & axi.rlast)
+                    frees[axi.rid[MAX_W-1:0]] <= 1;
+                if (axi.bvalid)
+                    frees[axi.bid[MAX_W-1:0]] <= 1;
+                if ((axi.awvalid & axi.awready) | (axi.arvalid & axi.arready))
+                    frees[free_index] <= 0;
+            end
+        end
+
+        always_comb begin
+            axi.arid = '0;
+            axi.awid = '0;
+            axi.arid[MAX_W-1:0] = free_index;
+            axi.awid[MAX_W-1:0] = free_index;
+        end
+
+        //Outstanding storage
+        hash_t request_hash;
+        logic[5:0] request_lower;
+        logic[5:0] request_upper;
+
+        hash_t[MAX_OUTSTANDING-1:0] hashes;
+        logic[MAX_OUTSTANDING-1:0] rnws;
+        logic[MAX_OUTSTANDING-1:0][5:0] lowers;
+        logic[MAX_OUTSTANDING-1:0][5:0] uppers;
+        logic[MAX_OUTSTANDING-1:0][3:0] wbes;
+        logic[MAX_OUTSTANDING-1:0][1+$clog2(NUM_CORES):0] ids;
+        
+        always_ff @(posedge clk) begin
+            if ((axi.awvalid & axi.awready) | (axi.arvalid & axi.arready)) begin
+                rnws[free_index] <= request_rnw;
+                lowers[free_index] <= request_lower;
+                uppers[free_index] <= request_upper;
+                wbes[free_index] <= request_wbe;
+                ids[free_index] <= request_id;
+                hashes[free_index] <= request_hash;
+            end
+        end
+
+        ////////////////////////////////////////////////////
+        //Hash function
+        //8-bit hashes can easily be compared using the carry circuitry
+        //Only hash address bits that do not correspond to a line
+        assign request_hash[0] = request_addr[8] ^ request_addr[16] ^ request_addr[24];
+        assign request_hash[1] = request_addr[9] ^ request_addr[17] ^ request_addr[25];
+        assign request_hash[2] = request_addr[10] ^ request_addr[18] ^ request_addr[26];
+        assign request_hash[3] = request_addr[11] ^ request_addr[19] ^ request_addr[27];
+        assign request_hash[4] = request_addr[12] ^ request_addr[20] ^ request_addr[28];
+        assign request_hash[5] = request_addr[13] ^ request_addr[21] ^ request_addr[29];
+        assign request_hash[6] = request_addr[14] ^ request_addr[22] ^ request_addr[30];
+        assign request_hash[7] = request_addr[15] ^ request_addr[23] ^ request_addr[31];
+
+        ////////////////////////////////////////////////////
+        //Collision check
+        //Collisions are checked at byte granularity; this is complicated by burst requests
+        //Therefore, the lower and upper boundaries of the request within a 64-byte "arena" are stored
+        //Collisions must therefore be within the boundaries
+        //Writes collide with all outstanding requests
+        //Reads only collide with outstanding writes
+        logic[NUM_CORES-1:0] range_collision;
+        logic[NUM_CORES-1:0] wbe_collision;
+        logic[NUM_CORES-1:0] hash_collision;
+        always_comb begin
+            for (int i = 0; i < NUM_CORES; i++) begin
+                hash_collision[i] = ~frees[i] & request_hash == hashes[i];
+                range_collision[i] = (request_lower >= lowers[i]) & (request_upper <= uppers[i]);
+                wbe_collision[i] = request_rnw ? ~rnws[i] : rnws[i] | |(request_wbe & wbes[i]);
+            end
+        end
+        assign addr_blocked = |(hash_collision & range_collision & wbe_collision) | ~|frees;
+
+        assign request_lower = request_rnw ? axi.araddr[7:2] : request_addr[7:2];
+        assign request_upper = request_rnw ? axi.araddr[7:2] + {1'b0, request_rlen} : request_addr[7:2];
+
+        assign request_rid = ids[axi.rid[MAX_W-1:0]];
+
+        //Write outstanding check
+        always_comb begin
+            write_outstanding = '0;
+            for (int i = 0; i < NUM_CORES; i++) begin
+                for (int j = 0; j < MAX_OUTSTANDING; j++)
+                    write_outstanding[i] |= ~frees[j] & ~rnws[j] & i == ids[j][2+:$clog2(NUM_CORES)];
+            end
+        end
+
+    //Writes need to wait for outstanding write collisions to finish
+    //Writes need to wait for outstanding read collisions to finish
+    //Reads need to wait for outstanding write collisions to finish
+    end else begin : gen_no_tracking
+
+        //Simply count the number of outstanding writes; MSB of count represents nonzero
+        logic count_decr;
+        count_t count;
+
+        assign count_decr = axi.bvalid;
+
+        always_ff @(posedge clk) begin
+            if (rst)
+                count <= '0;
+            else
+                count <= count - count_t'(write_sent) + count_t'(count_decr);
+        end
+        assign write_outstanding[0] = count[MAX_W];
+
+        //AXI ID is request ID
+        assign request_rid = axi.rid[1+$clog2(NUM_CORES):0];
+        always_comb begin
+            axi.arid = '0;
+            axi.awid = '0;
+            axi.arid[1+$clog2(NUM_CORES):0] = request_id;
+            axi.awid[1+$clog2(NUM_CORES):0] = request_id;
+        end
+
+        //Requests accepted as long as counter won't overflow
+        assign addr_blocked = count[MAX_W] & ~|count[MAX_W-1:0];
+    end endgenerate
 
 endmodule

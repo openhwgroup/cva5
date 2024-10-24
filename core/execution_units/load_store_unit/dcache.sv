@@ -73,7 +73,7 @@ module dcache
     logic stage1_done;
     logic stage0_advance_r;
 
-    assign write_outstanding = (current_state != IDLE) & (~stage1.rnw | stage1.amo);
+    assign write_outstanding = ((current_state != IDLE) & (~stage1.rnw | stage1.amo)) | mem.write_outstanding;
 
     //Peeking avoids circular logic
     assign ls.ready = (current_state == IDLE) | (stage1_done & ~stage1.cbo & ~(db_wen & load_peek & load_addr_peek[31:DB_ADDR_LEN+2] == stage1.addr[31:DB_ADDR_LEN+2] & load_addr_peek[2+:DB_ADDR_LEN] == db_addr));
