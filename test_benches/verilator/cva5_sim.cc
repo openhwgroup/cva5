@@ -23,7 +23,7 @@ const char* cva5_csv_log_file_name () {
 using namespace std;
 int main(int argc, char **argv) {
     ofstream logFile, sigFile, pcFile;
-    ifstream programFile;
+    ifstream programFile[1];
 
 	// Initialize Verilators variables
 	Verilated::commandArgs(argc, argv);
@@ -50,7 +50,7 @@ int main(int argc, char **argv) {
 
     logFile.open (argv[1]);
     sigFile.open (argv[2]);
-    programFile.open (argv[3]);
+    programFile[0].open (argv[3]);
 
     if (!logFile.is_open()) {
     	cout << "Failed to open logfile: " << argv[1] << endl;
@@ -107,7 +107,7 @@ int main(int argc, char **argv) {
 
 	logFile.close();
 	sigFile.close();
-    programFile.close();
+    programFile[0].close();
     pcFile.close();
 
 	delete cva5Tracer;

@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019 Eric Matthews,  Lesley Shannon
+ * Copyright © 2019 Eric Matthews, Chris Keilbart, Lesley Shannon
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
  *
  * Author(s):
  *             Eric Matthews <ematthew@sfu.ca>
+ *             Chris Keilbart <ckeilbar@sfu.ca>
  */
 
 #ifndef CVA5Tracer_H
@@ -29,7 +30,7 @@
 #include "verilated_fst_c.h"
 #include "Vcva5_sim.h"
 #include "SimMem.h"
-#include "AXI_DDR_simulation/axi_ddr_sim.h"
+#include "AXIMem.h"
 //#define TRACE_ON
 
 #define COMPLIANCE_SIG_PHASE_NOP 0x00B00013U
@@ -42,7 +43,7 @@
 //Testbench with CVA5 trace outputs on toplevel
 class CVA5Tracer {
 public:
-  CVA5Tracer(std::ifstream& programFile);
+  CVA5Tracer(std::ifstream (&programFile)[1]);
   ~CVA5Tracer();
   bool check_if_instruction_retired(uint32_t instruction);
   bool has_terminated();
@@ -59,7 +60,7 @@ public:
   //DDR Simulation
   Vcva5_sim *tb;
 private:
-  axi_ddr_sim * axi_ddr;
+  AXIMem *axi_ddr;
   SimMem *mem;
 #ifdef TRACE_ON
 		VerilatedFstC	*verilatorWaveformTracer;
@@ -76,7 +77,8 @@ private:
   bool program_complete = false;
 
   void update_UART();
-  void update_memory();
+  void memory_pre();
+  void memory_post();
   uint32_t instruction_r;
   uint32_t data_out_r;
 };

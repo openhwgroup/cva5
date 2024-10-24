@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019 Eric Matthews,  Lesley Shannon
+ * Copyright © 2019 Eric Matthews, Chris Keilbart, Lesley Shannon
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
  *
  * Author(s):
  *             Eric Matthews <ematthew@sfu.ca>
+ *             Chris Keilbart <ckeilbar@sfu.ca>
  */
 
 #include <iostream>
@@ -73,12 +74,10 @@ bool CVA5Tracer::store_queue_empty() {
 void CVA5Tracer::reset() {
     tb->clk = 0;
     tb->rst = 1;
-    for (int i=0; i <reset_length; i++){
+    for (int i=0; i < reset_length; i++)
         tick();
-    }
 
     tb->rst = 0;
-    std::cout << "DONE System reset \n" << std::flush;
 }
 
 void CVA5Tracer::set_log_file(std::ofstream* logFile) {
@@ -96,42 +95,41 @@ void CVA5Tracer::update_UART() {
 	}
 }
 
-
-void CVA5Tracer::update_memory() {
+void CVA5Tracer::memory_pre() {
     tb->instruction_bram_data_out = instruction_r;
+    tb->data_bram_data_out = data_out_r;
+}
+
+void CVA5Tracer::memory_post() {
     if (tb->instruction_bram_en)
         instruction_r = mem->read(tb->instruction_bram_addr);
-
-    tb->data_bram_data_out = data_out_r;
     if (tb->data_bram_en) {
         data_out_r = mem->read(tb->data_bram_addr);
         mem->write(tb->data_bram_addr, tb->data_bram_data_in, tb->data_bram_be);
     }
+
 }
 
-
 void CVA5Tracer::tick() {
-        cycle_count++;
+    //Rising edge
+    cycle_count++;
+    tb->clk = 1;
+    tb->eval();
 
-		tb->clk = 1;
-		tb->eval();
-        #ifdef TRACE_ON
-            verilatorWaveformTracer->dump(vluint32_t(cycle_count));
-        #endif
-        cycle_count++;
+    //Set outputs
+    axi_ddr->pre();
+    memory_pre();
+    tb->eval();
 
-        tb->clk = 0;
-        tb->eval();
-        #ifdef TRACE_ON
-            verilatorWaveformTracer->dump(vluint32_t(cycle_count));
-        #endif
+    //Respond to inputs
+    axi_ddr->post();
+    memory_post();
 
-        tb->clk = 1;
-        tb->eval();
-        axi_ddr->step();
-        update_UART();
-        update_memory();
+    #ifdef TRACE_ON
+        verilatorWaveformTracer->dump(vluint32_t(cycle_count));
+    #endif
 
+    update_UART();
 	#ifdef PC_TRACE_ON
         for (int i =0; i < tb->NUM_RETIRE_PORTS; i++) {
             if (logPC && tb->retire_ports_valid[i]) {
@@ -140,8 +138,14 @@ void CVA5Tracer::tick() {
         }
 	#endif
 
+    //Falling edge
+    cycle_count++;
+    tb->clk = 0;
+    tb->eval();
+    #ifdef TRACE_ON
+        verilatorWaveformTracer->dump(vluint32_t(cycle_count));
+    #endif
 }
-
 
 void CVA5Tracer::start_tracer(const char *trace_file) {
 	#ifdef TRACE_ON
@@ -151,32 +155,24 @@ void CVA5Tracer::start_tracer(const char *trace_file) {
 	#endif
 }
 
-
 uint64_t CVA5Tracer::cycle_count = 0;
 uint64_t CVA5Tracer::get_cycle_count() {
     return cycle_count;
 }
 
-
-CVA5Tracer::CVA5Tracer(std::ifstream& programFile) {
+CVA5Tracer::CVA5Tracer(std::ifstream (&programFile)[1]) {
     cycle_count = 0;
 
 	#ifdef TRACE_ON
 		Verilated::traceEverOn(true);
 	#endif
 
-
     tb = new Vcva5_sim;
-
-   #ifdef DDR_LOAD_FILE
-        axi_ddr = new axi_ddr_sim(DDR_INIT_FILE,DDR_FILE_STARTING_LOCATION,DDR_FILE_NUM_BYTES);
-    #else
-        axi_ddr = new axi_ddr_sim(programFile, tb);
-        
-    #endif
-    programFile.clear();
-    programFile.seekg(0, ios::beg);
-    mem = new SimMem(programFile, 128);
+    
+    axi_ddr = new AXIMem(programFile, tb);
+    programFile[0].clear();
+    programFile[0].seekg(0, ios::beg);
+    mem = new SimMem(programFile);
 
     instruction_r = mem->read(tb->instruction_bram_addr);
     data_out_r = 0;
@@ -189,5 +185,6 @@ CVA5Tracer::~CVA5Tracer() {
 		verilatorWaveformTracer->close();
 	#endif
 	delete mem;
+    delete axi_ddr;
 	delete tb;
 }
