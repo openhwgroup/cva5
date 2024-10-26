@@ -196,6 +196,15 @@ module litex_wrapper
     //assign m_interrupt.timer = cpu_timer_in;
     assign m_interrupt.external = cpu_m_interrupt;
 
+    mem_interface mem[0:0]();
+    // Instantiate the wishbone_adapter and connect it to the core arbiter
+    wishbone_adapter #(.NUM_CORES(NUM_CORES)) wb_adapter (
+        .clk(clk),
+        .rst(rst),
+        .mems(mems[0]), // Connect to Wishbone from core arbiter
+        .wishbone(idwishbone)
+    );```
+
     cva5 #(.CONFIG(STANDARD_CONFIG)) cpu(.*);
 
     l1_to_wishbone  arb(.*, .cpu(l2), .wishbone(idwishbone));
