@@ -181,9 +181,6 @@ module litex_wrapper
     assign s_interrupt.timer = cpu_timer_in;
     assign s_interrupt.external = cpu_s_interrupt;
 
-    //L2 to Wishbone
-    l2_requester_interface l2();
-
     //Wishbone interfaces
     wishbone_interface dwishbone();
     wishbone_interface iwishbone();
@@ -198,16 +195,18 @@ module litex_wrapper
 
     mem_interface mem[0:0]();
     // Instantiate the wishbone_adapter and connect it to the core arbiter
-    wishbone_adapter #(.NUM_CORES(NUM_CORES)) wb_adapter (
+    wishbone_adapter #(.NUM_CORES(1)) wb_adapter (
         .clk(clk),
         .rst(rst),
-        .mems(mems[0]), // Connect to Wishbone from core arbiter
+        .mems(mem), // Connect to Wishbone from core arbiter
         .wishbone(idwishbone)
-    );```
+    );
 
-    cva5 #(.CONFIG(STANDARD_CONFIG)) cpu(.*);
+    cva5 #(.CONFIG(STANDARD_CONFIG)) cpu(
+        .mem(mem[0]),
+        .*
+    );
 
-    l1_to_wishbone  arb(.*, .cpu(l2), .wishbone(idwishbone));
     assign idbus_adr = idwishbone.adr;
     assign idbus_dat_w = idwishbone.dat_w;
     assign idbus_sel = idwishbone.sel;
