@@ -238,6 +238,7 @@ module dcache
                 mem.request = 0;
                 mem.wdata = 'x;
                 mem.rnw = 'x;
+                mem.rlen = 'x;
                 db_wen = 0;
                 db_wdata = 'x;
                 db_way = 'x;
@@ -249,6 +250,7 @@ module dcache
                 mem.request = ~stage1.cbo & (~stage1.rnw | (stage1.uncacheable & ~stage1_is_sc) | (stage1_is_sc & amo_unit.reservation_valid));
                 mem.wdata = stage1.data;
                 mem.rnw = stage1.rnw & ~stage1_is_sc;
+                mem.rlen = '0;
                 db_wen = ~stage1.cbo & hit & ~stage1.uncacheable & (~stage1.rnw | (stage1_is_sc & amo_unit.reservation_valid));
                 db_wdata = stage1.data;
                 db_way = hit_ohot;
@@ -269,6 +271,7 @@ module dcache
                 mem.request = 1;
                 mem.wdata = 'x;
                 mem.rnw = 1;
+                mem.rlen = 5'(CONFIG.DCACHE.LINE_W-1);
                 db_wen = 0;
                 db_wdata = 'x;
                 db_way = 'x;
@@ -280,6 +283,7 @@ module dcache
                 mem.request = 0;
                 mem.wdata = 'x;
                 mem.rnw = 'x;
+                mem.rlen = 'x;
                 db_wen = mem.rvalid;
                 db_wdata = mem.rdata;
                 db_way = replacement_way;
@@ -298,6 +302,7 @@ module dcache
                 mem.request = 0;
                 mem.wdata = 'x;
                 mem.rnw = 'x;
+                mem.rlen = 'x;
                 db_wen = 0;
                 db_wdata = 'x;
                 db_way = 'x;
@@ -316,6 +321,7 @@ module dcache
                 mem.request = 1;
                 mem.wdata = amo_unit.rd;
                 mem.rnw = 0;
+                mem.rlen = 'x;
                 db_wen = ~stage1.uncacheable;
                 db_wdata = amo_unit.rd;
                 db_way = hit_r ? hit_ohot_r : replacement_way;
@@ -351,7 +357,6 @@ module dcache
     end
 
     assign mem.addr = stage1.addr[31:2];
-    assign mem.rlen = 5'(CONFIG.DCACHE.LINE_W-1);
     assign mem.wbe = stage1.be;
 
     ////////////////////////////////////////////////////
