@@ -61,116 +61,6 @@ module litex_wrapper
         default : '{default : NON_WRITEBACK_ID}
     };
 
-    localparam cpu_config_t STANDARD_CONFIG = '{
-        //ISA options
-        MODES : MSU,
-        INCLUDE_UNIT : '{
-            ALU : 1,
-            LS : 1,
-            MUL : 1,
-            DIV : 1,
-            CSR : 1,
-            FPU : 0,
-            CUSTOM : 0,
-            BR : 1,
-            GC : 1
-        },
-        INCLUDE_IFENCE : 1,
-        INCLUDE_AMO : 1,
-        INCLUDE_CBO : 0,
-
-        //CSR constants
-        CSRS : '{
-            MACHINE_IMPLEMENTATION_ID : 0,
-            CPU_ID : 0,
-            RESET_VEC : RESET_VEC,
-            RESET_TVEC : 32'h00000000,
-            MCONFIGPTR : '0,
-            INCLUDE_ZICNTR : 1,
-            INCLUDE_ZIHPM : 1,
-            INCLUDE_SSTC : 1,
-            INCLUDE_SMSTATEEN : 1
-        },
-        //Memory Options
-        SQ_DEPTH : 4,
-        INCLUDE_FORWARDING_TO_STORES : 1,
-        AMO_UNIT : '{
-            LR_WAIT : 8,
-            RESERVATION_WORDS : 8
-        },
-        INCLUDE_ICACHE : 1,
-        ICACHE_ADDR : '{
-            L : 32'h00000000, 
-            H : 32'h7FFFFFFF
-        },
-        ICACHE : '{
-            LINES : 512,
-            LINE_W : 8,
-            WAYS : 2,
-            USE_EXTERNAL_INVALIDATIONS : 0,
-            USE_NON_CACHEABLE : 0,
-            NON_CACHEABLE : '{
-                L: NON_CACHABLE_L,
-                H: NON_CACHABLE_H
-            }
-        },
-        ITLB : '{
-            WAYS : 2,
-            DEPTH : 64
-        },
-        INCLUDE_DCACHE : 1,
-        DCACHE_ADDR : '{
-            L : 32'h00000000, 
-            H : 32'hFFFFFFFF
-        },
-        DCACHE : '{
-            LINES : 512,
-            LINE_W : 8,
-            WAYS : 2,
-            USE_EXTERNAL_INVALIDATIONS : 0,
-            USE_NON_CACHEABLE : 1,
-            NON_CACHEABLE : '{
-                L: NON_CACHABLE_L,
-                H: NON_CACHABLE_H
-            }
-        },
-        DTLB : '{
-            WAYS : 2,
-            DEPTH : 64
-        },
-        INCLUDE_ILOCAL_MEM : 0,
-        ILOCAL_MEM_ADDR : '{
-            L : 32'h80000000, 
-            H : 32'h8FFFFFFF
-        },
-        INCLUDE_DLOCAL_MEM : 0,
-        DLOCAL_MEM_ADDR : '{
-            L : 32'h80000000,
-            H : 32'h8FFFFFFF
-        },
-        INCLUDE_IBUS : 0,
-        IBUS_ADDR : '{
-            L : 32'h00000000, 
-            H : 32'hFFFFFFFF
-        },
-        INCLUDE_PERIPHERAL_BUS : 0,
-        PERIPHERAL_BUS_ADDR : '{
-            L : 32'h00000000,
-            H : 32'hFFFFFFFF
-        },
-        PERIPHERAL_BUS_TYPE : WISHBONE_BUS,
-        //Branch Predictor Options
-        INCLUDE_BRANCH_PREDICTOR : 1,
-        BP : '{
-            WAYS : 2,
-            ENTRIES : 512,
-            RAS_ENTRIES : 8
-        },
-        //Writeback Options
-        NUM_WB_GROUPS : 3,
-        WB_GROUP : STANDARD_WB_GROUP_CONFIG
-    };
-
     //Unused interfaces
     axi_interface m_axi[NUM_CORES-1:0]();
     avalon_interface m_avalon[NUM_CORES-1:0]();
@@ -205,10 +95,117 @@ module litex_wrapper
     );
 
     generate for (genvar i = 0; i < NUM_CORES; i++) begin : gen_cores
-        localparam cpu_config_t CUSTOM_CONFIG = STANDARD_CONFIG;
-        assign CUSTOM_CONFIG.CSRS.CPU_ID = i;
+        localparam cpu_config_t STANDARD_CONFIG_I = '{
+            //ISA options
+            MODES : MSU,
+            INCLUDE_UNIT : '{
+                ALU : 1,
+                LS : 1,
+                MUL : 1,
+                DIV : 1,
+                CSR : 1,
+                FPU : 0,
+                CUSTOM : 0,
+                BR : 1,
+                GC : 1
+            },
+            INCLUDE_IFENCE : 1,
+            INCLUDE_AMO : 1,
+            INCLUDE_CBO : 0,
+    
+            //CSR constants
+            CSRS : '{
+                MACHINE_IMPLEMENTATION_ID : 0,
+                CPU_ID : i,
+                RESET_VEC : RESET_VEC,
+                RESET_TVEC : 32'h00000000,
+                MCONFIGPTR : '0,
+                INCLUDE_ZICNTR : 1,
+                INCLUDE_ZIHPM : 1,
+                INCLUDE_SSTC : 1,
+                INCLUDE_SMSTATEEN : 1
+            },
+            //Memory Options
+            SQ_DEPTH : 4,
+            INCLUDE_FORWARDING_TO_STORES : 1,
+            AMO_UNIT : '{
+                LR_WAIT : 8,
+                RESERVATION_WORDS : 8
+            },
+            INCLUDE_ICACHE : 1,
+            ICACHE_ADDR : '{
+                L : 32'h00000000, 
+                H : 32'h7FFFFFFF
+            },
+            ICACHE : '{
+                LINES : 512,
+                LINE_W : 8,
+                WAYS : 2,
+                USE_EXTERNAL_INVALIDATIONS : 0,
+                USE_NON_CACHEABLE : 0,
+                NON_CACHEABLE : '{
+                    L: NON_CACHABLE_L,
+                    H: NON_CACHABLE_H
+                }
+            },
+            ITLB : '{
+                WAYS : 2,
+                DEPTH : 64
+            },
+            INCLUDE_DCACHE : 1,
+            DCACHE_ADDR : '{
+                L : 32'h00000000, 
+                H : 32'hFFFFFFFF
+            },
+            DCACHE : '{
+                LINES : 512,
+                LINE_W : 8,
+                WAYS : 2,
+                USE_EXTERNAL_INVALIDATIONS : 0,
+                USE_NON_CACHEABLE : 1,
+                NON_CACHEABLE : '{
+                    L: NON_CACHABLE_L,
+                    H: NON_CACHABLE_H
+                }
+            },
+            DTLB : '{
+                WAYS : 2,
+                DEPTH : 64
+            },
+            INCLUDE_ILOCAL_MEM : 0,
+            ILOCAL_MEM_ADDR : '{
+                L : 32'h80000000, 
+                H : 32'h8FFFFFFF
+            },
+            INCLUDE_DLOCAL_MEM : 0,
+            DLOCAL_MEM_ADDR : '{
+                L : 32'h80000000,
+                H : 32'h8FFFFFFF
+            },
+            INCLUDE_IBUS : 0,
+            IBUS_ADDR : '{
+                L : 32'h00000000, 
+                H : 32'hFFFFFFFF
+            },
+            INCLUDE_PERIPHERAL_BUS : 0,
+            PERIPHERAL_BUS_ADDR : '{
+                L : 32'h00000000,
+                H : 32'hFFFFFFFF
+            },
+            PERIPHERAL_BUS_TYPE : WISHBONE_BUS,
+            //Branch Predictor Options
+            INCLUDE_BRANCH_PREDICTOR : 1,
+            BP : '{
+                WAYS : 2,
+                ENTRIES : 512,
+                RAS_ENTRIES : 8
+            },
+            //Writeback Options
+            NUM_WB_GROUPS : 3,
+            WB_GROUP : STANDARD_WB_GROUP_CONFIG
+        };
 
-        cva5 #(.CONFIG(CUSTOM_CONFIG)) cpu(
+        cva5 #(.CONFIG(STANDARD_CONFIG_I)) cpu(
             .instruction_bram(instruction_bram[i]),
             .data_bram(data_bram[i]),
     
