@@ -216,7 +216,7 @@ module litex_wrapper
     
             .mem(mem[i]),
     
-            .mtime(mtime[i]),
+            .mtime(mtime),
             .s_interrupt(s_interrupt[i]),
             .m_interrupt(m_interrupt[i]),
             .*    
