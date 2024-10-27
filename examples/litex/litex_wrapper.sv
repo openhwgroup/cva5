@@ -29,16 +29,16 @@ module litex_wrapper
     #(
         parameter bit [31:0] RESET_VEC = 0,
         parameter bit [31:0] NON_CACHABLE_L = 32'h80000000,
-        parameter bit [31:0] NON_CACHABLE_H = 32'hFFFFFFFF
+        parameter bit [31:0] NON_CACHABLE_H = 32'hFFFFFFFF,
+        parameter int unsigned NUM_CORES = 1
     )
-
     (
         input logic clk,
         input logic rst,
-        input logic cpu_m_interrupt,
-        input logic cpu_s_interrupt,
-        input logic cpu_software_in,
-        input logic cpu_timer_in,
+        input logic [NUM_CORES-1:0] cpu_m_interrupt,
+        input logic [NUM_CORES-1:0] cpu_s_interrupt,
+        input logic [NUM_CORES-1:0] cpu_software_in,
+        input logic [NUM_CORES-1:0] cpu_timer_in,
         input logic [63:0] mtime,
 
         output logic [29:0] idbus_adr,
@@ -172,18 +172,18 @@ module litex_wrapper
     };
 
     //Unused interfaces
-    axi_interface m_axi();
-    avalon_interface m_avalon();
-    local_memory_interface instruction_bram();
-    local_memory_interface data_bram();
+    axi_interface m_axi[NUM_CORES-1:0]();
+    avalon_interface m_avalon[NUM_CORES-1:0]();
+    local_memory_interface instruction_bram[NUM_CORES-1:0]();
+    local_memory_interface data_bram[NUM_CORES-1:0]();
     interrupt_t s_interrupt;
     assign s_interrupt.software = 0;
     assign s_interrupt.timer = cpu_timer_in;
     assign s_interrupt.external = cpu_s_interrupt;
 
     //Wishbone interfaces
-    wishbone_interface dwishbone();
-    wishbone_interface iwishbone();
+    wishbone_interface dwishbone[NUM_CORES-1:0]();
+    wishbone_interface iwishbone[NUM_CORES-1:0]();
     wishbone_interface idwishbone();
 
     //Timer and External interrupts
@@ -193,19 +193,38 @@ module litex_wrapper
     //assign m_interrupt.timer = cpu_timer_in;
     assign m_interrupt.external = cpu_m_interrupt;
 
-    mem_interface mem[0:0]();
-    // Instantiate the wishbone_adapter and connect it to the core arbiter
-    wishbone_adapter #(.NUM_CORES(1)) wb_adapter (
+    // Memory interfaces for each core
+    mem_interface mem[NUM_CORES-1:0]();
+    
+    // Instantiate the wishbone_adapter and connect it to the concatenated mem interfaces
+    wishbone_adapter #(.NUM_CORES(NUM_CORES)) wb_adapter (
         .clk(clk),
         .rst(rst),
-        .mems(mem), // Connect to Wishbone from core arbiter
+        .mems(mem), // Connect to Wishbone from all core arbiters
         .wishbone(idwishbone)
     );
 
-    cva5 #(.CONFIG(STANDARD_CONFIG)) cpu(
-        .mem(mem[0]),
-        .*
-    );
+    generate for (genvar i = 0; i < NUM_CORES; i++) begin : gen_cores
+        localparam cpu_config_t CUSTOM_CONFIG = STANDARD_CONFIG;
+        assign CUSTOM_CONFIG.CSRS.CPU_ID = i;
+
+        cva5 #(.CONFIG(CUSTOM_CONFIG)) cpu(
+            .instruction_bram(instruction_bram[i]),
+            .data_bram(data_bram[i]),
+    
+            .m_axi(m_axi[i]),
+            .m_avalon(m_avalon[i]),
+            .dwishbone(dwishbone[i]),
+            .iwishbone(iwishbone[i]),
+    
+            .mem(mem[i]),
+    
+            .mtime(mtime[i]),
+            .s_interrupt(s_interrupt[i]),
+            .m_interrupt(m_interrupt[i]),
+            .*    
+        );
+    end endgenerate
 
     assign idbus_adr = idwishbone.adr;
     assign idbus_dat_w = idwishbone.dat_w;
