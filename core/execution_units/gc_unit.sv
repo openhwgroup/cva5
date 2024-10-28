@@ -351,7 +351,7 @@ module gc_unit
     assign possible_exception = |exception_possible;
     assign gc.exception.possible = possible_exception;
 
-generate if (CONFIG.MODES != BARE) begin :gen_gc_m_mode
+generate if (CONFIG.MODES != BARE) begin : gen_gc_m_mode
 
     //Re-assigning interface inputs to array types so that they can be dynamically indexed
     exception_code_t [NUM_EXCEPTION_SOURCES-1:0] exception_code;
@@ -360,7 +360,7 @@ generate if (CONFIG.MODES != BARE) begin :gen_gc_m_mode
     logic [NUM_EXCEPTION_SOURCES-1:0] exception_discard;
     logic [31:0] muxed_exception_pc;
     
-    for (genvar i = 0; i < NUM_EXCEPTION_SOURCES; i++) begin
+    for (genvar i = 0; i < NUM_EXCEPTION_SOURCES; i++) begin : gen_unpacking
         assign exception_valid[i] = exception[i].valid;
         assign exception_code[i] = exception[i].code;
         assign exception_tval[i] = exception[i].tval;

@@ -75,6 +75,7 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
     logic lq_addr_discard;
     logic sq_addr_discard;
 
+    logic load_blocked;
     logic load_pop;
     logic load_addr_bit_3;
     logic [2:0] load_fn3;
@@ -274,7 +275,6 @@ module load_store_queue //ID-based input buffer for Load/Store Unit
     end
     endgenerate
 
-    logic load_blocked;
     assign load_blocked = (lq.data_out.store_collision & (lq.data_out.sq_index != sq_oldest));
 
     //Requests are only valid if the TLB has returned the physical address and there was no exception

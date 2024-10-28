@@ -26,7 +26,6 @@ module sdp_ram
         parameter ADDR_WIDTH = 10,
         parameter NUM_COL = 4, //Number of independently writeable components
         parameter COL_WIDTH = 16, //Width the "byte" enable controls
-        parameter DATA_WIDTH = COL_WIDTH*NUM_COL, //Do not set this to anything else
         parameter PIPELINE_DEPTH = 1, //Depth of the output pipeline, is latency in clock cycles
         parameter CASCADE_DEPTH = 4 //Maximum depth of the memory block cascade
     )
@@ -35,14 +34,16 @@ module sdp_ram
         //Port A
         input logic a_en,
         input logic[NUM_COL-1:0] a_wbe,
-        input logic[DATA_WIDTH-1:0] a_wdata,
+        input logic[COL_WIDTH*NUM_COL-1:0] a_wdata,
         input logic[ADDR_WIDTH-1:0] a_addr,
 
         //Port B
         input logic b_en,
         input logic[ADDR_WIDTH-1:0] b_addr,
-        output logic[DATA_WIDTH-1:0] b_rdata
+        output logic[COL_WIDTH*NUM_COL-1:0] b_rdata
     );
+
+    localparam DATA_WIDTH = COL_WIDTH*NUM_COL;
 
     (* cascade_height = CASCADE_DEPTH, ramstyle = "no_rw_check" *) //Higher depths use less resources but are slower
     logic[DATA_WIDTH-1:0] mem[(1<<ADDR_WIDTH)-1:0];

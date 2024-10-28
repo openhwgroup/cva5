@@ -25,7 +25,6 @@
 module cva5
 
     import cva5_config::*;
-    import l2_config_and_types::*;
     import riscv_types::*;
     import cva5_types::*;
     import fpu_types::*;

@@ -100,7 +100,7 @@ module dcache
     
     //Replacement policy
     logic[CONFIG.DCACHE.WAYS-1:0] replacement_way;
-    cycler #(CONFIG.DCACHE.WAYS) replacement_policy (
+    cycler #(.C_WIDTH(CONFIG.DCACHE.WAYS)) replacement_policy (
         .en(ls.new_request), 
         .one_hot(replacement_way),
     .*);

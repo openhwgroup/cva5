@@ -628,7 +628,7 @@ module load_store_unit
 
     generate if (CONFIG.INCLUDE_PERIPHERAL_BUS) begin : gen_ls_pbus
             assign sub_unit_address_match[BUS_ID] = dpbus_addr_utils.address_range_check(tlb.physical_address);
-            if(CONFIG.PERIPHERAL_BUS_TYPE == AXI_BUS)
+            if(CONFIG.PERIPHERAL_BUS_TYPE == AXI_BUS) begin : gen_axi
                 axi_master axi_bus (
                     .clk (clk),
                     .rst (rst),
@@ -639,7 +639,7 @@ module load_store_unit
                     .amo_unit (amo_if[BUS_ID]),
                     .ls (sub_unit[BUS_ID])
                 ); //Lower two bits of fn3 match AXI specification for request size (byte/halfword/word)
-            else if (CONFIG.PERIPHERAL_BUS_TYPE == WISHBONE_BUS)
+            end else if (CONFIG.PERIPHERAL_BUS_TYPE == WISHBONE_BUS) begin : gen_wishbone
                 wishbone_master #(.LR_WAIT(CONFIG.AMO_UNIT.LR_WAIT), .INCLUDE_AMO(CONFIG.INCLUDE_AMO)) wishbone_bus (
                     .clk (clk),
                     .rst (rst),
@@ -650,7 +650,7 @@ module load_store_unit
                     .amo_unit (amo_if[BUS_ID]),
                     .ls (sub_unit[BUS_ID])
                 );
-            else if (CONFIG.PERIPHERAL_BUS_TYPE == AVALON_BUS)  begin
+            end else if (CONFIG.PERIPHERAL_BUS_TYPE == AVALON_BUS) begin : gen_avalon
                 avalon_master #(.LR_WAIT(CONFIG.AMO_UNIT.LR_WAIT), .INCLUDE_AMO(CONFIG.INCLUDE_AMO)) avalon_bus (
                     .clk (clk),
                     .rst (rst),
