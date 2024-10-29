@@ -20,7 +20,7 @@
  *             Chris Keilbart <ckeilbar@sfu.ca>
  */
 
-module dcache
+module dcache_noinv
 
     import cva5_config::*;
     import riscv_types::*;

@@ -674,18 +674,33 @@ module load_store_unit
             assign uncacheable_load = CONFIG.DCACHE.USE_NON_CACHEABLE & uncacheable_utils.address_range_check(shared_inputs.addr);
             assign uncacheable_store = CONFIG.DCACHE.USE_NON_CACHEABLE & uncacheable_utils.address_range_check(shared_inputs.addr);
 
-            dcache #(.CONFIG(CONFIG)) data_cache (
-                .mem(mem),
-                .write_outstanding(unit_write_outstanding[DCACHE_ID]),
-                .amo(shared_inputs.amo),
-                .amo_type(shared_inputs.amo_type),
-                .amo_unit(amo_if[DCACHE_ID]),
-                .uncacheable(uncacheable_load | uncacheable_store),
-                .cbo(shared_inputs.cache_op),
-                .ls(sub_unit[DCACHE_ID]),
-                .load_peek(lsq.load_valid),
-                .load_addr_peek(lsq.load_data_out.addr),
-            .*);
+            if (CONFIG.DCACHE.USE_EXTERNAL_INVALIDATIONS) begin : gen_full_dcache
+                dcache_inv #(.CONFIG(CONFIG)) data_cache (
+                    .mem(mem),
+                    .write_outstanding(unit_write_outstanding[DCACHE_ID]),
+                    .amo(shared_inputs.amo),
+                    .amo_type(shared_inputs.amo_type),
+                    .amo_unit(amo_if[DCACHE_ID]),
+                    .uncacheable(uncacheable_load | uncacheable_store),
+                    .cbo(shared_inputs.cache_op),
+                    .ls(sub_unit[DCACHE_ID]),
+                    .load_peek(lsq.load_valid),
+                    .load_addr_peek(lsq.load_data_out.addr),
+                .*);
+            end else begin : gen_small_dcache
+                dcache_noinv #(.CONFIG(CONFIG)) data_cache (
+                    .mem(mem),
+                    .write_outstanding(unit_write_outstanding[DCACHE_ID]),
+                    .amo(shared_inputs.amo),
+                    .amo_type(shared_inputs.amo_type),
+                    .amo_unit(amo_if[DCACHE_ID]),
+                    .uncacheable(uncacheable_load | uncacheable_store),
+                    .cbo(shared_inputs.cache_op),
+                    .ls(sub_unit[DCACHE_ID]),
+                    .load_peek(lsq.load_valid),
+                    .load_addr_peek(lsq.load_data_out.addr),
+                .*);
+            end
         end
     endgenerate
 
