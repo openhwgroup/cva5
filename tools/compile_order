@@ -115,8 +115,11 @@ core/core_arbiter.sv
 apu/busses/multicore_arbiter.sv
 apu/busses/axi_adapter.sv
 apu/busses/wishbone_adapter.sv
-
 apu/clint/clint.sv
 apu/clint/clint_wrapper.sv
+apu/plic/plic_gateway.sv
+apu/plic/plic_cmptree.sv
+apu/plic/plic.sv
+apu/plic/plic_wrapper.sv
 
 core/cva5.sv
