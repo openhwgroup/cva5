@@ -69,7 +69,7 @@ module clint_wrapper
     localparam logic [15:0] MSIP_BASE = 16'h0; //Must be 4-byte aligned
     localparam logic [15:0] MTIMECMP_BASE = 16'h4000; //Must be 8-byte aligned
     localparam logic [15:0] MTIME_BASE = 16'hbff8; //Must be 8-byte aligned
-    localparam CORES_MINUS_ONE = NUM_CORES-1;
+    localparam logic [15:0] CORES_MINUS_ONE = 16'(NUM_CORES-1);
     
     localparam CORE_W = NUM_CORES == 1 ? 1 : $clog2(NUM_CORES);
     
@@ -101,69 +101,52 @@ module clint_wrapper
 
     //Interface
     generate if (AXI) begin : gen_axi_if
-        //Simple implementation uses separate cycles for address / data / response
-        logic[15:2] saved_waddr;
-        logic[15:2] saved_raddr;
+        //Simple implementation uses single-cycle for reads and writes
+        logic doing_write;
+        assign doing_write = axi_awvalid & axi_awready & axi_wvalid & axi_wready;
 
-        //Addresses
-        always_ff @(posedge clk) begin
-            if (~axi_rvalid)
-                saved_raddr <= axi_araddr[15:2];
-            if (~axi_wready & ~axi_bvalid)
-                saved_waddr <= axi_awaddr[15:2];
-        end
-        
         //Outputs
-        assign axi_arready = ~rst & ~axi_rvalid;
-        assign axi_awready = ~rst & ~axi_wready & ~axi_bvalid;
+        assign axi_arready = ~axi_rvalid;
+        assign axi_awready = ~axi_bvalid & ~axi_arvalid & axi_awvalid & axi_wvalid;
+        assign axi_wready = axi_awready;
+
         always_ff @(posedge clk) begin
             if (rst) begin
                 axi_rvalid <= 0;
-                axi_wready <= 0;
                 axi_bvalid <= 0;
             end
             else begin
-                if (axi_rvalid)
-                    axi_rvalid <= ~axi_rready;
-                else
-                    axi_rvalid <= axi_arvalid;
-
-                if (axi_wready)
-                    axi_wready <= ~axi_wvalid;
-                else
-                    axi_wready <= axi_awvalid & ~axi_bvalid;
-
-                if (axi_bvalid)
-                    axi_bvalid <= ~axi_bready;
-                else
-                    axi_bvalid <= axi_wvalid & axi_wready;
+                axi_rvalid <= axi_rvalid ? ~axi_rready : axi_arvalid;
+                axi_bvalid <= axi_bvalid ? ~axi_bready : doing_write;
             end
         end
 
         //Read data
-        always_comb begin
-            case ({saved_raddr, 2'b00}) inside
-                [MSIP_BASE:MSIP_BASE+4*CORES_MINUS_ONE] : axi_rdata = {31'b0, msip[NUM_CORES == 1 ? '0 : saved_raddr[2+:CORE_W]]};
-                [MTIME_BASE:MTIME_BASE+1] : axi_rdata = mtime_packed[saved_raddr[2]];
-                [MTIMECMP_BASE:MTIMECMP_BASE+8*CORES_MINUS_ONE] : axi_rdata = mtimecmp[NUM_CORES == 1 ? '0 : saved_raddr[3+:CORE_W]][saved_raddr[2]];
-                default : axi_rdata = '0;
-            endcase
+        always_ff @(posedge clk) begin
+            if (~axi_rvalid) begin
+                case ({axi_araddr[15:2], 2'b00}) inside
+                    [MSIP_BASE:MSIP_BASE+4*CORES_MINUS_ONE] : axi_rdata <= {31'b0, msip[NUM_CORES == 1 ? '0 : axi_araddr[2+:CORE_W]]};
+                    [MTIME_BASE:MTIME_BASE+1] : axi_rdata <= mtime_packed[axi_araddr[2]];
+                    [MTIMECMP_BASE:MTIMECMP_BASE+8*CORES_MINUS_ONE] : axi_rdata <= mtimecmp[NUM_CORES == 1 ? '0 : axi_araddr[3+:CORE_W]][axi_araddr[2]];
+                    default : axi_rdata <= 'x;
+                endcase
+            end
         end
 
         //Write data
         assign write_data = axi_wdata;
-        assign write_upper = saved_waddr[2];
-        assign write_msip_core = NUM_CORES == 1 ? '0 : saved_waddr[2+:CORE_W];
-        assign write_mtimecmp_core = NUM_CORES == 1 ? '0 : saved_waddr[3+:CORE_W];
+        assign write_upper = axi_awaddr[2];
+        assign write_msip_core = NUM_CORES == 1 ? '0 : axi_awaddr[2+:CORE_W];
+        assign write_mtimecmp_core = NUM_CORES == 1 ? '0 : axi_awaddr[3+:CORE_W];
         
         always_comb begin
             write_msip = 0;
             write_mtime = 0;
             write_mtimecmp = 0;
-            case ({saved_waddr, 2'b00}) inside
-                [MSIP_BASE:MSIP_BASE+4*CORES_MINUS_ONE] : write_msip = axi_wvalid & axi_wready;
-                [MTIME_BASE:MTIME_BASE+1] : write_mtime = axi_wvalid & axi_wready;
-                [MTIMECMP_BASE:MTIMECMP_BASE+8*CORES_MINUS_ONE] : write_mtimecmp = axi_wvalid & axi_wready;
+            case ({axi_awaddr[15:2], 2'b00}) inside
+                [MSIP_BASE:MSIP_BASE+4*CORES_MINUS_ONE] : write_msip = doing_write;
+                [MTIME_BASE:MTIME_BASE+1] : write_mtime = doing_write;
+                [MTIMECMP_BASE:MTIMECMP_BASE+8*CORES_MINUS_ONE] : write_mtimecmp = doing_write;
             endcase
         end
 

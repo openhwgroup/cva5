@@ -56,7 +56,7 @@ module clint
         if (rst) begin
             mtime <= '0;
             mtimecmp <= '1; //Reset to max to prevent interrupts
-            msip = '0;
+            msip <= '0;
         end
         else begin
             for (int i = 0; i < NUM_CORES; i++)
