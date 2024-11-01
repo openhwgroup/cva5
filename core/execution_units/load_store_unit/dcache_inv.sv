@@ -379,7 +379,7 @@ module dcache_inv
     assign inv_matches_stage1 = mem.inv & stage1.addr[31:2+SCONFIG.SUB_LINE_ADDR_W] == mem.inv_addr[31:2+SCONFIG.SUB_LINE_ADDR_W];
     always_ff @(posedge clk) begin
         case (current_state)
-            RMW_IDLE, RMW_FILLING, RMW_WRITE : rmw_retry <= stage1_valid & (rmw_retry | inv_matches_stage1);
+            RMW_IDLE, RMW_FILLING, RMW_WRITE : rmw_retry <= stage1_valid & stage1_type == AMO_RMW & (rmw_retry | inv_matches_stage1);
             default: rmw_retry <= 0;
         endcase
     end
@@ -452,7 +452,7 @@ module dcache_inv
                 mem.rnw = 0;
                 stage1_tb_write = 0;
                 stage1_tb_wval = 'x;
-                db_wen = mem.ack;
+                db_wen = ~stage1.uncacheable & mem.ack;
                 db_wdata = stage1.wdata;
                 db_way = stage0_advance_r ? hit_ohot : hit_ohot_r;
                 ls.data_valid = stage1_valid & (mem.ack | ~lr_valid);
