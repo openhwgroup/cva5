@@ -478,8 +478,9 @@ module dcache_inv
     assign mem.addr = stage1.addr[31:2];
     assign mem.wbe = stage1.be;
     assign mem.rlen = stage1.uncacheable ? '0 : 5'(CONFIG.DCACHE.LINE_W-1);
-
-    assign ls.ready = ~resetting & ~snoop_write & (~stage1_valid | stage1_done) & ~(db_wen & load_peek & load_addr_peek[31:2] == stage1.addr[31:2]);
+    
+    logic[DB_ADDR_LEN-1:0] db_addr;
+    assign ls.ready = ~resetting & ~snoop_write & (~stage1_valid | stage1_done) & ~(db_wen & load_peek & load_addr_peek[31:DB_ADDR_LEN+2] == stage1.addr[31:DB_ADDR_LEN+2] & load_addr_peek[2+:DB_ADDR_LEN] == db_addr);
     assign write_outstanding = (stage1_valid & ~(stage1_type inside {READ, AMO_LR})) | mem.write_outstanding;
 
     ////////////////////////////////////////////////////
@@ -517,7 +518,6 @@ module dcache_inv
     logic[CONFIG.DCACHE.WAYS-1:0][31:0] db_entries;
     logic[31:0] db_hit_entry;
     logic[CONFIG.DCACHE.WAYS-1:0][3:0] db_wbe_full;
-    logic[DB_ADDR_LEN-1:0] db_addr;
 
     always_comb begin
         for (int i = 0; i < CONFIG.DCACHE.WAYS; i++)
