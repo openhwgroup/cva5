@@ -185,7 +185,7 @@ module dcache_inv
     logic[CONFIG.DCACHE.WAYS-1:0] hit_ohot_r;
 
     assign a_en = snoop_write | stage1_tb_write_r | ls.new_request;
-    assign a_wbe = ({CONFIG.DCACHE.WAYS{snoop_write}} & snoop_hit) | ({CONFIG.DCACHE.WAYS{stage1_tb_write_r}} | (stage1_type == CBO ? hit_ohot_r : replacement_way));
+    assign a_wbe = ({CONFIG.DCACHE.WAYS{snoop_write}} & snoop_hit) | ({CONFIG.DCACHE.WAYS{stage1_tb_write_r}} & (stage1_type == CBO ? hit_ohot_r : replacement_way));
 
     always_comb begin
         if (snoop_write)
