@@ -545,8 +545,6 @@ if (CONFIG.MODES == MSU) begin : gen_supervisor_interrupts
             //STIP
             if (CONFIG.CSRS.INCLUDE_SSTC & menvcfgh.stce)
                 stip <= stip_stimecmp;
-            else if (s_interrupt.timer)
-                stip <= 1;
             else if (mwrite_en(MIP))
                 stip <= next_csr_mip_casted.stip;
             

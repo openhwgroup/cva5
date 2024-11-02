@@ -23,8 +23,6 @@
 module litex_wrapper
     import cva5_config::*;
     import cva5_types::*;
-    import l2_config_and_types::*;
-    import riscv_types::*;
 
     #(
         parameter bit [31:0] RESET_VEC = 0,
@@ -35,10 +33,11 @@ module litex_wrapper
     (
         input logic clk,
         input logic rst,
-        input logic [NUM_CORES-1:0] cpu_m_interrupt,
-        input logic [NUM_CORES-1:0] cpu_s_interrupt,
-        input logic [NUM_CORES-1:0] cpu_software_in,
-        input logic [NUM_CORES-1:0] cpu_timer_in,
+
+        input logic [NUM_CORES-1:0] meip,
+        input logic [NUM_CORES-1:0] seip,
+        input logic [NUM_CORES-1:0] mtip,
+        input logic [NUM_CORES-1:0] msip,
         input logic [63:0] mtime,
 
         output logic [29:0] idbus_adr,
@@ -64,41 +63,26 @@ module litex_wrapper
     //Unused interfaces
     axi_interface m_axi[NUM_CORES-1:0]();
     avalon_interface m_avalon[NUM_CORES-1:0]();
+    wishbone_interface dwishbone[NUM_CORES-1:0]();
+    wishbone_interface iwishbone[NUM_CORES-1:0]();
     local_memory_interface instruction_bram[NUM_CORES-1:0]();
     local_memory_interface data_bram[NUM_CORES-1:0]();
-    
-    
-    // Timer and external interrupts
+
+    //Interrupts
     interrupt_t[NUM_CORES-1:0] s_interrupt;
     interrupt_t[NUM_CORES-1:0] m_interrupt;
 
-    always_comb begin
-	for (int  i  = 0; i < NUM_CORES; i++) begin 
-	    s_interrupt[i].software = 0;
-	    s_interrupt[i].timer = cpu_timer_in[i];
-	    s_interrupt[i].external = cpu_s_interrupt[i];
-		
-            m_interrupt[i].software = 0;
-            m_interrupt[i].timer = 0;
-            m_interrupt[i].external = cpu_s_interrupt[i];
-	end
-    end
-    //Wishbone interfaces
-    wishbone_interface dwishbone[NUM_CORES-1:0]();
-    wishbone_interface iwishbone[NUM_CORES-1:0]();
+    //Memory interfaces for each core
+    mem_interface mem[NUM_CORES-1:0]();
+
+    //Final memory interface
     wishbone_interface idwishbone();
 
-
-    // Memory interfaces for each core
-    mem_interface mem[NUM_CORES-1:0]();
-    
-    // Instantiate the wishbone_adapter and connect it to the concatenated mem interfaces
+    //Mux requests from one or more cores onto the wishbone bus
     wishbone_adapter #(.NUM_CORES(NUM_CORES)) wb_adapter (
-        .clk(clk),
-        .rst(rst),
-        .mems(mem), // Connect to Wishbone from all core arbiters
-        .wishbone(idwishbone)
-    );
+        .mems(mem),
+        .wishbone(idwishbone),
+    .*);
 
     generate for (genvar i = 0; i < NUM_CORES; i++) begin : gen_cores
         localparam cpu_config_t STANDARD_CONFIG_I = '{
@@ -118,7 +102,6 @@ module litex_wrapper
             INCLUDE_IFENCE : 1,
             INCLUDE_AMO : 1,
             INCLUDE_CBO : 0,
-    
             //CSR constants
             CSRS : '{
                 MACHINE_IMPLEMENTATION_ID : 0,
@@ -140,7 +123,7 @@ module litex_wrapper
             },
             INCLUDE_ICACHE : 1,
             ICACHE_ADDR : '{
-                L : 32'h00000000, 
+                L : 32'h00000000,
                 H : 32'h7FFFFFFF
             },
             ICACHE : '{
@@ -160,7 +143,7 @@ module litex_wrapper
             },
             INCLUDE_DCACHE : 1,
             DCACHE_ADDR : '{
-                L : 32'h00000000, 
+                L : 32'h00000000,
                 H : 32'hFFFFFFFF
             },
             DCACHE : '{
@@ -180,7 +163,7 @@ module litex_wrapper
             },
             INCLUDE_ILOCAL_MEM : 0,
             ILOCAL_MEM_ADDR : '{
-                L : 32'h80000000, 
+                L : 32'h80000000,
                 H : 32'h8FFFFFFF
             },
             INCLUDE_DLOCAL_MEM : 0,
@@ -190,7 +173,7 @@ module litex_wrapper
             },
             INCLUDE_IBUS : 0,
             IBUS_ADDR : '{
-                L : 32'h00000000, 
+                L : 32'h00000000,
                 H : 32'hFFFFFFFF
             },
             INCLUDE_PERIPHERAL_BUS : 0,
@@ -211,22 +194,25 @@ module litex_wrapper
             WB_GROUP : STANDARD_WB_GROUP_CONFIG
         };
 
+        assign m_interrupt[i].software = msip[i];
+        assign m_interrupt[i].timer = mtip[i];
+        assign m_interrupt[i].external = meip[i];
+        assign s_interrupt[i].software = 0; //Not possible
+        assign s_interrupt[i].timer = 0; //Handled internally
+        assign s_interrupt[i].external = seip[i];
+
         cva5 #(.CONFIG(STANDARD_CONFIG_I)) cpu(
             .instruction_bram(instruction_bram[i]),
             .data_bram(data_bram[i]),
-    
             .m_axi(m_axi[i]),
             .m_avalon(m_avalon[i]),
             .dwishbone(dwishbone[i]),
             .iwishbone(iwishbone[i]),
-    
             .mem(mem[i]),
-    
             .mtime(mtime),
             .s_interrupt(s_interrupt[i]),
             .m_interrupt(m_interrupt[i]),
-            .*    
-        );
+        .*);
     end endgenerate
 
     assign idbus_adr = idwishbone.adr;
@@ -240,8 +226,5 @@ module litex_wrapper
     assign idwishbone.dat_r = idbus_dat_r;
     assign idwishbone.ack = idbus_ack;
     assign idwishbone.err = idbus_err;
-
-
-reg [63:0] counter = 64'b0;  // Initialize counter to zero
 
 endmodule
