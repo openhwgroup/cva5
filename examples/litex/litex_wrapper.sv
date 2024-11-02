@@ -66,22 +66,28 @@ module litex_wrapper
     avalon_interface m_avalon[NUM_CORES-1:0]();
     local_memory_interface instruction_bram[NUM_CORES-1:0]();
     local_memory_interface data_bram[NUM_CORES-1:0]();
-    interrupt_t s_interrupt;
-    assign s_interrupt.software = 0;
-    assign s_interrupt.timer = cpu_timer_in;
-    assign s_interrupt.external = cpu_s_interrupt;
+    
+    
+    // Timer and external interrupts
+    interrupt_t[NUM_CORES-1:0] s_interrupt;
+    interrupt_t[NUM_CORES-1:0] m_interrupt;
 
+    always_comb begin
+	for (int  i  = 0; i < NUM_CORES; i++) begin 
+	    s_interrupt[i].software = 0;
+	    s_interrupt[i].timer = cpu_timer_in[i];
+	    s_interrupt[i].external = cpu_s_interrupt[i];
+		
+            m_interrupt[i].software = 0;
+            m_interrupt[i].timer = 0;
+            m_interrupt[i].external = cpu_s_interrupt[i];
+	end
+    end
     //Wishbone interfaces
     wishbone_interface dwishbone[NUM_CORES-1:0]();
     wishbone_interface iwishbone[NUM_CORES-1:0]();
     wishbone_interface idwishbone();
 
-    //Timer and External interrupts
-    interrupt_t m_interrupt;
-    assign m_interrupt.software = cpu_software_in;
-    assign m_interrupt.timer = 0;
-    //assign m_interrupt.timer = cpu_timer_in;
-    assign m_interrupt.external = cpu_m_interrupt;
 
     // Memory interfaces for each core
     mem_interface mem[NUM_CORES-1:0]();
@@ -161,7 +167,7 @@ module litex_wrapper
                 LINES : 512,
                 LINE_W : 8,
                 WAYS : 2,
-                USE_EXTERNAL_INVALIDATIONS : 0,
+                USE_EXTERNAL_INVALIDATIONS : 1,
                 USE_NON_CACHEABLE : 1,
                 NON_CACHEABLE : '{
                     L: NON_CACHABLE_L,
@@ -234,5 +240,8 @@ module litex_wrapper
     assign idwishbone.dat_r = idbus_dat_r;
     assign idwishbone.ack = idbus_ack;
     assign idwishbone.err = idbus_err;
+
+
+reg [63:0] counter = 64'b0;  // Initialize counter to zero
 
 endmodule
