@@ -126,9 +126,9 @@ module clint_wrapper
             if (~axi_rvalid) begin
                 case ({axi_araddr[15:2], 2'b00}) inside
                     [MSIP_BASE:MSIP_BASE+4*CORES_MINUS_ONE] : axi_rdata <= {31'b0, msip[NUM_CORES == 1 ? '0 : axi_araddr[2+:CORE_W]]};
-                    [MTIME_BASE:MTIME_BASE+1] : axi_rdata <= mtime_packed[axi_araddr[2]];
+                    [MTIME_BASE:MTIME_BASE+4] : axi_rdata <= mtime_packed[axi_araddr[2]];
                     [MTIMECMP_BASE:MTIMECMP_BASE+8*CORES_MINUS_ONE] : axi_rdata <= mtimecmp[NUM_CORES == 1 ? '0 : axi_araddr[3+:CORE_W]][axi_araddr[2]];
-                    default : axi_rdata <= 'x;
+                    default : axi_rdata <= '0;
                 endcase
             end
         end
@@ -145,8 +145,8 @@ module clint_wrapper
             write_mtimecmp = 0;
             case ({axi_awaddr[15:2], 2'b00}) inside
                 [MSIP_BASE:MSIP_BASE+4*CORES_MINUS_ONE] : write_msip = doing_write;
-                [MTIME_BASE:MTIME_BASE+1] : write_mtime = doing_write;
-                [MTIMECMP_BASE:MTIMECMP_BASE+8*CORES_MINUS_ONE] : write_mtimecmp = doing_write;
+                [MTIME_BASE:MTIME_BASE+4] : write_mtime = doing_write;
+                [MTIMECMP_BASE:MTIMECMP_BASE+4+8*CORES_MINUS_ONE] : write_mtimecmp = doing_write;
             endcase
         end
 
@@ -155,7 +155,7 @@ module clint_wrapper
     end else begin : gen_wishbone_if
         //Combinational response
         assign write_data = wb_dat_i;
-        assign write_upper = wb_adr[3];
+        assign write_upper = wb_adr[2];
         assign wb_ack = wb_cyc & wb_stb;
 
         assign write_msip_core = NUM_CORES == 1 ? '0 : wb_adr[2+:CORE_W];
@@ -172,11 +172,11 @@ module clint_wrapper
                     write_msip = wb_cyc & wb_stb & wb_we;
                     wb_dat_o = {31'b0, msip[write_msip_core]};
                 end
-                [MTIME_BASE:MTIME_BASE+1] : begin
+                [MTIME_BASE:MTIME_BASE+4] : begin
                     write_mtime = wb_cyc & wb_stb & wb_we;
                     wb_dat_o = mtime_packed[write_upper];
                 end
-                [MTIMECMP_BASE:MTIMECMP_BASE+8*CORES_MINUS_ONE] : begin
+                [MTIMECMP_BASE:MTIMECMP_BASE+4+8*CORES_MINUS_ONE] : begin
                     write_mtimecmp = wb_cyc & wb_stb & wb_we;
                     wb_dat_o = mtimecmp[write_mtimecmp_core][write_upper];
                 end
