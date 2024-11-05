@@ -195,10 +195,10 @@ module litex_wrapper
         };
 
         assign m_interrupt[i].software = msip[i];
-        assign m_interrupt[i].timer = mtip[i];
+        assign m_interrupt[i].timer = 0; //Temporary workaround; should be MTIP
         assign m_interrupt[i].external = meip[i];
         assign s_interrupt[i].software = 0; //Not possible
-        assign s_interrupt[i].timer = 0; //Handled internally
+        assign s_interrupt[i].timer = mtip[i]; //Temporary workaround; should be 0
         assign s_interrupt[i].external = seip[i];
 
         cva5 #(.CONFIG(STANDARD_CONFIG_I)) cpu(
