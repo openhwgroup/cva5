@@ -131,7 +131,7 @@ module plic
         is_complete_claim = 0;
 
         //Interrupt priority
-        for (int i = 0; i < NUM_SOURCES; i++) begin
+        for (int i = 0; i < PADDED_SOURCES; i++) begin
             if (addr == 24'(i)) begin
                 is_priority = 1;
                 rdata[PRIORITY_W-1:0] = interrupt_priority[i];
