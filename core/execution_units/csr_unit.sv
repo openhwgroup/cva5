@@ -332,6 +332,7 @@ module csr_unit
     localparam mstatus_t sstatus_mask = '{default:0, mxr:1, sum:1, spp:1, spie:1, sie:1, sd:(CONFIG.INCLUDE_UNIT.FPU), fs:{2{CONFIG.INCLUDE_UNIT.FPU}}};
     logic stip_stimecmp;
 
+    mie_t sie_deleg_mask;
     localparam mie_t sie_mask = '{default:0, seie:CONFIG.MODES == MSU, stie:CONFIG.MODES == MSU, ssie:CONFIG.MODES == MSU};
     localparam mip_t sip_mask = '{default:0, seip:CONFIG.MODES == MSU, stip:CONFIG.MODES == MSU, ssip:CONFIG.MODES == MSU};
 
@@ -527,9 +528,9 @@ if (CONFIG.MODES == MSU) begin : gen_supervisor_interrupts
         endcase
     end
 
-    //STIP and SSIP can be set externally or locally
-    mip_t next_csr_mip_casted;
-    assign next_csr_mip_casted = mip_t'(next_csr);
+    //STIP set locally, SSIP set locally or externally
+    mip_t updated_csr_mip_casted;
+    assign updated_csr_mip_casted = mip_t'(updated_csr);
 
     always_ff @(posedge clk) begin
         if (rst) begin
@@ -545,28 +546,28 @@ if (CONFIG.MODES == MSU) begin : gen_supervisor_interrupts
             //STIP
             if (CONFIG.CSRS.INCLUDE_SSTC & menvcfgh.stce)
                 stip <= stip_stimecmp;
-            else if (s_interrupt.timer) //Temporary workaround; supervisor timer interrupts should not be external
-                stip <= 1;
             else if (mwrite_en(MIP))
-                stip <= next_csr_mip_casted.stip;
+                stip <= updated_csr_mip_casted.stip;
             
             //SSIP
             if (s_interrupt.software)
                 ssip <= 1;
             else if (mwrite_en(MIP) | (swrite_en(SIP) & mideleg.ssid))
-                ssip <= next_csr_mip_casted.ssip;
+                ssip <= updated_csr_mip_casted.ssip;
         end
     end
 end
 
     ////////////////////////////////////////////////////
     //MIE
-    localparam mie_t mie_mask = '{default:0, meie:1, seie:CONFIG.MODES == MSU, mtie:1, stie:CONFIG.MODES == MSU, msie:1, ssie:CONFIG.MODES == MSU};
+    localparam mie_t mie_mask = '{default:0, meie:1, mtie:1, msie:1};
     always_ff @(posedge clk) begin
         if (rst)
             mie <= '0;
-        else if (mwrite_en(MIE) | swrite_en(SIE))
-            mie <= updated_csr & (swrite ? sie_mask : mie_mask);
+        else if (mwrite_en(MIE))
+            mie <= updated_csr & (mie_mask | sie_mask);
+        else if (swrite_en(SIE))
+            mie <= (mie & mie_mask) | (updated_csr & sie_deleg_mask);
     end
 
     always_comb begin
@@ -846,7 +847,8 @@ generate if (CONFIG.MODES == MSU) begin : gen_csr_s_mode
 
     ////////////////////////////////////////////////////
     //SIE
-    assign sie = mie & sie_mask;
+    assign sie_deleg_mask = sie_mask & mie_t'(mideleg);
+    assign sie = mie & sie_deleg_mask;
 
     ////////////////////////////////////////////////////
     //SSTATUS
