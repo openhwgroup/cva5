@@ -306,11 +306,15 @@ module decode_and_issue
 
     always_ff @(posedge clk) begin
         if (issue_stage_ready) begin
-            ecode <=
-                    is_ecall ? ecall_code :
-                    is_ebreak ? BREAK :
-                    illegal_instruction_pattern ? ILLEGAL_INST :
-                    decode.fetch_metadata.error_code; //(~decode.fetch_metadata.ok)
+            if (~decode.fetch_metadata.ok)
+                ecode <= decode.fetch_metadata.error_code;
+            else if (is_ecall)
+                ecode <= ecall_code;
+            else if (is_ebreak)
+                ecode <= BREAK;
+            else
+                ecode <= ILLEGAL_INST;
+
             if (~decode.fetch_metadata.ok | is_ebreak)
                 tval <= decode.pc;
             else if (is_ecall)
