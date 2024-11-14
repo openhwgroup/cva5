@@ -365,7 +365,7 @@ module dcache_noinv
         assert property (@(posedge clk) disable iff (rst) ls.new_request |-> ls.ready)
         else $error("dcache received request when not ready");
 
-    dache_suprious_l1_ack_assertion:
+    dcache_spurious_l1_ack_assertion:
         assert property (@(posedge clk) disable iff (rst) mem.ack |-> mem.request)
         else $error("dcache received ack without a request");
 
