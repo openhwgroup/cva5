@@ -23,7 +23,7 @@
 
 
 package nexys_config;
-	import cva5_config::*;
+    import cva5_config::*;
 
     localparam wb_group_config_t NEXYS_WB_GROUP_CONFIG = '{
         0 : '{0: ALU_ID, default : NON_WRITEBACK_ID},
@@ -81,8 +81,8 @@ package nexys_config;
             USE_EXTERNAL_INVALIDATIONS : 0,
             USE_NON_CACHEABLE : 0,
             NON_CACHEABLE : '{
-				L : 32'h88000000, 
-				H : 32'h8FFFFFFF
+                L : 32'h88000000, 
+                H : 32'h8FFFFFFF
             }
         },
         ITLB : '{
@@ -101,8 +101,8 @@ package nexys_config;
             USE_EXTERNAL_INVALIDATIONS : 0,
             USE_NON_CACHEABLE : 1,
             NON_CACHEABLE : '{
-				L : 32'h88000000, 
-				H : 32'h8FFFFFFF
+                L : 32'h88000000, 
+                H : 32'h8FFFFFFF
             }
         },
         DTLB : '{

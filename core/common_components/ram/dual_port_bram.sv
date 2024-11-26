@@ -28,7 +28,7 @@ module dual_port_bram
     import cva5_types::*;
     import riscv_types::*;
 
-	#(
+    #(
         parameter WIDTH = 32,
         parameter LINES = 4096
     )

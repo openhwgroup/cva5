@@ -28,7 +28,7 @@ module byte_en_bram
     import cva5_types::*;
     import riscv_types::*;
 
-	#(
+    #(
         parameter LINES = 4096,
         parameter preload_file = "",
         parameter USE_PRELOAD_FILE = 0

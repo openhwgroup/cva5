@@ -26,7 +26,7 @@ module cva5_sim
     import l2_config_and_types::*;
     import riscv_types::*;
     import cva5_types::*;
-	import nexys_config::*;
+    import nexys_config::*;
 
     # (
         parameter MEMORY_FILE = "<path to executable>.hw_init" //change this to appropriate location 
@@ -111,12 +111,12 @@ module cva5_sim
 
     local_memory_interface instruction_bram();
     local_memory_interface data_bram();
-	axi_interface m_axi ();
+    axi_interface m_axi ();
     avalon_interface m_avalon();
     wishbone_interface dwishbone();
     wishbone_interface iwishbone();
 
-	//L2 and AXI
+    //L2 and AXI
     axi_interface axi ();
     mem_interface mem[0:0]();
 

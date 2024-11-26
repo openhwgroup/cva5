@@ -58,13 +58,13 @@ bool CVA5Tracer::has_stalled() {
             std::cout << "\n\nError!!!!\n";
             std::cout << "Stall of " << stall_limit << " cycles detected!\n\n";
             return true;
-		} else {
-			stall_count++;
-		}
-	}
+        } else {
+            stall_count++;
+        }
+    }
     else 
         stall_count=0;
-	return false;
+    return false;
 }
 
 bool CVA5Tracer::store_queue_empty() {
@@ -89,10 +89,10 @@ void CVA5Tracer::set_pc_file(std::ofstream* pcFile) {
 }
 
 void CVA5Tracer::update_UART() {
-	if (tb->write_uart) {
-		std::cout <<  tb->uart_byte << std::flush;
-		*logFile << tb->uart_byte;
-	}
+    if (tb->write_uart) {
+        std::cout <<  tb->uart_byte << std::flush;
+        *logFile << tb->uart_byte;
+    }
 }
 
 void CVA5Tracer::memory_pre() {
@@ -130,13 +130,13 @@ void CVA5Tracer::tick() {
     #endif
 
     update_UART();
-	#ifdef PC_TRACE_ON
+    #ifdef PC_TRACE_ON
         for (int i =0; i < tb->NUM_RETIRE_PORTS; i++) {
             if (logPC && tb->retire_ports_valid[i]) {
-            	*pcFile << std::hex << tb->retire_ports_pc[i] << std::endl;
+                *pcFile << std::hex << tb->retire_ports_pc[i] << std::endl;
             }
         }
-	#endif
+    #endif
 
     //Falling edge
     cycle_count++;
@@ -148,11 +148,11 @@ void CVA5Tracer::tick() {
 }
 
 void CVA5Tracer::start_tracer(const char *trace_file) {
-	#ifdef TRACE_ON
-		verilatorWaveformTracer = new VerilatedFstC;
-		tb->trace(verilatorWaveformTracer, 99);
-		verilatorWaveformTracer->open(trace_file);
-	#endif
+    #ifdef TRACE_ON
+        verilatorWaveformTracer = new VerilatedFstC;
+        tb->trace(verilatorWaveformTracer, 99);
+        verilatorWaveformTracer->open(trace_file);
+    #endif
 }
 
 uint64_t CVA5Tracer::cycle_count = 0;
@@ -163,9 +163,9 @@ uint64_t CVA5Tracer::get_cycle_count() {
 CVA5Tracer::CVA5Tracer(std::ifstream (&programFile)[1]) {
     cycle_count = 0;
 
-	#ifdef TRACE_ON
-		Verilated::traceEverOn(true);
-	#endif
+    #ifdef TRACE_ON
+        Verilated::traceEverOn(true);
+    #endif
 
     tb = new Vcva5_sim;
     
@@ -180,11 +180,11 @@ CVA5Tracer::CVA5Tracer(std::ifstream (&programFile)[1]) {
 
 
 CVA5Tracer::~CVA5Tracer() {
-	#ifdef TRACE_ON
-		verilatorWaveformTracer->flush();
-		verilatorWaveformTracer->close();
-	#endif
-	delete mem;
+    #ifdef TRACE_ON
+        verilatorWaveformTracer->flush();
+        verilatorWaveformTracer->close();
+    #endif
+    delete mem;
     delete axi_ddr;
-	delete tb;
+    delete tb;
 }

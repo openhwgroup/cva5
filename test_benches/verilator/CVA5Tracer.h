@@ -63,7 +63,7 @@ private:
   AXIMem *axi_ddr;
   SimMem *mem;
 #ifdef TRACE_ON
-		VerilatedFstC	*verilatorWaveformTracer;
+  VerilatedFstC* verilatorWaveformTracer;
 #endif
   std::ofstream* logFile;
   std::ofstream* pcFile;

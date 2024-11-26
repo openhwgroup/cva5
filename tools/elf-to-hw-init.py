@@ -96,22 +96,22 @@ hexRegex = re.compile(r'[a-f0-9]{8}')
 index = 0
 lowestAddress = sys.maxsize
 for line in opcode_input:
-	if (isInstLine.match(line)) :
-		addressMatch = hexRegex.match(line)
-		if (int(addressMatch[0],16) < lowestAddress) :
-			lowestAddress = int(addressMatch[0],16)
-			index = int(lowestAddress/4) -  int(int(args.baseAddr,16)/4)
-	if (line.find('start address') != -1) :
-		addressMatch = addressRegex.search(line)
-		print('start address: ', addressMatch[0])
-		
+    if (isInstLine.match(line)) :
+        addressMatch = hexRegex.match(line)
+        if (int(addressMatch[0],16) < lowestAddress) :
+            lowestAddress = int(addressMatch[0],16)
+            index = int(lowestAddress/4) -  int(int(args.baseAddr,16)/4)
+    if (line.find('start address') != -1) :
+        addressMatch = addressRegex.search(line)
+        print('start address: ', addressMatch[0])
+
 #Reads binary 4 bytes at a time and converts to Verilog readmemh format
 word = program_input.read(4)
 while word != b"":
-	ramData[index] = stringByteSwap(word.hex())
-	index+=1
-	word = program_input.read(4)
-		
+    ramData[index] = stringByteSwap(word.hex())
+    index+=1
+    word = program_input.read(4)
+
 program_output.write('\n'.join(str(line) for line in ramData))
 
 #append instruction details to data
@@ -126,5 +126,3 @@ sim_output.write(' --\n'.join(str(line) for line in ramData))
 sim_output.write(' --')
 
 print('Done')
-    
-    
