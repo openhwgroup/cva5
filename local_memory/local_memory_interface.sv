@@ -31,11 +31,4 @@ interface local_memory_interface;
     modport slave (input addr, en, be, data_in, output data_out);
     modport master (output addr, en, be, data_in, input data_out);
 
-`ifdef __CVA5_FORMAL__
-    modport formal (input addr, en, be, data_in, data_out);
-`endif
-
 endinterface
-
-
-

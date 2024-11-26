@@ -80,14 +80,6 @@ interface axi_interface;
             wready,
             bvalid, bresp, bid);
 
-`ifdef __CVA5_FORMAL__
-    modport formal (input arready, arvalid, araddr, arlen, arsize, arburst, arcache, arlock,
-                          rready, rvalid, rdata, rresp, rlast, rid,
-                          awready, awvalid, awaddr, awlen, awsize, awburst, awcache, awlock, arid,
-                          wready, wvalid, wdata, wstrb, wlast, awid,
-                          bready, bvalid, bresp, bid);
-`endif
-
 endinterface
 
 interface avalon_interface;
@@ -106,11 +98,6 @@ interface avalon_interface;
             output addr, read, write, lock, byteenable, writedata);
     modport slave (output readdata, waitrequest, readdatavalid, writeresponsevalid,
             input addr, read, write, lock, byteenable, writedata);
-
-`ifdef __CVA5_FORMAL__
-    modport formal (input readdata, waitrequest, readdatavalid, writeresponsevalid,
-                          addr, read, write, lock, byteenable, writedata);
-`endif
 
 endinterface
 
@@ -131,10 +118,6 @@ interface wishbone_interface;
             output adr, dat_w, sel, cyc, stb, we, cti, bte);
     modport slave (output dat_r, ack, err,
             input adr, dat_w, sel, cyc, stb, we, cti, bte);
-
-`ifdef __CVA5_FORMAL__
-    modport formal (input adr, dat_w, sel, cyc, stb, we, cti, bte, dat_r, ack, err);
-`endif
 
 endinterface
 
