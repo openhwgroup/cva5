@@ -182,11 +182,9 @@ module mmu
 
     ////////////////////////////////////////////////////
     //Assertions
-    `ifdef ENABLE_SIMULATION_ASSERTIONS
-        mmu_spurious_l1_response:
-            assert property (@(posedge clk) disable iff (rst) (mem.rvalid) |-> (state[WAIT_REQUEST_1] | state[WAIT_REQUEST_2]))
-            else $error("mmu recieved response without a request");
-    `endif
+    mmu_spurious_l1_response:
+        assert property (@(posedge clk) disable iff (rst) (mem.rvalid) |-> (state[WAIT_REQUEST_1] | state[WAIT_REQUEST_2]))
+        else $error("mmu recieved response without a request");
 
     //TLB request remains high until it recieves a response from the MMU unless
     //the transaction is aborted.  As such, if TLB request is low and we are not in the

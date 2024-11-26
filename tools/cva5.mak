@@ -53,7 +53,7 @@ lint-full:
 #Build CVA5 Sim
 $(CVA5_SIM): $(CVA5_HW_SRCS) $(CVA5_SIM_SRCS)
 	mkdir -p $(CVA5_SIM_DIR)
-	verilator --cc --exe --Mdir $(CVA5_SIM_DIR) -DENABLE_SIMULATION_ASSERTIONS --assert \
+	verilator --cc --exe --Mdir $(CVA5_SIM_DIR) --assert \
 		-o cva5-sim \
 		$(VERILATOR_LINT_IGNORE) $(VERILATOR_CFLAGS) \
 		$(CVA5_SIM_SRCS) \

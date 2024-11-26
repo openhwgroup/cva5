@@ -391,17 +391,4 @@ package cva5_config;
         GC_EXCEPTION = 4
     } exception_sources_t;
 
-    ////////////////////////////////////////////////////
-    //Debug Parameters
-
-    //To enable assertions specific to formal debug, uncomment or set in tool flow
-    //`define ENABLE_FORMAL_ASSERTIONS
-
-    //To enable assertions specific to simulation (verilator), uncomment or set in tool flow
-    //`define ENABLE_SIMULATION_ASSERTIONS
-
-    //When no exceptions are expected in a simulation, turn on this flag
-    //to convert any exceptions into assertions
-    localparam DEBUG_CONVERT_EXCEPTIONS_INTO_ASSERTIONS = 0;
-
 endpackage
