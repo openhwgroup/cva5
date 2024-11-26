@@ -181,10 +181,11 @@ module dcache_inv
     logic stage1_tb_write;
     logic stage1_tb_wval;
     logic stage1_tb_write_r;
+    logic inv_matches_stage1;
     logic stage1_tb_wval_r;
     logic[CONFIG.DCACHE.WAYS-1:0] hit_ohot_r;
 
-    assign a_en = snoop_write | stage1_tb_write_r | ls.new_request;
+    assign a_en = snoop_write | (stage1_tb_write_r & ~inv_matches_stage1) | ls.new_request;
     assign a_wbe = ({CONFIG.DCACHE.WAYS{snoop_write}} & snoop_hit) | ({CONFIG.DCACHE.WAYS{stage1_tb_write_r}} & (stage1_type == CBO ? hit_ohot_r : replacement_way));
 
     always_comb begin
@@ -375,7 +376,6 @@ module dcache_inv
     end
 
     //RMW requests must be retried if invalidated after the read but before the write
-    logic inv_matches_stage1;
     assign inv_matches_stage1 = mem.inv & stage1.addr[31:2+SCONFIG.SUB_LINE_ADDR_W] == mem.inv_addr[31:2+SCONFIG.SUB_LINE_ADDR_W];
     always_ff @(posedge clk) begin
         case (current_state)
