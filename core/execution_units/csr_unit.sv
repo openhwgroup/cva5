@@ -609,7 +609,7 @@ end
     assign mip_priority_vector[2] = mip.mtip & mie.mtie;
     assign mip_priority_vector[3] = mip.seip & mie.seie & ~(privilege_level == MACHINE_PRIVILEGE & mideleg.seid); //Suppressed if delegated
     assign mip_priority_vector[4] = mip.ssip & mie.ssie & ~(privilege_level == MACHINE_PRIVILEGE & mideleg.ssid); //Suppressed if delegated
-    assign mip_priority_vector[5] = mip.stip & mie.stie;
+    assign mip_priority_vector[5] = 1;
 
     priority_encoder #(.WIDTH(6))
     interrupt_cause_encoder (
