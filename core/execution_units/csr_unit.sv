@@ -596,16 +596,20 @@ end
     //MCAUSE
     //Can be software written, written on exception or
     //interrupt with specific code
-    mip_t mip_cause;
     logic [5:0] mip_priority_vector;
     logic [2:0] mip_cause_sel;
 
     localparam logic [ECODE_W-1:0] interruput_code_table [7:0] = '{ 0, 0, 
-        M_EXTERNAL_INTERRUPT, M_TIMER_INTERRUPT, M_SOFTWARE_INTERRUPT,
-        S_EXTERNAL_INTERRUPT, S_TIMER_INTERRUPT, S_SOFTWARE_INTERRUPT
+        S_TIMER_INTERRUPT, S_SOFTWARE_INTERRUPT, S_EXTERNAL_INTERRUPT,
+        M_TIMER_INTERRUPT, M_SOFTWARE_INTERRUPT, M_EXTERNAL_INTERRUPT
     };
-    assign mip_cause = (mip & mie);
-    assign mip_priority_vector = '{mip_cause.meip, mip_cause.mtip, mip_cause.msip, mip_cause.seip, mip_cause.stip, mip_cause.ssip};
+
+    assign mip_priority_vector[0] = mip.meip & mie.meie;
+    assign mip_priority_vector[1] = mip.msip & mie.msie;
+    assign mip_priority_vector[2] = mip.mtip & mie.mtie;
+    assign mip_priority_vector[3] = mip.seip & mie.seie & ~(privilege_level == MACHINE_PRIVILEGE & mideleg.seid); //Suppressed if delegated
+    assign mip_priority_vector[4] = mip.ssip & mie.ssie & ~(privilege_level == MACHINE_PRIVILEGE & mideleg.ssid); //Suppressed if delegated
+    assign mip_priority_vector[5] = mip.stip & mie.stie;
 
     priority_encoder #(.WIDTH(6))
     interrupt_cause_encoder (
