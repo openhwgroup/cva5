@@ -239,7 +239,6 @@ package cva5_config;
     localparam cpu_config_t EXAMPLE_CONFIG = '{
         //ISA options
         MODES : MSU,
-
         INCLUDE_UNIT : '{
             ALU : 1,
             LS : 1,
@@ -251,11 +250,9 @@ package cva5_config;
             BR : 1,
             GC : 1
         },
-
         INCLUDE_IFENCE : 1,
         INCLUDE_AMO : 0,
         INCLUDE_CBO : 0,
-        
         //CSR constants
         CSRS : '{
             MACHINE_IMPLEMENTATION_ID : 0,
@@ -275,7 +272,7 @@ package cva5_config;
             LR_WAIT : 32,
             RESERVATION_WORDS : 8
         },
-        INCLUDE_ICACHE : 0,
+        INCLUDE_ICACHE : 1,
         ICACHE_ADDR : '{
             L: 32'h80000000,
             H: 32'h8FFFFFFF
@@ -295,7 +292,7 @@ package cva5_config;
             WAYS : 2,
             DEPTH : 64
         },
-        INCLUDE_DCACHE : 0,
+        INCLUDE_DCACHE : 1,
         DCACHE_ADDR : '{
             L: 32'h80000000,
             H: 32'h8FFFFFFF
@@ -315,12 +312,12 @@ package cva5_config;
             WAYS : 2,
             DEPTH : 64
         },
-        INCLUDE_ILOCAL_MEM : 1,
+        INCLUDE_ILOCAL_MEM : 0,
         ILOCAL_MEM_ADDR : '{
             L : 32'h80000000, 
             H : 32'h8FFFFFFF
         },
-        INCLUDE_DLOCAL_MEM : 1,
+        INCLUDE_DLOCAL_MEM : 0,
         DLOCAL_MEM_ADDR : '{
             L : 32'h80000000,
             H : 32'h8FFFFFFF

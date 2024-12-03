@@ -64,8 +64,6 @@ interface l2_requester_interface;
             input wr_data, wr_data_be, wr_data_push, output data_full,
             output rd_data, rd_sub_id, rd_data_valid, input rd_data_ack);
 
-`endif
-
 endinterface
 
 

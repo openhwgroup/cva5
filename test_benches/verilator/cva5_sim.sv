@@ -1,5 +1,5 @@
 /*
- * Copyright © 2017 Eric Matthews,  Lesley Shannon
+ * Copyright © 2017 Eric Matthews, Chris Keilbart, Lesley Shannon
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,13 +23,9 @@
 module cva5_sim 
 
     import cva5_config::*;
-    import l2_config_and_types::*;
     import riscv_types::*;
     import cva5_types::*;
 
-    # (
-        parameter MEMORY_FILE = "/home/ematthew/Research/RISCV/software/riscv-tools/riscv-tests/benchmarks/dhrystone.riscv.hw_init" //change this to appropriate location "/home/ematthew/Downloads/dhrystone.riscv.sim_init"
-    )
     (
         input logic clk,
         input logic rst,
@@ -76,75 +72,6 @@ module cva5_sim
         output logic ddr_axi_wvalid,
         output logic [5:0]ddr_axi_wid,
 
-        //L2 interface
-        input logic [29:0] addr,
-        input logic [3:0] be,
-        input logic rnw,
-        input logic is_amo,
-        input logic [4:0] amo_type_or_burst_size,
-        input logic [L2_SUB_ID_W-1:0] sub_id,
-
-        input logic request_push,
-        output logic request_full,
-
-        output logic [31:2] inv_addr,
-        output logic inv_valid,
-        input logic inv_ack,
-
-        output logic con_result,
-        output logic con_valid,
-
-        input logic [31:0] wr_data,
-        input logic wr_data_push,
-        output logic data_full,
-
-        output logic [31:0] rd_data,
-        output logic [L2_SUB_ID_W-1:0] rd_sub_id,
-        output logic rd_data_valid,
-        input logic rd_data_ack,
-
-        //        //AXI bus
-        //        output logic [31:0]bus_axi_araddr,
-        //        output logic [1:0]bus_axi_arburst,
-        //        output logic [3:0]bus_axi_arcache,
-        //        output logic [5:0]bus_axi_arid,
-        //        output logic [7:0]bus_axi_arlen,
-        //        output logic [0:0]bus_axi_arlock,
-        //        output logic [2:0]bus_axi_arprot,
-        //        output logic [3:0]bus_axi_arqos,
-        //        input logic bus_axi_arready,
-        //        output logic [3:0]bus_axi_arregion,
-        //        output logic [2:0]bus_axi_arsize,
-        //        output logic bus_axi_arvalid,
-        //        output logic [31:0]bus_axi_awaddr,
-        //        output logic [1:0]bus_axi_awburst,
-        //        output logic [3:0]bus_axi_awcache,
-        //        output logic [5:0]bus_axi_awid,
-        //        output logic [7:0]bus_axi_awlen,
-        //        output logic [0:0]bus_axi_awlock,
-        //        output logic [2:0]bus_axi_awprot,
-        //        output logic [3:0]bus_axi_awqos,
-        //        input logic bus_axi_awready,
-        //        output logic [3:0]bus_axi_awregion,
-        //        output logic [2:0]bus_axi_awsize,
-        //        output logic bus_axi_awvalid,
-        //        output logic [5:0]bus_axi_bid,
-        //        output logic bus_axi_bready,
-        //        input logic [1:0]bus_axi_bresp,
-        //        input logic bus_axi_bvalid,
-        //        input logic [31:0]bus_axi_rdata,
-        //        output logic [5:0]bus_axi_rid,
-        //        output logic bus_axi_rlast,
-        //        output logic bus_axi_rready,
-        //        input logic [1:0]bus_axi_rresp,
-        //        input logic bus_axi_rvalid,
-        //        output logic [31:0]bus_axi_wdata,
-        //        output logic bus_axi_wlast,
-        //        input logic bus_axi_wready,
-        //        output logic [3:0]bus_axi_wstrb,
-        //        output logic bus_axi_wvalid,
-        //        output logic [5:0]bus_axi_wid,
-
         //Local Memory
         output logic [29:0] instruction_bram_addr,
         output logic instruction_bram_en,
@@ -170,111 +97,29 @@ module cva5_sim
         output logic store_queue_empty
     );
 
-    logic [3:0] WRITE_COUNTER_MAX;
-    logic [3:0] READ_COUNTER_MAX;
-    assign READ_COUNTER_MAX = 4'b0101;
-    assign WRITE_COUNTER_MAX = 4'b0101;
-
-    //AXI memory
-    logic [31:0]axi_araddr;
-    logic [1:0]axi_arburst;
-    logic [3:0]axi_arcache;
-    logic [5:0]axi_arid;
-    logic [7:0]axi_arlen;
-    logic [0:0]axi_arlock;
-    logic [2:0]axi_arprot;
-    logic [3:0]axi_arqos;
-    logic axi_arready;
-    logic [3:0]axi_arregion;
-    logic [2:0]axi_arsize;
-    logic axi_arvalid;
-    logic [31:0]axi_awaddr;
-    logic [1:0]axi_awburst;
-    logic [3:0]axi_awcache;
-    logic [5:0]axi_awid;
-    logic [7:0]axi_awlen;
-    logic [0:0]axi_awlock;
-    logic [2:0]axi_awprot;
-    logic [3:0]axi_awqos;
-    logic axi_awready;
-    logic [3:0]axi_awregion;
-    logic [2:0]axi_awsize;
-    logic axi_awvalid;
-    logic [5:0]axi_bid;
-    logic axi_bready;
-    logic [1:0]axi_bresp;
-    logic axi_bvalid;
-    logic [31:0]axi_rdata;
-    logic [5:0]axi_rid;
-    logic axi_rlast;
-    logic axi_rready;
-    logic [1:0]axi_rresp;
-    logic axi_rvalid;
-    logic [31:0]axi_wdata;
-    logic axi_wlast;
-    logic axi_wready;
-    logic [3:0]axi_wstrb;
-    logic axi_wvalid;
-    logic [5:0]axi_wid;
-
-    parameter SCRATCH_MEM_KB = 128;
-    parameter MEM_LINES = (SCRATCH_MEM_KB*1024)/4;
-
-    interrupt_t s_interrupt;
-    interrupt_t m_interrupt;
-
-    assign s_interrupt = '{default: 0};
-    assign m_interrupt = '{default: 0};
-
+    //Peripheral busses
+    local_memory_interface instruction_bram();
+    local_memory_interface data_bram();
     axi_interface m_axi();
-    //axi_interface ddr_axi();
     avalon_interface m_avalon();
     wishbone_interface dwishbone();
     wishbone_interface iwishbone();
 
-    l2_requester_interface l2[L2_NUM_PORTS-1:0]();
-    l2_memory_interface mem();
+    //Primary memory busses
+    axi_interface axi();
+    mem_interface mem[0:0]();
 
-    local_memory_interface instruction_bram();
-    local_memory_interface data_bram();
+    //Additional CPU signals
+    interrupt_t s_interrupt;
+    interrupt_t m_interrupt;
+    logic[63:0] mtime;
 
-    //    assign m_axi.arready = bus_axi_arready;
-    //    assign bus_axi_arvalid = m_axi.arvalid;
-    //    assign bus_axi_araddr = m_axi.araddr;
-    //
-    //
-    //    //read data
-    //    assign bus_axi_rready = m_axi.rready;
-    //    assign m_axi.rvalid = bus_axi_rvalid;
-    //    assign m_axi.rdata = bus_axi_rdata;
-    //    assign m_axi.rresp = bus_axi_rresp;
-    //
-    //    //Write channel
-    //    //write address
-    //    assign m_axi.awready = bus_axi_awready;
-    //    assign bus_axi_awaddr = m_axi.awaddr;
-    //    assign bus_axi_awvalid = m_axi.awvalid;
-    //
-    //
-    //    //write data
-    //    assign m_axi.wready = bus_axi_wready;
-    //    assign bus_axi_wvalid = m_axi. wvalid;
-    //    assign bus_axi_wdata = m_axi.wdata;
-    //    assign bus_axi_wstrb = m_axi.wstrb;
-    //
-    //    //write response
-    //    assign bus_axi_bready = m_axi.bready;
-    //    assign m_axi.bvalid = bus_axi_bvalid;
-    //    assign m_axi.bresp = bus_axi_bresp;
+    ////////////////////////////////////////////////////
+    //CPU instantiation and mapping
+    cva5 #(.CONFIG(EXAMPLE_CONFIG)) cpu(.mem(mem[0]), .*);
+    axi_adapter #(.NUM_CORES(1)) arb(.mems(mem), .axi(axi), .*);
 
-    assign l2[1].request_push = 0;
-    assign l2[1].wr_data_push = 0;
-    assign l2[1].inv_ack = l2[1].inv_valid;
-    assign l2[1].rd_data_ack = l2[1].rd_data_valid;
-
-    axi_to_arb l2_to_mem (.*, .l2(mem));
-    l2_arbiter l2_arb (.*, .request(l2));
-
+    //Local memory port mapping
     assign instruction_bram_addr = instruction_bram.addr;
     assign instruction_bram_en = instruction_bram.en;
     assign instruction_bram_be = instruction_bram.be;
@@ -287,140 +132,100 @@ module cva5_sim
     assign data_bram_data_in = data_bram.data_in;
     assign data_bram.data_out = data_bram_data_out;
 
-    cva5 #(.CONFIG(EXAMPLE_CONFIG)) cpu(.*, .l2(l2[0]));
+    //Main memory port mapping
+    assign ddr_axi_araddr = axi.araddr;
+    assign ddr_axi_arburst = axi.arburst;
+    assign ddr_axi_arcache = axi.arcache;
+    assign ddr_axi_arid = axi.arid;
+    assign ddr_axi_arlen = axi.arlen;
+    assign axi.arready = ddr_axi_arready;
+    assign ddr_axi_arsize = axi.arsize;
+    assign ddr_axi_arvalid = axi.arvalid;
 
-    //read channel
-    logic[3:0] read_counter;
-    logic begin_read_counter;
+    assign ddr_axi_awaddr = axi.awaddr;
+    assign ddr_axi_awburst = axi.awburst;
+    assign ddr_axi_awcache = axi.awcache;
+    assign ddr_axi_awid = axi.awid;
+    assign ddr_axi_awlen =  axi.awlen;
+    assign axi.awready = ddr_axi_awready;
+    assign ddr_axi_awvalid = axi.awvalid;
+    
+    assign axi.bid = ddr_axi_bid;
+    assign ddr_axi_bready = axi.bready;
+    assign axi.bresp = ddr_axi_bresp;
+    assign axi.bvalid = ddr_axi_bvalid;
+
+    assign axi.rdata = ddr_axi_rdata;
+    assign axi.rid = ddr_axi_rid;
+    assign axi.rlast = ddr_axi_rlast;
+    assign ddr_axi_rready = axi.rready;
+    assign axi.rresp = ddr_axi_rresp;
+    assign axi.rvalid = ddr_axi_rvalid;
+
+    assign ddr_axi_wdata = axi.wdata;
+    assign ddr_axi_wlast = axi.wlast;
+    assign axi.wready = ddr_axi_wready;
+    assign ddr_axi_wstrb = axi.wstrb;
+    assign ddr_axi_wvalid = axi.wvalid;
+
+    //Other CPU signals
+    assign s_interrupt = '{default: 0};
+    assign m_interrupt = '{default: 0};
 
     always_ff @(posedge clk) begin
-        if (rst) begin
-            m_axi.rvalid <= 0;
-            m_axi.arready <= 1; //You want it to start at ready
-            m_axi.rresp <= 0;
-            read_counter <= READ_COUNTER_MAX;
-        end
-        else begin
-            if(m_axi.arready == 1 && m_axi.arvalid == 1) begin
-                m_axi.arready <= 0;
-                begin_read_counter <= 1;
-                m_axi.rdata <= 32'hFFFFFF21;
-            end
-
-            if(begin_read_counter) begin
-                if(read_counter == 0) begin
-                    m_axi.rvalid <= 1;
-                    m_axi.arready <= 1;
-                    read_counter <= READ_COUNTER_MAX;
-                    begin_read_counter <= 0;
-                end
-                else begin
-                    read_counter <= read_counter - 1;
-                    m_axi.rvalid <= 0;
-                end
-            end
-
-            if(m_axi.rvalid &&  m_axi.rready) begin
-                m_axi.rvalid <= 0;
-            end
-
-        end
+        if (rst)
+            mtime <= '0;
+        else
+            mtime <= mtime + 1;
     end
 
-    //Write channel
-    //write address
-    logic[3:0] write_counter;
-    logic begin_write_counter;
-
+    //Simulate a UART on the peripheral AXI bus
+    //Write channels
     always_ff @(posedge clk) begin
         if (rst) begin
+            m_axi.awready <= 1;
             m_axi.wready <= 0;
-            m_axi.awready <= 1; //You want it to start at ready
-            m_axi.bresp <= 0;
-            write_counter <= WRITE_COUNTER_MAX;
+            m_axi.bvalid <= 0;
+            write_uart <= 0;
         end
         else begin
-            if(m_axi.awready == 1 && m_axi.awvalid == 1) begin
+            write_uart <= 0;
+            if (m_axi.awvalid & m_axi.awready) begin
                 m_axi.awready <= 0;
-                begin_write_counter <= 1;
+                m_axi.wready <= 1;
             end
-
-            if(begin_write_counter) begin
-                if(write_counter == 0) begin
-                    m_axi.awready <= 1;
-                    m_axi.wready <= 1;
-                    write_counter <= WRITE_COUNTER_MAX;
-                    begin_write_counter <= 0;
-                end
-                else begin
-                    write_counter <= write_counter - 1;
-                    m_axi.wready <= 0;
-                end
-            end
-
-            if(m_axi.bready == 1 && m_axi.wready) begin
-                m_axi.bvalid <= 1;
-                m_axi.bresp <= 0;
-            end
-            else begin
-                m_axi.bvalid <= 0;
-                m_axi.bresp <= 0;
-            end
-
-            if(m_axi.wready & m_axi.wvalid) begin
+            else if (m_axi.wvalid & m_axi.wready) begin
                 m_axi.wready <= 0;
+                m_axi.bvalid <= 1;
+                write_uart <= 1;
+            end
+            else if (m_axi.bvalid & m_axi.bready) begin
+                m_axi.bvalid <= 0;
+                m_axi.awready <= 1;
             end
         end
-    end
-
-    initial begin
-        write_uart = 0;
-        uart_byte = 0;
-    end
-    //Capture writes to UART
-    always_ff @(posedge clk) begin
-        write_uart <= (m_axi.wvalid && m_axi.wready && m_axi.awaddr[13:0] == 4096);
         uart_byte <= m_axi.wdata[7:0];
     end
 
+    //Read channels
+    assign m_axi.rdata = 32'hFFFFFF21;
+    always_ff @(posedge clk) begin
+        if (rst) begin
+            m_axi.arready <= 1;
+            m_axi.rvalid <= 0;
+        end
+        else begin
+            if (m_axi.arvalid & m_axi.arready) begin
+                m_axi.arready <= 0;
+                m_axi.rvalid <= 1;
+            end
+            else if (m_axi.rvalid & m_axi.rready) begin
+                m_axi.rvalid <= 0;
+                m_axi.arready <= 1;
+            end
+        end
+    end
 
-
-    ////////////////////////////////////////////////////
-    //DDR AXI interface
-    assign ddr_axi_araddr = axi_araddr;
-    assign ddr_axi_arburst = axi_arburst;
-    assign ddr_axi_arcache = axi_arcache;
-    assign ddr_axi_arid = axi_arid;
-    assign ddr_axi_arlen = axi_arlen;
-    assign axi_arready = ddr_axi_arready;
-    assign ddr_axi_arsize = axi_arsize;
-    assign ddr_axi_arvalid = axi_arvalid;
-
-    assign ddr_axi_awaddr = axi_awaddr;
-    assign ddr_axi_awburst = axi_awburst;
-    assign ddr_axi_awcache = axi_awcache;
-    assign ddr_axi_awid = axi_awid;
-    assign ddr_axi_awlen =  axi_awlen;
-    assign axi_awready = ddr_axi_awready;
-    assign ddr_axi_awvalid = axi_awvalid;
-    
-    assign axi_bid = ddr_axi_bid;
-    assign ddr_axi_bready = axi_bready;
-    assign axi_bresp = ddr_axi_bresp;
-    assign axi_bvalid = ddr_axi_bvalid;
-
-    assign axi_rdata = ddr_axi_rdata;
-    assign axi_rid = ddr_axi_rid;
-    assign axi_rlast = ddr_axi_rlast;
-    assign ddr_axi_rready = axi_rready;
-    assign axi_rresp = ddr_axi_rresp;
-    assign axi_rvalid = ddr_axi_rvalid;
-
-    assign ddr_axi_wdata = axi_wdata;
-    assign ddr_axi_wlast = axi_wlast;
-    assign axi_wready = ddr_axi_wready;
-    assign ddr_axi_wstrb = axi_wstrb;
-    assign ddr_axi_wvalid = axi_wvalid;
 
     ////////////////////////////////////////////////////
     //Trace Interface
@@ -481,7 +286,7 @@ module cva5_sim
     logic [3:0] stall_source_count;
     ///////////////
 
-    //Issue phys_rd to unit mem
+    //Issue rd_addr to unit mem
     //Used for determining what outputs an operand stall is waiting on
     logic [MAX_NUM_UNITS-1:0] rd_addr_table [32];
 
@@ -497,9 +302,10 @@ module cva5_sim
     end endgenerate
 
     generate if (EXAMPLE_CONFIG.INCLUDE_DCACHE) begin
-        assign dcache_hit = `DCACHE_P.load_hit;
-        assign dcache_miss = `DCACHE_P.line_complete;
-        assign darb_stall = cpu.dcache_mem.request & ~cpu.dcache_mem.ack;
+        //Depends on data cache type; not enabled for now
+        // assign dcache_hit = `DCACHE_P.load_hit;
+        // assign dcache_miss = `DCACHE_P.line_complete;
+        // assign darb_stall = cpu.dcache_mem.request & ~cpu.dcache_mem.ack;
     end endgenerate
 
     logic [MAX_NUM_UNITS-1:0] unit_ready;
@@ -525,8 +331,8 @@ module cva5_sim
 
         //Issue stalls
         base_no_instruction_stall = ~`ISSUE_P.issue.stage_valid | cpu.gc.fetch_flush;
-            base_no_id_sub_stall = (`METADATA_P.post_issue_count == MAX_IDS);
-            base_flush_sub_stall = cpu.gc.fetch_flush;
+        base_no_id_sub_stall = (`METADATA_P.post_issue_count == MAX_IDS);
+        base_flush_sub_stall = cpu.gc.fetch_flush;
         base_unit_busy_stall = `ISSUE_P.issue.stage_valid & ~|(`ISSUE_P.unit_needed_issue_stage & unit_ready);
         base_operands_stall = `ISSUE_P.issue.stage_valid & ~(&`ISSUE_P.operand_ready);
         base_hold_stall = `ISSUE_P.issue.stage_valid & `ISSUE_P.issue_hold;
@@ -564,28 +370,26 @@ module cva5_sim
 
         //Retire Instruction Mix
         for (int i = 0; i < RETIRE_PORTS; i++) begin
-                is_mul[i] = retire_ports_instruction[i][25] & ~retire_ports_instruction[i][14];
-                is_div[i] = retire_ports_instruction[i][25] & retire_ports_instruction[i][14];
-                instruction_mix_stats[i][ALU_STAT] = cpu.retire_port_valid[i] & (retire_ports_instruction[i][6:2] inside {ARITH_T, ARITH_IMM_T, AUIPC_T, LUI_T}) & ~(is_mul[i] | is_div[i]);
-                instruction_mix_stats[i][BR_STAT] = cpu.retire_port_valid[i] & (retire_ports_instruction[i][6:2] inside {BRANCH_T, JAL_T, JALR_T});
-                instruction_mix_stats[i][MUL_STAT] = cpu.retire_port_valid[i] & (retire_ports_instruction[i][6:2] inside {ARITH_T}) & is_mul[i];
-                instruction_mix_stats[i][DIV_STAT] = cpu.retire_port_valid[i] & (retire_ports_instruction[i][6:2] inside {ARITH_T}) & is_div[i];
-                instruction_mix_stats[i][LOAD_STAT] = cpu.retire_port_valid[i] & (retire_ports_instruction[i][6:2] inside {LOAD_T, FPU_LOAD_T, AMO_T});// & retire_ports_instruction[i][14:12] inside {LS_B_fn3, L_BU_fn3};
-                instruction_mix_stats[i][STORE_STAT] = cpu.retire_port_valid[i] & (retire_ports_instruction[i][6:2] inside {STORE_T, FPU_STORE_T, AMO_T});
-                instruction_mix_stats[i][FPU_STAT] = cpu.retire_port_valid[i] & (retire_ports_instruction[i][6:2] inside {FPU_MADD_T, FPU_MSUB_T, FPU_NMSUB_T, FPU_NMADD_T, FPU_OP_T});
-                instruction_mix_stats[i][MISC_STAT] = cpu.retire_port_valid[i] & (retire_ports_instruction[i][6:2] inside {SYSTEM_T, FENCE_T});
+            is_mul[i] = retire_ports_instruction[i][25] & ~retire_ports_instruction[i][14];
+            is_div[i] = retire_ports_instruction[i][25] & retire_ports_instruction[i][14];
+            instruction_mix_stats[i][ALU_STAT] = cpu.retire_port_valid[i] & (retire_ports_instruction[i][6:2] inside {ARITH_T, ARITH_IMM_T, AUIPC_T, LUI_T}) & ~(is_mul[i] | is_div[i]);
+            instruction_mix_stats[i][BR_STAT] = cpu.retire_port_valid[i] & (retire_ports_instruction[i][6:2] inside {BRANCH_T, JAL_T, JALR_T});
+            instruction_mix_stats[i][MUL_STAT] = cpu.retire_port_valid[i] & (retire_ports_instruction[i][6:2] inside {ARITH_T}) & is_mul[i];
+            instruction_mix_stats[i][DIV_STAT] = cpu.retire_port_valid[i] & (retire_ports_instruction[i][6:2] inside {ARITH_T}) & is_div[i];
+            instruction_mix_stats[i][LOAD_STAT] = cpu.retire_port_valid[i] & (retire_ports_instruction[i][6:2] inside {LOAD_T, FPU_LOAD_T, AMO_T});// & retire_ports_instruction[i][14:12] inside {LS_B_fn3, L_BU_fn3};
+            instruction_mix_stats[i][STORE_STAT] = cpu.retire_port_valid[i] & (retire_ports_instruction[i][6:2] inside {STORE_T, FPU_STORE_T, AMO_T});
+            instruction_mix_stats[i][FPU_STAT] = cpu.retire_port_valid[i] & (retire_ports_instruction[i][6:2] inside {FPU_MADD_T, FPU_MSUB_T, FPU_NMSUB_T, FPU_NMADD_T, FPU_OP_T});
+            instruction_mix_stats[i][MISC_STAT] = cpu.retire_port_valid[i] & (retire_ports_instruction[i][6:2] inside {SYSTEM_T, FENCE_T});
         end
     end
 
     sim_stats #(.NUM_OF_STATS(NUM_STATS), .NUM_INSTRUCTION_MIX_STATS(NUM_INSTRUCTION_MIX_STATS)) stats_block (
-        .clk (clk),
-        .rst (rst),
-        .start_collection (start_collection),
-        .end_collection (end_collection),
-        .stats (stats),
-        .instruction_mix_stats (instruction_mix_stats),
-        .retire_count (cpu.retire_count)
-    );
+        .start_collection(start_collection),
+        .end_collection(end_collection),
+        .stats(stats),
+        .instruction_mix_stats(instruction_mix_stats),
+        .retire_count(cpu.retire_count),
+    .*);
 
     ////////////////////////////////////////////////////
     //Performs the lookups to provide the speculative architectural register file with
@@ -650,8 +454,5 @@ module cva5_sim
     end endgenerate
 
     assign store_queue_empty = ~cpu.load_store_status.outstanding_store;
-
-    ////////////////////////////////////////////////////
-    //Assertion Binding
 
 endmodule
