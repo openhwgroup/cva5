@@ -159,8 +159,8 @@ module multicore_arbiter
 
     always_comb begin
         for (int j = 0; j < NUM_CORES; j++) begin
-            wcount_incr = acks[j] & ~rnw[j];
-            wcount_decr = out_core[j] & ~request_rnw & request_pop;
+            wcount_incr[j] = acks[j] & ~rnw[j];
+            wcount_decr[j] = out_core[j] & ~request_rnw & request_pop;
         end
     end
 
@@ -169,7 +169,7 @@ module multicore_arbiter
             wcounts <= '0;
         else begin
             for (int j = 0; j < NUM_CORES; j++) //Flipped increment / decrement allows the MSB to be used as a nonzero signal
-                wcounts[j] <= wcounts - count_t'(wcount_incr) + count_t'(wcount_decr);
+                wcounts[j] <= wcounts[j] - count_t'(wcount_incr[j]) + count_t'(wcount_decr[j]);
         end
     end
 
