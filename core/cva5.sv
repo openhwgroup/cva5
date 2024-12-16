@@ -301,7 +301,7 @@ module cva5
             .clk (clk),
             .rst (rst),
             .mmu (immu),
-            .abort_request (gc.fetch_flush),
+            .abort_request (gc.fetch_flush | early_branch_flush),
             .mem (immu_mem)
         );
 
