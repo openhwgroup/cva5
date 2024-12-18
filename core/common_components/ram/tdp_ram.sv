@@ -27,7 +27,9 @@ module tdp_ram
         parameter NUM_COL = 4, //Number of independently writeable components
         parameter COL_WIDTH = 16, //Width the "byte" enable controls
         parameter PIPELINE_DEPTH = 1, //Depth of the output pipeline, is latency in clock cycles
-        parameter CASCADE_DEPTH = 4 //Maximum depth of the memory block cascade
+        parameter CASCADE_DEPTH = 4, //Maximum depth of the memory block cascade
+        parameter USE_PRELOAD = 0,
+        parameter PRELOAD_FILE = ""
     )
     (
         input logic clk,
@@ -51,7 +53,10 @@ module tdp_ram
     (* cascade_height = CASCADE_DEPTH, ramstyle = "no_rw_check" *) //Higher depths use less resources but are slower
     logic[DATA_WIDTH-1:0] mem[(1<<ADDR_WIDTH)-1:0]; 
 
-    initial mem = '{default: '0};
+    initial begin
+        if (USE_PRELOAD)
+            $readmemh(PRELOAD_FILE, mem, 0);
+    end
 
     //A read/write
     logic[DATA_WIDTH-1:0] a_ram_output;

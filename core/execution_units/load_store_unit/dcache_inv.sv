@@ -229,7 +229,8 @@ module dcache_inv
         .ADDR_WIDTH(SCONFIG.LINE_ADDR_W),
         .NUM_COL(CONFIG.DCACHE.WAYS),
         .COL_WIDTH($bits(tb_entry_t)),
-        .PIPELINE_DEPTH(0)
+        .PIPELINE_DEPTH(0),
+        .USE_PRELOAD(0)
     ) tagbank (
         .a_en(a_en),
         .a_wbe(a_wbe),
