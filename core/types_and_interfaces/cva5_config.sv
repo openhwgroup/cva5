@@ -175,7 +175,7 @@ package cva5_config;
         bit INCLUDE_CBO; //Data cache invalidation operations
 
         //Units
-        units_t INCLUDE_UNIT;
+        units_t INCLUDE_UNIT; //Value of ALU, LS, BR, and GC ignored
     
         //CSR constants
         csr_config_t CSRS;
@@ -240,15 +240,12 @@ package cva5_config;
         //ISA options
         MODES : MSU,
         INCLUDE_UNIT : '{
-            ALU : 1,
-            LS : 1,
             MUL : 1,
             DIV : 1,
             CSR : 1,
             FPU : 1,
             CUSTOM : 0,
-            BR : 1,
-            GC : 1
+            default: '0
         },
         INCLUDE_IFENCE : 1,
         INCLUDE_AMO : 0,

@@ -36,15 +36,12 @@ package nexys_config;
         //ISA options
         MODES : MSU,
         INCLUDE_UNIT : '{
-            ALU : 1,
-            LS : 1,
             MUL : 1,
             DIV : 1,
             CSR : 1,
             FPU : 1,
             CUSTOM : 0,
-            BR : 1,
-            GC : 1
+            default: '0
         },
         INCLUDE_IFENCE : 0,
         INCLUDE_AMO : 0,
