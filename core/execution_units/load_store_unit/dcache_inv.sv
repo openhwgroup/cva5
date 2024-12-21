@@ -66,6 +66,8 @@ module dcache_inv
         AMO_SC,
         AMO_RMW
     } req_type_t;
+    req_type_t stage0_type;
+    req_type_t stage1_type;
 
     typedef struct packed {
         logic[31:0] addr;
@@ -103,8 +105,6 @@ module dcache_inv
             stage1 <= stage0;
     end
 
-    req_type_t stage0_type;
-    req_type_t stage1_type;
     always_comb begin
         if (cbo)
             stage0_type = CBO;

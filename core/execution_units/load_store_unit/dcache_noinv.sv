@@ -67,11 +67,25 @@ module dcache_noinv
         logic cbo;
     } req_t;
 
+    typedef enum {
+        IDLE,
+        FIRST_CYCLE,
+        REQUESTING_READ,
+        FILLING,
+        UNCACHEABLE_WAITING_READ,
+        AMO_WRITE
+    } stage1_t;
+
     //Implementation
     req_t stage0;
     req_t stage1;
     logic stage1_done;
     logic stage0_advance_r;
+    stage1_t current_state;
+    logic[DB_ADDR_LEN-1:0] db_addr;
+    logic db_wen;
+    logic stage1_is_lr;
+    logic stage1_is_sc;
 
     assign write_outstanding = ((current_state != IDLE) & (~stage1.rnw | stage1.amo)) | mem.write_outstanding;
 
@@ -153,17 +167,16 @@ module dcache_noinv
     //Databank
     logic[CONFIG.DCACHE.WAYS-1:0][31:0] db_entries;
     logic[31:0] db_hit_entry;
-    logic db_wen;
     logic[CONFIG.DCACHE.WAYS-1:0] db_way;
     logic[CONFIG.DCACHE.WAYS-1:0][3:0] db_wbe_full;
     logic[31:0] db_wdata;
+    logic[SCONFIG.SUB_LINE_ADDR_W-1:0] word_counter;
 
     always_comb begin
         for (int i = 0; i < CONFIG.DCACHE.WAYS; i++)
             db_wbe_full[i] = {4{db_way[i]}} & stage1.be;
     end
 
-    logic[DB_ADDR_LEN-1:0] db_addr;
     assign db_addr = current_state == FILLING ? {addr_utils.getTagLineAddr(stage1.addr), word_counter} : addr_utils.getDataLineAddr(stage1.addr);
 
     sdp_ram #(
@@ -192,7 +205,6 @@ module dcache_noinv
     //Arbiter response
     logic correct_word;
     logic return_done;
-    logic[SCONFIG.SUB_LINE_ADDR_W-1:0] word_counter;
     assign return_done = mem.rvalid & word_counter == SCONFIG.SUB_LINE_ADDR_W'(CONFIG.DCACHE.LINE_W-1);
     assign correct_word = mem.rvalid & word_counter == stage1.addr[2+:SCONFIG.SUB_LINE_ADDR_W];
     always_ff @(posedge clk) begin
@@ -202,17 +214,7 @@ module dcache_noinv
             word_counter <= 0;
     end
 
-    typedef enum {
-        IDLE,
-        FIRST_CYCLE,
-        REQUESTING_READ,
-        FILLING,
-        UNCACHEABLE_WAITING_READ,
-        AMO_WRITE
-    } stage1_t;
-    stage1_t current_state;
     stage1_t next_state;
-
     always_ff @(posedge clk) begin
         if (rst)
             current_state <= IDLE;
@@ -336,9 +338,6 @@ module dcache_noinv
     end
 
     //AMO
-    logic stage1_is_lr;
-    logic stage1_is_sc;
-
     assign stage1_is_lr = stage1.amo & stage1.amo_type == AMO_LR_FN5;
     assign stage1_is_sc = stage1.amo & stage1.amo_type == AMO_SC_FN5;
 

@@ -332,6 +332,8 @@ module csr_unit
     localparam mstatus_t sstatus_mask = '{default:0, mxr:1, sum:1, spp:1, spie:1, sie:1, sd:(CONFIG.INCLUDE_UNIT.FPU), fs:{2{CONFIG.INCLUDE_UNIT.FPU}}};
     logic stip_stimecmp;
 
+    logic[31:0] sie;
+    mip_t sip;
     mie_t sie_deleg_mask;
     localparam mie_t sie_mask = '{default:0, seie:CONFIG.MODES == MSU, stie:CONFIG.MODES == MSU, ssie:CONFIG.MODES == MSU};
     localparam mip_t sip_mask = '{default:0, seip:CONFIG.MODES == MSU, stip:CONFIG.MODES == MSU, ssip:CONFIG.MODES == MSU};
@@ -722,8 +724,6 @@ endgenerate
     logic[31:0] scounteren;
     logic[31:0] stimecmp;
     logic[31:0] stimecmph;
-    mip_t sip;
-    logic[31:0] sie;
     localparam logic[31:0] sstateen0 = 0; //The defined behaviour is not used
     localparam logic[31:0] sstateen1 = 0;
     localparam logic[31:0] sstateen2 = 0;
