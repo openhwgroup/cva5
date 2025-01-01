@@ -49,20 +49,20 @@ module plic_wrapper
         output logic wb_ack,
 
         //Compliant AXI Lite interface; does not include optional awprot, wstrb, bresp, arprot, and rresp
-        input logic axi_awvalid,
-        input logic[25:2] axi_awaddr,
-        output logic axi_awready,
-        input logic axi_wvalid,
-        input logic[31:0] axi_wdata,
-        output logic axi_wready,
-        output logic axi_bvalid,
-        input logic axi_bready,
-        input logic axi_arvalid,
-        input logic[25:2] axi_araddr,
-        output logic axi_arready,
-        output logic axi_rvalid, 
-        output logic[31:0] axi_rdata,
-        input logic axi_rready
+        input logic S_AXI_awvalid,
+        input logic[31:0] S_AXI_awaddr,
+        output logic S_AXI_awready,
+        input logic S_AXI_wvalid,
+        input logic[31:0] S_AXI_wdata,
+        output logic S_AXI_wready,
+        output logic S_AXI_bvalid,
+        input logic S_AXI_bready,
+        input logic S_AXI_arvalid,
+        input logic[31:0] S_AXI_araddr,
+        output logic S_AXI_arready,
+        output logic S_AXI_rvalid, 
+        output logic[31:0] S_AXI_rdata,
+        input logic S_AXI_rready
     );
 
     ////////////////////////////////////////////////////
@@ -98,43 +98,78 @@ module plic_wrapper
 
     //Interface
     generate if (AXI) begin : gen_axi_if
-        //Writes are asynchronous, reads need two cycles
-        //Reads take priority over writes
-        logic[25:2] saved_addr;
-        always_comb begin
-            if (read_reg)
-                addr = saved_addr;
-            else if (axi_arvalid & axi_arready)
-                addr = axi_araddr[25:2];
-            else
-                addr = axi_awaddr[25:2];
-        end
 
-        assign axi_arready = ~read_reg & ~axi_rvalid;
-        assign axi_awready = ~axi_bvalid & ~axi_arvalid & ~read_reg & axi_awvalid & axi_wvalid;
-        assign axi_wready = axi_awready;
-        assign write_reg = axi_awvalid & axi_awready & axi_wvalid & axi_wready;
-        assign wdata = axi_wdata;
+        typedef enum logic [2:0] {
+            IDLE,
+            RADDR,
+            WADDR,
+            RDATA,
+            WDATA
+        } state_t;
 
-        always_ff @(posedge clk) begin
-            if (read_reg)
-                axi_rdata <= rdata;
-            if (axi_arvalid & axi_arready)
-                saved_addr <= axi_araddr[25:2];
-        end
+        state_t state, next_state;
 
         always_ff @(posedge clk) begin
             if (rst) begin
-                read_reg <= 0;
-                axi_rvalid <= 0;
-                axi_bvalid <= 0;
+                state <= IDLE;
             end
             else begin
-                read_reg <= axi_arvalid & axi_arready;
-                axi_rvalid <= axi_rvalid ? ~axi_rready : read_reg;
-                axi_bvalid <= axi_bvalid ? ~axi_bready : write_reg;
+                state <= next_state;
             end
         end
+
+        always_comb begin
+            next_state = state;
+            case (state) inside
+                IDLE : begin
+                    if (S_AXI_awvalid) begin
+                        next_state = WADDR;
+                    end
+                    else if (S_AXI_arvalid) begin
+                        next_state = RADDR;
+                    end
+                end
+                RADDR : begin
+                    if (S_AXI_arready) begin
+                        next_state = RDATA;
+                    end
+                end
+                WADDR : begin
+                    if (S_AXI_wvalid) begin
+                        next_state = WDATA;
+                    end
+                end
+                RDATA : begin
+                    if (S_AXI_rready) begin
+                        next_state = IDLE;
+                    end
+                end
+                WDATA : begin
+                    if (S_AXI_bready) begin
+                        next_state = IDLE;
+                    end
+                end
+            endcase
+        end
+        assign S_AXI_arready = (state == RADDR) ? 1 : 0;
+        assign S_AXI_rvalid = (state == RDATA) ? 1 : 0;
+        assign S_AXI_awready = (state == WADDR) ? 1 : 0;
+        assign S_AXI_wready = (state == WDATA) ? 1 : 0;
+        assign S_AXI_bvalid = (state == WDATA) ? 1 : 0;
+
+        assign read_reg = ((state == RDATA) && S_AXI_rvalid) ? 1 : 0;
+        assign S_AXI_rdata = rdata;
+        assign write_reg = ((state == WDATA) && S_AXI_wvalid) ? 1 : 0;
+        assign wdata = S_AXI_wdata;
+
+        always_ff @(posedge clk) begin
+            if (S_AXI_arvalid)
+                addr = S_AXI_araddr[25:2];
+            else if(S_AXI_awvalid)
+                addr = S_AXI_awaddr[25:2];
+        end
+
+
     
         //Not in use
         assign wb_ack = 0;
@@ -153,11 +188,11 @@ module plic_wrapper
         end
 
         //Not in use
-        assign axi_awready = 0;
-        assign axi_wready = 0;
-        assign axi_bvalid = 0;
-        assign axi_arready = 0;
-        assign axi_rvalid = 0;
+        assign S_AXI_awready = 0;
+        assign S_AXI_wready = 0;
+        assign S_AXI_bvalid = 0;
+        assign S_AXI_arready = 0;
+        assign S_AXI_rvalid = 0;
     end endgenerate
 
 endmodule

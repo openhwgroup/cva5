@@ -411,6 +411,7 @@ module dcache_inv
                 mem.request = stage1_valid;
                 mem.wdata = stage1.wdata;
                 mem.rnw = 0;
+                mem.rmw = 0;
                 stage1_tb_write = 0;
                 stage1_tb_wval = 'x;
                 db_wen = stage0_advance_r & hit & ~stage1.uncacheable;
@@ -424,6 +425,7 @@ module dcache_inv
                 mem.request = stage1_valid & ~request_sent;
                 mem.wdata = 'x;
                 mem.rnw = 0;
+                mem.rmw = 0;
                 stage1_tb_write = ~stage1.uncacheable & mem.ack & (stage0_advance_r ? hit : hit_r);
                 stage1_tb_wval = 0;
                 db_wen = 0;
@@ -437,6 +439,7 @@ module dcache_inv
                 mem.request = stage1_valid & ~stage0_advance_r & (stage1.uncacheable | ~hit_r) & ~request_sent;
                 mem.wdata = 'x;
                 mem.rnw = 1;
+                mem.rmw = 0;
                 stage1_tb_write = ~stage1.uncacheable & mem.ack;
                 stage1_tb_wval = 1;
                 db_wen = mem.rvalid & ~stage1.uncacheable;
@@ -450,6 +453,7 @@ module dcache_inv
                 mem.request = stage1_valid & lr_valid;
                 mem.wdata = stage1.wdata;
                 mem.rnw = 0;
+                mem.rmw = 0;
                 stage1_tb_write = 0;
                 stage1_tb_wval = 'x;
                 db_wen = ~stage1.uncacheable & mem.ack;
@@ -463,6 +467,7 @@ module dcache_inv
                 mem.request = rmw_mem_request;
                 mem.wdata = amo_unit.rd;
                 mem.rnw = rmw_mem_rnw;
+                mem.rmw = 1;
                 stage1_tb_write = rmw_stage1_tb_write;
                 stage1_tb_wval = 1;
                 db_wen = rmw_db_wen;

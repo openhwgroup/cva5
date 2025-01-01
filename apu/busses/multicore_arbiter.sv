@@ -61,6 +61,7 @@ module multicore_arbiter
         logic[3:0] wbe;
         logic[31:0] wdata;
         full_id_t id;
+        logic rmw;
     } request_t;
     request_t in_req;
     request_t out_req;
@@ -71,6 +72,7 @@ module multicore_arbiter
     logic[NUM_CORES-1:0][31:2] addr;
     logic[NUM_CORES-1:0][4:0] rlen;
     logic[NUM_CORES-1:0] rnw;
+    logic[NUM_CORES-1:0] rmw;
     logic[NUM_CORES-1:0][3:0] wbe;
     logic[NUM_CORES-1:0][31:0] wdata;
     logic[NUM_CORES-1:0][1:0] id;
@@ -96,6 +98,7 @@ module multicore_arbiter
         assign addr[i] = mems[i].addr;
         assign rlen[i] = mems[i].rlen;
         assign rnw[i] = mems[i].rnw;
+        assign rmw[i] = mems[i].rmw;
         assign wbe[i] = mems[i].wbe;
         assign wdata[i] = mems[i].wdata;
         assign id[i] = mems[i].id;
@@ -108,9 +111,54 @@ module multicore_arbiter
         assign mems[i].rid = request_rid[1:0];
         assign mems[i].write_outstanding = wcounts[i][$clog2(FIFO_DEPTH)] | write_outstanding[i];
     end endgenerate
+    
+    logic [4:0] rmw_len;
+    logic [31:2] rmw_addr;
+    logic [1:0] rmw_index;
+    always_ff @(posedge clk or posedge rst) begin
+        if (rst) begin
+            rmw_len <= '0;
+            rmw_addr <= '0;
+            rmw_index <= '0;
+        end
+        else if (in_req.rmw & in_req.rnw & request_push) begin
+            rmw_addr <= in_req.addr;
+            rmw_len <= in_req.rlen;
+            rmw_index <= chosen_port;
+        end
+    end
 
-    //Request FIFO
-    assign request_push = ~request_fifo.full & |requests;
+    logic[1:0] rmw_in_fifo;
+    always_ff @(posedge clk or posedge rst) begin
+        if (rst)
+            rmw_in_fifo <= 0;
+        else if (rmw_in_fifo == 2)begin
+            if(rmw_counter == rmw_len+1)
+                rmw_in_fifo <= 0;
+            else
+                rmw_in_fifo <= 2;
+        end else if (in_req.rmw & in_req.rnw & request_push)
+            rmw_in_fifo <= 1;
+        else if (out_req.rmw & out_req.rnw & request_pop)
+            rmw_in_fifo <= 2;
+    end
+
+    logic [4:0] rmw_counter;
+
+    always_ff @(posedge clk) begin
+        if(rst)begin
+            rmw_counter <= '0;
+        end else if(rmw_in_fifo==2) begin
+            if(rvalids[rmw_index])
+                rmw_counter <= rmw_counter + 1;
+            else
+                rmw_counter <= rmw_counter;
+        end else begin
+            rmw_counter <= '0;
+        end
+    end
+
+    assign request_push = ~request_fifo.full & |requests & ((rmw_in_fifo==0) | in_req.rnw | rmw_addr[31:6] != in_req.addr[31:6]);
     assign request_fifo.data_in = in_req;
     assign out_req = request_fifo.data_out;
     assign request_valid = request_fifo.valid;
@@ -140,7 +188,8 @@ module multicore_arbiter
         rnw : rnw[chosen_port],
         wbe : wbe[chosen_port],
         wdata : wdata[chosen_port],
-        id : padded_id
+        id : padded_id,
+        rmw : rmw[chosen_port]
     };
 
     generate if (NUM_CORES == 1) begin : gen_no_id

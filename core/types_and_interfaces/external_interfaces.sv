@@ -132,6 +132,7 @@ interface mem_interface;
     logic[1:0] rid;
     
     logic rnw;
+    logic rmw;
     logic[3:0] wbe;
     logic[31:0] wdata;
 
@@ -143,9 +144,9 @@ interface mem_interface;
 
     modport ro_master (output request, addr, rlen, input ack, rvalid, rdata);
     modport ro_slave (input request, addr, rlen, output ack, rvalid, rdata);
-    modport rw_master (output request, addr, rlen, rnw, wbe, wdata, input ack, rvalid, rdata, inv, inv_addr, write_outstanding);
-    modport rw_slave (input request, addr, rlen, rnw, wbe, wdata, output ack, rvalid, rdata, inv, inv_addr, write_outstanding);
-    modport mem_master (output request, addr, rlen, rnw, wbe, wdata, id, input ack, rvalid, rdata, rid, inv, inv_addr, write_outstanding);
-    modport mem_slave (input request, addr, rlen, rnw, wbe, wdata, id, output ack, rvalid, rdata, rid, inv, inv_addr, write_outstanding);
+    modport rw_master (output request, addr, rlen, rnw, rmw, wbe, wdata, input ack, rvalid, rdata, inv, inv_addr, write_outstanding);
+    modport rw_slave (input request, addr, rlen, rnw, rmw, wbe, wdata, output ack, rvalid, rdata, inv, inv_addr, write_outstanding);
+    modport mem_master (output request, addr, rlen, rnw, rmw, wbe, wdata, id, input ack, rvalid, rdata, rid, inv, inv_addr, write_outstanding);
+    modport mem_slave (input request, addr, rlen, rnw, rmw, wbe, wdata, id, output ack, rvalid, rdata, rid, inv, inv_addr, write_outstanding);
 
 endinterface

@@ -25,7 +25,7 @@ module clint_wrapper
 
     #(
         parameter int unsigned NUM_CORES = 1,
-        parameter logic AXI = 1'b0 //Else the wishbone bus is used
+        parameter logic AXI = 1'b1 //Else the wishbone bus is used
     ) (
         input logic clk,
         input logic rst,
@@ -46,20 +46,20 @@ module clint_wrapper
         output logic wb_ack,
 
         //Compliant AXI Lite interface; does not include optional awprot, wstrb, bresp, arprot, and rresp
-        input logic axi_awvalid,
-        input logic[15:2] axi_awaddr,
-        output logic axi_awready,
-        input logic axi_wvalid,
-        input logic[31:0] axi_wdata,
-        output logic axi_wready,
-        output logic axi_bvalid,
-        input logic axi_bready,
-        input logic axi_arvalid,
-        input logic[15:2] axi_araddr,
-        output logic axi_arready,
-        output logic axi_rvalid, 
-        output logic[31:0] axi_rdata,
-        input logic axi_rready
+        input logic S_AXI_awvalid,
+        input logic[31:0] S_AXI_awaddr,
+        output logic S_AXI_awready,
+        input logic S_AXI_wvalid,
+        input logic[31:0] S_AXI_wdata,
+        output logic S_AXI_wready,
+        output logic S_AXI_bvalid,
+        input logic S_AXI_bready,
+        input logic S_AXI_arvalid,
+        input logic[31:0] S_AXI_araddr,
+        output logic S_AXI_arready,
+        output logic S_AXI_rvalid, 
+        output logic[31:0] S_AXI_rdata,
+        input logic S_AXI_rready
     );
 
     ////////////////////////////////////////////////////
@@ -100,50 +100,103 @@ module clint_wrapper
 
 
     //Interface
-    generate if (AXI) begin : gen_axi_if
+    generate if (AXI) begin : gen_S_AXI_if
         //Simple implementation uses single-cycle for reads and writes
-        logic doing_write;
-        assign doing_write = axi_awvalid & axi_awready & axi_wvalid & axi_wready;
+        typedef enum logic [2:0] {
+            IDLE,
+            RADDR,
+            WADDR,
+            RDATA,
+            WDATA
+        } state_t;
 
-        //Outputs
-        assign axi_arready = ~axi_rvalid;
-        assign axi_awready = ~axi_bvalid & ~axi_arvalid & axi_awvalid & axi_wvalid;
-        assign axi_wready = axi_awready;
+        state_t state, next_state;
 
         always_ff @(posedge clk) begin
             if (rst) begin
-                axi_rvalid <= 0;
-                axi_bvalid <= 0;
+                state <= IDLE;
             end
             else begin
-                axi_rvalid <= axi_rvalid ? ~axi_rready : axi_arvalid;
-                axi_bvalid <= axi_bvalid ? ~axi_bready : doing_write;
+                state <= next_state;
             end
         end
 
+        always_comb begin
+            next_state = state;
+            case (state) inside
+                IDLE : begin
+                    if (S_AXI_awvalid) begin
+                        next_state = WADDR;
+                    end
+                    else if (S_AXI_arvalid) begin
+                        next_state = RADDR;
+                    end
+                end
+                RADDR : begin
+                    if (S_AXI_arready) begin
+                        next_state = RDATA;
+                    end
+                end
+                WADDR : begin
+                    if (S_AXI_wvalid) begin
+                        next_state = WDATA;
+                    end
+                end
+                RDATA : begin
+                    if (S_AXI_rready) begin
+                        next_state = IDLE;
+                    end
+                end
+                WDATA : begin
+                    if (S_AXI_bready) begin
+                        next_state = IDLE;
+                    end
+                end
+            endcase
+        end
+        logic [31:0] raddr_reg,waddr_reg;
+        logic doing_write;
+        assign doing_write = (S_AXI_wvalid && (state==WDATA)) ? 1 : 0;
+        assign S_AXI_arready = (state == RADDR) ? 1 : 0;
+        assign S_AXI_rvalid = (state == RDATA) ? 1 : 0;
+        assign S_AXI_awready = (state == WADDR) ? 1 : 0;
+        assign S_AXI_wready = (state == WDATA) ? 1 : 0;
+        assign S_AXI_bvalid = (state == WDATA) ? 1 : 0;
+        always_ff @(posedge clk) begin
+            if (rst) begin
+                raddr_reg <= 0;
+                waddr_reg <= 0;
+            end
+            else begin
+                if(S_AXI_arvalid) begin
+                    raddr_reg <= S_AXI_araddr;
+                end
+                if(S_AXI_awvalid) begin
+                    waddr_reg <= S_AXI_awaddr;
+                end
+            end
+        end
         //Read data
         always_ff @(posedge clk) begin
-            if (~axi_rvalid) begin
-                case ({axi_araddr[15:2], 2'b00}) inside
-                    [MSIP_BASE:MSIP_BASE+4*CORES_MINUS_ONE] : axi_rdata <= {31'b0, msip[NUM_CORES == 1 ? '0 : axi_araddr[2+:CORE_W]]};
-                    [MTIME_BASE:MTIME_BASE+4] : axi_rdata <= mtime_packed[axi_araddr[2]];
-                    [MTIMECMP_BASE:MTIMECMP_BASE+8*CORES_MINUS_ONE] : axi_rdata <= mtimecmp[NUM_CORES == 1 ? '0 : axi_araddr[3+:CORE_W]][axi_araddr[2]];
-                    default : axi_rdata <= '0;
-                endcase
-            end
+            case ({raddr_reg[15:2], 2'b00}) inside
+                [MSIP_BASE:MSIP_BASE+4*CORES_MINUS_ONE] : S_AXI_rdata <= {31'b0, msip[NUM_CORES == 1 ? '0 : raddr_reg[2+:CORE_W]]};
+                [MTIME_BASE:MTIME_BASE+4] : S_AXI_rdata <= mtime_packed[raddr_reg[2]];
+                [MTIMECMP_BASE:MTIMECMP_BASE+4+8*CORES_MINUS_ONE] : S_AXI_rdata <= mtimecmp[NUM_CORES == 1 ? '0 : raddr_reg[3+:CORE_W]][raddr_reg[2]];
+                default : S_AXI_rdata <= '0;
+            endcase
         end
 
         //Write data
-        assign write_data = axi_wdata;
-        assign write_upper = axi_awaddr[2];
-        assign write_msip_core = NUM_CORES == 1 ? '0 : axi_awaddr[2+:CORE_W];
-        assign write_mtimecmp_core = NUM_CORES == 1 ? '0 : axi_awaddr[3+:CORE_W];
+        assign write_data = S_AXI_wdata;
+        assign write_upper = waddr_reg[2];
+        assign write_msip_core = NUM_CORES == 1 ? '0 : waddr_reg[2+:CORE_W];
+        assign write_mtimecmp_core = NUM_CORES == 1 ? '0 : waddr_reg[3+:CORE_W];
         
         always_comb begin
             write_msip = 0;
             write_mtime = 0;
             write_mtimecmp = 0;
-            case ({axi_awaddr[15:2], 2'b00}) inside
+            case ({waddr_reg[15:2], 2'b00}) inside
                 [MSIP_BASE:MSIP_BASE+4*CORES_MINUS_ONE] : write_msip = doing_write;
                 [MTIME_BASE:MTIME_BASE+4] : write_mtime = doing_write;
                 [MTIMECMP_BASE:MTIMECMP_BASE+4+8*CORES_MINUS_ONE] : write_mtimecmp = doing_write;
@@ -184,11 +237,11 @@ module clint_wrapper
         end
 
         //Not in use
-        assign axi_awready = 0;
-        assign axi_wready = 0;
-        assign axi_bvalid = 0;
-        assign axi_arready = 0;
-        assign axi_rvalid = 0;
+        assign S_AXI_awready = 0;
+        assign S_AXI_wready = 0;
+        assign S_AXI_bvalid = 0;
+        assign S_AXI_arready = 0;
+        assign S_AXI_rvalid = 0;
     end endgenerate
 
 endmodule
