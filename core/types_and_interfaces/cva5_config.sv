@@ -342,10 +342,6 @@ package cva5_config;
         WB_GROUP : EXAMPLE_WB_GROUP_CONFIG
     };
 
-    ////////////////////////////////////////////////////
-    //Bus Options
-    parameter C_M_AXI_ADDR_WIDTH = 32; //Kept as parameter, due to localparam failing with scripted IP packaging
-    parameter C_M_AXI_DATA_WIDTH = 32; //Kept as parameter, due to localparam failing with scripted IP packaging
 
     ////////////////////////////////////////////////////
     //ID limit

@@ -25,7 +25,7 @@ interface axi_interface;
 
     logic arready;
     logic arvalid;
-    logic [C_M_AXI_ADDR_WIDTH-1:0] araddr;
+    logic [31:0] araddr;
     logic [7:0] arlen;
     logic [2:0] arsize;
     logic [1:0] arburst;
@@ -36,7 +36,7 @@ interface axi_interface;
     //read data
     logic rready;
     logic rvalid;
-    logic [C_M_AXI_DATA_WIDTH-1:0] rdata;
+    logic [31:0] rdata;
     logic [1:0] rresp;
     logic rlast;
     logic [5:0] rid;
@@ -45,7 +45,7 @@ interface axi_interface;
     //write address
     logic awready;
     logic awvalid;
-    logic [C_M_AXI_ADDR_WIDTH-1:0] awaddr;
+    logic [31:0] awaddr;
     logic [7:0] awlen;
     logic [2:0] awsize;
     logic [1:0] awburst;
@@ -56,8 +56,8 @@ interface axi_interface;
     //write data
     logic wready;
     logic wvalid;
-    logic [C_M_AXI_DATA_WIDTH-1:0] wdata;
-    logic [(C_M_AXI_DATA_WIDTH/8)-1:0] wstrb;
+    logic [31:0] wdata;
+    logic [3:0] wstrb;
     logic wlast;
 
     //write response
@@ -147,5 +147,17 @@ interface mem_interface;
     modport rw_slave (input request, addr, rlen, rnw, wbe, wdata, output ack, rvalid, rdata, inv, inv_addr, write_outstanding);
     modport mem_master (output request, addr, rlen, rnw, wbe, wdata, id, input ack, rvalid, rdata, rid, inv, inv_addr, write_outstanding);
     modport mem_slave (input request, addr, rlen, rnw, wbe, wdata, id, output ack, rvalid, rdata, rid, inv, inv_addr, write_outstanding);
+
+endinterface
+
+interface local_memory_interface;
+    logic[29:0] addr;
+    logic en;
+    logic[3:0] be;
+    logic[31:0] data_in;
+    logic[31:0] data_out;
+
+    modport slave (input addr, en, be, data_in, output data_out);
+    modport master (output addr, en, be, data_in, input data_out);
 
 endinterface
