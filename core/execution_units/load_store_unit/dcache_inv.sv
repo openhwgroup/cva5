@@ -185,8 +185,19 @@ module dcache_inv
     logic stage1_tb_wval_r;
     logic[CONFIG.DCACHE.WAYS-1:0] hit_ohot_r;
 
-    assign a_en = snoop_write | (stage1_tb_write_r & ~inv_matches_stage1) | ls.new_request;
-    assign a_wbe = ({CONFIG.DCACHE.WAYS{snoop_write}} & snoop_hit) | ({CONFIG.DCACHE.WAYS{stage1_tb_write_r}} & (stage1_type == CBO ? hit_ohot_r : replacement_way));
+    assign a_en = snoop_write | stage1_tb_write_r | ls.new_request ;// & ~inv_matches_stage1 )
+    assign a_wbe = ({CONFIG.DCACHE.WAYS{snoop_write}} & snoop_hit) | ({CONFIG.DCACHE.WAYS{stage1_tb_write_r}} & (stage1_type == CBO ? hit_ohot_r : (coming_to_read_after_snoop_reg == 1'b1 ? hit_ohot_r : replacement_way)));
+
+
+    logic[CONFIG.DCACHE.WAYS-1:0] rmw_refill_way;
+    always_ff @(posedge clk) begin
+        if (rst)
+            rmw_refill_way <= 0;
+        else if (current_state==RMW_FILLING & a_wbe!=0)
+            rmw_refill_way <= a_wbe;
+        else if (current_state!=RMW_FILLING)
+            rmw_refill_way <= 0;
+    end
 
     always_comb begin
         if (snoop_write)
@@ -248,10 +259,15 @@ module dcache_inv
     logic hit_r;
     logic[CONFIG.DCACHE.WAYS-1:0] hit_ohot;
 
+    logic hit_state = 0;
     always_comb begin
         hit_ohot = '0;
-        for (int i = 0; i < CONFIG.DCACHE.WAYS; i++)
-            hit_ohot[i] = a_rdata[i].valid & (a_rdata[i].tag == stage1.addr[2+SCONFIG.SUB_LINE_ADDR_W+SCONFIG.LINE_ADDR_W+:SCONFIG.TAG_W]);
+        // if(hit_state==2'd2)begin
+        //     hit_ohot = hit_ohot_r;
+        // end else begin
+            for (int i = 0; i < CONFIG.DCACHE.WAYS; i++)
+                hit_ohot[i] = a_rdata[i].valid & (a_rdata[i].tag == stage1.addr[2+SCONFIG.SUB_LINE_ADDR_W+SCONFIG.LINE_ADDR_W+:SCONFIG.TAG_W]);
+        // end
     end
     assign hit = |hit_ohot;
 
@@ -259,8 +275,25 @@ module dcache_inv
         if (stage0_advance_r) begin
             hit_r <= hit;
             hit_ohot_r <= hit_ohot;
-        end
+        end 
+        // else if(hit_state==2'd1 && (stage1_tb_write_r & ~inv_matches_stage1))begin
+        //     hit_r <= 0;
+            // hit_ohot_r <= a_wbe;
+        // end
+        // end else if((rmw_stage1_tb_write))begin
+        //     hit_r <= 0;
+        // end
     end
+
+    // always_ff @(posedge clk)begin
+    //     if(rst)begin
+    //         hit_state<=2'd0;
+    //     end else if(stage0_advance_r) begin
+    //         hit_state<=2'd0;
+    //     end else if(rmw_retry)begin
+    //         hit_state<=2'd1;
+    //     end 
+    // end
 
     ////////////////////////////////////////////////////
     //Atomic read/modify/write state machine
@@ -292,9 +325,19 @@ module dcache_inv
             current_state <= next_state;
     end
 
+    logic coming_to_read_after_snoop;
+    logic coming_to_read_after_snoop_reg;
+    always_ff @(posedge clk) begin
+        if (rst)
+            coming_to_read_after_snoop_reg <= 0;
+        else 
+            coming_to_read_after_snoop_reg <= coming_to_read_after_snoop;
+    end
+
     always_comb begin
         unique case (current_state)
             RMW_READ : begin
+                coming_to_read_after_snoop = coming_to_read_after_snoop_reg;
                 rmw_mem_request = 1;
                 rmw_mem_rnw = 1;
                 rmw_stage1_tb_write = mem.ack & ~stage1.uncacheable;
@@ -305,6 +348,7 @@ module dcache_inv
                 next_state = mem.ack ? RMW_FILLING : RMW_READ;
             end
             RMW_WRITE : begin
+                coming_to_read_after_snoop = 0;
                 rmw_mem_request = ~rmw_retry;
                 rmw_mem_rnw = 0;
                 rmw_stage1_tb_write = 0;
@@ -314,12 +358,14 @@ module dcache_inv
                 rmw_stage1_done = mem.ack;
                 if (mem.ack)
                     next_state = RMW_IDLE;
-                else if (rmw_retry)
+                else if (rmw_retry)begin
                     next_state = RMW_READ;
-                else
+                    coming_to_read_after_snoop = 1;
+                end else
                     next_state = RMW_WRITE;
             end
             RMW_FILLING : begin
+                coming_to_read_after_snoop = 0;
                 rmw_mem_request = 0;
                 rmw_mem_rnw = 'x;
                 rmw_stage1_tb_write = 0;
@@ -327,12 +373,14 @@ module dcache_inv
                 rmw_db_wdata = mem.rdata;
                 rmw_ls_data_valid = 0;
                 rmw_stage1_done = 0;
-                if (return_done)
+                if (return_done)begin
                     next_state = rmw_retry ? RMW_READ : RMW_WRITE;
-                else
+                    coming_to_read_after_snoop = rmw_retry;
+                end else
                     next_state = RMW_FILLING;
             end
             RMW_IDLE : begin
+                coming_to_read_after_snoop = 0;
                 rmw_mem_request = 0;
                 rmw_mem_rnw = 'x;
                 rmw_stage1_tb_write = 0;

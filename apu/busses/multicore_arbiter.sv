@@ -112,53 +112,68 @@ module multicore_arbiter
         assign mems[i].write_outstanding = wcounts[i][$clog2(FIFO_DEPTH)] | write_outstanding[i];
     end endgenerate
     
-    logic [4:0] rmw_len;
-    logic [31:2] rmw_addr;
-    logic [1:0] rmw_index;
+    // logic [4:0] rmw_len;
+    // logic [31:2] rmw_addr;
+    logic [(NUM_CORES == 1 ? 1 : $clog2(NUM_CORES))-1:0] rmw_index;
     always_ff @(posedge clk or posedge rst) begin
         if (rst) begin
-            rmw_len <= '0;
-            rmw_addr <= '0;
+            // rmw_len <= '0;
+            // rmw_addr <= '0;
             rmw_index <= '0;
         end
-        else if (in_req.rmw & in_req.rnw & request_push) begin
-            rmw_addr <= in_req.addr;
-            rmw_len <= in_req.rlen;
+        else if (in_req.rmw & request_push) begin
+            // rmw_addr <= in_req.addr;
+            // rmw_len <= in_req.rlen;
             rmw_index <= chosen_port;
         end
     end
 
-    logic[1:0] rmw_in_fifo;
+    // logic[1:0] rmw_in_fifo;
+    // always_ff @(posedge clk or posedge rst) begin
+    //     if (rst)
+    //         rmw_in_fifo <= 0;
+    //     else if (rmw_in_fifo == 2)begin
+    //         if(rmw_counter == rmw_len+1)
+    //             rmw_in_fifo <= 0;
+    //         else
+    //             rmw_in_fifo <= 2;
+    //     end else if (in_req.rmw & in_req.rnw & request_push)
+    //         rmw_in_fifo <= 1;
+    //     else if (out_req.rmw & out_req.rnw & request_pop)
+    //         rmw_in_fifo <= 2;
+    // end
+
+    // logic [4:0] rmw_counter;
+
+    // always_ff @(posedge clk) begin
+    //     if(rst)begin
+    //         rmw_counter <= '0;
+    //     end else if(rmw_in_fifo==2) begin
+    //         if(rvalids[rmw_index])
+    //             rmw_counter <= rmw_counter + 1;
+    //         else
+    //             rmw_counter <= rmw_counter;
+    //     end else begin
+    //         rmw_counter <= '0;
+    //     end
+    // end
+    logic rmw_is_on;
     always_ff @(posedge clk or posedge rst) begin
-        if (rst)
-            rmw_in_fifo <= 0;
-        else if (rmw_in_fifo == 2)begin
-            if(rmw_counter == rmw_len+1)
-                rmw_in_fifo <= 0;
-            else
-                rmw_in_fifo <= 2;
-        end else if (in_req.rmw & in_req.rnw & request_push)
-            rmw_in_fifo <= 1;
-        else if (out_req.rmw & out_req.rnw & request_pop)
-            rmw_in_fifo <= 2;
-    end
-
-    logic [4:0] rmw_counter;
-
-    always_ff @(posedge clk) begin
-        if(rst)begin
-            rmw_counter <= '0;
-        end else if(rmw_in_fifo==2) begin
-            if(rvalids[rmw_index])
-                rmw_counter <= rmw_counter + 1;
-            else
-                rmw_counter <= rmw_counter;
-        end else begin
-            rmw_counter <= '0;
+        if (rst) begin
+            rmw_is_on <= 1'b0;
+        end else if(in_req.rmw  & request_push) begin
+            rmw_is_on <= 1'b1;
+        end else if(in_req.rmw==0) begin
+            rmw_is_on <= 1'b0;
         end
     end
+    logic[NUM_CORES-1:0] accept_request_from_rmw_core;
 
-    assign request_push = ~request_fifo.full & |requests & ((rmw_in_fifo==0) | in_req.rnw | rmw_addr[31:6] != in_req.addr[31:6]);
+    logic rmw_hit;
+    assign rmw_hit = |(requests &  accept_request_from_rmw_core);
+    assign accept_request_from_rmw_core = (rmw_is_on ? (1'b1 << rmw_index) : {NUM_CORES{1'b1}});
+
+    assign request_push = ~request_fifo.full & |requests & (~rmw_is_on |  rmw_hit);//((rmw_in_fifo==0) | in_req.rnw | rmw_addr[31:6] != in_req.addr[31:6]);
     assign request_fifo.data_in = in_req;
     assign out_req = request_fifo.data_out;
     assign request_valid = request_fifo.valid;
@@ -176,7 +191,7 @@ module multicore_arbiter
 
     //Arbitration
     round_robin #(.NUM_PORTS(NUM_CORES)) rr (
-        .requests(requests),
+        .requests(requests & accept_request_from_rmw_core),
         .grant(request_push),
         .grantee(chosen_port),
     .*);
