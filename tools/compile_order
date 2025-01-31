@@ -5,12 +5,6 @@ core/types_and_interfaces/cva5_types.sv
 core/types_and_interfaces/fpu_types.sv
 core/types_and_interfaces/opcodes.sv
 
-l2_arbiter/l2_config_and_types.sv
-l2_arbiter/l2_interfaces.sv
-l2_arbiter/l2_external_interfaces.sv
-local_memory/local_memory_interface.sv
-local_memory/local_mem.sv
-
 core/types_and_interfaces/internal_interfaces.sv
 core/types_and_interfaces/external_interfaces.sv
 
@@ -19,7 +13,6 @@ core/common_components/ram/lutram_1w_mr.sv
 core/common_components/ram/sdp_ram.sv
 core/common_components/ram/sdp_ram_padded.sv
 core/common_components/ram/tdp_ram.sv
-core/common_components/ram/dual_port_bram.sv
 core/common_components/set_clr_reg_with_rst.sv
 core/common_components/one_hot_to_integer.sv
 core/common_components/one_hot_mux.sv
@@ -30,10 +23,6 @@ core/common_components/priority_encoder.sv
 core/common_components/round_robin.sv
 core/common_components/toggle_memory.sv
 core/common_components/toggle_memory_set.sv
-
-core/common_components/vendor_support/intel/intel_byte_enable_ram.sv
-core/common_components/vendor_support/xilinx/xilinx_byte_enable_ram.sv
-core/common_components/byte_en_bram.sv
 
 core/execution_units/csr_unit.sv
 core/execution_units/gc_unit.sv

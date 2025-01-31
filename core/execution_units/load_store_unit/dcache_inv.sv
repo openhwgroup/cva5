@@ -66,6 +66,8 @@ module dcache_inv
         AMO_SC,
         AMO_RMW
     } req_type_t;
+    req_type_t stage0_type;
+    req_type_t stage1_type;
 
     typedef struct packed {
         logic[31:0] addr;
@@ -103,8 +105,6 @@ module dcache_inv
             stage1 <= stage0;
     end
 
-    req_type_t stage0_type;
-    req_type_t stage1_type;
     always_comb begin
         if (cbo)
             stage0_type = CBO;
@@ -240,7 +240,8 @@ module dcache_inv
         .ADDR_WIDTH(SCONFIG.LINE_ADDR_W),
         .NUM_COL(CONFIG.DCACHE.WAYS),
         .COL_WIDTH($bits(tb_entry_t)),
-        .PIPELINE_DEPTH(0)
+        .PIPELINE_DEPTH(0),
+        .USE_PRELOAD(0)
     ) tagbank (
         .a_en(a_en),
         .a_wbe(a_wbe),

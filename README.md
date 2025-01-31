@@ -7,8 +7,6 @@ The CVA5 is derived from the Taiga Project from Simon Fraser University.
 
 The pipeline has been designed to support parallel, variable-latency execution units and to readily support the inclusion of new execution units.
 
-![CVA5 Block Diagram](examples/zedboard/cva5_small.png)
-
 
 ## Documentation and Project Setup
 For up-to-date documentation, as well as an automated build environment setup, refer to [Taiga Project](https://gitlab.com/sfu-rcl/taiga-project)
@@ -19,7 +17,7 @@ CVA5 is licensed under the Solderpad License, Version 2.1 ( http://solderpad.org
 
 
 ## Examples
-A zedboard configuration is provided under the examples directory along with tools for running stand-alone applications and providing application level simulation of the system.  (See the README in the zedboard directory for details.)
+A script to package CVA5 as an IP is available and can be run in Vivado by running `source ./examples/xilinx/package_as_ip.tcl`. A similar script can be executed afterwords to create a system implementing a small hello world application executing from block memory on the Nexys A7 FPGA.
 
 
 ## Publications
