@@ -60,7 +60,7 @@ module litex_wrapper
         // AXI SIGNALS - need these to unwrap the interface for packaging //
 	    input logic m_axi_arready,
 	    output logic m_axi_arvalid,
-	    output logic [C_M_AXI_ADDR_WIDTH-1:0] m_axi_araddr,
+	    output logic [32-1:0] m_axi_araddr,
 	    output logic [7:0] m_axi_arlen,
 	    output logic [2:0] m_axi_arsize,
 	    output logic [1:0] m_axi_arburst,
@@ -70,7 +70,7 @@ module litex_wrapper
 	    //read data
 	    output logic m_axi_rready,
 	    input logic m_axi_rvalid,
-	    input logic [C_M_AXI_DATA_WIDTH-1:0] m_axi_rdata,
+	    input logic [32-1:0] m_axi_rdata,
 	    input logic [1:0] m_axi_rresp,
 	    input logic m_axi_rlast,
 	    input logic [5:0] m_axi_rid,
@@ -79,7 +79,7 @@ module litex_wrapper
 	    //write address
 	    input logic m_axi_awready,
 	    output logic m_axi_awvalid,
-	    output logic [C_M_AXI_ADDR_WIDTH-1:0] m_axi_awaddr,
+	    output logic [32-1:0] m_axi_awaddr,
 	    output logic [7:0] m_axi_awlen,
 	    output logic [2:0] m_axi_awsize,
 	    output logic [1:0] m_axi_awburst,
@@ -89,8 +89,8 @@ module litex_wrapper
 	    //write data
 	    input logic m_axi_wready,
 	    output logic m_axi_wvalid,
-	    output logic [C_M_AXI_DATA_WIDTH-1:0] m_axi_wdata,
-	    output logic [(C_M_AXI_DATA_WIDTH/8)-1:0] m_axi_wstrb,
+	    output logic [32-1:0] m_axi_wdata,
+	    output logic [(32/8)-1:0] m_axi_wstrb,
 	    output logic m_axi_wlast,
 
 	    //write response
@@ -177,7 +177,7 @@ module litex_wrapper
             },
             ITLB : '{
                 WAYS : 2,
-                DEPTH : 64
+                DEPTH : 2
             },
             INCLUDE_DCACHE : 1,
             DCACHE_ADDR : '{
@@ -197,7 +197,7 @@ module litex_wrapper
             },
             DTLB : '{
                 WAYS : 2,
-                DEPTH : 64
+                DEPTH : 2
             },
             INCLUDE_ILOCAL_MEM : 0,
             ILOCAL_MEM_ADDR : '{
