@@ -49,20 +49,20 @@ module plic_wrapper
         output logic wb_ack,
 
         //Compliant AXI Lite interface; does not include optional awprot, wstrb, bresp, arprot, and rresp
-        input logic S_AXI_awvalid,
-        input logic[31:0] S_AXI_awaddr,
-        output logic S_AXI_awready,
-        input logic S_AXI_wvalid,
-        input logic[31:0] S_AXI_wdata,
-        output logic S_AXI_wready,
-        output logic S_AXI_bvalid,
-        input logic S_AXI_bready,
-        input logic S_AXI_arvalid,
-        input logic[31:0] S_AXI_araddr,
-        output logic S_AXI_arready,
-        output logic S_AXI_rvalid, 
-        output logic[31:0] S_AXI_rdata,
-        input logic S_AXI_rready
+        input logic s_axi_awvalid,
+        input logic[31:0] s_axi_awaddr,
+        output logic s_axi_awready,
+        input logic s_axi_wvalid,
+        input logic[31:0] s_axi_wdata,
+        output logic s_axi_wready,
+        output logic s_axi_bvalid,
+        input logic s_axi_bready,
+        input logic s_axi_arvalid,
+        input logic[31:0] s_axi_araddr,
+        output logic s_axi_arready,
+        output logic s_axi_rvalid,
+        output logic[31:0] s_axi_rdata,
+        input logic s_axi_rready
     );
 
     ////////////////////////////////////////////////////
@@ -98,79 +98,61 @@ module plic_wrapper
 
     //Interface
     generate if (AXI) begin : gen_axi_if
-
+        //Simple implementation uses state machine for reads and writes
         typedef enum logic [2:0] {
             IDLE,
-            RADDR,
-            WADDR,
-            RDATA,
-            WDATA
+            RACCEPT,
+            WACCEPT,
+            RRESP,
+            WRESP
         } state_t;
-
-        state_t state, next_state;
+        state_t state;
+        state_t next_state;
 
         always_ff @(posedge clk) begin
-            if (rst) begin
+            if (rst)
                 state <= IDLE;
-            end
-            else begin
+            else
                 state <= next_state;
-            end
         end
 
         always_comb begin
-            next_state = state;
-            case (state) inside
+            unique case (state) inside
                 IDLE : begin
-                    if (S_AXI_awvalid) begin
-                        next_state = WADDR;
-                    end
-                    else if (S_AXI_arvalid) begin
-                        next_state = RADDR;
-                    end
-                end
-                RADDR : begin
-                    if (S_AXI_arready) begin
-                        next_state = RDATA;
-                    end
-                end
-                WADDR : begin
-                    if (S_AXI_wvalid) begin
-                        next_state = WDATA;
-                    end
-                end
-                RDATA : begin
-                    if (S_AXI_rready) begin
+                    if (s_axi_awvalid & s_axi_wvalid)
+                        next_state = WACCEPT;
+                    else if (s_axi_arvalid)
+                        next_state = RACCEPT;
+                    else
                         next_state = IDLE;
-                    end
                 end
-                WDATA : begin
-                    if (S_AXI_bready) begin
-                        next_state = IDLE;
-                    end
-                end
+                RACCEPT : next_state = RRESP;
+                WACCEPT : next_state = WRESP;
+                RRESP : next_state = s_axi_rready ? IDLE : RRESP;
+                WRESP : next_state = s_axi_bready ? IDLE : WRESP;
             endcase
         end
-        assign S_AXI_arready = (state == RADDR) ? 1 : 0;
-        assign S_AXI_rvalid = (state == RDATA) ? 1 : 0;
-        assign S_AXI_awready = (state == WADDR) ? 1 : 0;
-        assign S_AXI_wready = (state == WDATA) ? 1 : 0;
-        assign S_AXI_bvalid = (state == WDATA) ? 1 : 0;
 
-        assign read_reg = ((state == RDATA) && S_AXI_rvalid) ? 1 : 0;
-        assign S_AXI_rdata = rdata;
-        assign write_reg = ((state == WDATA) && S_AXI_wvalid) ? 1 : 0;
-        assign wdata = S_AXI_wdata;
+        //Reads
+        assign read_reg = state == RACCEPT;
+        assign s_axi_arready = read_reg;
+        assign s_axi_rvalid = state == RRESP;
 
         always_ff @(posedge clk) begin
-            if (S_AXI_arvalid)
-                addr = S_AXI_araddr[25:2];
-            else if(S_AXI_awvalid)
-                addr = S_AXI_awaddr[25:2];
+            if (read_reg)
+                s_axi_rdata <= rdata;
         end
 
+        //Writes
+        assign write_reg = state == WACCEPT;
+        assign s_axi_awready = write_reg;
+        assign s_axi_wready = write_reg;
+        assign wdata = s_axi_wdata;
+        assign s_axi_bvalid = state == WRESP;
 
-    
+        //Must use the read address while in the idle state to ensure read_reg claims the right interrupt
+        assign addr = write_reg ? s_axi_awaddr[25:2] : s_axi_araddr[25:2];
+
         //Not in use
         assign wb_ack = 0;
     end else begin : gen_wishbone_if
@@ -188,11 +170,11 @@ module plic_wrapper
         end
 
         //Not in use
-        assign S_AXI_awready = 0;
-        assign S_AXI_wready = 0;
-        assign S_AXI_bvalid = 0;
-        assign S_AXI_arready = 0;
-        assign S_AXI_rvalid = 0;
+        assign s_axi_awready = 0;
+        assign s_axi_wready = 0;
+        assign s_axi_bvalid = 0;
+        assign s_axi_arready = 0;
+        assign s_axi_rvalid = 0;
     end endgenerate
 
 endmodule
