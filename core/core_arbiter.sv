@@ -70,7 +70,7 @@ module core_arbiter
     assign addr[1] = INCLUDE_ICACHE ? icache.addr : 'x;
     assign rlen[1] = INCLUDE_ICACHE ? icache.rlen : 'x;
     assign rnw[1] = INCLUDE_ICACHE ? 1 : 'x;
-    assign rmw[1] = 0;
+    assign rmw[1] = INCLUDE_ICACHE ? 0 : 'x;
     assign icache.ack = mem.ack & port == 2'b01;
     assign icache.rvalid = mem.rvalid & mem.rid == 2'b01;
     assign icache.rdata = mem.rdata;
@@ -79,7 +79,7 @@ module core_arbiter
     assign addr[2] = INCLUDE_MMUS ? dmmu.addr : 'x;
     assign rlen[2] = INCLUDE_MMUS ? dmmu.rlen : 'x;
     assign rnw[2] = INCLUDE_MMUS ? 1 : 'x;
-    assign rmw[2] = 0;
+    assign rmw[2] = INCLUDE_MMUS ? 0 : 'x;
     assign dmmu.rdata = mem.rdata;
     assign dmmu.ack = mem.ack & port == 2'b10;
     assign dmmu.rvalid = mem.rvalid & mem.rid == 2'b10;
@@ -88,7 +88,7 @@ module core_arbiter
     assign addr[3] = INCLUDE_MMUS ? immu.addr : 'x;
     assign rlen[3] = INCLUDE_MMUS ? immu.rlen : 'x;
     assign rnw[3] = INCLUDE_MMUS ? 1 : 'x;
-    assign rmw[3] = 0;
+    assign rmw[3] = INCLUDE_MMUS ? 0 : 'x;
     assign immu.rdata = mem.rdata;
     assign immu.ack = mem.ack & port == 2'b11;
     assign immu.rvalid = mem.rvalid & mem.rid == 2'b11;

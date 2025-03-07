@@ -357,6 +357,7 @@ module dcache_noinv
 
     assign mem.addr = stage1.addr[31:2];
     assign mem.wbe = stage1.be;
+    assign mem.rmw = 0; //Although this unit can issue RMWs, they do not need special treatment as they are not coherent with other units
 
     ////////////////////////////////////////////////////
     //Assertions
