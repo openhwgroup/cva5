@@ -99,7 +99,7 @@ module load_store_unit
     localparam DCACHE_ID = int'(CONFIG.INCLUDE_DLOCAL_MEM) + int'(CONFIG.INCLUDE_PERIPHERAL_BUS);
 
     //Should be equal to pipeline depth of longest load/store subunit 
-    localparam ATTRIBUTES_DEPTH = 2;
+    localparam ATTRIBUTES_DEPTH = 1;
 
     //Subunit signals
     amo_interface amo_if[NUM_SUB_UNITS]();
