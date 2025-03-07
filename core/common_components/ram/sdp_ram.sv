@@ -45,7 +45,7 @@ module sdp_ram
 
     localparam DATA_WIDTH = COL_WIDTH*NUM_COL;
 
-    (* cascade_height = CASCADE_DEPTH, ramstyle = "no_rw_check" *) //Higher depths use less resources but are slower
+    (* cascade_height = CASCADE_DEPTH, ramstyle = "no_rw_check", ram_style = "block" *) //Higher depths use less resources but are slower
     logic[DATA_WIDTH-1:0] mem[(1<<ADDR_WIDTH)-1:0];
 
     initial mem = '{default: '0};
