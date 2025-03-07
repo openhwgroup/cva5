@@ -83,7 +83,7 @@ module axi_adapter
     assign axi.arlen = {3'b0, request_rlen};
     assign axi.arsize = 3'b010; //4 bytes
     assign axi.arburst = 2'b01; //Incrementing
-    assign axi.arcache = 4'b0011; //Bufferable and cacheable memory
+    assign axi.arcache = 4'b0011; //Bufferable and non-cacheable memory
     assign axi.arlock = 0; //Not locked
 
     //R
@@ -114,7 +114,7 @@ module axi_adapter
     assign axi.awlen = '0;
     assign axi.awsize = 3'b010; //4 bytes
     assign axi.awburst = 2'b01; //Incrementing
-    assign axi.awcache = 4'b0011; //Bufferable and cacheable memory
+    assign axi.awcache = 4'b0011; //Bufferable and non-cacheable memory
     assign axi.awlock = 0; //Not locked
 
     //W

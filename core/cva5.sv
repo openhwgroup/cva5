@@ -695,13 +695,6 @@ module cva5
 
     ////////////////////////////////////////////////////
     //Assertions
-    //Ensure that reset is held for at least 32 cycles to clear shift regs
-    // always_ff @ (posedge clk) begin
-    //     assert property(@(posedge clk) $rose (rst) |=> rst[*32]) else $error("Reset not held for long enough!");
-    // end
-
-    ////////////////////////////////////////////////////
-    //Assertions
 
 
 endmodule

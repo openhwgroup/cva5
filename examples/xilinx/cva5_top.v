@@ -53,7 +53,7 @@ module cva5_top
         output [31:0] m_axi_wdata,
         output [3:0] m_axi_wstrb,
 
-        //write response
+        //B
         output m_axi_bready,
         input m_axi_bvalid,
         input [1:0] m_axi_bresp

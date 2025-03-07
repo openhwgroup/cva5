@@ -56,7 +56,7 @@ module cva5_wrapper
         output logic [31:0] m_axi_wdata,
         output logic [3:0] m_axi_wstrb,
 
-        //write response
+        //B
         output logic m_axi_bready,
         input logic m_axi_bvalid,
         input logic [1:0] m_axi_bresp
