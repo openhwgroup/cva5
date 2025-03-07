@@ -72,30 +72,22 @@ module amo_unit
     amo_t selected_op;
     logic[31:0] selected_rs1;
     logic[31:0] selected_rs2;
-
-    one_hot_mux #(.OPTIONS(NUM_UNITS), .DATA_TYPE(amo_t)) op_mux (
-        .one_hot(rmw_valid),
-        .choices(op),
-        .sel(selected_op),
-    .*);
-
-    one_hot_mux #(.OPTIONS(NUM_UNITS), .DATA_TYPE(logic[31:0])) rs1_mux (
-        .one_hot(rmw_valid),
-        .choices(rs1),
-        .sel(selected_rs1),
-    .*);
-
-    one_hot_mux #(.OPTIONS(NUM_UNITS), .DATA_TYPE(logic[31:0])) rs2_mux (
-        .one_hot(rmw_valid),
-        .choices(rs2),
-        .sel(selected_rs2),
-    .*);
-
-    one_hot_mux #(.OPTIONS(NUM_UNITS), .DATA_TYPE(reservation_t)) reservation_mux (
+    logic[$clog2(NUM_UNITS > 1 ? NUM_UNITS : 2)-1:0] reservation_int;
+    logic[$clog2(NUM_UNITS > 1 ? NUM_UNITS : 2)-1:0] rmw_int;
+    
+    one_hot_to_integer #(.C_WIDTH(NUM_UNITS)) reservation_conv (
         .one_hot(set_reservation),
-        .choices(reservation),
-        .sel(set_val),
-    .*);
+        .int_out(reservation_int)
+    );
+    assign set_val = reservation[reservation_int];
+
+    one_hot_to_integer #(.C_WIDTH(NUM_UNITS)) rmw_conv (
+        .one_hot(rmw_valid),
+        .int_out(rmw_int)
+    );
+    assign selected_op = op[rmw_int];
+    assign selected_rs1 = rs1[rmw_int];
+    assign selected_rs2 = rs2[rmw_int];
 
     ////////////////////////////////////////////////////
     //RISC-V LR-SC

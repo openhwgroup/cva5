@@ -524,6 +524,7 @@ module dcache_inv
     logic[CONFIG.DCACHE.WAYS-1:0][31:0] db_entries;
     logic[31:0] db_hit_entry;
     logic[CONFIG.DCACHE.WAYS-1:0][3:0] db_wbe_full;
+    logic[$clog2(CONFIG.DCACHE.WAYS > 1 ? CONFIG.DCACHE.WAYS : 2)-1:0] hit_int;
 
     always_comb begin
         for (int i = 0; i < CONFIG.DCACHE.WAYS; i++)
@@ -548,16 +549,11 @@ module dcache_inv
         .b_rdata(db_entries),
     .*);
 
-    one_hot_mux #(
-        .OPTIONS(CONFIG.DCACHE.WAYS),
-        .DATA_TYPE(logic[31:0])
-    ) db_mux (
-        .clk(clk),
-        .rst(1'b1), //Disable the assertion
+    one_hot_to_integer #(.C_WIDTH(CONFIG.DCACHE.WAYS)) hit_conv (
         .one_hot(hit_ohot),
-        .choices(db_entries),
-        .sel(db_hit_entry)
+        .int_out(hit_int)
     );
+    assign db_hit_entry = db_entries[hit_int];
 
     ////////////////////////////////////////////////////
     //Assertions
@@ -568,5 +564,9 @@ module dcache_inv
     dcache_spurious_l1_ack_assertion:
         assert property (@(posedge clk) disable iff (rst) mem.ack |-> mem.request)
         else $error("dcache received ack without a request");
+
+    // dcache_ohot_assertion:
+    //     assert property (@(posedge clk) disable iff (rst) ls.new_request |=> $onehot0(hit_ohot))
+    //     else $error("dcache hit multiple ways");
 
 endmodule

@@ -167,6 +167,7 @@ module dcache_noinv
     //Databank
     logic[CONFIG.DCACHE.WAYS-1:0][31:0] db_entries;
     logic[31:0] db_hit_entry;
+    logic[$clog2(CONFIG.DCACHE.WAYS > 1 ? CONFIG.DCACHE.WAYS : 2)-1:0] hit_int;
     logic[CONFIG.DCACHE.WAYS-1:0] db_way;
     logic[CONFIG.DCACHE.WAYS-1:0][3:0] db_wbe_full;
     logic[31:0] db_wdata;
@@ -194,13 +195,11 @@ module dcache_noinv
         .b_rdata(db_entries),
     .*);
 
-    always_comb begin
-        db_hit_entry = 'x;
-        for (int i = 0; i < CONFIG.DCACHE.WAYS; i++) begin
-            if (hit_ohot[i])
-                db_hit_entry = db_entries[i];
-        end
-    end
+    one_hot_to_integer #(.C_WIDTH(CONFIG.DCACHE.WAYS)) hit_conv (
+        .one_hot(hit_ohot),
+        .int_out(hit_int)
+    );
+    assign db_hit_entry = db_entries[hit_int];
 
     //Arbiter response
     logic correct_word;
@@ -368,5 +367,9 @@ module dcache_noinv
     dcache_spurious_l1_ack_assertion:
         assert property (@(posedge clk) disable iff (rst) mem.ack |-> mem.request)
         else $error("dcache received ack without a request");
+
+    // dcache_ohot_assertion:
+    //     assert property (@(posedge clk) disable iff (rst) ls.new_request |=> $onehot0(hit_ohot))
+    //     else $error("dcache hit multiple ways");
 
 endmodule

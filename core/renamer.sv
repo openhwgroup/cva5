@@ -167,7 +167,7 @@ module renamer
     assign spec_table_next = spec_table_next_mux[spec_table_sel];
 
     assign spec_table_read_addr[0] = spec_table_write_index;
-    assign spec_table_read_addr[1+:READ_PORTS] = decode.rs_addr;
+    assign spec_table_read_addr[1:READ_PORTS] = decode.rs_addr;
 
     lutram_1w_mr #(
         .DATA_TYPE(spec_table_t),
