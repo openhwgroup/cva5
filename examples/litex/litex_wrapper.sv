@@ -41,6 +41,7 @@ module litex_wrapper
         input logic [NUM_CORES-1:0] msip,
         input logic [63:0] mtime,
 
+        //Wishbone memory port (used only if configured)
         output logic [29:0] idbus_adr,
         output logic [31:0] idbus_dat_w,
         output logic [3:0] idbus_sel,
@@ -53,51 +54,43 @@ module litex_wrapper
         input logic idbus_ack,
         input logic idbus_err,
 
-
-
-
-
-        // AXI SIGNALS - need these to unwrap the interface for packaging //
-	    input logic m_axi_arready,
-	    output logic m_axi_arvalid,
-	    output logic [32-1:0] m_axi_araddr,
-	    output logic [7:0] m_axi_arlen,
-	    output logic [2:0] m_axi_arsize,
-	    output logic [1:0] m_axi_arburst,
-	    output logic [3:0] m_axi_arcache,
-	    output logic [5:0] m_axi_arid,
-
-	    //read data
-	    output logic m_axi_rready,
-	    input logic m_axi_rvalid,
-	    input logic [32-1:0] m_axi_rdata,
-	    input logic [1:0] m_axi_rresp,
-	    input logic m_axi_rlast,
-	    input logic [5:0] m_axi_rid,
-
-	    //Write channel
-	    //write address
-	    input logic m_axi_awready,
-	    output logic m_axi_awvalid,
-	    output logic [32-1:0] m_axi_awaddr,
-	    output logic [7:0] m_axi_awlen,
-	    output logic [2:0] m_axi_awsize,
-	    output logic [1:0] m_axi_awburst,
-	    output logic [3:0] m_axi_awcache,
-	    output logic [5:0] m_axi_awid,
-
-	    //write data
-	    input logic m_axi_wready,
-	    output logic m_axi_wvalid,
-	    output logic [32-1:0] m_axi_wdata,
-	    output logic [(32/8)-1:0] m_axi_wstrb,
-	    output logic m_axi_wlast,
-
-	    //write response
-	    output logic m_axi_bready,
-	    input logic m_axi_bvalid,
-	    input logic [1:0] m_axi_bresp,
-	    input logic [5:0] m_axi_bid
+        //AXI memory port (used only if configured)
+        //AR
+        input logic m_axi_arready,
+        output logic m_axi_arvalid,
+        output logic [31:0] m_axi_araddr,
+        output logic [7:0] m_axi_arlen,
+        output logic [2:0] m_axi_arsize, //Constant, 32b
+        output logic [1:0] m_axi_arburst, //Constant, incrementing
+        output logic [3:0] m_axi_arcache, //Constant, normal non-cacheable bufferable
+        output logic [5:0] m_axi_arid,
+        //R
+        output logic m_axi_rready,
+        input logic m_axi_rvalid,
+        input logic [31:0] m_axi_rdata,
+        input logic [1:0] m_axi_rresp,
+        input logic m_axi_rlast,
+        input logic [5:0] m_axi_rid,
+        //AW
+        input logic m_axi_awready,
+        output logic m_axi_awvalid,
+        output logic [31:0] m_axi_awaddr,
+        output logic [7:0] m_axi_awlen, //Constant, 0
+        output logic [2:0] m_axi_awsize, //Constant, 32b
+        output logic [1:0] m_axi_awburst, //Constant, incrementing
+        output logic [3:0] m_axi_awcache, //Constant, normal non-cacheable bufferable
+        output logic [5:0] m_axi_awid,
+        //W
+        input logic m_axi_wready,
+        output logic m_axi_wvalid,
+        output logic [31:0] m_axi_wdata,
+        output logic [3:0] m_axi_wstrb,
+        output logic m_axi_wlast,
+        //B
+        output logic m_axi_bready,
+        input logic m_axi_bvalid,
+        input logic [1:0] m_axi_bresp,
+        input logic [5:0] m_axi_bid
     );
 
     localparam wb_group_config_t STANDARD_WB_GROUP_CONFIG = '{
@@ -108,8 +101,8 @@ module litex_wrapper
     };
 
     //Unused interfaces
-    axi_interface m_axi[NUM_CORES-1:0]();
-    avalon_interface m_avalon[NUM_CORES-1:0]();
+    axi_interface axi[NUM_CORES-1:0]();
+    avalon_interface avalon[NUM_CORES-1:0]();
     wishbone_interface dwishbone[NUM_CORES-1:0]();
     wishbone_interface iwishbone[NUM_CORES-1:0]();
     local_memory_interface instruction_bram[NUM_CORES-1:0]();
@@ -121,10 +114,7 @@ module litex_wrapper
 
     //Memory interfaces for each core
     mem_interface mem[NUM_CORES-1:0]();
-
-    //Final memory interface
-
-
+    
     generate for (genvar i = 0; i < NUM_CORES; i++) begin : gen_cores
         localparam cpu_config_t STANDARD_CONFIG_I = '{
             //ISA options
@@ -177,7 +167,7 @@ module litex_wrapper
             },
             ITLB : '{
                 WAYS : 2,
-                DEPTH : 2
+                DEPTH : 64
             },
             INCLUDE_DCACHE : 1,
             DCACHE_ADDR : '{
@@ -197,7 +187,7 @@ module litex_wrapper
             },
             DTLB : '{
                 WAYS : 2,
-                DEPTH : 2
+                DEPTH : 64
             },
             INCLUDE_ILOCAL_MEM : 0,
             ILOCAL_MEM_ADDR : '{
@@ -242,8 +232,8 @@ module litex_wrapper
         cva5 #(.CONFIG(STANDARD_CONFIG_I)) cpu(
             .instruction_bram(instruction_bram[i]),
             .data_bram(data_bram[i]),
-            .m_axi(m_axi[i]),
-            .m_avalon(m_avalon[i]),
+            .m_axi(axi[i]),
+            .m_avalon(avalon[i]),
             .dwishbone(dwishbone[i]),
             .iwishbone(iwishbone[i]),
             .mem(mem[i]),
@@ -252,62 +242,55 @@ module litex_wrapper
             .m_interrupt(m_interrupt[i]),
         .*);
 
-
     end endgenerate
 
 
-
-
+    //Final memory interface
     generate if (AXI) begin : gen_axi_if
-        axi_interface m_axi_l2();
+        axi_interface m_axi();
 
-        axi_adapter #(.NUM_CORES(NUM_CORES)) wb_adapter (
+        //Mux requests from one or more cores onto the AXI bus
+        axi_adapter #(.NUM_CORES(NUM_CORES)) axi_adapter (
             .mems(mem),
-            .axi(m_axi_l2),
+            .axi(m_axi),
         .*);
 
+        assign m_axi.arready = m_axi_arready;
+        assign m_axi_arvalid = m_axi.arvalid;
+        assign m_axi_araddr = m_axi.araddr;
+        assign m_axi_arlen = m_axi.arlen;
+        assign m_axi_arsize = m_axi.arsize;
+        assign m_axi_arburst = m_axi.arburst;
+        assign m_axi_arcache = m_axi.arcache;
+        assign m_axi_arid = m_axi.arid;
 
-        assign m_axi_l2.arready = m_axi_arready ;
-        assign m_axi_arvalid = m_axi_l2.arvalid;
-        assign m_axi_araddr = m_axi_l2.araddr;
-        assign m_axi_arlen = m_axi_l2.arlen;
-        assign m_axi_arsize = m_axi_l2.arsize;
-        assign m_axi_arburst = m_axi_l2.arburst;
-        assign m_axi_arcache = m_axi_l2.arcache;
-        assign m_axi_arid = m_axi_l2.arid;
+        assign m_axi_rready = m_axi.rready;
+        assign m_axi.rvalid = m_axi_rvalid;
+        assign m_axi.rdata  = m_axi_rdata;
+        assign m_axi.rresp = m_axi_rresp;
+        assign m_axi.rlast = m_axi_rlast;
+        assign m_axi.rid  = m_axi_rid;
 
-        assign m_axi_rready = m_axi_l2.rready;
-        assign m_axi_l2.rvalid = m_axi_rvalid;
-        assign m_axi_l2.rdata  = m_axi_rdata;
-        assign m_axi_l2.rresp = m_axi_rresp;
-        assign m_axi_l2.rlast = m_axi_rlast;
-        assign m_axi_l2.rid  = m_axi_rid;
+        assign m_axi.awready = m_axi_awready;
+        assign m_axi_awvalid = m_axi.awvalid;
+        assign m_axi_awaddr = m_axi.awaddr;
+        assign m_axi_awlen = m_axi.awlen;
+        assign m_axi_awsize = m_axi.awsize;
+        assign m_axi_awburst = m_axi.awburst;
+        assign m_axi_awcache = m_axi.awcache;
+        assign m_axi_awid = m_axi.awid;
 
-        assign m_axi_l2.awready = m_axi_awready;
-        assign m_axi_awvalid = m_axi_l2.awvalid;
-        assign m_axi_awaddr = m_axi_l2.awaddr;
-        assign m_axi_awlen = m_axi_l2.awlen;
-        assign m_axi_awsize = m_axi_l2.awsize;
-        assign m_axi_awburst = m_axi_l2.awburst;
-        assign m_axi_awcache = m_axi_l2.awcache;
-        assign m_axi_awid = m_axi_l2.awid;
+        assign m_axi.wready = m_axi_wready;
+        assign m_axi_wvalid = m_axi.wvalid;
+        assign m_axi_wdata = m_axi.wdata;
+        assign m_axi_wstrb = m_axi.wstrb;
+        assign m_axi_wlast = m_axi.wlast;
 
-        //write data
-        assign m_axi_l2.wready = m_axi_wready;
-        assign m_axi_wvalid = m_axi_l2.wvalid;
-        assign m_axi_wdata = m_axi_l2.wdata;
-        assign m_axi_wstrb = m_axi_l2.wstrb;
-        assign m_axi_wlast = m_axi_l2.wlast;
-
-            //write response
-        assign m_axi_bready = m_axi_l2.bready;
-        assign m_axi_l2.bvalid = m_axi_bvalid;
-        assign m_axi_l2.bresp = m_axi_bresp;
-        assign m_axi_l2.bid =  m_axi_bid;
-
-
+        assign m_axi_bready = m_axi.bready;
+        assign m_axi.bvalid = m_axi_bvalid;
+        assign m_axi.bresp = m_axi_bresp;
+        assign m_axi.bid =  m_axi_bid;
     end else begin : gen_wishbone_if
-
         wishbone_interface idwishbone();
 
         //Mux requests from one or more cores onto the wishbone bus
@@ -328,9 +311,5 @@ module litex_wrapper
         assign idwishbone.ack = idbus_ack;
         assign idwishbone.err = idbus_err;
     end endgenerate
-
-
-
-
 
 endmodule
