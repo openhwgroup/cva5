@@ -198,7 +198,7 @@ module dcache_inv
     end
 
     assign a_wdata = '{
-        valid : stage1_tb_write_r & stage1_tb_wval_r,
+        valid : stage1_tb_write_r & stage1_tb_wval_r & ~inv_matches_stage1 ,
         tag : stage1.addr[2+SCONFIG.SUB_LINE_ADDR_W+SCONFIG.LINE_ADDR_W+:SCONFIG.TAG_W]
     };
 
