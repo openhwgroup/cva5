@@ -53,7 +53,6 @@ module instruction_metadata_and_id_management
         input logic decode_uses_rd,
         input logic fp_decode_uses_rd,
         input rs_addr_t decode_rd_addr,
-        input exception_sources_t decode_exception_unit,
         input logic decode_is_store,
         //renamer
         input phys_addr_t decode_phys_rd_addr,
@@ -76,15 +75,11 @@ module instruction_metadata_and_id_management
         output retire_packet_t fp_wb_retire,
         output retire_packet_t store_retire,
         output id_t retire_ids [RETIRE_PORTS],
-        output id_t retire_ids_next [RETIRE_PORTS],
         output logic retire_port_valid [RETIRE_PORTS],
         output logic [LOG2_RETIRE_PORTS : 0] retire_count,
 
         //CSR
-        output logic [LOG2_MAX_IDS:0] post_issue_count,
-        //Exception
-        output logic [31:0] oldest_pc,
-        output logic [$clog2(NUM_EXCEPTION_SOURCES)-1:0] current_exception_unit
+        output logic [LOG2_MAX_IDS:0] post_issue_count
     );
     //////////////////////////////////////////
     localparam NUM_WB_GROUPS = CONFIG.NUM_WB_GROUPS + 32'(CONFIG.INCLUDE_UNIT.FPU) + 32'(CONFIG.INCLUDE_UNIT.FPU);
@@ -115,6 +110,7 @@ module instruction_metadata_and_id_management
     retire_packet_t fp_wb_retire_next;
     retire_packet_t store_retire_next;
 
+    id_t retire_ids_next [RETIRE_PORTS];
     logic retire_port_valid_next [RETIRE_PORTS];
     logic [LOG2_RETIRE_PORTS : 0] retire_count_next;
     ////////////////////////////////////////////////////
@@ -132,18 +128,6 @@ module instruction_metadata_and_id_management
         .new_ram_data(if_pc),
         .ram_data_out(decode_pc)
     );
-
-    generate if (CONFIG.INCLUDE_M_MODE) begin : gen_pc_id_exception_support
-    lutram_1w_1r #(.DATA_TYPE(logic[31:0]), .DEPTH(MAX_IDS))
-    pc_table_exception (
-        .clk(clk),
-        .waddr(pc_id),
-        .raddr(retire_ids_next[0]),
-        .ram_write(pc_id_assigned),
-        .new_ram_data(if_pc),
-        .ram_data_out(oldest_pc)
-    );
-    end endgenerate
 
     ////////////////////////////////////////////////////
     //Instruction table
@@ -221,20 +205,6 @@ module instruction_metadata_and_id_management
     );
 
     ////////////////////////////////////////////////////
-    //Exception unit table
-    generate if (CONFIG.INCLUDE_M_MODE) begin : gen_id_exception_support
-    lutram_1w_1r #(.DATA_TYPE(logic[$bits(exception_sources_t)-1:0]), .DEPTH(MAX_IDS))
-    exception_unit_table (
-        .clk(clk),
-        .waddr(decode_id),
-        .raddr(retire_ids_next[0]),
-        .ram_write(decode_advance),
-        .new_ram_data(decode_exception_unit),
-        .ram_data_out(current_exception_unit)
-    );
-    end endgenerate
-
-    ////////////////////////////////////////////////////
     //ID Management
     
     //Next ID always increases, except on a fetch buffer flush.
@@ -255,7 +225,7 @@ module instruction_metadata_and_id_management
             decode_id <= oldest_pre_issue_id;
         end
         else begin
-            pc_id <= (early_branch_flush ? fetch_id : pc_id) + LOG2_MAX_IDS'(pc_id_assigned);
+            pc_id <= early_branch_flush ? fetch_id + LOG2_MAX_IDS'(fetch_complete) : pc_id + LOG2_MAX_IDS'(pc_id_assigned);
             fetch_id <= fetch_id + LOG2_MAX_IDS'(fetch_complete);
             decode_id <= decode_id + LOG2_MAX_IDS'(decode_advance);
         end
@@ -270,10 +240,8 @@ module instruction_metadata_and_id_management
                 retire_ids_next[i] <= retire_ids_next[i] + LOG2_MAX_IDS'(retire_count_next);
         end
 
-        always_ff @ (posedge clk) begin
-            if (~gc.retire_hold)
-                retire_ids[i] <= retire_ids_next[i];
-        end
+        always_ff @ (posedge clk)
+            retire_ids[i] <= retire_ids_next[i];
     end endgenerate
 
     //Represented as a negative value so that the MSB indicates that the decode stage is valid
@@ -343,7 +311,6 @@ module instruction_metadata_and_id_management
     ) id_waiting_for_writeback_toggle_mem_set
     (
         .clk (clk),
-        .rst (rst),
         .init_clear (gc.init_clear),
         .toggle (id_waiting_toggle),
         .toggle_addr (id_waiting_toggle_addr),
@@ -363,13 +330,11 @@ module instruction_metadata_and_id_management
     //Supports retiring up to RETIRE_PORTS instructions.  The retired block of instructions must be
     //contiguous and must start with the first retire port.  Additionally, only one register file writing 
     //instruction is supported per cycle.
-    //If an exception is pending, only retire a single intrustuction per cycle.  As such, the pending
-    //exception will have to become the oldest instruction retire_ids[0] before it can retire.
     logic retire_with_rd_found;
     logic retire_with_fp_rd_found;
     logic retire_with_store_found;
     always_comb begin
-        contiguous_retire = ~gc.retire_hold;
+        contiguous_retire = 1;
         retire_with_rd_found = 0;
         retire_with_fp_rd_found = 0;
         retire_with_store_found = 0;
@@ -386,7 +351,7 @@ module instruction_metadata_and_id_management
             retire_with_rd_found |= retire_port_valid_next[i] & retire_type[i] == RD;
             retire_with_fp_rd_found |= retire_port_valid_next[i] & retire_type[i] == FP_RD;
             retire_with_store_found |= retire_port_valid_next[i] & retire_type[i] == STORE;
-            contiguous_retire &= retire_port_valid_next[i] & ~gc.exception_pending;
+            contiguous_retire &= retire_port_valid_next[i];
 
             if (retire_port_valid_next[i] & retire_type[i] == RD)
                 retire_with_rd_sel = LOG2_RETIRE_PORTS'(i);
@@ -423,9 +388,9 @@ module instruction_metadata_and_id_management
         fp_wb_retire <= fp_wb_retire_next;
         store_retire <= store_retire_next;
 
-        retire_count <= gc.writeback_supress ? '0 : retire_count_next;
+        retire_count <= retire_count_next;
         for (int i = 0; i < RETIRE_PORTS; i++)
-            retire_port_valid[i] <= retire_port_valid_next[i] & ~gc.writeback_supress;
+            retire_port_valid[i] <= retire_port_valid_next[i];
     end
 
     ////////////////////////////////////////////////////
@@ -439,7 +404,7 @@ module instruction_metadata_and_id_management
         valid : fetched_count_neg[LOG2_MAX_IDS],
         pc : decode_pc,
         instruction : decode_instruction,
-        fetch_metadata : CONFIG.INCLUDE_M_MODE ? decode_fetch_metadata : ADDR_OK
+        fetch_metadata : CONFIG.MODES != BARE ? decode_fetch_metadata : ADDR_OK
     };
 
     ////////////////////////////////////////////////////

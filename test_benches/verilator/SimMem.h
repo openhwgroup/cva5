@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019 Eric Matthews,  Lesley Shannon
+ * Copyright © 2019 Eric Matthews, Chris Keilbart, Lesley Shannon
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,23 +18,37 @@
  *
  * Author(s):
  *             Eric Matthews <ematthew@sfu.ca>
+ *             Chris Keilbart <ckeilbar@sfu.ca>
  */
 
 #ifndef SIMMEM_H
 #define SIMMEM_H
-#include <stdlib.h>
-#include <iostream>
 #include <fstream>
+#include <unordered_map>
+#include <queue>
+#include <cstdint>
+
+using namespace std;
+
+//Default defines; can be overridden by command line
+#ifndef NUM_CORES
+#define NUM_CORES 1
+#endif
+#ifndef STARTING_ADDR
+#define STARTING_ADDR 0x80000000
+#endif
+#ifndef PROGRAM_SPACING
+#define PROGRAM_SPACING 0x04000000
+#endif
 
 class SimMem {
 public:
-  SimMem(std::ifstream& program, uint32_t mem_size);
-  ~SimMem();
-  void write (uint32_t addr, uint32_t data, uint32_t be);
-  uint32_t read (uint32_t addr);
+    SimMem(ifstream (&memFiles)[NUM_CORES]);
+    void write(uint32_t addr, uint32_t data, uint32_t be);
+    uint32_t read(uint32_t addr);
 private:
-  uint32_t mem_size;
-  uint32_t *memory;
-  uint32_t address_mask;
+    queue<uint32_t> i_queue[NUM_CORES];
+    queue<uint32_t> d_queue[NUM_CORES];
+    unordered_map<uint32_t,uint32_t> memory;
 };
 #endif

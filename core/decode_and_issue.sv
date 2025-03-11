@@ -40,7 +40,6 @@ module decode_and_issue
         input logic pc_id_available,
         input decode_packet_t decode,
         output logic decode_advance,
-        output exception_sources_t decode_exception_unit,
 
         //Renamer
         renamer_interface.decode renamer,
@@ -190,6 +189,10 @@ module decode_and_issue
     ////////////////////////////////////////////////////
     //Issue
     always_ff @(posedge clk) begin
+        if (instruction_issued) begin
+            issue.pc_r <= issue.pc;
+            issue.instruction_r <= issue.instruction;
+        end
         if (issue_stage_ready) begin
             issue.pc <= decode.pc;
             issue.instruction <= decode.instruction;
@@ -208,7 +211,6 @@ module decode_and_issue
             fp_issue_rd_wb_group <= fp_decode_wb_group;
             issue.is_multicycle <= ~unit_needed[ALU_ID];
             issue.id <= decode.id;
-            issue.exception_unit <= decode_exception_unit;
             issue_uses_rs <= decode_uses_rs;
             fp_issue_uses_rs <= fp_decode_uses_rs;
             issue.uses_rd <= decode_uses_rd;
@@ -276,29 +278,23 @@ module decode_and_issue
 
     ////////////////////////////////////////////////////
     //Illegal Instruction check
-    generate if (CONFIG.INCLUDE_M_MODE) begin : gen_decode_exceptions
+    generate if (CONFIG.MODES != BARE) begin : gen_decode_exceptions
     logic new_exception;
     exception_code_t ecode;
     exception_code_t ecall_code;
+    logic [31:0] tval;
 
     //ECALL and EBREAK captured here, but seperated out when ecode is set
     assign illegal_instruction_pattern = ~|unit_needed;
 
-    //TODO: Consider ways of parameterizing so that any exception generating unit
-    //can be automatically added to this expression
-    always_comb begin
-        unique case (1'b1)
-            unit_needed[LS_ID] : decode_exception_unit = LS_EXCEPTION;
-            unit_needed[BR_ID] : decode_exception_unit = BR_EXCEPTION;
-            default : decode_exception_unit = PRE_ISSUE_EXCEPTION;
-        endcase
-        if (~decode.fetch_metadata.ok)
-            decode_exception_unit = PRE_ISSUE_EXCEPTION;
-    end
-
     ////////////////////////////////////////////////////
     //ECALL/EBREAK
     //The type of call instruction is depedent on the current privilege level
+    logic is_ecall;
+    logic is_ebreak;
+    assign is_ecall = decode.instruction inside {ECALL};
+    assign is_ebreak = decode.instruction inside {EBREAK};
+    
     always_comb begin
         case (current_privilege)
             USER_PRIVILEGE : ecall_code = ECALL_U;
@@ -310,11 +306,21 @@ module decode_and_issue
 
     always_ff @(posedge clk) begin
         if (issue_stage_ready) begin
-            ecode <=
-                    decode.instruction inside {ECALL} ? ecall_code :
-                    decode.instruction inside {EBREAK} ? BREAK :
-                    illegal_instruction_pattern ? ILLEGAL_INST :
-                    decode.fetch_metadata.error_code; //(~decode.fetch_metadata.ok)
+            if (~decode.fetch_metadata.ok)
+                ecode <= decode.fetch_metadata.error_code;
+            else if (is_ecall)
+                ecode <= ecall_code;
+            else if (is_ebreak)
+                ecode <= BREAK;
+            else
+                ecode <= ILLEGAL_INST;
+
+            if (~decode.fetch_metadata.ok | is_ebreak)
+                tval <= decode.pc;
+            else if (is_ecall)
+                tval <= '0;
+            else
+                tval <= decode.instruction;
         end
     end
 
@@ -327,22 +333,20 @@ module decode_and_issue
             pre_issue_exception_pending <= illegal_instruction_pattern | (~decode.fetch_metadata.ok);
     end
 
-    assign new_exception = issue.stage_valid & pre_issue_exception_pending & ~(gc.issue_hold | gc.fetch_flush | exception.valid);
+    assign new_exception = issue.stage_valid & pre_issue_exception_pending & ~(gc.issue_hold | gc.fetch_flush) & ~exception.valid;
 
     always_ff @(posedge clk) begin
         if (rst)
             exception.valid <= 0;
         else
-            exception.valid <= (exception.valid | new_exception) & ~exception.ack;
+            exception.valid <= new_exception;
     end
 
-    always_ff @(posedge clk) begin
-        if (new_exception) begin
-            exception.code <= ecode;
-            exception.tval <= issue.instruction;
-            exception.id <= issue.id;
-        end
-    end
+    assign exception.possible = 0; //Not needed because occurs before issue
+    assign exception.code = ecode;
+    assign exception.tval = tval;
+    assign exception.pc = issue.pc;
+    assign exception.discard = 0;
 
     end endgenerate
     ////////////////////////////////////////////////////

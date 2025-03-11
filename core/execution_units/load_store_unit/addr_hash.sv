@@ -28,7 +28,7 @@ module addr_hash
         parameter logic USE_BIT_3 = 1
     )
     (
-        input logic [31:0] addr,
+        input logic [11:0] addr,
         output addr_hash_t addr_hash
     );
 

@@ -35,7 +35,7 @@ module priority_encoder
     );
     ////////////////////////////////////////////////////
     //Width Check
-    if (WIDTH > 12)
+    if (WIDTH > 14)
         $error("Max priority encoder width exceeded!");
 
     //Tool workaround

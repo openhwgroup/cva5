@@ -68,7 +68,7 @@ module lfsr
     logic feedback;
     ////////////////////////////////////////////////////
     //Implementation
-    generate if (WIDTH == 2) begin : gen_width_two
+    generate if (WIDTH <= 2) begin : gen_width_one_or_two
         assign feedback = ~value[WIDTH-1];
     end
     else begin : gen_width_three_plus
@@ -84,8 +84,10 @@ module lfsr
     always_ff @ (posedge clk) begin
         if (NEEDS_RESET & rst)
             value <= '0;
-        else if (en)
-            value <= {value[WIDTH-2:0], feedback};
+        else if (en) begin
+            value <= value << 1;
+            value[0] <= feedback;
+        end
     end
 
 endmodule

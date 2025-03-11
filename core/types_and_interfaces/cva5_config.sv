@@ -32,30 +32,37 @@ package cva5_config;
 
     ////////////////////////////////////////////////////
     //CSR Options
-    typedef struct packed {
-        int unsigned COUNTER_W; //CSR counter width (33-64 bits): 48-bits --> 32 days @ 100MHz
-        bit MCYCLE_WRITEABLE;
-        bit MINSTR_WRITEABLE;
-        bit MTVEC_WRITEABLE;
-        bit INCLUDE_MSCRATCH;
-        bit INCLUDE_MCAUSE;
-        bit INCLUDE_MTVAL;
-    } csr_non_standard_config_t;
+    typedef enum {
+        BARE,
+        M,
+        MU,
+        MSU
+    } modes_t;
 
     typedef struct packed {
         bit [31:0] MACHINE_IMPLEMENTATION_ID;
         bit [31:0] CPU_ID;
         bit [31:0] RESET_VEC; //PC value on reset
-        bit [31:0] RESET_MTVEC;
-        csr_non_standard_config_t NON_STANDARD_OPTIONS;
+        bit [31:0] RESET_TVEC;
+        bit [31:0] MCONFIGPTR;
+        bit INCLUDE_ZICNTR;
+        bit INCLUDE_ZIHPM;
+        bit INCLUDE_SSTC;
+        bit INCLUDE_SMSTATEEN;
     } csr_config_t;
 
     //Memory range [L, H]
     //Address range is inclusive and must be aligned to its size
     typedef struct packed {
-        bit [31:0] L;
-        bit [31:0] H;
+        logic [31:0] L;
+        logic [31:0] H;
     } memory_config_t;
+
+    //Atomic configuration
+    typedef struct packed {
+        int unsigned LR_WAIT; //Must be >= the maximum number of cycles a constrained LR-SC can take
+        int unsigned RESERVATION_WORDS; //The amount of 32-bit words that are reserved by an LR instruction, must be == cache line size (if cache present)
+    } amo_config_t;
 
     ////////////////////////////////////////////////////
     //Cache Options
@@ -109,7 +116,7 @@ package cva5_config;
     //Additionally, writeback units must be grouped before non-writeback units
     localparam MAX_NUM_UNITS = 9;
     typedef struct packed {
-        bit IEC;
+        bit GC;
         bit BR;
         //End of Write-Back Units
         bit CUSTOM;
@@ -122,7 +129,7 @@ package cva5_config;
     } units_t;
 
     typedef enum bit [$clog2(MAX_NUM_UNITS)-1:0] {
-        IEC_ID = 8,
+        GC_ID = 8,
         BR_ID = 7,
         //End of Write-Back Units (insert new writeback units here)
         CUSTOM_ID = 6,
@@ -161,22 +168,21 @@ package cva5_config;
 
     typedef struct packed {
         //ISA options
-        bit INCLUDE_M_MODE;
-        bit INCLUDE_S_MODE;
-        bit INCLUDE_U_MODE;
+        modes_t MODES;
 
         bit INCLUDE_IFENCE; //local mem operations only
         bit INCLUDE_AMO;
         bit INCLUDE_CBO; //Data cache invalidation operations
 
         //Units
-        units_t INCLUDE_UNIT;
+        units_t INCLUDE_UNIT; //Value of ALU, LS, BR, and GC ignored
     
         //CSR constants
         csr_config_t CSRS;
         //Memory Options
         int unsigned SQ_DEPTH;//CAM-based reasonable max of 4
         bit INCLUDE_FORWARDING_TO_STORES;
+        amo_config_t AMO_UNIT;
         //Caches
         bit INCLUDE_ICACHE;
         cache_config_t ICACHE;
@@ -232,46 +238,38 @@ package cva5_config;
 
     localparam cpu_config_t EXAMPLE_CONFIG = '{
         //ISA options
-        INCLUDE_M_MODE : 1,
-        INCLUDE_S_MODE : 0,
-        INCLUDE_U_MODE : 0,
-
+        MODES : MSU,
         INCLUDE_UNIT : '{
-            ALU : 1,
-            LS : 1,
             MUL : 1,
             DIV : 1,
             CSR : 1,
             FPU : 1,
             CUSTOM : 0,
-            BR : 1,
-            IEC : 1
+            default: '0
         },
-
         INCLUDE_IFENCE : 1,
         INCLUDE_AMO : 0,
         INCLUDE_CBO : 0,
-        
         //CSR constants
         CSRS : '{
             MACHINE_IMPLEMENTATION_ID : 0,
             CPU_ID : 0,
             RESET_VEC : 32'h80000000,
-            RESET_MTVEC : 32'h80000100,
-            NON_STANDARD_OPTIONS : '{
-                COUNTER_W : 33,
-                MCYCLE_WRITEABLE : 0,
-                MINSTR_WRITEABLE : 0,
-                MTVEC_WRITEABLE : 1,
-                INCLUDE_MSCRATCH : 0,
-                INCLUDE_MCAUSE : 1,
-                INCLUDE_MTVAL : 1
-            }
+            RESET_TVEC : 32'h00000000,
+            MCONFIGPTR : '0,
+            INCLUDE_ZICNTR : 1,
+            INCLUDE_ZIHPM : 1,
+            INCLUDE_SSTC : 1,
+            INCLUDE_SMSTATEEN : 1
         },
         //Memory Options
         SQ_DEPTH : 4,
         INCLUDE_FORWARDING_TO_STORES : 1,
-        INCLUDE_ICACHE : 0,
+        AMO_UNIT : '{
+            LR_WAIT : 32,
+            RESERVATION_WORDS : 8
+        },
+        INCLUDE_ICACHE : 1,
         ICACHE_ADDR : '{
             L: 32'h80000000,
             H: 32'h8FFFFFFF
@@ -291,7 +289,7 @@ package cva5_config;
             WAYS : 2,
             DEPTH : 64
         },
-        INCLUDE_DCACHE : 0,
+        INCLUDE_DCACHE : 1,
         DCACHE_ADDR : '{
             L: 32'h80000000,
             H: 32'h8FFFFFFF
@@ -311,12 +309,12 @@ package cva5_config;
             WAYS : 2,
             DEPTH : 64
         },
-        INCLUDE_ILOCAL_MEM : 1,
+        INCLUDE_ILOCAL_MEM : 0,
         ILOCAL_MEM_ADDR : '{
             L : 32'h80000000, 
             H : 32'h8FFFFFFF
         },
-        INCLUDE_DLOCAL_MEM : 1,
+        INCLUDE_DLOCAL_MEM : 0,
         DLOCAL_MEM_ADDR : '{
             L : 32'h80000000,
             H : 32'h8FFFFFFF
@@ -344,10 +342,6 @@ package cva5_config;
         WB_GROUP : EXAMPLE_WB_GROUP_CONFIG
     };
 
-    ////////////////////////////////////////////////////
-    //Bus Options
-    parameter C_M_AXI_ADDR_WIDTH = 32; //Kept as parameter, due to localparam failing with scripted IP packaging
-    parameter C_M_AXI_DATA_WIDTH = 32; //Kept as parameter, due to localparam failing with scripted IP packaging
 
     ////////////////////////////////////////////////////
     //ID limit
@@ -377,35 +371,14 @@ package cva5_config;
 
     ////////////////////////////////////////////////////
     //Exceptions
-    localparam NUM_EXCEPTION_SOURCES = 3; //LS, Branch, Illegal
+    localparam NUM_EXCEPTION_SOURCES = 5; //LS, Branch, Illegal, CSR, GC
     //Stored in a ID table on issue, checked at retire
-    typedef enum bit [1:0] {
+    typedef enum bit [2:0] {
         LS_EXCEPTION = 0,
         BR_EXCEPTION = 1,
-        PRE_ISSUE_EXCEPTION = 2
+        PRE_ISSUE_EXCEPTION = 2,
+        CSR_EXCEPTION = 3,
+        GC_EXCEPTION = 4
     } exception_sources_t;
-
-    ////////////////////////////////////////////////////
-    //L1 Arbiter IDs
-    localparam L1_CONNECTIONS = 4;
-    typedef enum bit [1:0] {
-        L1_DCACHE_ID = 0,
-        L1_ICACHE_ID = 1,
-        L1_DMMU_ID = 2,
-        L1_IMMU_ID = 3
-    } l1_id_t;
-
-    ////////////////////////////////////////////////////
-    //Debug Parameters
-
-    //To enable assertions specific to formal debug, uncomment or set in tool flow
-    //`define ENABLE_FORMAL_ASSERTIONS
-
-    //To enable assertions specific to simulation (verilator), uncomment or set in tool flow
-    //`define ENABLE_SIMULATION_ASSERTIONS
-
-    //When no exceptions are expected in a simulation, turn on this flag
-    //to convert any exceptions into assertions
-    localparam DEBUG_CONVERT_EXCEPTIONS_INTO_ASSERTIONS = 0;
 
 endpackage

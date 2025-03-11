@@ -12,7 +12,7 @@ CVA5Tracer *cva5Tracer;
 char* csv_log_name;
 //For time index on assertions
  double sc_time_stamp () {
-            return cva5Tracer->get_cycle_count();
+            return CVA5Tracer::get_cycle_count();
 }
 
 const char* cva5_csv_log_file_name () {
@@ -23,42 +23,42 @@ const char* cva5_csv_log_file_name () {
 using namespace std;
 int main(int argc, char **argv) {
     ofstream logFile, sigFile, pcFile;
-    ifstream programFile;
+    ifstream programFile[1];
 
-	// Initialize Verilators variables
-	Verilated::commandArgs(argc, argv);
+    // Initialize Verilators variables
+    Verilated::commandArgs(argc, argv);
 
     if (!argv[1]) {
-    	cout << "Missing log file name.\n";
-    	exit(EXIT_FAILURE);
+        cout << "Missing log file name.\n";
+        exit(EXIT_FAILURE);
     }
 
     if (!argv[2]) {
-    	cout << "Missing signature file name.\n";
-    	exit(EXIT_FAILURE);
+        cout << "Missing signature file name.\n";
+        exit(EXIT_FAILURE);
     }
 
     if (!argv[3]) {
-    	cout << "Missing program file name.\n";
-    	exit(EXIT_FAILURE);
+        cout << "Missing program file name.\n";
+        exit(EXIT_FAILURE);
     }
 
     if (!argv[4]) {
-    	cout << "Missing trace log file name.\n";
-    	exit(EXIT_FAILURE);
+        cout << "Missing trace log file name.\n";
+        exit(EXIT_FAILURE);
     }
 
     logFile.open (argv[1]);
     sigFile.open (argv[2]);
-    programFile.open (argv[3]);
+    programFile[0].open (argv[3]);
 
     if (!logFile.is_open()) {
-    	cout << "Failed to open logfile: " << argv[1] << endl;
-    	exit(EXIT_FAILURE);
+        cout << "Failed to open logfile: " << argv[1] << endl;
+        exit(EXIT_FAILURE);
     }
     if (!sigFile.is_open()) {
-    	cout << "Failed to open sigFile: " << argv[2] << endl;
-    	exit(EXIT_FAILURE);
+        cout << "Failed to open sigFile: " << argv[2] << endl;
+        exit(EXIT_FAILURE);
     }
 
     char default_csv = '\0';
@@ -67,7 +67,7 @@ int main(int argc, char **argv) {
     } else {
         csv_log_name = &default_csv; 
     }
-	// Create an instance of our module under test
+    // Create an instance of our module under test
     cva5Tracer = new CVA5Tracer(programFile);
     cva5Tracer->set_log_file(&logFile);
 
@@ -80,17 +80,17 @@ int main(int argc, char **argv) {
 
     #ifdef TRACE_ON
         cva5Tracer->start_tracer(argv[4]);
-	#endif
-	cva5Tracer->reset();
-	cout << "--------------------------------------------------------------\n";
-	cout << "   Starting Simulation, logging to " << argv[1] << "\n";
-	cout << "--------------------------------------------------------------\n";
+    #endif
+    cva5Tracer->reset();
+    cout << "--------------------------------------------------------------\n";
+    cout << "   Starting Simulation, logging to " << argv[1] << "\n";
+    cout << "--------------------------------------------------------------\n";
     cout << flush;
 
-	// Tick the clock until we are done
+    // Tick the clock until we are done
     bool sig_phase_complete = false;
-	while(!(cva5Tracer->has_stalled() || cva5Tracer->has_terminated())) {
-	    cva5Tracer->tick();
+    while(!(cva5Tracer->has_stalled() || cva5Tracer->has_terminated())) {
+        cva5Tracer->tick();
         //Compliance Tests Signature Printing Phase
         sig_phase_complete |= cva5Tracer->check_if_instruction_retired(COMPLIANCE_SIG_PHASE_NOP);
         if (sig_phase_complete && cva5Tracer->store_queue_empty()) {
@@ -99,18 +99,18 @@ int main(int argc, char **argv) {
             std::cout << "--------------------------------------------------------------\n";
             cva5Tracer->set_log_file(&sigFile);
         }
-	}
+    }
 
-	cout << "--------------------------------------------------------------\n";
-	cout << "   Simulation Completed\n";
-	cout << "--------------------------------------------------------------\n";
+    cout << "--------------------------------------------------------------\n";
+    cout << "   Simulation Completed\n";
+    cout << "--------------------------------------------------------------\n";
 
-	logFile.close();
-	sigFile.close();
-    programFile.close();
+    logFile.close();
+    sigFile.close();
+    programFile[0].close();
     pcFile.close();
 
-	delete cva5Tracer;
+    delete cva5Tracer;
 
-	exit(EXIT_SUCCESS);
+    exit(EXIT_SUCCESS);
 }

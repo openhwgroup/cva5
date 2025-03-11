@@ -22,16 +22,12 @@
 
 module toggle_memory
 
-    import cva5_config::*;
-    import cva5_types::*;
-    
     # (
         parameter DEPTH = 8,
         parameter NUM_READ_PORTS = 2
     )
     (
         input logic clk,
-        input logic rst,
 
         input logic toggle,
         input logic [$clog2(DEPTH)-1:0] toggle_id,

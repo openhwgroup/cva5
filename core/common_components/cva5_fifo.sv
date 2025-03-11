@@ -27,10 +27,6 @@
  */
 module cva5_fifo
 
-    import cva5_config::*;
-    import riscv_types::*;
-    import cva5_types::*;
-    
     #(
         parameter type DATA_TYPE = logic,
         parameter FIFO_DEPTH = 4
@@ -49,8 +45,10 @@ module cva5_fifo
         always_ff @ (posedge clk) begin
             if (rst)
                 fifo.valid <= 0;
-            else
-                fifo.valid <= fifo.push | (fifo.valid & ~fifo.pop);
+            else if (fifo.push & ~fifo.pop)
+                fifo.valid <= 1;
+            else if (fifo.pop & ~fifo.push)
+                fifo.valid <= 0;
         end
         assign fifo.full = fifo.valid;
 
@@ -134,6 +132,6 @@ module cva5_fifo
     fifo_potenial_push_overflow_assertion:
         assert property (@(posedge clk) disable iff (rst) fifo.potential_push |-> (~fifo.full | fifo.pop)) else $error("potential push overflow");
     fifo_underflow_assertion:
-        assert property (@(posedge clk) disable iff (rst) fifo.pop |-> fifo.valid) else $error("underflow");
+        assert property (@(posedge clk) disable iff (rst) fifo.pop |-> (fifo.valid | fifo.push)) else $error("underflow");
 
 endmodule

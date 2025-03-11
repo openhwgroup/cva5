@@ -49,8 +49,8 @@ module set_clr_reg_with_rst
             else
                 result <= set | (result & ~clr);
         end
-    end else begin
-        always_ff @ (posedge clk) begin : gen_clear_over_set
+    end else begin : gen_clear_over_set
+        always_ff @ (posedge clk) begin
             if (rst)
                 result <= RST_VALUE;
             else

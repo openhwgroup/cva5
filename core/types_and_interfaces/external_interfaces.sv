@@ -25,17 +25,18 @@ interface axi_interface;
 
     logic arready;
     logic arvalid;
-    logic [C_M_AXI_ADDR_WIDTH-1:0] araddr;
+    logic [31:0] araddr;
     logic [7:0] arlen;
     logic [2:0] arsize;
     logic [1:0] arburst;
     logic [3:0] arcache;
     logic [5:0] arid;
+    logic arlock;
 
     //read data
     logic rready;
     logic rvalid;
-    logic [C_M_AXI_DATA_WIDTH-1:0] rdata;
+    logic [31:0] rdata;
     logic [1:0] rresp;
     logic rlast;
     logic [5:0] rid;
@@ -44,18 +45,19 @@ interface axi_interface;
     //write address
     logic awready;
     logic awvalid;
-    logic [C_M_AXI_ADDR_WIDTH-1:0] awaddr;
+    logic [31:0] awaddr;
     logic [7:0] awlen;
     logic [2:0] awsize;
     logic [1:0] awburst;
     logic [3:0] awcache;
     logic [5:0] awid;
+    logic awlock;
 
     //write data
     logic wready;
     logic wvalid;
-    logic [C_M_AXI_DATA_WIDTH-1:0] wdata;
-    logic [(C_M_AXI_DATA_WIDTH/8)-1:0] wstrb;
+    logic [31:0] wdata;
+    logic [3:0] wstrb;
     logic wlast;
 
     //write response
@@ -65,12 +67,12 @@ interface axi_interface;
     logic [5:0] bid;
 
     modport master (input arready, rvalid, rdata, rresp, rlast, rid, awready, wready, bvalid, bresp, bid,
-            output arvalid, araddr, arlen, arsize, arburst, arcache, arid, rready, awvalid, awaddr, awlen, awsize, awburst, awcache, awid,
+            output arvalid, araddr, arlen, arsize, arburst, arcache, arlock, arid, rready, awvalid, awaddr, awlen, awsize, awburst, awcache, awid, awlock,
             wvalid, wdata, wstrb, wlast, bready);
 
-    modport slave (input arvalid, araddr, arlen, arsize, arburst, arcache,
+    modport slave (input arvalid, araddr, arlen, arsize, arburst, arcache, arlock,
             rready,
-            awvalid, awaddr, awlen, awsize, awburst, awcache, arid,
+            awvalid, awaddr, awlen, awsize, awburst, awcache, awlock, arid,
             wvalid, wdata, wstrb, wlast, awid,
             bready,
             output arready, rvalid, rdata, rresp, rlast, rid,
@@ -78,20 +80,13 @@ interface axi_interface;
             wready,
             bvalid, bresp, bid);
 
-`ifdef __CVA5_FORMAL__
-    modport formal (input arready, arvalid, araddr, arlen, arsize, arburst, arcache,
-                          rready, rvalid, rdata, rresp, rlast, rid,
-                          awready, awvalid, awaddr, awlen, awsize, awburst, awcache, arid,
-                          wready, wvalid, wdata, wstrb, wlast, awid,
-                          bready, bvalid, bresp, bid);
-`endif
-
 endinterface
 
 interface avalon_interface;
     logic [31:0] addr;
     logic read;
     logic write;
+    logic lock;
     logic [3:0] byteenable;
     logic [31:0] readdata;
     logic [31:0] writedata;
@@ -100,14 +95,9 @@ interface avalon_interface;
     logic writeresponsevalid;
 
     modport master (input readdata, waitrequest, readdatavalid, writeresponsevalid,
-            output addr, read, write, byteenable, writedata);
+            output addr, read, write, lock, byteenable, writedata);
     modport slave (output readdata, waitrequest, readdatavalid, writeresponsevalid,
-            input addr, read, write, byteenable, writedata);
-
-`ifdef __CVA5_FORMAL__
-    modport formal (input readdata, waitrequest, readdatavalid, writeresponsevalid,
-                          addr, read, write, byteenable, writedata);
-`endif
+            input addr, read, write, lock, byteenable, writedata);
 
 endinterface
 
@@ -129,48 +119,46 @@ interface wishbone_interface;
     modport slave (output dat_r, ack, err,
             input adr, dat_w, sel, cyc, stb, we, cti, bte);
 
-`ifdef __CVA5_FORMAL__
-    modport formal (input adr, dat_w, sel, cyc, stb, we, cti, bte, dat_r, ack, err);
-`endif
-
 endinterface
 
-interface l1_arbiter_request_interface;
-    import l2_config_and_types::*;
-
-    logic [31:0] addr;
-    logic [31:0] data ;
-    logic rnw ;
-    logic [3:0] be;
-    logic [4:0] size;
-    logic is_amo;
-    logic [4:0] amo;
-
+interface mem_interface;
     logic request;
+    logic[31:2] addr;
+    logic[4:0] rlen; //Nobody truly needs requests > 32 words
     logic ack;
 
-    modport master (output addr, data, rnw, be, size, is_amo, amo, request, input ack);
-    modport slave (input addr, data, rnw, be, size, is_amo, amo, request, output ack);
+    logic rvalid;
+    logic[31:0] rdata;
+    logic[1:0] rid;
+    
+    logic rnw;
+    logic rmw;
+    logic[3:0] wbe;
+    logic[31:0] wdata;
 
-`ifdef __CVA5_FORMAL__
-    modport formal (input addr, data, rnw, be, size, is_amo, amo, request, ack);
-`endif
+    logic inv;
+    logic[31:2] inv_addr;
+    logic write_outstanding;
+
+    logic[1:0] id;
+
+    modport ro_master (output request, addr, rlen, input ack, rvalid, rdata);
+    modport ro_slave (input request, addr, rlen, output ack, rvalid, rdata);
+    modport rw_master (output request, addr, rlen, rnw, rmw, wbe, wdata, input ack, rvalid, rdata, inv, inv_addr, write_outstanding);
+    modport rw_slave (input request, addr, rlen, rnw, rmw, wbe, wdata, output ack, rvalid, rdata, inv, inv_addr, write_outstanding);
+    modport mem_master (output request, addr, rlen, rnw, rmw, wbe, wdata, id, input ack, rvalid, rdata, rid, inv, inv_addr, write_outstanding);
+    modport mem_slave (input request, addr, rlen, rnw, rmw, wbe, wdata, id, output ack, rvalid, rdata, rid, inv, inv_addr, write_outstanding);
 
 endinterface
 
-interface l1_arbiter_return_interface;
-    logic [31:2] inv_addr;
-    logic inv_valid;
-    logic inv_ack;
-    logic [31:0] data;
-    logic data_valid;
+interface local_memory_interface;
+    logic[29:0] addr;
+    logic en;
+    logic[3:0] be;
+    logic[31:0] data_in;
+    logic[31:0] data_out;
 
-    modport master (input inv_addr, inv_valid, data, data_valid, output inv_ack);
-    modport slave (output inv_addr, inv_valid, data, data_valid, input inv_ack);
-
-`ifdef __CVA5_FORMAL__
-    modport formal (input inv_addr, inv_valid, data, data_valid, inv_ack);
-`endif
+    modport slave (input addr, en, be, data_in, output data_out);
+    modport master (output addr, en, be, data_in, input data_out);
 
 endinterface
-

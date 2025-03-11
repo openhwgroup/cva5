@@ -98,14 +98,15 @@ interface exception_interface;
     import cva5_types::*;
 
     logic valid;
-    logic ack;
+    logic possible;
     
     exception_code_t code;
-    id_t id;
     logic [31:0] tval;
+    logic [31:0] pc;
+    logic discard;
     
-    modport unit (output valid, code, id, tval, input ack);
-    modport econtrol (input valid, code, id, tval, output ack);
+    modport unit (output valid, possible, code, tval, pc, discard);
+    modport econtrol (input valid, possible, code, tval, pc, discard);
 endinterface
 
 interface fifo_interface #(parameter type DATA_TYPE = logic);
@@ -122,6 +123,8 @@ interface fifo_interface #(parameter type DATA_TYPE = logic);
 endinterface
 
 interface mmu_interface;
+    import csr_types::*;
+    
     //From TLB
     logic request;
     logic execute;
@@ -130,6 +133,8 @@ interface mmu_interface;
 
     //TLB response
     logic write_entry;
+    logic superpage;
+    pte_perms_t perms;
     logic [19:0] upper_physical_address;
     logic is_fault;
 
@@ -137,10 +142,10 @@ interface mmu_interface;
     logic [21:0] satp_ppn;
     logic mxr; //Make eXecutable Readable
     logic sum; //permit Supervisor User Memory access
-    logic [1:0] privilege;
+    privilege_t privilege;
 
-    modport mmu (input virtual_address, request, execute, rnw, satp_ppn, mxr, sum, privilege, output write_entry, upper_physical_address, is_fault);
-    modport tlb (input write_entry, upper_physical_address, is_fault, output request, virtual_address, execute, rnw);
+    modport mmu (input virtual_address, request, execute, rnw, satp_ppn, mxr, sum, privilege, output write_entry, superpage, perms, upper_physical_address, is_fault);
+    modport tlb (input write_entry, superpage, perms, upper_physical_address, is_fault, mxr, sum, privilege, output request, virtual_address, execute, rnw);
     modport csr (output satp_ppn, mxr, sum, privilege);
 
 endinterface
@@ -154,18 +159,17 @@ interface tlb_interface;
     //TLB Inputs
     logic [31:0] virtual_address;
     logic rnw;
-    logic execute;
 
     //TLB Outputs
     logic is_fault;
     logic [31:0] physical_address;
 
     modport tlb (
-        input new_request, virtual_address, rnw, execute,
+        input new_request, virtual_address, rnw,
         output ready, done, is_fault, physical_address
     );
     modport requester  (
-        output new_request, virtual_address, rnw, execute,
+        output new_request, virtual_address, rnw,
         input ready, done, is_fault, physical_address
     );
 endinterface
@@ -181,6 +185,10 @@ interface load_store_queue_interface;
     logic load_pop;
     logic store_pop;
 
+    //Address translation
+    logic addr_push;
+    lsq_addr_entry_t addr_data_in;
+
     //LSQ outputs
     data_access_shared_inputs_t load_data_out;
     data_access_shared_inputs_t store_data_out;
@@ -193,15 +201,14 @@ interface load_store_queue_interface;
     //LSQ status
     logic sq_empty;
     logic empty;
-    logic no_released_stores_pending;
 
     modport queue (
-        input data_in, potential_push, push, load_pop, store_pop,
-        output full, load_data_out, store_data_out, load_valid, store_valid, sq_empty, empty, no_released_stores_pending
+        input data_in, potential_push, push, addr_push, addr_data_in, load_pop, store_pop, 
+        output full, load_data_out, store_data_out, load_valid, store_valid, sq_empty, empty
     );
     modport ls (
-        output data_in, potential_push, push, load_pop, store_pop,
-        input full, load_data_out, store_data_out, load_valid, store_valid, sq_empty, empty, no_released_stores_pending
+        output data_in, potential_push, push, addr_push, addr_data_in, load_pop, store_pop,
+        input full, load_data_out, store_data_out, load_valid, store_valid, sq_empty, empty
     );
 endinterface
 
@@ -221,15 +228,14 @@ interface store_queue_interface;
 
     //SQ status
     logic empty;
-    logic no_released_stores_pending;
 
     modport queue (
         input data_in, push, pop,
-        output full, data_out, valid, empty, no_released_stores_pending
+        output full, data_out, valid, empty
     );
     modport ls (
         output data_in, push, pop,
-        input full, data_out, valid, empty, no_released_stores_pending
+        input full, data_out, valid, empty
     );
 endinterface
 
@@ -258,23 +264,14 @@ interface cache_functions_interface #(parameter int TAG_W = 8, parameter int LIN
 
 endinterface
 
-interface addr_utils_interface #(parameter bit [31:0] BASE_ADDR = 32'h00000000, parameter bit [31:0] UPPER_BOUND = 32'hFFFFFFFF);
-        //Based on the lower and upper address ranges,
-        //find the number of bits needed to uniquely identify this memory range.
-        //Assumption: address range is aligned to its size
-        function int unsigned bit_range ();
-            for(int i=0; i < 32; i++) begin
-                if (BASE_ADDR[i] == UPPER_BOUND[i])
-                    return (32 - i);
-            end
-            return 0;
-        endfunction
-
-        localparam int unsigned BIT_RANGE = bit_range();
-
-        /* verilator lint_off SELRANGE */
+interface addr_utils_interface #(parameter logic [31:0] BASE_ADDR = 32'h00000000, parameter logic [31:0] UPPER_BOUND = 32'hFFFFFFFF);
+        //The range should be aligned for performance
         function address_range_check (input logic[31:0] addr);
-            return (BIT_RANGE == 0) ? 1 : (addr[31:32-BIT_RANGE] == BASE_ADDR[31:32-BIT_RANGE]);
+            /* verilator lint_off UNSIGNED */
+            /* verilator lint_off CMPCONST */
+            return addr >= BASE_ADDR & addr <= UPPER_BOUND;
+            /* verilator lint_on UNSIGNED */
+            /* verilator lint_on CMPCONST */
         endfunction
 endinterface
 
@@ -405,4 +402,31 @@ interface fp_intermediate_wb_interface;
         output ack,
         input id, done, rd, expo_overflow, fflags, rm, hidden, grs, clz, carry, safe, subnormal, right_shift, right_shift_amt, ignore_max_expo, d2s
     );
+endinterface
+
+interface amo_interface;
+    import riscv_types::*;
+
+    //Atomic Load Reserved and Store Conditional
+    logic set_reservation;
+    logic clear_reservation;
+    logic[31:0] reservation;
+    logic reservation_valid;
+
+    //Atomic Read-Modify-Write
+    logic rmw_valid;
+    amo_t op;
+    logic[31:0] rs1;
+    logic[31:0] rs2;
+    logic[31:0] rd;
+
+    modport subunit (
+        input reservation_valid, rd,
+        output set_reservation, clear_reservation, reservation, rmw_valid, op, rs1, rs2
+    );
+    modport amo_unit (
+        output reservation_valid, rd,
+        input set_reservation, clear_reservation, reservation, rmw_valid, op, rs1, rs2
+    );
+
 endinterface

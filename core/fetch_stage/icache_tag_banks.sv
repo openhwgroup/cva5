@@ -33,6 +33,8 @@ module itag_banks
     (
         input logic clk,
         input logic rst,
+        input logic ifence,
+        input logic[SCONFIG.LINE_ADDR_W-1:0] ifence_addr,
 
         input logic[SCONFIG.LINE_ADDR_W-1:0] stage1_line_addr,
         input logic[SCONFIG.LINE_ADDR_W-1:0] stage2_line_addr,
@@ -49,7 +51,7 @@ module itag_banks
 
     //Valid + tag
     typedef logic [SCONFIG.TAG_W : 0] itag_entry_t;
-    itag_entry_t  tag_line[CONFIG.ICACHE.WAYS-1:0];
+    itag_entry_t[CONFIG.ICACHE.WAYS-1:0]  tag_line;
 
     logic hit_allowed;
 
@@ -60,25 +62,25 @@ module itag_banks
             hit_allowed <= stage1_adv;
     end
 
-    genvar i;
-    generate
-        for (i=0; i < CONFIG.ICACHE.WAYS; i++) begin : tag_bank_gen
-            dual_port_bram #(.WIDTH(SCONFIG.TAG_W+1), .LINES(CONFIG.ICACHE.LINES)) itag_bank (.*,
-                    .clk(clk),
-                    .en_a(stage1_adv),
-                    .wen_a('0),
-                    .addr_a(stage1_line_addr),
-                    .data_in_a('0),
-                    .data_out_a(tag_line[i]),
-                    .en_b(update),
-                    .wen_b(update_way[i]),
-                    .addr_b(stage2_line_addr),
-                    .data_in_b({1'b1, stage2_tag}),
-                    .data_out_b()
-                );
-            assign tag_hit_way[i] = ({hit_allowed, 1'b1, stage2_tag} == {1'b1, tag_line[i]});
-        end
-    endgenerate
+    sdp_ram_padded #(
+        .ADDR_WIDTH(SCONFIG.LINE_ADDR_W),
+        .NUM_COL(CONFIG.ICACHE.WAYS),
+        .COL_WIDTH(SCONFIG.TAG_W+1),
+        .PIPELINE_DEPTH(0)
+    ) itag_bank (
+        .a_en(update | ifence),
+        .a_wbe(update_way | {CONFIG.ICACHE.WAYS{ifence}}),
+        .a_wdata({CONFIG.ICACHE.WAYS{~ifence, stage2_tag}}),
+        .a_addr(ifence ? ifence_addr : stage2_line_addr),
+        .b_en(stage1_adv),
+        .b_addr(stage1_line_addr),
+        .b_rdata(tag_line),
+    .*);
+
+    always_comb begin
+        for (int i = 0; i < CONFIG.ICACHE.WAYS; i++)
+            tag_hit_way[i] = ({hit_allowed, 1'b1, stage2_tag} == {1'b1, tag_line[i]});
+    end
 
     assign tag_hit = |tag_hit_way;
 
