@@ -279,7 +279,7 @@ module csr_unit
     ////////////////////////////////////////////////////
     //Machine Version Registers
     localparam logic [31:0] mvendorid = 0;
-    localparam logic [31:0] marchid = 0; //TODO: register an ID with RISC-V
+    localparam logic [31:0] marchid = 48; //https://github.com/riscv/riscv-isa-manual/pull/1897
     localparam logic [31:0] mimpid = CONFIG.CSRS.MACHINE_IMPLEMENTATION_ID;
     localparam logic [31:0] mhartid = CONFIG.CSRS.CPU_ID;
     localparam logic [31:0] mconfigptr = CONFIG.CSRS.MCONFIGPTR;
