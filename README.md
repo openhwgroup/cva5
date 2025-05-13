@@ -9,7 +9,7 @@ The pipeline has been designed to support parallel, variable-latency execution u
 
 Below is the complete architecture of **CVA5**. Configurable components are highlighted with red dashed rectangles.  
 For more details, please refer to our [FCCM presentation](docs/FCCM_Presentation) available in the `docs` directory.
-<img src="docs/FCCM_Presentation/cva5.png"/>
+<img src="docs/FCCM_Presentation/CVA5.png"/>
 
 ## Documentation and Project Setup
 For up-to-date documentation, as well as an automated build environment setup, refer to [Taiga Project](https://gitlab.com/sfu-rcl/taiga-project)
