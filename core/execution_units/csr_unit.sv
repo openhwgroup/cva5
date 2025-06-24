@@ -619,7 +619,7 @@ end
         .encoded_result (mip_cause_sel)
     );
 
-    always_ff @(posedge clk) begin
+    always_comb begin
         if (interrupt_pending)
             interrupt_cause_r <= interruput_code_table[mip_cause_sel];
     end
