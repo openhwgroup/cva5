@@ -139,7 +139,7 @@ module csr_unit
 
     logic exception_delegated;
     logic interrupt_delegated;
-    logic [ECODE_W-1:0] interrupt_cause_r;
+    logic [ECODE_W-1:0] interrupt_cause;
 
     function logic mwrite_en (input csr_addr_t addr);
         return mwrite & sub_write_en[addr.sub_addr];
@@ -357,7 +357,7 @@ generate if (CONFIG.MODES != BARE) begin : gen_csr_m_mode
 
     assign can_delegate = CONFIG.MODES == MSU & privilege_level inside {SUPERVISOR_PRIVILEGE, USER_PRIVILEGE};
     assign exception_delegated = can_delegate & exception_pkt.valid & medeleg[exception_pkt.code];
-    assign interrupt_delegated = can_delegate & interrupt_taken & mideleg[interrupt_cause_r];
+    assign interrupt_delegated = can_delegate & interrupt_taken & mideleg[interrupt_cause];
 
     one_hot_to_integer #(6)
     mstatus_case_one_hot (
@@ -619,10 +619,7 @@ end
         .encoded_result (mip_cause_sel)
     );
 
-    always_comb begin
-        if (interrupt_pending)
-            interrupt_cause_r <= interruput_code_table[mip_cause_sel];
-    end
+    assign interrupt_cause = interrupt_code_table[mip_cause_sel];
 
     always_ff @(posedge clk) begin
         mcause.zeros <= '0;
@@ -632,7 +629,7 @@ end
         end
         else if ((mwrite_en(MCAUSE) | (exception_pkt.valid & ~exception_delegated) | (interrupt_taken & ~interrupt_delegated))) begin
             mcause.is_interrupt <= interrupt_taken | (mwrite_en(MCAUSE) & updated_csr[31]);
-            mcause.code <= interrupt_taken ? interrupt_cause_r : exception_pkt.valid ? exception_pkt.code : updated_csr[ECODE_W-1:0];
+            mcause.code <= interrupt_taken ? interrupt_cause : exception_pkt.valid ? exception_pkt.code : updated_csr[ECODE_W-1:0];
         end
     end
 
@@ -768,7 +765,7 @@ generate if (CONFIG.MODES == MSU) begin : gen_csr_s_mode
         end
         else if ((swrite_en(SCAUSE) | (exception_pkt.valid & exception_delegated) | (interrupt_taken & interrupt_delegated))) begin
             scause.is_interrupt <= interrupt_taken | (swrite_en(SCAUSE) & updated_csr[31]);
-            scause.code <= interrupt_taken ? interrupt_cause_r : exception_pkt.valid ? exception_pkt.code : updated_csr[ECODE_W-1:0];
+            scause.code <= interrupt_taken ? interrupt_cause : exception_pkt.valid ? exception_pkt.code : updated_csr[ECODE_W-1:0];
         end
     end
 
