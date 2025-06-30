@@ -601,7 +601,7 @@ end
     logic [5:0] mip_priority_vector;
     logic [2:0] mip_cause_sel;
 
-    localparam logic [ECODE_W-1:0] interruput_code_table [7:0] = '{ 0, 0, 
+    localparam logic [ECODE_W-1:0] interrupt_code_table [7:0] = '{ 0, 0, 
         S_TIMER_INTERRUPT, S_SOFTWARE_INTERRUPT, S_EXTERNAL_INTERRUPT,
         M_TIMER_INTERRUPT, M_SOFTWARE_INTERRUPT, M_EXTERNAL_INTERRUPT
     };
